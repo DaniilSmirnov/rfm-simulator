@@ -321,25 +321,13 @@ func _update_peers(players: Array) -> void:
 			continue
 		present[p.id] = true
 		if not peers.has(p.id):
-			var color = Color.from_hsv(float(posmod(str(p.id).hash(), 100)) / 100, 0.55, 0.8)
 			var car = Props.player_car(int(p.get("slot", 0)))
 			game.add_child(car)
-			var avatar = Node3D.new()
+			var avatar = Props.player_avatar()
 			game.add_child(avatar)
-			Props.box(avatar, Vector3(0, 1.1, 0), Vector3(0.55, 0.7, 0.3), color)
-			Props.box(avatar, Vector3(0, 1.7, 0), Vector3(0.35, 0.4, 0.35), Color("d2ad83"))
-			for x in [-0.17, 0.17]:
-				Props.box(avatar, Vector3(x, 0.42, 0), Vector3(0.2, 0.85, 0.22), Color("35445b"))
-			var arm = Node3D.new()
-			avatar.add_child(arm)
-			arm.position = Vector3(0.37, 1.35, 0)
-			Props.box(arm, Vector3(0, -0.25, 0), Vector3(0.18, 0.5, 0.18), color)
-			var can = Props.cylinder(arm, Vector3(0, -0.52, 0), 0.09, 0.09, 0.25, Color("daa44f"))
-			can.hide()
-			var skewer = Props.skewer()
-			skewer.hide()
-			arm.add_child(skewer)
-			skewer.position = Vector3(0, -0.5, -0.05)
+			var arm = avatar.get_node("RightArm")
+			var can = arm.get_node("BeerCan")
+			var skewer = arm.get_node("Skewer")
 			var label = Props.label_3d(game, Vector3.ZERO, p.name, 26, 0.012, Color("fff1cb"))
 			label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 			peers[p.id] = {"id": p.id, "car": car, "avatar": avatar, "arm": arm, "can": can, "skewer": skewer, "eat_time": -1.0, "eat_sample": -1.0, "label": label, "last_car": null, "state": null}

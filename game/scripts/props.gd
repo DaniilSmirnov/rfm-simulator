@@ -30,6 +30,102 @@ static func cylinder(parent: Node3D, pos: Vector3, bottom: float, top: float, he
 	n.position = pos
 	return n
 
+const PLAYER_SKIN = Color("d9a482")
+const PLAYER_SHIRT = Color("202b31")
+const PLAYER_TRIM = Color("92985a")
+
+# Separate triangle normals keep these small ellipsoids visibly faceted in WebGL.
+static func faceted(parent: Node3D, pos: Vector3, size: Vector3, color: Color, sides: int = 10, rings: int = 5) -> MeshInstance3D:
+	var sphere = SphereMesh.new()
+	sphere.radius = 0.5
+	sphere.height = 1.0
+	sphere.radial_segments = sides
+	sphere.rings = rings
+	var vertices = sphere.get_faces()
+	var normals = PackedVector3Array()
+	for i in range(0, vertices.size(), 3):
+		for j in range(3):
+			vertices[i + j] *= size
+		var normal = (vertices[i + 1] - vertices[i]).cross(vertices[i + 2] - vertices[i]).normalized()
+		if normal.dot(vertices[i] + vertices[i + 1] + vertices[i + 2]) < 0:
+			normal = -normal
+		for j in range(3):
+			normals.append(normal)
+	var arrays = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	var mesh = ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	var part = MeshInstance3D.new()
+	part.mesh = mesh
+	part.material_override = material(color)
+	parent.add_child(part)
+	part.position = pos
+	return part
+
+static func player_avatar() -> Node3D:
+	var root = Node3D.new()
+	root.name = "RallySpectator"
+	# Stocky tank top, bare arms, shorts and sandals from the reference.
+	faceted(root, Vector3(0, 1.03, 0), Vector3(0.69, 0.75, 0.44), PLAYER_SHIRT)
+	for side in [-1, 1]:
+		var trim = box(root, Vector3(side * 0.24, 1.31, -0.14), Vector3(0.12, 0.12, 0.15), PLAYER_TRIM)
+		trim.rotation.z = side * 0.25
+		box(root, Vector3(side * 0.29, 0.94, 0), Vector3(0.06, 0.35, 0.29), PLAYER_TRIM)
+	# A tiny geometric palm emblem instead of a texture.
+	box(root, Vector3(0, 1.10, -0.222), Vector3(0.025, 0.15, 0.012), PLAYER_TRIM)
+	for angle in [-0.9, -0.45, 0.45, 0.9]:
+		var leaf = box(root, Vector3(0, 1.19, -0.23), Vector3(0.025, 0.17, 0.013), PLAYER_TRIM)
+		leaf.rotation.z = angle
+	faceted(root, Vector3(0, 0.69, 0), Vector3(0.65, 0.28, 0.42), Color("394650"))
+	box(root, Vector3(0, 0.77, -0.20), Vector3(0.56, 0.06, 0.03), Color("515c62"))
+	for side in [-1, 1]:
+		var leg = Node3D.new()
+		leg.name = "LeftLeg" if side < 0 else "RightLeg"
+		root.add_child(leg)
+		leg.position = Vector3(side * 0.17, 0.65, 0)
+		cylinder(leg, Vector3(0, -0.055, 0), 0.145, 0.15, 0.22, Color("394650"), 8)
+		faceted(leg, Vector3(0, -0.32, 0), Vector3(0.20, 0.43, 0.23), PLAYER_SKIN, 8, 4)
+		box(leg, Vector3(0, -0.59, -0.065), Vector3(0.24, 0.10, 0.39), Color("564933"))
+		box(leg, Vector3(0, -0.53, -0.12), Vector3(0.24, 0.065, 0.10), Color("737b75"))
+		box(leg, Vector3(0, -0.50, 0.055), Vector3(0.23, 0.11, 0.07), Color("737b75"))
+		var arm = Node3D.new()
+		arm.name = "LeftArm" if side < 0 else "RightArm"
+		root.add_child(arm)
+		arm.position = Vector3(side * 0.37, 1.29, 0)
+		faceted(arm, Vector3(0, -0.09, 0), Vector3(0.25, 0.31, 0.27), PLAYER_SKIN, 8, 4)
+		faceted(arm, Vector3(0, -0.32, 0), Vector3(0.20, 0.32, 0.21), PLAYER_SKIN, 8, 4)
+		faceted(arm, Vector3(0, -0.49, -0.015), Vector3(0.20, 0.19, 0.17), PLAYER_SKIN, 8, 4)
+		if side > 0:
+			var can = cylinder(arm, Vector3(0, -0.52, -0.085), 0.075, 0.075, 0.23, Color("daa44f"), 8)
+			can.name = "BeerCan"
+			cylinder(can, Vector3(0, 0.119, 0), 0.071, 0.071, 0.008, Color("c4cac5"), 8)
+			can.hide()
+			var food = skewer()
+			arm.add_child(food)
+			food.position = Vector3(0, -0.5, -0.09)
+			food.hide()
+	var head = Node3D.new()
+	head.name = "Head"
+	root.add_child(head)
+	head.position = Vector3(0, 1.58, 0)
+	faceted(head, Vector3.ZERO, Vector3(0.64, 0.72, 0.52), PLAYER_SKIN, 10, 6)
+	for side in [-1, 1]:
+		faceted(head, Vector3(side * 0.31, -0.03, 0), Vector3(0.13, 0.20, 0.13), PLAYER_SKIN, 8, 4)
+		var eye = faceted(head, Vector3(side * 0.165, 0.065, -0.255), Vector3(0.31, 0.38, 0.24), Color("f5f2e7"), 10, 5)
+		eye.name = "LeftEye" if side < 0 else "RightEye"
+		faceted(head, Vector3(side * 0.165 + 0.025, 0.065, -0.373), Vector3(0.085, 0.115, 0.035), Color("182226"), 8, 4)
+		box(head, Vector3(side * 0.165 + 0.014, 0.093, -0.392), Vector3(0.019, 0.022, 0.009), Color("ffffff"))
+	faceted(head, Vector3(0, -0.06, -0.285), Vector3(0.115, 0.145, 0.15), PLAYER_SKIN.lightened(0.04), 8, 4)
+	box(head, Vector3(0, -0.19, -0.23), Vector3(0.17, 0.022, 0.017), Color("875244"))
+	var hair = faceted(head, Vector3(0, 0.30, 0.015), Vector3(0.66, 0.25, 0.54), Color("71451f"), 10, 4)
+	hair.name = "Quiff"
+	for i in range(5):
+		var tuft = faceted(hair, Vector3(-0.24 + i * 0.115, 0.085 + i * 0.01, -0.13), Vector3(0.20, 0.24, 0.32), Color("805125").lightened(i * 0.016), 7, 3)
+		tuft.rotation.z = -0.25
+	return root
+
 static func car(color: Color, rally: bool = false, variant: int = 0) -> Node3D:
 	if rally:
 		return rally_car(variant)
@@ -141,9 +237,9 @@ static func skewer() -> Node3D:
 
 static func meat_hand() -> Node3D:
 	var root = skewer()
-	var sleeve = box(root, Vector3(0.07, -0.48, 0.08), Vector3(0.14, 0.35, 0.17), Color("526846"))
+	var sleeve = faceted(root, Vector3(0.07, -0.48, 0.08), Vector3(0.17, 0.35, 0.19), PLAYER_SKIN, 8, 4)
 	sleeve.rotation.z = -0.18
-	box(root, Vector3(0, -0.24, 0.04), Vector3(0.13, 0.14, 0.12), Color("d1a780"))
+	box(root, Vector3(0, -0.24, 0.04), Vector3(0.13, 0.14, 0.12), PLAYER_SKIN)
 	for child in root.get_children():
 		if child is GeometryInstance3D:
 			child.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -309,9 +405,9 @@ static func beer_hand() -> Node3D:
 	var root = Node3D.new()
 	root.name = "BeerHand"
 	# Wrist and a thumb wrapping around the can, in camera-local space.
-	var sleeve = box(root, Vector3(0.08, -0.32, 0.1), Vector3(0.15, 0.42, 0.17), Color("526846"))
+	var sleeve = faceted(root, Vector3(0.08, -0.32, 0.1), Vector3(0.18, 0.42, 0.20), PLAYER_SKIN, 8, 4)
 	sleeve.rotation.z = -0.18
-	box(root, Vector3(0.035, -0.1, 0.045), Vector3(0.13, 0.17, 0.12), Color("caa07a"))
+	box(root, Vector3(0.035, -0.1, 0.045), Vector3(0.13, 0.17, 0.12), PLAYER_SKIN)
 	box(root, Vector3(-0.065, -0.035, 0.025), Vector3(0.045, 0.11, 0.07), Color("d8af88"))
 	for y in [-0.085, -0.045, -0.005]:
 		box(root, Vector3(0.01, y, 0.084), Vector3(0.11, 0.03, 0.035), Color("d8af88"))
