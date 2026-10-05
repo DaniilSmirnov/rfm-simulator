@@ -25,4 +25,5 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+      - run: npm run test:server
       - run: npx wrangler deploy --dry-run --outdir .cache/worker

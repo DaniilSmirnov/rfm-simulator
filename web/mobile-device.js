@@ -8,8 +8,9 @@ const RallyDevice = {
       || (nav.maxTouchPoints > 0 && media('(pointer: coarse)').matches));
   },
   configure(config) {
+    config.args.push('--', '--room-server=' + location.origin);
     if (!this.isMobile()) return;
-    config.args.push('--', '--mobile-controls');
+    config.args.push('--mobile-controls');
     document.documentElement.style.overscrollBehavior = 'none';
     document.body.style.overscrollBehavior = 'none';
     document.getElementById('canvas').style.touchAction = 'none';

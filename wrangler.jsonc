@@ -6,6 +6,27 @@
   "preview_urls": true,
   "assets": {
     "directory": "./dist",
-    "not_found_handling": "none"
-  }
+    "not_found_handling": "none",
+    "binding": "ASSETS",
+    "run_worker_first": [
+      "/api/*"
+    ]
+  },
+  "main": "server/worker.mjs",
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "ROOMS",
+        "class_name": "RallyRoom"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "RallyRoom"
+      ]
+    }
+  ]
 }

@@ -64,6 +64,7 @@ var wind_audio: AudioStreamPlayer
 var fire_audio: AudioStreamPlayer3D
 var capture_mode = false
 var hud_panels: Array[Control] = []
+var room: Node
 var mobile_mode = false
 var mobile_controls: Control
 var mobile_sidebar: PanelContainer
@@ -108,8 +109,9 @@ func enable_mobile() -> void:
 	menu.offset_right = 310
 	menu.offset_top = -195
 	menu.offset_bottom = 195
-	menu.get_child(0).add_theme_constant_override("separation", 10)
-	menu_title.add_theme_font_size_override("font_size", 30)
+	menu.get_child(0).add_theme_constant_override("separation", 6)
+	menu.get_child(0).get_child(0).hide()
+	menu_title.add_theme_font_size_override("font_size", 26)
 	menu_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	menu_text.add_theme_font_size_override("font_size", 18)
 	menu_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -147,6 +149,9 @@ func _ready() -> void:
 	camera.look_at(stage.at(70))
 	_build_ui()
 	_setup_audio()
+	room = preload("res://scripts/room.gd").new()
+	room.game = self
+	add_child(room)
 	if OS.has_feature("mobile") or "--mobile-controls" in OS.get_cmdline_user_args():
 		enable_mobile()
 	if "--capture" in OS.get_cmdline_user_args():
@@ -230,7 +235,7 @@ func _build_ui() -> void:
 	var vb = VBoxContainer.new()
 	top.add_child(vb)
 	title_label = _label(vb, "СИМУЛЯТОР РАЛЛИЙНОГО ОВОЩА", 22)
-	_label(vb, "DYFI-INSPIRED  /  ГОРНЫЙ ЛЕС  /  ДЕМО 0.3", 12, Color("b2bea1"))
+	_label(vb, "DYFI-INSPIRED  /  ГОРНЫЙ ЛЕС  /  ДЕМО 0.4", 12, Color("b2bea1"))
 	var sidebar = PanelContainer.new()
 	mobile_sidebar = sidebar
 	ui.add_child(sidebar)
@@ -335,10 +340,13 @@ func start_game() -> void:
 	menu.hide()
 	for panel in hud_panels:
 		panel.show()
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if mobile_mode else Input.MOUSE_MODE_CAPTURED
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if mobile_mode or (room.connected and OS.has_feature("web")) else Input.MOUSE_MODE_CAPTURED
 	toast("Доедь до любой поляны. Q — выбрать случайную на карте.")
 
 func _menu_action() -> void:
+	if (dead or finished) and room.connected:
+		room.leave()
+		return
 	if dead or finished:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		get_tree().reload_current_scene()
@@ -360,11 +368,16 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if not playing or paused or dead or finished:
 		return
+	if event is InputEventMouseButton and event.pressed and not mobile_mode and room.connected:
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	if event is InputEventMouseMotion and not in_car and not mobile_mode:
 		view_yaw -= event.relative.x * 0.0025
 		view_pitch = clampf(view_pitch - event.relative.y * 0.0025, -1.15, 1.1)
-	if drink_time >= 0:
+	if drink_time >= 0 or (room.connected and not room.is_host and room.world_paused):
 		return
+	for shared_action in room.SHARED_ACTIONS:
+		if event.is_action_pressed(shared_action) and room.submit(shared_action):
+			return
 	if event.is_action_pressed("interact"):
 		_toggle_car()
 	elif event.is_action_pressed("table"):
@@ -391,29 +404,37 @@ func _unhandled_input(event: InputEvent) -> void:
 		else:
 			toast("Возврат на СУ недоступен во время заездов.")
 	elif event is InputEventKey and event.pressed and not event.echo:
+		if room.connected and not room.is_host:
+			return
 		if event.physical_keycode == KEY_F8:
 			spawn_racer("stuck")
 		elif event.physical_keycode == KEY_F9:
 			spawn_racer("crash")
 
 func _process(delta: float) -> void:
-	if not playing or paused or dead or finished:
+	if not playing or paused or dead or finished or (room.connected and not room.is_host and room.world_paused):
 		return
-	elapsed += delta
+	if not room.connected or room.is_host:
+		elapsed += delta
 	if in_car:
 		_drive(delta)
 	else:
 		_walk(delta)
 	_update_drinking(delta)
 	_update_camera(delta)
-	_update_racers(delta)
-	_update_cooking(delta)
-	_update_tow(delta)
+	if not room.connected or room.is_host:
+		_update_racers(delta)
+		_update_cooking(delta)
+		if room.connected:
+			room.update_tow(delta)
+			room.check_remote_collisions()
+		else:
+			_update_tow(delta)
 	if beer_timer > 0:
 		beer_timer = maxf(0, beer_timer - delta)
 	toast_time = maxf(0, toast_time - delta)
 	toast_label.visible = toast_time > 0 and not mobile_mode
-	if racing:
+	if racing and (not room.connected or room.is_host):
 		race_clock += delta
 		spawn_clock -= delta
 		if spawn_clock <= 0:
@@ -422,7 +443,8 @@ func _process(delta: float) -> void:
 	_update_hud()
 	engine_audio.pitch_scale = 0.75 + absf(speed) / 18.0
 	engine_audio.volume_db = -21 if in_car else -35
-	_check_finish()
+	if not room.connected or room.is_host:
+		_check_finish()
 	if capture_mode and elapsed > 1.3:
 		capture_mode = false
 		await RenderingServer.frame_post_draw
@@ -714,7 +736,8 @@ func spawn_racer(forced: String = "") -> void:
 	add_child(node)
 	var s = maxf(0, focus - 115)
 	node.position = stage.at(s)
-	racers.append({"node": node, "s": s, "focus": focus, "kind": kind, "state": "racing", "offset": 0.0, "age": 0.0, "counted": false, "start": Vector3.ZERO, "target": Vector3.ZERO, "variant": variant})
+	node.set_meta("room_id", rally_spawn_count)
+	racers.append({"id": rally_spawn_count, "node": node, "s": s, "focus": focus, "kind": kind, "state": "racing", "offset": 0.0, "age": 0.0, "counted": false, "start": Vector3.ZERO, "target": Vector3.ZERO, "variant": variant})
 	toast("Приближается %s, номер %d!" % [node.get_meta("model"), node.get_meta("number")])
 
 func _update_racers(delta: float) -> void:

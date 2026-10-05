@@ -14,6 +14,10 @@ func _draw() -> void:
 		draw_circle(project(game.camp.position), 5, Color("efc66b"))
 	for racer in game.racers:
 		draw_circle(project(racer.node.position), 3, Color("d76646"))
+	if game.room != null and game.room.connected:
+		for peer in game.room.peers.values():
+			if peer.state != null:
+				draw_circle(project(game.room.v(peer.state.pos)), 4, Color("79cdd1"))
 	draw_circle(project(game.player_position()), 5, Color("f2ead4"))
 	var heading = Vector2(-sin(game.heading), cos(game.heading))
 	draw_line(project(game.player_position()), project(game.player_position()) + heading * 12, Color("f2ead4"), 2)

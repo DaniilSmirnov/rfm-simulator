@@ -18,7 +18,7 @@ func _ready() -> void:
 	resized.connect(reset_input)
 
 func active() -> bool:
-	return game != null and game.playing and not game.paused and not game.dead and not game.finished
+	return game != null and game.playing and not game.paused and not game.dead and not game.finished and not (game.room.connected and not game.room.is_host and game.room.world_paused)
 
 func _process(_delta: float) -> void:
 	if not active() or last_in_car != game.in_car or last_size != size:

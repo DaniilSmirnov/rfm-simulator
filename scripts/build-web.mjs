@@ -43,7 +43,7 @@ await writeFile(jsPath, js.replace(needle, 'return RallyMini.fetch(file).then(fu
 const htmlPath = join(output, 'index.html');
 const html = await readFile(join(rawOutput, 'index.html'), 'utf8');
 if (!html.includes('const engine = new Engine(GODOT_CONFIG);')) throw new Error('Unexpected HTML engine config.');
-await writeFile(htmlPath, html.replace('<script src="index.js"></script>', '<script src="mini-loader.js"></script>\n<script src="mobile-device.js"></script>\n<script src="index.js"></script>').replace('const engine = new Engine(GODOT_CONFIG);', 'RallyDevice.configure(GODOT_CONFIG);\nconst engine = new Engine(GODOT_CONFIG);'));
+await writeFile(htmlPath, html.replace('<script src="index.js"></script>', '<script src="mini-loader.js"></script>\n<script src="mobile-device.js"></script>\n<script src="room-session.js"></script>\n<script src="index.js"></script>').replace('const engine = new Engine(GODOT_CONFIG);', 'RallyDevice.configure(GODOT_CONFIG);\nconst engine = new Engine(GODOT_CONFIG);'));
 await cp(join(root, 'web'), output, { recursive: true });
 await mkdir(join(output, 'licenses'), { recursive: true });
 for (const name of ['GODOT_LICENSE.txt', 'GODOT_COPYRIGHT.txt']) {
