@@ -4,3 +4,6 @@ const godot = await getGodot();
 const project = join(root, 'game');
 run(godot, ['--headless', '--editor', '--path', project, '--import']);
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_demo.gd']);
+
+run(process.execPath, [join(root, 'scripts/test-device.mjs')]);
+run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_mobile.gd']);

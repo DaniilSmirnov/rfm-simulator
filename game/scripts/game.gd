@@ -64,6 +64,67 @@ var wind_audio: AudioStreamPlayer
 var fire_audio: AudioStreamPlayer3D
 var capture_mode = false
 var hud_panels: Array[Control] = []
+var mobile_mode = false
+var mobile_controls: Control
+var mobile_sidebar: PanelContainer
+var mobile_top: PanelContainer
+var mobile_bottom: PanelContainer
+var menu_help: Label
+
+func enable_mobile() -> void:
+	if mobile_mode:
+		return
+	mobile_mode = true
+	get_window().content_scale_size = Vector2i(720, 480)
+	get_window().content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	title_label.text = "РАЛЛИЙНЫЙ ОВОЩ"
+	title_label.add_theme_font_size_override("font_size", 22)
+	mobile_top.get_child(0).get_child(1).hide()
+	mobile_top.position = Vector2(36, 64)
+	mobile_top.size = Vector2.ZERO
+	mobile_bottom.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	mobile_bottom.offset_left = 36
+	mobile_bottom.offset_right = -36
+	mobile_bottom.offset_top = 150
+	mobile_bottom.offset_bottom = 220
+	info_label.add_theme_font_size_override("font_size", 18)
+	info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint_label.hide()
+	quest_label.hide()
+	mobile_sidebar.get_child(0).get_child(0).hide()
+	mobile_sidebar.offset_left = -280
+	mobile_sidebar.offset_right = -36
+	mobile_sidebar.offset_top = 230
+	mobile_sidebar.offset_bottom = 410
+	minimap.custom_minimum_size = Vector2(204, 110)
+	toast_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	toast_label.offset_left = 36
+	toast_label.offset_right = -36
+	toast_label.offset_top = -330
+	toast_label.offset_bottom = -265
+	toast_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	menu.offset_left = -310
+	menu.offset_right = 310
+	menu.offset_top = -195
+	menu.offset_bottom = 195
+	menu.get_child(0).add_theme_constant_override("separation", 10)
+	menu_title.add_theme_font_size_override("font_size", 30)
+	menu_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	menu_text.add_theme_font_size_override("font_size", 18)
+	menu_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	menu_text.text = "Доедь до поляны, разложи лагерь и посмотри ралли. Жарь шашлык, помогай экипажам и береги себя."
+	menu_help.text = "Стик — движение и руль. Газ — справа.\nОбзор пешком — свайп по свободной части экрана."
+	var layer = CanvasLayer.new()
+	layer.layer = 10
+	add_child(layer)
+	mobile_controls = preload("res://scripts/mobile_controls.gd").new()
+	mobile_controls.game = self
+	layer.add_child(mobile_controls)
+
+func _input(event: InputEvent) -> void:
+	if event is InputEventScreenTouch and event.pressed and not mobile_mode:
+		enable_mobile()
 
 func _ready() -> void:
 	rng.randomize()
@@ -86,6 +147,8 @@ func _ready() -> void:
 	camera.look_at(stage.at(70))
 	_build_ui()
 	_setup_audio()
+	if OS.has_feature("mobile") or "--mobile-controls" in OS.get_cmdline_user_args():
+		enable_mobile()
 	if "--capture" in OS.get_cmdline_user_args():
 		capture_mode = true
 		start_game()
@@ -160,14 +223,16 @@ func _build_ui() -> void:
 	ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var top = PanelContainer.new()
+	mobile_top = top
 	ui.add_child(top)
 	top.position = Vector2(28, 24)
 	top.add_theme_stylebox_override("panel", _panel(Color("25352be8")))
 	var vb = VBoxContainer.new()
 	top.add_child(vb)
 	title_label = _label(vb, "СИМУЛЯТОР РАЛЛИЙНОГО ОВОЩА", 22)
-	_label(vb, "DYFI-INSPIRED  /  ГОРНЫЙ ЛЕС  /  ДЕМО 0.2", 12, Color("b2bea1"))
+	_label(vb, "DYFI-INSPIRED  /  ГОРНЫЙ ЛЕС  /  ДЕМО 0.3", 12, Color("b2bea1"))
 	var sidebar = PanelContainer.new()
+	mobile_sidebar = sidebar
 	ui.add_child(sidebar)
 	sidebar.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
 	sidebar.offset_left = -332
@@ -188,6 +253,7 @@ func _build_ui() -> void:
 	sv.add_child(minimap)
 	status_label = _label(sv, "", 13, Color("b2bea1"))
 	var bottom = PanelContainer.new()
+	mobile_bottom = bottom
 	ui.add_child(bottom)
 	bottom.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	bottom.offset_left = 28
@@ -236,7 +302,7 @@ func _build_ui() -> void:
 	start_button.add_theme_stylebox_override("pressed", _panel(Color("c78f4a")))
 	start_button.pressed.connect(_menu_action)
 	mv.add_child(start_button)
-	_label(mv, "WASD — движение   ·   E — выйти   ·   Esc — пауза\nНа ногах: мышь — обзор   ·   F/C/G — лагерь", 14, Color("b2bea1"))
+	menu_help = _label(mv, "WASD — движение   ·   E — выйти   ·   Esc — пауза\nНа ногах: мышь — обзор   ·   F/C/G — лагерь", 14, Color("b2bea1"))
 
 func _setup_audio() -> void:
 	engine_audio = AudioStreamPlayer.new()
@@ -269,7 +335,7 @@ func start_game() -> void:
 	menu.hide()
 	for panel in hud_panels:
 		panel.show()
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if mobile_mode else Input.MOUSE_MODE_CAPTURED
 	toast("Доедь до любой поляны. Q — выбрать случайную на карте.")
 
 func _menu_action() -> void:
@@ -279,7 +345,7 @@ func _menu_action() -> void:
 	elif paused:
 		paused = false
 		menu.hide()
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if mobile_mode else Input.MOUSE_MODE_CAPTURED
 	else:
 		start_game()
 
@@ -290,11 +356,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		menu_title.text = "Перерыв на природе"
 		menu_text.text = "Пауза. Ралли, мангал и таймеры остановлены.\n\nHome — вернуть машину на дорогу.\nF8 / F9 — показать застревание / вылет.\n\nПродолжить — кнопкой или Esc."
 		start_button.text = "ПРОДОЛЖИТЬ"
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if paused else Input.MOUSE_MODE_CAPTURED
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if paused or mobile_mode else Input.MOUSE_MODE_CAPTURED
 		return
 	if not playing or paused or dead or finished:
 		return
-	if event is InputEventMouseMotion and not in_car:
+	if event is InputEventMouseMotion and not in_car and not mobile_mode:
 		view_yaw -= event.relative.x * 0.0025
 		view_pitch = clampf(view_pitch - event.relative.y * 0.0025, -1.15, 1.1)
 	if drink_time >= 0:
@@ -346,7 +412,7 @@ func _process(delta: float) -> void:
 	if beer_timer > 0:
 		beer_timer = maxf(0, beer_timer - delta)
 	toast_time = maxf(0, toast_time - delta)
-	toast_label.visible = toast_time > 0
+	toast_label.visible = toast_time > 0 and not mobile_mode
 	if racing:
 		race_clock += delta
 		spawn_clock -= delta
@@ -753,9 +819,13 @@ func _cancel_tow() -> void:
 		rope_mesh = null
 
 func toast(message: String) -> void:
+	if mobile_mode:
+		var labels = {"Q —": "Поляна —", "Space —": "Тормоз —", "F —": "Стол —", "C —": "Стулья —", "G —": "Мангал —", "X —": "Есть —", "R —": "Заезды —", "— T": "— Трос", ": E.": ": Выйти.", "нажми X": "нажми Есть", "Удерживай T": "Удерживай Трос"}
+		for key in labels:
+			message = message.replace(key, labels[key])
 	if toast_label != null:
 		toast_label.text = message
-		toast_label.visible = true
+		toast_label.visible = not mobile_mode
 		toast_time = 5
 
 func _update_hud() -> void:
@@ -773,6 +843,13 @@ func _update_hud() -> void:
 			info_label.text = "ОТКРЫВАЕМ БАНКУ" if drink_time < 1.25 else "ЗА ХОРОШИЙ ВЫЕЗД!"
 		if tow_target != null:
 			info_label.text = "ВЫТАСКИВАЕМ ЭКИПАЖ   ·   %d%%   ·   УДЕРЖИВАЙ T" % int(tow_progress * 100)
+	if mobile_mode:
+		if in_car:
+			info_label.text = "%02d КМ/Ч · МАШИНА %d%% · ПОЛЯНА %d м" % [int(absf(speed) * 3.6), int(condition), distance]
+		else:
+			info_label.text = info_label.text.replace("ЗРИТЕЛЬ    ·    ", "").replace("УДЕРЖИВАЙ T", "УДЕРЖИВАЙ ТРОС")
+		if toast_time > 0:
+			info_label.text += "\n" + toast_label.text
 	minimap.queue_redraw()
 
 func _check_finish() -> void:
