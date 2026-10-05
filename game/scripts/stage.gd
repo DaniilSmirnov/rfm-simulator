@@ -120,13 +120,12 @@ func build() -> void:
 	rng.seed = 7102026 + variant * 971
 	_build_terrain()
 	_build_road()
-	_build_trails()
 	var forest: Array[Dictionary] = []
-	for i in range(520 if winter else 1250):
+	for i in range(520 if winter else 2200):
 		var p = Vector3(rng.randf_range(-150, 150), 0, rng.randf_range(-LENGTH - 65, 50))
 		if road_distance(p) < 9:
 			continue
-		if trail_distance(p) < 4.6:
+		if trail_distance(p) < 3.2:
 			continue
 		var in_clearing = false
 		for c in clearings:
@@ -186,37 +185,6 @@ func _build_terrain() -> void:
 	mat.vertex_color_is_srgb = true
 	n.material_override = mat
 	add_child(n)
-
-func _build_trails() -> void:
-	# Low-poly gravel footpaths. Their centre line follows the same height
-	# samples used by `ground`, so walkers do not float above the terrain.
-	for trail in trails:
-		var st = SurfaceTool.new()
-		st.begin(Mesh.PRIMITIVE_TRIANGLES)
-		var trail_points: Array = trail.points
-		var half_width: float = trail.width * 0.5
-		for i in range(trail_points.size() - 1):
-			var a: Vector3 = trail_points[i]
-			var b: Vector3 = trail_points[i + 1]
-			var forward = Vector3(b.x - a.x, 0, b.z - a.z).normalized()
-			var across = Vector3(-forward.z, 0, forward.x) * half_width
-			var left = a + across
-			var right = a - across
-			var next_left = b + across
-			var next_right = b - across
-			for v in [left, right, next_left, right, next_right, next_left]:
-				v.y = ground(v) + 0.035
-				st.set_color(Color("87775e").lightened(rng.randf_range(-0.06, 0.06)))
-				st.add_vertex(v)
-		st.generate_normals()
-		var mesh_instance = MeshInstance3D.new()
-		mesh_instance.name = "ForestFootpath"
-		mesh_instance.mesh = st.commit()
-		var material = RallyProps.material(Color.WHITE)
-		material.vertex_color_use_as_albedo = true
-		material.vertex_color_is_srgb = true
-		mesh_instance.material_override = material
-		add_child(mesh_instance)
 
 func _build_road() -> void:
 	var st = SurfaceTool.new()
