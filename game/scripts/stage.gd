@@ -29,6 +29,9 @@ func _init(selected: int = 0) -> void:
 		else:
 			points.append(Vector3(sin(s / 90.0) * 38.0 + sin(s / 38.0) * 9.0, 5.0 + s * 0.024 + sin(s / 58.0) * 3.7, -s))
 	for s in [140.0, 310.0, 505.0, 690.0]:
+		if winter:
+			clearings.append(at(s) + side(s) * (13.0 if s < 500 else -13.0))
+			continue
 		var direction_sign = 1.0 if s < 500 else -1.0
 		var lookout = at(s) + side(s) * direction_sign * 27.0
 		# The spectator clearings sit above the road. A short switchback makes
@@ -83,12 +86,13 @@ func ground(pos: Vector3) -> float:
 		height += slope * 0.42 + sin(s / 85.0) * slope * 0.15
 	for clearing in clearings:
 		var d = Vector2(pos.x - clearing.x, pos.z - clearing.z).length()
-		height = lerpf(clearing.y, height, smoothstep(5.5, 11.5, d))
-	for trail in trails:
-		var trail_sample = _trail_sample(pos, trail)
-		if trail_sample.distance < trail.width:
-			var blend = 1.0 - smoothstep(trail.width * 0.55, trail.width, trail_sample.distance)
-			height = lerpf(height, trail_sample.height, blend)
+		height = lerpf(clearing.y, height, smoothstep(7.0 if winter else 5.5, 16.0 if winter else 11.5, d))
+	if not winter:
+		for trail in trails:
+			var trail_sample = _trail_sample(pos, trail)
+			if trail_sample.distance < trail.width:
+				var blend = 1.0 - smoothstep(trail.width * 0.55, trail.width, trail_sample.distance)
+				height = lerpf(height, trail_sample.height, blend)
 	return height
 
 func _trail_sample(pos: Vector3, trail: Dictionary) -> Dictionary:
@@ -125,11 +129,11 @@ func build() -> void:
 		var p = Vector3(rng.randf_range(-150, 150), 0, rng.randf_range(-LENGTH - 65, 50))
 		if road_distance(p) < 9:
 			continue
-		if trail_distance(p) < 3.2:
+		if not winter and trail_distance(p) < 3.2:
 			continue
 		var in_clearing = false
 		for c in clearings:
-			if Vector2(p.x - c.x, p.z - c.z).length() < 8.5:
+			if Vector2(p.x - c.x, p.z - c.z).length() < (11.0 if winter else 8.5):
 				in_clearing = true
 		if in_clearing:
 			continue

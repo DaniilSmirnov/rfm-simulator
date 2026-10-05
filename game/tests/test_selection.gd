@@ -50,6 +50,7 @@ func run() -> void:
 	guest.room.request_kind = "join"
 	guest.room._response(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), JSON.stringify({"player": "guest", "token": "g", "host": false, "slot": 1, "car_model": 2, "stage": 1}).to_utf8_buffer())
 	check(guest.stage.winter and guest.playing and not guest.selection_controls.visible, "guest enters host winter stage before gameplay")
+	check(guest.stage.trails.is_empty(), "winter stage keeps its original forest without spectator footpaths")
 	check(guest.car.get_meta("model") == "Lada Niva" and host.car.get_meta("model") == "Kia Rio", "room handshake preserves individual car choices")
 	check(host.stage.trees == guest.stage.trees and host.stage.points == guest.stage.points, "winter forest and terrain match on every client")
 	host.room._update_peers([{"id": "guest", "name": "Друг", "slot": 1, "car_model": 2, "state": guest.room.local_state()}])
