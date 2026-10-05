@@ -4,6 +4,7 @@ class_name RallyStage
 const LENGTH = 840.0
 const STEP = 4.0
 const WIDTH = 7.4
+const TREE_CELL_SIZE = 16.0
 const STAGES = ["Лесной перевал · гравий", "Зимний Турини · снег и лёд"]
 var variant = 0
 var winter = false
@@ -13,6 +14,8 @@ var trails: Array[Dictionary] = []
 var trees: Array[Vector3] = []
 var forest_data: Array[Dictionary] = []
 var forest_layers: Array[MultiMesh] = []
+var tree_cells: Dictionary = {}
+var indexed_tree_count = -1
 var fallen: Dictionary = {}
 var rng = RandomNumberGenerator.new()
 
@@ -135,6 +138,7 @@ func build() -> void:
 		trees.append(p)
 		forest.append({"position": p, "height": rng.randf_range(6, 13), "shade": rng.randf_range(-0.025, 0.045)})
 	forest_data = forest
+	_rebuild_tree_index()
 	_build_forest(forest)
 	for i in range(100):
 		var s = rng.randf_range(20, LENGTH - 15)
@@ -288,6 +292,18 @@ func _build_forest(forest: Array[Dictionary]) -> void:
 		instance.multimesh = mm
 		add_child(instance)
 
+func _rebuild_tree_index() -> void:
+	tree_cells.clear()
+	for index in range(trees.size()):
+		var key = _tree_cell(trees[index])
+		if not tree_cells.has(key):
+			tree_cells[key] = []
+		tree_cells[key].append(index)
+	indexed_tree_count = trees.size()
+
+func _tree_cell(pos: Vector3) -> Vector2i:
+	return Vector2i(floori(pos.x / TREE_CELL_SIZE), floori(pos.z / TREE_CELL_SIZE))
+
 func fell(index: int, direction_hint: Vector3) -> bool:
 	if index < 0 or index >= trees.size() or fallen.has(index):
 		return false
@@ -335,7 +351,23 @@ static func flat(pos: Vector3) -> Vector2:
 func obstacle_hit(start: Vector3, end: Vector3, radius: float, allow_escape: bool = false) -> int:
 	var a = flat(start)
 	var b = flat(end)
-	for index in range(trees.size()):
+	var candidates: Array = []
+	if tree_cells.is_empty() or indexed_tree_count != trees.size():
+		# Tests and external callers may append a temporary tree directly.
+		for index in range(trees.size()):
+			candidates.append(index)
+	else:
+		# Fallen trunks can extend up to roughly half a tree height from their
+		# base, so include a generous one-cell safety border around the sweep.
+		var padding = 12.0 + radius
+		var min_cell = _tree_cell(Vector3(minf(a.x, b.x) - padding, 0, minf(a.y, b.y) - padding))
+		var max_cell = _tree_cell(Vector3(maxf(a.x, b.x) + padding, 0, maxf(a.y, b.y) + padding))
+		for cell_x in range(min_cell.x, max_cell.x + 1):
+			for cell_z in range(min_cell.y, max_cell.y + 1):
+				var nearby = tree_cells.get(Vector2i(cell_x, cell_z), [])
+				for index in nearby:
+					candidates.append(index)
+	for index in candidates:
 		var c = flat(trees[index])
 		var d = c
 		var width = 0.2
