@@ -250,6 +250,10 @@ func _process(delta: float) -> void:
 		peer.avatar.position = peer.avatar.position.lerp(v(peer.state.pos), minf(1, delta * 12))
 		peer.avatar.rotation.y = lerp_angle(peer.avatar.rotation.y, peer.state.yaw, minf(1, delta * 12))
 		peer.avatar.visible = not peer.state.in_car
+		var collapsed = int(peer.state.get("beers", 0)) >= 30
+		peer.avatar.rotation.z = lerp_angle(peer.avatar.rotation.z, PI / 2 if collapsed else 0.0, minf(1, delta * 8))
+		if collapsed:
+			peer.avatar.position.y = v(peer.state.pos).y + 0.25
 		var food_sample = float(peer.state.get("eat", -1))
 		if food_sample != peer.eat_sample:
 			peer.eat_time = food_sample
@@ -301,8 +305,14 @@ static func a(pos: Vector3) -> Array:
 static func v(pos: Array) -> Vector3:
 	return Vector3(pos[0], pos[1], pos[2])
 
+func tree_requests() -> Array:
+	var result = []
+	for index in game.tree_requests:
+		result.append({"id": index, "dir": a(game.tree_requests[index])})
+	return result.slice(0, 8)
+
 func local_state() -> Dictionary:
-	return {"pos": a(game.player_position()), "car": a(game.car.position), "heading": game.heading, "tilt": a(game.car.rotation), "yaw": game.view_yaw, "pitch": game.view_pitch, "in_car": game.in_car, "tow": Input.is_action_pressed("tow") and not game.paused and not game.dead, "beer": game.drink_time, "eat": game.eat_time}
+	return {"pos": a(game.player_position()), "car": a(game.car.position), "heading": game.heading, "tilt": a(game.car.rotation), "yaw": game.view_yaw, "pitch": game.view_pitch, "in_car": game.in_car, "tow": Input.is_action_pressed("tow") and not game.paused and not game.dead and game.beers < 30, "speed": game.speed, "beers": game.beers, "trees": tree_requests(), "beer": game.drink_time, "eat": game.eat_time}
 
 func _update_peers(players: Array) -> void:
 	var present = {}
@@ -332,7 +342,7 @@ func _update_peers(players: Array) -> void:
 			skewer.position = Vector3(0, -0.5, -0.05)
 			var label = Props.label_3d(game, Vector3.ZERO, p.name, 26, 0.012, Color("fff1cb"))
 			label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-			peers[p.id] = {"id": p.id, "car": car, "avatar": avatar, "arm": arm, "can": can, "skewer": skewer, "eat_time": -1.0, "eat_sample": -1.0, "label": label, "state": null}
+			peers[p.id] = {"id": p.id, "car": car, "avatar": avatar, "arm": arm, "can": can, "skewer": skewer, "eat_time": -1.0, "eat_sample": -1.0, "label": label, "last_car": null, "state": null}
 			if p.state != null:
 				car.position = v(p.state.car)
 				avatar.position = v(p.state.pos)
@@ -378,7 +388,7 @@ func world_state() -> Dictionary:
 	var racers = []
 	for r in game.racers:
 		racers.append({"id": r.id, "variant": r.variant, "pos": a(r.node.position), "yaw": r.node.rotation.y, "tilt": a(r.node.rotation), "state": r.state})
-	return {"stones": stone_state(), "impacts": game.impact_serials, "camp": a(game.camp.position) if game.camp != null else null, "chairs": game.has_chairs, "cooking": game.cooking, "cook_time": game.cook_time, "eaten": game.eaten, "racing": game.racing, "passed": game.passed, "helped": game.helped, "elapsed": game.elapsed, "clearing": game.target_clearing, "paused": game.paused, "dead": game.dead, "finished": game.finished, "title": game.menu_title.text, "text": game.menu_text.text, "racers": racers, "tow": game.tow_target.get_meta("room_id") if game.tow_target != null else -1, "tow_progress": game.tow_progress, "tow_owner": tow_owner, "notice": game.toast_label.text, "notice_time": game.toast_time}
+	return {"fallen": game.stage.tree_snapshot(), "stones": stone_state(), "impacts": game.impact_serials, "camp": a(game.camp.position) if game.camp != null else null, "chairs": game.has_chairs, "cooking": game.cooking, "cook_time": game.cook_time, "eaten": game.eaten, "racing": game.racing, "passed": game.passed, "helped": game.helped, "elapsed": game.elapsed, "clearing": game.target_clearing, "paused": game.paused, "dead": game.dead, "finished": game.finished, "title": game.menu_title.text, "text": game.menu_text.text, "racers": racers, "tow": game.tow_target.get_meta("room_id") if game.tow_target != null else -1, "tow_progress": game.tow_progress, "tow_owner": tow_owner, "notice": game.toast_label.text, "notice_time": game.toast_time}
 
 func stone_state() -> Array:
 	var result = []
@@ -413,6 +423,9 @@ func apply_stones(w: Dictionary) -> void:
 			game.stones.erase(stone)
 
 func apply_world(w: Dictionary) -> void:
+	game.stage.apply_trees(w.get("fallen", []))
+	for f in w.get("fallen", []):
+		game.tree_requests.erase(int(f.id))
 	apply_stones(w)
 	world_paused = w.paused
 	if w.get("notice_time", 0) > 0 and w.get("notice", "") != last_notice:
@@ -523,6 +536,25 @@ func update_tow(delta: float) -> void:
 			game._cancel_tow()
 
 func check_remote_collisions() -> void:
+	var people = [{"id": player_id, "state": local_state()}]
+	for peer in peers.values():
+		if peer.state != null:
+			people.append({"id": peer.id, "state": peer.state})
+	for peer in peers.values():
+		if peer.state == null:
+			continue
+		var previous = v(peer.state.car) if peer.last_car == null else peer.last_car
+		var current = v(peer.state.car)
+		for request in peer.state.get("trees", []):
+			var index = int(request.id)
+			if index >= 0 and index < game.stage.trees.size() and current.distance_to(game.stage.trees[index]) < 4 and absf(float(peer.state.get("speed", 0))) > 1:
+				game.knock_tree(index, v(request.dir))
+		if absf(float(peer.state.get("speed", 0))) > 5:
+			for person in people:
+				if person.id != peer.id and not person.state.in_car and game.Motion.swept_hit(previous + Vector3(0, 0.7, 0), current + Vector3(0, 0.7, 0), v(person.state.pos) + Vector3(0, 0.7, 0), 1.55):
+					game.die("Легковушка сбила участника вашей компании.")
+					return
+		peer.last_car = current
 	for peer in peers.values():
 		if peer.state == null:
 			continue

@@ -31,6 +31,9 @@ var has_chairs = false
 var cooking = false
 var cook_time = 0.0
 var eaten = false
+var drunk_phase = 0.0
+var collapse_time = 0.0
+var tree_requests: Dictionary = {}
 var beers = 0
 var beer_timer = 0.0
 const DRINK_DURATION = 3.3
@@ -429,6 +432,9 @@ func _process(delta: float) -> void:
 		return
 	if not room.connected or room.is_host:
 		elapsed += delta
+	stage.update_fallen(delta)
+	if beers >= 3:
+		drunk_phase = fposmod(drunk_phase + delta * (minf(4.0, 0.12 + (beers - 3) * 0.075)), TAU)
 	if in_car:
 		_drive(delta)
 	else:
@@ -500,16 +506,17 @@ func _drive(delta: float) -> void:
 		var next = previous + vehicle_motion.velocity * dt
 		next.x = clampf(next.x, -185, 185)
 		next.z = clampf(next.z, -Stage.LENGTH + 5, 10)
-		var hit = false
-		for tree in stage.trees:
-			if Motion.swept_hit(Vector3(previous.x, 0, previous.z), Vector3(next.x, 0, next.z), Vector3(tree.x, 0, tree.z), 1.61):
-				hit = true
-				break
+		var tree_index = stage.obstacle_hit(previous, next, 0.95)
+		var hit = tree_index >= 0
+		if hit and vehicle_motion.velocity.length() > 5 and not stage.fallen.has(tree_index):
+			knock_tree(tree_index, vehicle_motion.velocity)
+		if contact_blocked(previous, next, true):
+			hit = true
 		if hit:
 			condition = maxf(0, condition - vehicle_motion.velocity.length() * 1.4)
 			vehicle_motion.velocity *= -0.25
 			speed = vehicle_motion.velocity.dot(forward)
-			toast("Дерево крепче твоего бампера.")
+			toast("Удар! Сбавь скорость.")
 		else:
 			car.position = next
 		vehicle_motion.suspension(car, stage, dt, heading, (heading - previous_heading) / dt * speed)
@@ -518,7 +525,41 @@ func _drive(delta: float) -> void:
 	if condition <= 0:
 		die("Легковушка сдалась раньше тебя.\nРазбитый СУ победил подвеску.")
 
+func knock_tree(index: int, direction_hint: Vector3) -> void:
+	if stage.fell(index, direction_hint):
+		if room.connected and not room.is_host:
+			tree_requests[index] = direction_hint.normalized()
+		toast("Дерево падает!")
+
+func contact_blocked(start: Vector3, end: Vector3, driving: bool) -> bool:
+	var cars = []
+	var people = []
+	if not driving:
+		cars.append(car.position)
+	for racer in racers:
+		cars.append(racer.node.position)
+	for peer in room.peers.values():
+		if peer.state == null:
+			continue
+		cars.append(room.v(peer.state.car))
+		if not peer.state.in_car:
+			people.append(room.v(peer.state.pos))
+	for other in cars:
+		if Motion.swept_hit(start + Vector3(0, 0.65, 0), end + Vector3(0, 0.65, 0), other + Vector3(0, 0.65, 0), 2.5 if driving else 1.75):
+			# Let an initially overlapping walker move out of the volume.
+			if end.distance_to(other) <= start.distance_to(other):
+				return true
+	for person in people:
+		if Motion.swept_hit(start + Vector3(0, 0.7, 0), end + Vector3(0, 0.7, 0), person + Vector3(0, 0.7, 0), 1.55 if driving else 0.6):
+			if end.distance_to(person) <= start.distance_to(person):
+				if driving and absf(speed) > 5 and (not room.connected or room.is_host):
+					die("Легковушка сбила участника вашей компании.")
+				return true
+	return false
+
 func _walk(delta: float) -> void:
+	if beers >= 30:
+		return
 	var motion = Vector2(Input.get_axis("left", "right"), Input.get_axis("forward", "back"))
 	if motion.length() > 1:
 		motion = motion.normalized()
@@ -526,11 +567,7 @@ func _walk(delta: float) -> void:
 	var next = walker + dir * delta * (1.4 if drink_time >= 0 or eat_time >= 0 else 4.3)
 	next.x = clampf(next.x, -185, 185)
 	next.z = clampf(next.z, -Stage.LENGTH + 5, 10)
-	var hit = false
-	for p in stage.trees:
-		if Vector2(p.x - next.x, p.z - next.z).length_squared() < 0.4:
-			hit = true
-			break
+	var hit = stage.obstacle_hit(walker, next, 0.3) >= 0 or contact_blocked(walker, next, false)
 	if not hit:
 		walker = next
 	walker.y = stage.ground(walker)
@@ -539,6 +576,8 @@ func _update_camera(delta: float) -> void:
 	if capture_mode:
 		return
 	impact_shake = maxf(0, impact_shake - delta)
+	collapse_time = minf(0.8, collapse_time + delta) if beers >= 30 else 0.0
+	var collapse = smoothstep(0, 0.8, collapse_time)
 	if in_car:
 		var behind = Vector3(sin(heading), 0, cos(heading))
 		var desired = car.position + behind * 8.2 + Vector3(0, 4.4, 0)
@@ -546,14 +585,19 @@ func _update_camera(delta: float) -> void:
 		camera.position = camera.position.lerp(desired, 1 - exp(-delta * 7))
 		camera.look_at(car.position + Vector3(0, 1.1, 0))
 	else:
-		camera.position = walker + Vector3(0, 1.72 + sin(elapsed * 12) * 0.015, 0)
+		camera.position = walker + Vector3(0, lerpf(1.72, 0.36, collapse) + sin(elapsed * 12) * 0.015, 0)
 		var sip = sin(clampf((drink_time - 1.3) / 1.2, 0, 1) * PI) if drink_time >= 0 else 0.0
 		camera.rotation = Vector3(view_pitch + sip * 0.035, view_yaw, sin(elapsed * 1.7) * 0.012 if beer_timer > 0 else 0)
 		camera.fov = 68 - sip * 2.0
 
+	if beers >= 3:
+		camera.rotation.z += drunk_phase + (PI / 2 * collapse)
 	camera.position += Vector3(sin(elapsed * 91), cos(elapsed * 73), 0) * impact_shake * 0.12
 
 func _toggle_car() -> void:
+	if beers >= 30:
+		toast("Ты лежишь. На сегодня поездки закончились.")
+		return
 	if drink_time >= 0 or eat_time >= 0:
 		toast("Сначала закончи есть или пить и освободи руки.")
 		return
@@ -658,7 +702,7 @@ func drink_beer() -> bool:
 	if in_car or not near_camp():
 		toast("Пиво осталось у стола. Подойди к лагерю пешком.")
 		return false
-	if eat_time >= 0 or drink_time >= 0 or beer_timer > 0 or beers >= 3:
+	if eat_time >= 0 or drink_time >= 0 or beer_timer > 0:
 		toast("Пока хватит. Лучше посмотри ралли.")
 		return false
 	drink_time = 0.0
@@ -701,7 +745,15 @@ func _update_drinking(delta: float) -> void:
 	if not drink_committed and drink_time >= 1.8:
 		drink_committed = true
 		beers += 1
-		beer_timer = 12
+		beer_timer = 1.0
+		if beers >= 30:
+			if in_car:
+				in_car = false
+				walker = car.position
+				walker.y = stage.ground(walker)
+			vehicle_motion.velocity = Vector3.ZERO
+			speed = 0
+			toast("Тридцатая банка. Ты упал и больше не можешь ходить.")
 		beer_audio.stream = load("res://audio/beer-sip.wav")
 		_play_audio(beer_audio)
 	if drink_time >= DRINK_DURATION:
@@ -792,7 +844,7 @@ func spawn_racer(forced: String = "") -> void:
 		if existing.kind == "stuck" and kind == "stuck":
 			kind = "pass"
 	var focus = clampf(stage.road_s(player_position()), 45, Stage.LENGTH - 80)
-	var variant = rally_spawn_count % Props.RALLY_MODELS.size()
+	var variant = [5, 0, 1, 2, 3, 4][rally_spawn_count % Props.RALLY_MODELS.size()]
 	rally_spawn_count += 1
 	var node = Props.car(Color.WHITE, true, variant)
 	add_child(node)
@@ -854,9 +906,31 @@ func _update_racers(delta: float) -> void:
 		elif racer.state == "stopped" and racer.age > 18:
 			to_remove.append(racer)
 		if racer.state in ["racing", "offroad"]:
+			var tree_hit = stage.obstacle_hit(racer.previous, node.position, 0.95)
+			if tree_hit >= 0:
+				if not stage.fallen.has(tree_hit):
+					knock_tree(tree_hit, node.position - racer.previous)
+				else:
+					racer.state = "stopped"
+					racer.age = 0
 			if Motion.swept_hit(racer.previous + Vector3(0, 0.7, 0), node.position + Vector3(0, 0.7, 0), player_position() + Vector3(0, 0.7, 0), 2.6 if in_car else 1.65):
 				die("Раллийная машина попала в тебя.\nНа этом выезд закончился.")
 				return
+		if racer.state in ["racing", "offroad"]:
+			var blockers = [car.position]
+			for peer in room.peers.values():
+				if peer.state != null:
+					blockers.append(room.v(peer.state.car))
+			for other in racers:
+				if other.id < racer.id or other.state in ["stopped", "stranded"]:
+					blockers.append(other.node.position)
+			for blocker in blockers:
+				if Motion.swept_hit(racer.previous + Vector3(0, 0.65, 0), node.position + Vector3(0, 0.65, 0), blocker + Vector3(0, 0.65, 0), 2.5):
+					node.position = racer.previous
+					racer.state = "stopped"
+					racer.age = 0
+					toast("Столкновение машин! Экипаж остановился.")
+					break
 		var d = node.position.distance_to(player_position())
 		if d < nearest_d and racer.state in ["racing", "offroad"]:
 			nearest = node
@@ -968,7 +1042,7 @@ func toast(message: String) -> void:
 func _update_hud() -> void:
 	var distance = int(player_position().distance_to(stage.clearings[target_clearing]))
 	quest_label.text = "%s Найти место  ·  %d м\n%s Разложить стол\n%s Поставить стулья\n%s Пожарить и съесть шашлык\n%s Посмотреть 6 экипажей" % ["[x]" if camp != null else "[ ]", distance, "[x]" if camp != null else "[ ]", "[x]" if has_chairs else "[ ]", "[x]" if eaten else "[ ]", "[x]" if passed >= 6 else "[ ]"]
-	status_label.text = "ЭКИПАЖИ %d/6   ·   ПОМОЩЬ %d\nПИВО %d/3   ·   ВЫЕЗД %02d:%02d" % [passed, helped, beers, int(elapsed) / 60, int(elapsed) % 60]
+	status_label.text = "ЭКИПАЖИ %d/6   ·   ПОМОЩЬ %d\nПИВО %d   ·   ВЫЕЗД %02d:%02d" % [passed, helped, beers, int(elapsed) / 60, int(elapsed) % 60]
 	if in_car:
 		info_label.text = "%02d КМ/Ч    ·    ЛЕГКОВУШКА %d%%    ·    %s" % [int(absf(speed) * 3.6), int(condition), "ОБОЧИНА" if stage.road_distance(car.position) > 4 else "ГРАВИЙ / КОЛЕЯ"]
 		hint_label.text = "WASD / стрелки — газ и руль   ·   Space — тормоз   ·   E — выйти   ·   Q — случайная поляна   ·   Home — вернуть на СУ"
@@ -980,6 +1054,8 @@ func _update_hud() -> void:
 			info_label.text = "ОТКРЫВАЕМ БАНКУ" if drink_time < 1.25 else "ЗА ХОРОШИЙ ВЫЕЗД!"
 		if eat_time >= 0:
 			info_label.text = "ЕДИМ ШАШЛЫК"
+		if beers >= 30:
+			info_label.text = "ТЫ ЛЕЖИШЬ · ХОДИТЬ БОЛЬШЕ НЕ ПОЛУЧИТСЯ"
 		if tow_target != null:
 			info_label.text = "ВЫТАСКИВАЕМ ЭКИПАЖ   ·   %d%%   ·   УДЕРЖИВАЙ T" % int(tow_progress * 100)
 	if mobile_mode:

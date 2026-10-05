@@ -14,3 +14,5 @@ run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_room.
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_physics.gd']);
 
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_food_fleet.gd']);
+
+run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_party.gd']);

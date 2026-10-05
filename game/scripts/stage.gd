@@ -7,6 +7,9 @@ const WIDTH = 7.4
 var points: PackedVector3Array = []
 var clearings: Array[Vector3] = []
 var trees: Array[Vector3] = []
+var forest_data: Array[Dictionary] = []
+var forest_layers: Array[MultiMesh] = []
+var fallen: Dictionary = {}
 var rng = RandomNumberGenerator.new()
 
 func _init() -> void:
@@ -72,6 +75,7 @@ func build() -> void:
 		p.y = ground(p)
 		trees.append(p)
 		forest.append({"position": p, "height": rng.randf_range(6, 13), "shade": rng.randf_range(-0.025, 0.045)})
+	forest_data = forest
 	_build_forest(forest)
 	for i in range(100):
 		var s = rng.randf_range(20, LENGTH - 15)
@@ -173,6 +177,7 @@ func _build_forest(forest: Array[Dictionary]) -> void:
 		mm.use_colors = true
 		mm.mesh = mesh
 		mm.instance_count = forest.size()
+		forest_layers.append(mm)
 		for i in range(forest.size()):
 			var tree_data = forest[i]
 			var h: float = tree_data.height
@@ -186,3 +191,70 @@ func _build_forest(forest: Array[Dictionary]) -> void:
 		instance.name = "ForestLayer%d" % layer
 		instance.multimesh = mm
 		add_child(instance)
+
+func fell(index: int, direction_hint: Vector3) -> bool:
+	if index < 0 or index >= trees.size() or fallen.has(index):
+		return false
+	var dir = Vector3(direction_hint.x, 0, direction_hint.z).normalized()
+	if dir.length_squared() < 0.5:
+		dir = Vector3.FORWARD
+	fallen[index] = {"direction": dir, "age": 0.0}
+	return true
+
+func update_fallen(delta: float) -> void:
+	for index in fallen:
+		var tree_data: Dictionary = forest_data[index]
+		var f: Dictionary = fallen[index]
+		f.age = minf(1.3, f.age + delta)
+		var angle = smoothstep(0, 1.3, f.age) * PI * 0.5
+		var basis = Basis(Vector3.UP.cross(f.direction).normalized(), angle)
+		f.basis = basis
+		var h: float = tree_data.height
+		for layer in range(forest_layers.size()):
+			var radius = 0.2 if layer == 0 else h * (0.28 - (layer - 1) * 0.055)
+			var height = h * (0.64 if layer == 0 else 0.49)
+			var y = h * (0.32 if layer == 0 else 0.47 + (layer - 1) * 0.18)
+			forest_layers[layer].set_instance_transform(index, Transform3D(basis * Basis.from_scale(Vector3(radius, height, radius)), trees[index] + Vector3(0, 0.2, 0) + basis * Vector3(0, y, 0)))
+
+func tree_snapshot() -> Array:
+	var result = []
+	for index in fallen:
+		var f: Dictionary = fallen[index]
+		result.append({"id": index, "dir": [f.direction.x, 0, f.direction.z], "age": f.age})
+	return result
+
+func apply_trees(snapshot: Array) -> void:
+	for f in snapshot:
+		var index = int(f.id)
+		if index < 0 or index >= trees.size():
+			continue
+		fell(index, Vector3(f.dir[0], 0, f.dir[2]))
+		fallen[index].direction = Vector3(f.dir[0], 0, f.dir[2]).normalized()
+		fallen[index].age = maxf(fallen[index].age, float(f.age))
+	update_fallen(0)
+
+static func flat(pos: Vector3) -> Vector2:
+	return Vector2(pos.x, pos.z)
+
+func obstacle_hit(start: Vector3, end: Vector3, radius: float) -> int:
+	var a = flat(start)
+	var b = flat(end)
+	for index in range(trees.size()):
+		var c = flat(trees[index])
+		var d = c
+		var width = 0.2
+		if fallen.has(index):
+			var f: Dictionary = fallen[index]
+			d += flat(f.direction) * forest_data[index].height * 0.64 * sin(smoothstep(0, 1.3, f.age) * PI * 0.5)
+			width = 0.35
+		var padding = radius + width
+		if maxf(a.x, b.x) + padding < minf(c.x, d.x) or minf(a.x, b.x) - padding > maxf(c.x, d.x) or maxf(a.y, b.y) + padding < minf(c.y, d.y) or minf(a.y, b.y) - padding > maxf(c.y, d.y):
+			continue
+		if Geometry2D.segment_intersects_segment(a, b, c, d) != null:
+			return index
+		var distance = minf(a.distance_to(Geometry2D.get_closest_point_to_segment(a, c, d)), b.distance_to(Geometry2D.get_closest_point_to_segment(b, c, d)))
+		distance = minf(distance, c.distance_to(Geometry2D.get_closest_point_to_segment(c, a, b)))
+		distance = minf(distance, d.distance_to(Geometry2D.get_closest_point_to_segment(d, a, b)))
+		if distance < radius + width:
+			return index
+	return -1

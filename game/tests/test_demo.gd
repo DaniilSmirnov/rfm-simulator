@@ -81,7 +81,8 @@ func run() -> void:
 	scene.dead = false
 	scene.menu.hide()
 	scene.beers = 3
-	check(not scene.drink_beer(), "three beer limit")
+	check(scene.drink_beer(), "beer remains available after third can")
+	scene._cancel_drink()
 	scene.beers = 1
 	check(scene.start_rally(), "stage starts on foot")
 	scene.spawn_racer("stuck")

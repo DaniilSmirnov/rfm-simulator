@@ -172,6 +172,7 @@ const RALLY_MODELS = [
 	{"name": "Тройка 2103", "body": "ece6d1", "accent": "b43e34", "length": 4.08, "roof_end": 1.05, "lights": "twin", "number": 33, "sponsor": "VOLNA", "trim": "d3d7ca"},
 	{"name": "Пятёрка 2105", "body": "53868e", "accent": "f0d66a", "length": 4.0, "roof_end": 1.03, "lights": "square", "number": 51, "sponsor": "GRAVEL", "trim": "242d2c"},
 	{"name": "Семёрка 2107", "body": "314c80", "accent": "ede9d5", "length": 4.12, "roof_end": 1.02, "lights": "square", "number": 77, "sponsor": "SUMMIT", "trim": "cdd0c2"},
+	{"name": "Семёрка TAXI 65", "body": "727c83", "accent": "e5e7d8", "length": 4.12, "roof_end": 1.02, "lights": "square", "number": 65, "sponsor": "ТАТНЕФТЬ", "trim": "bcc4c2"},
 ]
 
 static func label_3d(parent: Node3D, pos: Vector3, text: String, size: int, pixel_size: float, color: Color, yaw: float = 0.0) -> Label3D:
@@ -229,7 +230,8 @@ static func rally_car(variant: int) -> Node3D:
 		box(root, Vector3(x, 0.7, -0.72), Vector3(0.02, 0.23, 0.62), accent)
 		label_3d(root, Vector3(side * 0.905, 0.7, -0.72), profile.sponsor, 48, 0.0017, Color("172724"), yaw)
 		box(root, Vector3(x, 0.4, 0), Vector3(0.03, 0.12, 2.9), accent)
-		label_3d(root, Vector3(side * 0.798, 1.35, 0.48), "CREW / RUS", 32, 0.0018, Color("f5edcf"), yaw)
+		if variant != 5:
+			label_3d(root, Vector3(side * 0.798, 1.35, 0.48), "CREW / RUS", 32, 0.0018, Color("f5edcf"), yaw)
 		# Chequered sponsor sticker on rear quarters.
 		for row in range(2):
 			for col in range(4):
@@ -238,11 +240,11 @@ static func rally_car(variant: int) -> Node3D:
 	box(root, Vector3(0, 0.47, rear + 0.05), Vector3(1.82, 0.13, 0.12), trim)
 	box(root, Vector3(0, 0.78, front - 0.016), Vector3(1.48, 0.31, 0.03), Color("1c2825"))
 	for y in [0.67, 0.74, 0.81, 0.88]:
-		box(root, Vector3(0, y, front - 0.035), Vector3(0.7 if variant != 4 else 0.54, 0.026, 0.02), trim)
+		box(root, Vector3(0, y, front - 0.035), Vector3(0.7 if variant not in [4, 5] else 0.54, 0.026, 0.02), trim)
 	if profile.lights == "square":
 		for x in [-0.59, 0.59]:
 			box(root, Vector3(x, 0.79, front - 0.05), Vector3(0.4, 0.22, 0.05), Color("fff0ba"))
-		if variant == 4:
+		if variant in [4, 5]:
 			box(root, Vector3(0, 0.8, front - 0.064), Vector3(0.6, 0.4, 0.025), trim)
 			box(root, Vector3(0, 0.8, front - 0.08), Vector3(0.49, 0.31, 0.012), Color("26302b"))
 			for x in [-0.18, -0.06, 0.06, 0.18]:
@@ -272,10 +274,35 @@ static func rally_car(variant: int) -> Node3D:
 			box(root, Vector3(0, 1.69, z), Vector3(1.45, 0.05, 0.05), trim)
 		box(root, Vector3(0, 1.19, 1.76), Vector3(1.57, 0.57, 0.1), body)
 		box(root, Vector3(0, 1.29, 1.822), Vector3(1.37, 0.33, 0.025), Color("294047"))
-	else:
+	elif variant != 5:
 		for x in [-0.55, 0.55]:
 			box(root, Vector3(x, 1.15, rear - 0.22), Vector3(0.06, 0.24, 0.06), trim)
 		box(root, Vector3(0, 1.3, rear - 0.22), Vector3(1.82, 0.09, 0.32), accent)
+	if variant == 5:
+		# Reference livery: silver 2107 #65 with widened arches and green/white rally decals.
+		for side in [-1, 1]:
+			var yaw = side * PI / 2
+			for z in [-1.25, 1.27]:
+				box(root, Vector3(side * 0.94, 0.87, z), Vector3(0.22, 0.12, 0.96), Color("ccd1c9"))
+			box(root, Vector3(side * 0.90, 0.86, 0.16), Vector3(0.028, 0.36, 0.81), Color("eceddd"))
+			box(root, Vector3(side * 0.92, 1.02, 0.16), Vector3(0.025, 0.12, 0.81), Color("279e85"))
+			label_3d(root, Vector3(side * 0.94, 0.94, -0.10), "65", 96, 0.0026, Color("e5e02a"), yaw)
+			label_3d(root, Vector3(side * 0.82, 1.36, 0.54), "65", 96, 0.0030, Color("f06424"), yaw)
+			label_3d(root, Vector3(side * 0.825, 1.17, 0.52), "Крылов Ю.\nЯрош М.", 28, 0.0016, Color("eaece0"), yaw)
+			box(root, Vector3(side * 0.94, 0.48, 0.35), Vector3(0.025, 0.15, 2.35), Color("625c46"))
+		box(root, Vector3(0, 1.46, -0.85), Vector3(1.46, 0.15, 0.027), Color("23a887"))
+		box(root, Vector3(0, 1.46, -0.87), Vector3(0.94, 0.15, 0.028), Color("f0efe1"))
+		label_3d(root, Vector3(0, 1.46, -0.90), "ТАТНЕФТЬ", 44, 0.0019, Color("299a78"), PI)
+		box(root, Vector3(0, 1.01, -1.35), Vector3(0.55, 0.025, 0.42), Color("299e86"))
+		box(root, Vector3(0, 0.39, front - 0.15), Vector3(1.95, 0.22, 0.15), Color("d3d7d0"))
+		# Must sit on the trunk, behind the rear window, rather than on the roof.
+		var taxi = box(root, Vector3(0, 1.12, 1.65), Vector3(0.68, 0.22, 0.23), Color("eabe2c"))
+		taxi.name = "TrunkTaxi"
+		for face in [-1, 1]:
+			for row in range(2):
+				for col in range(8):
+					if (row + col) % 2 == 0:
+						box(taxi, Vector3(-0.245 + col * 0.07, -0.04 + row * 0.07, face * 0.12), Vector3(0.06, 0.06, 0.01), Color("242a25"))
 	return root
 
 static func beer_hand() -> Node3D:

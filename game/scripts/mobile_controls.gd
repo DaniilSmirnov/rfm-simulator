@@ -61,7 +61,7 @@ func _layout() -> void:
 			actions.append(["Есть", "eat", false])
 		if not game.racing:
 			actions.append(["Заезды", "rally", false])
-		if game.near_camp() and game.beers < 3:
+		if game.near_camp():
 			actions.append(["Пиво", "beer", false])
 		for racer in game.racers:
 			if racer.state == "stranded" and game.walker.distance_to(racer.node.position) < 6:

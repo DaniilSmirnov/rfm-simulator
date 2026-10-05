@@ -118,3 +118,11 @@ test('food animation phase survives sync and defaults to idle for older clients'
   reply = r.sync({ token: h.token, state: { ...state(), eat: Infinity } }, 1300);
   assert.equal(reply.players[0].state.eat, -1);
 });
+
+test('beer count, vehicle speed and bounded tree requests survive room sync', () => {
+  const { r, h } = setup();
+  const reply = r.sync({ token: h.token, state: { ...state(), beers: 30, speed: 12, trees: [{ id: 7, dir: [1, 0, 0] }, { id: -1, dir: [1, 0, 0] }, { id: 3, dir: [null, 0, 0] }] } }, 1100);
+  assert.equal(reply.players[0].state.beers, 30);
+  assert.equal(reply.players[0].state.speed, 12);
+  assert.deepEqual(reply.players[0].state.trees, [{ id: 7, dir: [1, 0, 0] }]);
+});
