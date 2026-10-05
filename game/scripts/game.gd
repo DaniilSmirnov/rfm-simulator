@@ -14,6 +14,7 @@ var eat_time = -1.0
 var eat_committed = false
 const EAT_DURATION = 3.6
 var beer_prop: Node3D
+var avatar_variant = 0
 var rope_mesh: MeshInstance3D
 var in_car = true
 var heading = 0.0
@@ -708,7 +709,7 @@ func drink_beer() -> bool:
 	drink_time = 0.0
 	drink_committed = false
 	can_opened = false
-	beer_prop = Props.beer_hand()
+	beer_prop = Props.beer_hand(avatar_variant)
 	camera.add_child(beer_prop)
 	_update_drinking(0)
 	toast("Открываем банку. За хороший выезд!")
@@ -784,7 +785,7 @@ func eat_meat() -> bool:
 		return false
 	eat_time = 0
 	eat_committed = false
-	meat_prop = Props.meat_hand()
+	meat_prop = Props.meat_hand(avatar_variant)
 	camera.add_child(meat_prop)
 	_update_eating(0)
 	toast("Шампур горячий. Приятного аппетита!")

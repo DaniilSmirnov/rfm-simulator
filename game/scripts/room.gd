@@ -192,6 +192,7 @@ func _response(result: int, code: int, _headers: PackedStringArray, bytes: Packe
 		game.start_game()
 		# Separate parked cars at the start; local movement remains responsive.
 		var lane = int(data.get("slot", 0))
+		game.avatar_variant = posmod(lane, Props.SPECTATOR_MODELS.size())
 		game.select_player_car(lane)
 		game.car.position = game.stage.at(12 + lane * 6)
 		game.toast("Комната %s · %s. Передай ID друзьям!" % [room_id, game.car.get_meta("model")])
@@ -323,7 +324,7 @@ func _update_peers(players: Array) -> void:
 		if not peers.has(p.id):
 			var car = Props.player_car(int(p.get("slot", 0)))
 			game.add_child(car)
-			var avatar = Props.player_avatar()
+			var avatar = Props.player_avatar(int(p.get("slot", 0)))
 			game.add_child(avatar)
 			var arm = avatar.get_node("RightArm")
 			var can = arm.get_node("BeerCan")
