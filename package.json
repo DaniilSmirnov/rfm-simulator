@@ -1,0 +1,20 @@
+{
+  "name": "rfm-simulator",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Симулятор раллийного овоща — Godot mini web demo",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "node scripts/build-web.mjs",
+    "test": "node scripts/test-game.mjs",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "preview": "wrangler preview"
+  },
+  "devDependencies": {
+    "wrangler": "4.147.0"
+  }
+}

@@ -1,0 +1,6 @@
+import { join } from 'node:path';
+import { getGodot, root, run } from './godot.mjs';
+const godot = await getGodot();
+const project = join(root, 'game');
+run(godot, ['--headless', '--editor', '--path', project, '--import']);
+run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_demo.gd']);

@@ -1,0 +1,6 @@
+{
+  "godot": "4.4.1-stable",
+  "emscripten": "3.1.64",
+  "template_sha256": "2ce387a1209a51d157b6f25763c6a6163f8108f2a1c84d69d4d4f4cb7beeebee",
+  "wasm_sha256": "5d82db01fa7bed3927f12b7cbdbcddf0f131f18d7c8c588f69cc6c464c8e7409"
+}
