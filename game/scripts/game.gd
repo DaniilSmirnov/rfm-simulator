@@ -9,6 +9,10 @@ var camera: Camera3D
 var camp: Node3D
 var grill: Node3D
 var smoke: GPUParticles3D
+var meat_prop: Node3D
+var eat_time = -1.0
+var eat_committed = false
+const EAT_DURATION = 3.6
 var beer_prop: Node3D
 var rope_mesh: MeshInstance3D
 var in_car = true
@@ -143,7 +147,7 @@ func _ready() -> void:
 	add_child(stage)
 	stage.build()
 	_build_environment()
-	car = Props.car(Color("c8884c"))
+	car = Props.player_car(0)
 	add_child(car)
 	car.position = stage.at(12)
 	heading = atan2(-stage.direction(12).x, -stage.direction(12).z)
@@ -243,7 +247,7 @@ func _build_ui() -> void:
 	var vb = VBoxContainer.new()
 	top.add_child(vb)
 	title_label = _label(vb, "СИМУЛЯТОР РАЛЛИЙНОГО ОВОЩА", 22)
-	_label(vb, "DYFI-INSPIRED  /  ГОРНЫЙ ЛЕС  /  ДЕМО 0.4", 12, Color("b2bea1"))
+	_label(vb, "DYFI-INSPIRED  /  ГОРНЫЙ ЛЕС  /  ДЕМО " + str(ProjectSettings.get_setting("application/config/version")), 12, Color("b2bea1"))
 	var sidebar = PanelContainer.new()
 	mobile_sidebar = sidebar
 	ui.add_child(sidebar)
@@ -381,10 +385,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion and not in_car and not mobile_mode:
 		view_yaw -= event.relative.x * 0.0025
 		view_pitch = clampf(view_pitch - event.relative.y * 0.0025, -1.15, 1.1)
-	if drink_time >= 0 or (room.connected and not room.is_host and room.world_paused):
+	if drink_time >= 0 or eat_time >= 0 or (room.connected and not room.is_host and room.world_paused):
 		return
 	for shared_action in room.SHARED_ACTIONS:
-		if event.is_action_pressed(shared_action) and room.submit(shared_action):
+		if shared_action != "eat" and event.is_action_pressed(shared_action) and room.submit(shared_action):
 			return
 	if event.is_action_pressed("interact"):
 		_toggle_car()
@@ -430,6 +434,7 @@ func _process(delta: float) -> void:
 	else:
 		_walk(delta)
 	_update_drinking(delta)
+	_update_eating(delta)
 	_update_camera(delta)
 	if not room.connected or room.is_host:
 		_update_racers(delta)
@@ -518,7 +523,7 @@ func _walk(delta: float) -> void:
 	if motion.length() > 1:
 		motion = motion.normalized()
 	var dir = Vector3(motion.x, 0, motion.y).rotated(Vector3.UP, view_yaw)
-	var next = walker + dir * delta * (1.4 if drink_time >= 0 else 4.3)
+	var next = walker + dir * delta * (1.4 if drink_time >= 0 or eat_time >= 0 else 4.3)
 	next.x = clampf(next.x, -185, 185)
 	next.z = clampf(next.z, -Stage.LENGTH + 5, 10)
 	var hit = false
@@ -549,8 +554,8 @@ func _update_camera(delta: float) -> void:
 	camera.position += Vector3(sin(elapsed * 91), cos(elapsed * 73), 0) * impact_shake * 0.12
 
 func _toggle_car() -> void:
-	if drink_time >= 0:
-		toast("Сначала допей и освободи руки.")
+	if drink_time >= 0 or eat_time >= 0:
+		toast("Сначала закончи есть или пить и освободи руки.")
 		return
 	if in_car:
 		if absf(speed) > 1:
@@ -653,7 +658,7 @@ func drink_beer() -> bool:
 	if in_car or not near_camp():
 		toast("Пиво осталось у стола. Подойди к лагерю пешком.")
 		return false
-	if drink_time >= 0 or beer_timer > 0 or beers >= 3:
+	if eat_time >= 0 or drink_time >= 0 or beer_timer > 0 or beers >= 3:
 		toast("Пока хватит. Лучше посмотри ралли.")
 		return false
 	drink_time = 0.0
@@ -712,14 +717,56 @@ func _cancel_drink() -> void:
 	if beer_audio != null:
 		beer_audio.stop()
 
+func select_player_car(variant: int) -> void:
+	var transform_before = car.transform
+	car.queue_free()
+	car = Props.player_car(variant)
+	add_child(car)
+	car.transform = transform_before
+
 func eat_meat() -> bool:
+	if not playing or paused or dead or finished or eat_time >= 0 or drink_time >= 0:
+		return false
 	if in_car or not near_camp() or cook_time < 35:
 		toast("Шашлык ещё не готов или ты далеко от лагеря.")
 		return false
-	if not eaten:
-		eaten = true
-		toast("Шашлык удался. Осталось насмотреться на ралли.")
+	eat_time = 0
+	eat_committed = false
+	meat_prop = Props.meat_hand()
+	camera.add_child(meat_prop)
+	_update_eating(0)
+	toast("Шампур горячий. Приятного аппетита!")
 	return true
+
+func commit_meat() -> bool:
+	if in_car or not near_camp() or cook_time < 35:
+		return false
+	eaten = true
+	toast("Шашлык удался. Осталось насмотреться на ралли.")
+	return true
+
+func _update_eating(delta: float) -> void:
+	if eat_time < 0:
+		return
+	eat_time = minf(EAT_DURATION, eat_time + delta)
+	var lift = Props.food_lift(eat_time)
+	meat_prop.position = Vector3(0.34, -0.72, -0.70).lerp(Vector3(0.10, -0.43, -0.39), lift)
+	meat_prop.rotation = Vector3(-0.18 * lift, 0.15, -0.25 + lift * 0.17)
+	Props.pose_skewer(meat_prop, eat_time)
+	if not eat_committed and eat_time >= 2.6:
+		eat_committed = true
+		if not room.connected or room.is_host:
+			commit_meat()
+		else:
+			room.submit("eat")
+	if eat_time >= EAT_DURATION:
+		_cancel_eat()
+
+func _cancel_eat() -> void:
+	eat_time = -1
+	if is_instance_valid(meat_prop):
+		meat_prop.queue_free()
+	meat_prop = null
 
 func start_rally() -> bool:
 	if in_car:
@@ -931,6 +978,8 @@ func _update_hud() -> void:
 		hint_label.text = "WASD — идти   ·   мышь — смотреть   ·   E — сесть   ·   F — стол   ·   C — стулья   ·   G — мангал   ·   B — пиво   ·   X — есть   ·   R — заезды"
 		if drink_time >= 0:
 			info_label.text = "ОТКРЫВАЕМ БАНКУ" if drink_time < 1.25 else "ЗА ХОРОШИЙ ВЫЕЗД!"
+		if eat_time >= 0:
+			info_label.text = "ЕДИМ ШАШЛЫК"
 		if tow_target != null:
 			info_label.text = "ВЫТАСКИВАЕМ ЭКИПАЖ   ·   %d%%   ·   УДЕРЖИВАЙ T" % int(tow_progress * 100)
 	if mobile_mode:
@@ -945,7 +994,7 @@ func _update_hud() -> void:
 func _check_finish() -> void:
 	if dead:
 		return
-	if camp != null and has_chairs and eaten and passed >= 6:
+	if camp != null and has_chairs and eaten and eat_time < 0 and passed >= 6:
 		finished = true
 		_show_result("Идеальный раллийный овощ", "Шашлык съеден. Ралли посмотрено. Ты выжил.\n\nЭкипажи: %d  ·  Помощь тросом: %d\nПиво: %d  ·  Машина: %d%%\n\nДень в лесу удался." % [passed, helped, beers, condition])
 
@@ -955,6 +1004,7 @@ func die(reason: String) -> void:
 
 func _show_result(title: String, body: String) -> void:
 	_cancel_drink()
+	_cancel_eat()
 	menu.show()
 	menu_title.text = title
 	menu_text.text = body

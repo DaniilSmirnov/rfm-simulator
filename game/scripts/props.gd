@@ -56,6 +56,115 @@ static func car(color: Color, rally: bool = false, variant: int = 0) -> Node3D:
 			box(root, Vector3(x, 0.81, 0.15), Vector3(0.03, 0.32, 0.55), Color("f2e8d0"))
 	return root
 
+# Player fleet. Shapes are stylized original meshes, with recognizable proportions.
+const PLAYER_MODELS = [
+	{"name": "Lada Granta", "color": "c8884c", "length": 4.26, "width": 1.70, "height": 1.50, "rear": 0.95, "glass": 0.36, "lights": "wide", "grille": 0.65},
+	{"name": "Lada Vesta", "color": "a8bdc2", "length": 4.41, "width": 1.77, "height": 1.49, "rear": 1.05, "glass": 0.48, "lights": "slim", "grille": 0.94},
+	{"name": "Lada Niva", "color": "627746", "length": 3.74, "width": 1.68, "height": 1.74, "rear": 1.50, "glass": 0.14, "lights": "round", "grille": 0.86},
+	{"name": "ВАЗ-2107", "color": "e6dfc7", "length": 4.12, "width": 1.64, "height": 1.45, "rear": 0.95, "glass": 0.19, "lights": "square", "grille": 0.55},
+	{"name": "Hyundai Solaris", "color": "8dabb9", "length": 4.37, "width": 1.72, "height": 1.46, "rear": 1.00, "glass": 0.52, "lights": "wide", "grille": 0.80},
+	{"name": "Kia Rio", "color": "a74d43", "length": 4.40, "width": 1.74, "height": 1.47, "rear": 0.93, "glass": 0.43, "lights": "slim", "grille": 0.56},
+	{"name": "Renault Logan", "color": "c6c9b9", "length": 4.35, "width": 1.73, "height": 1.53, "rear": 0.87, "glass": 0.27, "lights": "square", "grille": 0.90},
+	{"name": "Renault Duster", "color": "a58058", "length": 4.34, "width": 1.82, "height": 1.70, "rear": 1.63, "glass": 0.28, "lights": "square", "grille": 1.05},
+]
+
+static func player_car(variant: int = 0) -> Node3D:
+	variant = posmod(variant, PLAYER_MODELS.size())
+	var p: Dictionary = PLAYER_MODELS[variant]
+	var root = Node3D.new()
+	root.name = "PlayerCar_%d" % variant
+	root.set_meta("model", p.name)
+	root.set_meta("variant", variant)
+	var paint = Color(p.color)
+	var suv = variant in [2, 7]
+	var base = 0.81 if suv else 0.67
+	var radius = 0.43 if suv else 0.36
+	var front: float = -p.length / 2
+	var rear: float = p.length / 2
+	box(root, Vector3(0, base, 0), Vector3(p.width, 0.55, p.length), paint)
+	box(root, Vector3(0, base + 0.3, front + 0.63), Vector3(p.width * 0.96, 0.13, 1.1), paint)
+	box(root, Vector3(0, (p.height + base + 0.2) * 0.5, (p.rear - 0.65) * 0.5), Vector3(p.width * 0.85, p.height - base - 0.22, p.rear + 0.65), Color("2c454e"))
+	var windshield = box(root, Vector3(0, p.height - 0.27, -0.71), Vector3(p.width * 0.82, 0.48, 0.05), Color("49636a"))
+	windshield.rotation.x = -p.glass
+	box(root, Vector3(0, p.height, (p.rear - 0.42) * 0.5), Vector3(p.width * 0.88, 0.10, p.rear + 0.42), paint)
+	for side in [-1, 1]:
+		for z in [-0.60, 0.35, p.rear - 0.05]:
+			box(root, Vector3(side * p.width * 0.43, p.height - 0.26, z), Vector3(0.07, 0.48, 0.08), paint)
+		box(root, Vector3(side * p.width * 0.51, base + 0.43, -0.5), Vector3(0.20, 0.13, 0.19), Color("333d3b"))
+		for z in [front + 0.74, rear - 0.74]:
+			var wheel = cylinder(root, Vector3(side * p.width * 0.53, radius, z), radius, radius, 0.25, Color("202827"), 10)
+			wheel.rotation.z = PI / 2
+			var hub = cylinder(root, Vector3(side * p.width * 0.61, radius, z), radius * 0.55, radius * 0.55, 0.03, Color("aeb8b6"), 8)
+			hub.rotation.z = PI / 2
+			if suv:
+				box(root, Vector3(side * p.width * 0.5, base - 0.02, z), Vector3(0.10, 0.16, 0.9), Color("38413a"))
+		var light_x: float = side * p.width * 0.34
+		if p.lights == "round":
+			var light = cylinder(root, Vector3(light_x, base + 0.10, front - 0.025), 0.15, 0.15, 0.05, Color("eee8b4"), 10)
+			light.rotation.x = PI / 2
+		else:
+			box(root, Vector3(light_x, base + 0.13, front - 0.02), Vector3(0.48 if p.lights == "wide" else 0.38, 0.11 if p.lights == "slim" else 0.22, 0.05), Color("eee8b4"))
+		box(root, Vector3(light_x, base + 0.13, rear + 0.02), Vector3(0.35, 0.28 if suv else 0.15, 0.05), Color("ab3631"))
+	box(root, Vector3(0, base + 0.06, front - 0.04), Vector3(p.grille, 0.26, 0.06), Color("283431"))
+	for z in [front - 0.045, rear + 0.045]:
+		box(root, Vector3(0, base - 0.23, z), Vector3(p.width, 0.16, 0.10), Color("a7aca2") if variant == 3 else Color("35413d"))
+		box(root, Vector3(0, base - 0.17, z + (-0.06 if z < 0 else 0.06)), Vector3(0.38, 0.10, 0.02), Color("e8e5d0"))
+	if variant == 1: # Vesta's X-shaped front trim.
+		for side in [-1, 1]:
+			for angle in [-0.6, 0.6]:
+				var trim = box(root, Vector3(side * 0.48, base - 0.02, front - 0.065), Vector3(0.055, 0.39, 0.035), Color("c3c6be"))
+				trim.rotation.z = side * angle
+	if variant == 5:
+		box(root, Vector3(0, base - 0.20, front - 0.08), Vector3(1.10, 0.09, 0.03), Color("1f2928"))
+	if variant == 6:
+		var badge = box(root, Vector3(0, base + 0.09, front - 0.09), Vector3(0.13, 0.17, 0.03), Color("bfc5bf"))
+		badge.rotation.z = PI / 4
+	if variant == 2:
+		var spare = cylinder(root, Vector3(0, base + 0.15, rear + 0.2), 0.38, 0.38, 0.22, Color("25332b"), 10)
+		spare.rotation.x = PI / 2
+	if suv:
+		for side in [-1, 1]:
+			box(root, Vector3(side * 0.57, p.height + 0.08, 0.45), Vector3(0.06, 0.07, 1.65), Color("38413a"))
+	return root
+
+static func skewer() -> Node3D:
+	var root = Node3D.new()
+	root.name = "Skewer"
+	box(root, Vector3(0, 0.08, 0), Vector3(0.022, 0.68, 0.022), Color("b6b8ad"))
+	box(root, Vector3(0, -0.29, 0), Vector3(0.05, 0.14, 0.04), Color("725135"))
+	for i in range(3):
+		var meat = box(root, Vector3(0, i * 0.11 + 0.06, 0), Vector3(0.12, 0.09, 0.10), Color("9e5130").lightened(i * 0.035))
+		meat.name = "Meat%d" % i
+		meat.rotation.y = i * 0.5
+		box(meat, Vector3(0, 0.02, 0.051), Vector3(0.10, 0.016, 0.007), Color("563b27"))
+	return root
+
+static func meat_hand() -> Node3D:
+	var root = skewer()
+	var sleeve = box(root, Vector3(0.07, -0.48, 0.08), Vector3(0.14, 0.35, 0.17), Color("526846"))
+	sleeve.rotation.z = -0.18
+	box(root, Vector3(0, -0.24, 0.04), Vector3(0.13, 0.14, 0.12), Color("d1a780"))
+	for child in root.get_children():
+		if child is GeometryInstance3D:
+			child.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return root
+
+static func food_lift(time: float) -> float:
+	if time < 0:
+		return 0
+	if time < 0.65:
+		return smoothstep(0, 0.65, time)
+	if time < 2.8:
+		return 0.9 + cos((time - 0.65) * TAU / 0.72) * 0.1
+	return 1.0 - smoothstep(2.8, 3.6, time)
+
+static func food_bites(time: float) -> int:
+	return (1 if time >= 1.1 else 0) + (1 if time >= 1.85 else 0) + (1 if time >= 2.6 else 0)
+
+static func pose_skewer(node: Node3D, time: float) -> void:
+	for i in range(3):
+		node.get_node("Meat%d" % (2 - i)).visible = i >= food_bites(time)
+
 # Five classic rear-wheel-drive silhouettes; fictional club liveries.
 const RALLY_MODELS = [
 	{"name": "Копейка 2101", "body": "d84b33", "accent": "f3e7ca", "length": 3.9, "roof_end": 0.95, "lights": "round", "number": 17, "sponsor": "TAIGA", "trim": "c4c6b9"},

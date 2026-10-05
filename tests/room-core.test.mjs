@@ -98,3 +98,23 @@ test('personal car suspension tilt survives sync and invalid tilt falls back saf
   reply = r.sync({ token: h.token, state: { ...state(), tilt: [null, 1, 0] } }, 1200);
   assert.deepEqual(reply.players[0].state.tilt, [0, 1, 0]);
 });
+
+test('eight assigned car slots survive sync and reuse vacated slots', () => {
+  const { r, h } = setup();
+  for (let i = 2; i < 8; i++) r.add('Друг', 1000);
+  const reply = r.sync({ token: h.token, state: { ...state(), slot: 7 } }, 1100);
+  assert.deepEqual(reply.players.map(p => p.slot).sort(), [0, 1, 2, 3, 4, 5, 6, 7]);
+  assert.equal(reply.players.find(p => p.id === h.player).slot, 0);
+  const departing = Object.values(r.data.players).find(p => p.slot === 4);
+  r.leave(departing.token);
+  assert.equal(r.add('Новый', 1200).slot, 4);
+});
+test('food animation phase survives sync and defaults to idle for older clients', () => {
+  const { r, h } = setup();
+  let reply = r.sync({ token: h.token, state: { ...state(), eat: 1.85 } }, 1100);
+  assert.equal(reply.players[0].state.eat, 1.85);
+  reply = r.sync({ token: h.token, state: state() }, 1200);
+  assert.equal(reply.players[0].state.eat, -1);
+  reply = r.sync({ token: h.token, state: { ...state(), eat: Infinity } }, 1300);
+  assert.equal(reply.players[0].state.eat, -1);
+});

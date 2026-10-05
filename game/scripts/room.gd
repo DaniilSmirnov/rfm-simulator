@@ -192,8 +192,9 @@ func _response(result: int, code: int, _headers: PackedStringArray, bytes: Packe
 		game.start_game()
 		# Separate parked cars at the start; local movement remains responsive.
 		var lane = int(data.get("slot", 0))
+		game.select_player_car(lane)
 		game.car.position = game.stage.at(12 + lane * 6)
-		game.toast("Комната %s. Передай ID друзьям!" % room_id)
+		game.toast("Комната %s · %s. Передай ID друзьям!" % [room_id, game.car.get_meta("model")])
 		print("ROOM_CONNECTED ", room_id, " host=", is_host)
 	else:
 		_update_peers(data.players)
@@ -249,8 +250,22 @@ func _process(delta: float) -> void:
 		peer.avatar.position = peer.avatar.position.lerp(v(peer.state.pos), minf(1, delta * 12))
 		peer.avatar.rotation.y = lerp_angle(peer.avatar.rotation.y, peer.state.yaw, minf(1, delta * 12))
 		peer.avatar.visible = not peer.state.in_car
-		peer.can.visible = peer.state.beer >= 0
-		peer.arm.rotation.x = -1.6 if peer.state.beer >= 1.25 else -0.5
+		var food_sample = float(peer.state.get("eat", -1))
+		if food_sample != peer.eat_sample:
+			peer.eat_time = food_sample
+			peer.eat_sample = food_sample
+		if peer.eat_time >= 0 and not world_paused and not game.paused:
+			peer.eat_time = minf(3.6, peer.eat_time + delta)
+		peer.skewer.visible = peer.eat_time >= 0 and peer.eat_time < 3.6 and not peer.state.in_car
+		peer.can.visible = peer.state.beer >= 0 and not peer.skewer.visible and not peer.state.in_car
+		if peer.skewer.visible:
+			peer.arm.rotation.x = lerpf(0.25, 2.3, Props.food_lift(peer.eat_time))
+			peer.arm.rotation.z = -0.45 * Props.food_lift(peer.eat_time)
+			peer.skewer.rotation.x = -Props.food_lift(peer.eat_time)
+			Props.pose_skewer(peer.skewer, peer.eat_time)
+		else:
+			peer.arm.rotation.z = 0
+			peer.arm.rotation.x = 1.6 if peer.state.beer >= 1.25 else 0.5
 		peer.label.position = peer.car.position + Vector3(0, 2.8, 0) if peer.state.in_car else peer.avatar.position + Vector3(0, 2.3, 0)
 	if not is_host:
 		if not world_paused and not game.paused and not game.dead and not game.finished:
@@ -287,7 +302,7 @@ static func v(pos: Array) -> Vector3:
 	return Vector3(pos[0], pos[1], pos[2])
 
 func local_state() -> Dictionary:
-	return {"pos": a(game.player_position()), "car": a(game.car.position), "heading": game.heading, "tilt": a(game.car.rotation), "yaw": game.view_yaw, "pitch": game.view_pitch, "in_car": game.in_car, "tow": Input.is_action_pressed("tow") and not game.paused and not game.dead, "beer": game.drink_time}
+	return {"pos": a(game.player_position()), "car": a(game.car.position), "heading": game.heading, "tilt": a(game.car.rotation), "yaw": game.view_yaw, "pitch": game.view_pitch, "in_car": game.in_car, "tow": Input.is_action_pressed("tow") and not game.paused and not game.dead, "beer": game.drink_time, "eat": game.eat_time}
 
 func _update_peers(players: Array) -> void:
 	var present = {}
@@ -297,7 +312,7 @@ func _update_peers(players: Array) -> void:
 		present[p.id] = true
 		if not peers.has(p.id):
 			var color = Color.from_hsv(float(posmod(str(p.id).hash(), 100)) / 100, 0.55, 0.8)
-			var car = Props.car(color)
+			var car = Props.player_car(int(p.get("slot", 0)))
 			game.add_child(car)
 			var avatar = Node3D.new()
 			game.add_child(avatar)
@@ -310,9 +325,14 @@ func _update_peers(players: Array) -> void:
 			arm.position = Vector3(0.37, 1.35, 0)
 			Props.box(arm, Vector3(0, -0.25, 0), Vector3(0.18, 0.5, 0.18), color)
 			var can = Props.cylinder(arm, Vector3(0, -0.52, 0), 0.09, 0.09, 0.25, Color("daa44f"))
+			can.hide()
+			var skewer = Props.skewer()
+			skewer.hide()
+			arm.add_child(skewer)
+			skewer.position = Vector3(0, -0.5, -0.05)
 			var label = Props.label_3d(game, Vector3.ZERO, p.name, 26, 0.012, Color("fff1cb"))
 			label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-			peers[p.id] = {"id": p.id, "car": car, "avatar": avatar, "arm": arm, "can": can, "label": label, "state": null}
+			peers[p.id] = {"id": p.id, "car": car, "avatar": avatar, "arm": arm, "can": can, "skewer": skewer, "eat_time": -1.0, "eat_sample": -1.0, "label": label, "state": null}
 			if p.state != null:
 				car.position = v(p.state.car)
 				avatar.position = v(p.state.pos)
@@ -344,7 +364,7 @@ func _apply_command(c: Dictionary) -> void:
 		"table": game.place_table()
 		"chairs": game.place_chairs()
 		"grill": game.start_grill()
-		"eat": game.eat_meat()
+		"eat": game.commit_meat()
 		"rally": game.start_rally()
 		"random_spot":
 			game.target_clearing = game.rng.randi_range(0, game.stage.clearings.size() - 1)

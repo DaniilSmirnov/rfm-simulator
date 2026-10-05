@@ -57,7 +57,7 @@ func _layout() -> void:
 			actions.append(["Стулья", "chairs", false])
 		elif not game.cooking:
 			actions.append(["Мангал", "grill", false])
-		elif not game.eaten:
+		elif game.cook_time >= 35:
 			actions.append(["Есть", "eat", false])
 		if not game.racing:
 			actions.append(["Заезды", "rally", false])

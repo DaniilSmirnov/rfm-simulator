@@ -38,7 +38,7 @@ export class RoomState {
     const p = this.member(body.token);
     const s = body.state;
     if (!s || !vec(s.pos) || !vec(s.car) || !number(s.heading) || !number(s.yaw) || !number(s.pitch) || typeof s.in_car !== 'boolean') throw new RoomError(400, 'Некорректное состояние игрока.');
-    p.state = { pos: s.pos, car: s.car, heading: s.heading, tilt: vec(s.tilt) ? s.tilt : [0, s.heading, 0], yaw: s.yaw, pitch: s.pitch, in_car: s.in_car, tow: s.tow === true, beer: Math.max(-1, Math.min(3.3, Number(s.beer) || 0)) };
+    p.state = { pos: s.pos, car: s.car, heading: s.heading, tilt: vec(s.tilt) ? s.tilt : [0, s.heading, 0], yaw: s.yaw, pitch: s.pitch, in_car: s.in_car, tow: s.tow === true, eat: Number.isFinite(s.eat) ? Math.max(-1, Math.min(3.6, s.eat)) : -1, beer: Math.max(-1, Math.min(3.3, Number(s.beer) || 0)) };
     p.seen = now;
     if (p.id === this.data.host) {
       if (body.world && typeof body.world === 'object' && !Array.isArray(body.world)) this.data.world = body.world;
@@ -53,7 +53,7 @@ export class RoomState {
       }
     }
     return { host: this.data.host, world: this.data.world, accepted: p.seq,
-      players: Object.values(this.data.players).map(({ id, name, state }) => ({ id, name, state })),
+      players: Object.values(this.data.players).map(({ id, name, slot, state }) => ({ id, name, slot, state })),
       commands: p.id === this.data.host ? this.data.commands : [] };
   }
   heartbeat(token, now) {
