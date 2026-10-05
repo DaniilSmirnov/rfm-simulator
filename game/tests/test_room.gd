@@ -62,6 +62,19 @@ func run() -> void:
 	host.paused = true
 	guest.room.apply_world(host.room.world_state())
 	check(guest.room.world_paused, "host pause replicated")
+	guest.enable_mobile()
+	var controls = guest.mobile_controls
+	controls._layout()
+	controls.touch_begin(9, controls.stick_center + Vector2(60, 0))
+	check(not Input.is_action_pressed("right"), "host pause blocks guest mobile movement")
+	var pause_found = false
+	for button in controls.buttons:
+		if button.action == "pause_demo":
+			controls.touch_begin(10, button.rect.get_center())
+			pause_found = true
+			break
+	check(pause_found and guest.paused and guest.menu.visible, "guest can still open pause and leave while host paused")
+	guest.paused = false
 	host.paused = false
 	host.racers[0].node.queue_free()
 	host.racers.clear()

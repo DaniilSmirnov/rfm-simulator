@@ -18,10 +18,13 @@ func _ready() -> void:
 	resized.connect(reset_input)
 
 func active() -> bool:
-	return game != null and game.playing and not game.paused and not game.dead and not game.finished and not (game.room.connected and not game.room.is_host and game.room.world_paused)
+	return game != null and game.playing and not game.paused and not game.dead and not game.finished
+
+func world_blocked() -> bool:
+	return game.room.connected and not game.room.is_host and game.room.world_paused
 
 func _process(_delta: float) -> void:
-	if not active() or last_in_car != game.in_car or last_size != size:
+	if not active() or world_blocked() or last_in_car != game.in_car or last_size != size:
 		reset_input()
 	last_in_car = game.in_car
 	last_size = size
@@ -40,7 +43,9 @@ func _layout() -> void:
 	if not active():
 		return
 	var actions: Array[Array] = []
-	if game.in_car:
+	if world_blocked():
+		actions = []
+	elif game.in_car:
 		actions = [["Выйти", "interact", false], ["Вернуть", "recover", false], ["Поляна", "random_spot", false], ["Назад", "back", true], ["Тормоз", "brake", true], ["Газ", "forward", true]]
 		if game.tow_target != null:
 			actions[1] = ["Трос", "tow", true]
@@ -102,6 +107,8 @@ func touch_begin(index: int, pos: Vector2) -> void:
 				action.pressed = true
 				game._unhandled_input(action)
 			return
+	if world_blocked():
+		return
 	if pos.distance_to(stick_center) < 115 and not _has_role("stick"):
 		fingers[index] = {"kind": "stick"}
 		_move_stick(pos)
