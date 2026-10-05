@@ -42,8 +42,9 @@ export class RoomState {
     if (!s || !vec(s.pos) || !vec(s.car) || !number(s.heading) || !number(s.yaw) || !number(s.pitch) || typeof s.in_car !== 'boolean') throw new RoomError(400, 'Некорректное состояние игрока.');
     p.state = { pos: s.pos, car: s.car, heading: s.heading, tilt: vec(s.tilt) ? s.tilt : [0, s.heading, 0], yaw: s.yaw, pitch: s.pitch, in_car: s.in_car, tow: s.tow === true, speed: number(s.speed) ? Math.max(-50, Math.min(50, s.speed)) : 0, beers: Number.isSafeInteger(s.beers) ? Math.max(0, Math.min(100000, s.beers)) : 0, trees: Array.isArray(s.trees) ? s.trees.slice(0, 8).filter(t => Number.isSafeInteger(t?.id) && t.id >= 0 && t.id < 780 && vec(t.dir)).map(t => ({ id: t.id, dir: t.dir })) : [], eat: Number.isFinite(s.eat) ? Math.max(-1, Math.min(3.6, s.eat)) : -1, beer: Math.max(-1, Math.min(3.3, Number(s.beer) || 0)) };
     p.seen = now;
+    p.state_time = now;
     if (p.id === this.data.host) {
-      if (body.world && typeof body.world === 'object' && !Array.isArray(body.world)) this.data.world = body.world;
+      if (body.world && typeof body.world === 'object' && !Array.isArray(body.world)) { this.data.world = body.world; this.data.world_time = now; }
       const ack = new Set(Array.isArray(body.ack) ? body.ack.slice(0, 64) : []);
       this.data.commands = this.data.commands.filter(c => !ack.has(c.id));
     } else {
@@ -54,8 +55,8 @@ export class RoomState {
         p.seq = c.seq;
       }
     }
-    return { stage: this.data.stage ?? 0, host: this.data.host, world: this.data.world, accepted: p.seq,
-      players: Object.values(this.data.players).map(({ id, name, slot, car_model, state }) => ({ id, name, slot, car_model: car_model ?? slot, state })),
+    return { server_time: now, world_time: this.data.world_time ?? 0, stage: this.data.stage ?? 0, host: this.data.host, world: this.data.world, accepted: p.seq,
+      players: Object.values(this.data.players).map(({ id, name, slot, car_model, state_time, state }) => ({ id, name, slot, car_model: car_model ?? slot, state_time: state_time ?? 0, state })),
       commands: p.id === this.data.host ? this.data.commands : [] };
   }
   heartbeat(token, now) {

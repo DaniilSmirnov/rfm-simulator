@@ -63,6 +63,7 @@ func run() -> void:
 	host._update_stones(0.1)
 	host.stone_impact("guest")
 	guest.room.apply_world(host.room.world_state())
+	await create_timer(0.4).timeout
 	guest.room._process(0.1)
 	check(guest.stones.size() == host.stones.size() and guest.stones.size() > 0, "shared gravel is replicated")
 	check(absf(guest.racers[0].node.rotation.z + 0.18) < 0.02, "rally suspension roll replicated")

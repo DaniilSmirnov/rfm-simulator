@@ -3,6 +3,19 @@ import assert from 'node:assert/strict';
 import { RoomState, MAX_PLAYERS } from '../server/room-core.mjs';
 const state = (x = 0) => ({ pos: [x, 1, 2], car: [3, 4, 5], heading: 1, yaw: 2, pitch: 0, in_car: false, tow: false, beer: -1 });
 const setup = () => { const r = new RoomState(); const h = r.add('Хозяин', 1000, true); const g = r.add('Друг', 1000); return { r, h, g }; };
+test('snapshot timestamps belong to state updates rather than polls or heartbeats', () => {
+  const { r, h, g } = setup();
+  r.sync({ token: h.token, state: state(), world: { elapsed: 1 } }, 1100);
+  r.heartbeat(h.token, 1150);
+  let reply = r.sync({ token: g.token, state: state() }, 1200);
+  assert.equal(reply.server_time, 1200);
+  assert.equal(reply.world_time, 1100);
+  assert.equal(reply.players.find(p => p.id === h.player).state_time, 1100);
+  const restored = new RoomState(structuredClone(r.data));
+  reply = restored.sync({ token: h.token, state: state(), world: { elapsed: 2 } }, 1300);
+  assert.equal(reply.world_time, 1300);
+  assert.equal(reply.players.find(p => p.id === g.player).state_time, 1200);
+});
 test('host stage and individual car choices persist through joins, sync and restore', () => {
   const r = new RoomState();
   const h = r.add('Host', 1000, true, { stage: 1, car_model: 5 });

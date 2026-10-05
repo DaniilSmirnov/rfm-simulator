@@ -32,13 +32,16 @@ try {
   assert.equal(guest.car_model, 2);
   const state = { pos: [0, 1, 2], car: [2, 3, 4], heading: 0, yaw: 0, pitch: 0, in_car: false, tow: false, beer: -1, eat: 1.85 };
   assert.equal((await api(base + '/sync', { token: 'wrong', state })).status, 401);
-  await api(base + '/sync', { token: host.token, state, world: { camp: [12, 3, 40], paused: false } });
+  const published = await api(base + '/sync', { token: host.token, state, world: { camp: [12, 3, 40], paused: false } });
   const shared = await api(base + '/sync', { token: guest.token, state, commands: [{ seq: 1, action: 'table' }] });
   assert.deepEqual(shared.world.camp, [12, 3, 40]);
   assert.equal(shared.players.length, 2);
   assert.deepEqual(shared.players.map(p => p.slot), [0, 1]);
   assert.deepEqual(shared.players.map(p => p.car_model), [5, 2]);
   assert.equal(shared.stage, 1);
+  assert.equal(shared.world_time, published.world_time);
+  assert.ok(shared.server_time >= shared.world_time);
+  assert.equal(shared.players.find(p => p.id === host.player).state_time, published.world_time);
   assert.equal(shared.players.find(p => p.id === guest.player).state.eat, 1.85);
   const hostSync = await api(base + '/sync', { token: host.token, state });
   assert.equal(hostSync.commands[0].action, 'table');

@@ -1,5 +1,13 @@
 extends Node
 # HTTP transport works with the existing minimal web template (no WebSocket module).
+const SnapshotMotion = preload("res://scripts/snapshot_motion.gd")
+const SYNC_INTERVAL = 0.1
+var server_offset = 0.0
+var clock_initialized = false
+var best_round_trip = INF
+var request_sent_at = 0.0
+var last_world_time = -1.0
+var racer_motion: Dictionary = {}
 const Props = preload("res://scripts/props.gd")
 const SHARED_ACTIONS = ["table", "chairs", "grill", "eat", "rally", "random_spot"]
 var game: Node3D
@@ -149,6 +157,7 @@ func connect_room(id: String) -> void:
 
 func _request(kind: String, body: Dictionary) -> void:
 	request_kind = kind
+	request_sent_at = Time.get_ticks_usec() / 1000000.0
 	busy = true
 	var path = "/api/rooms" if kind == "create" else "/api/rooms/%s/%s" % [room_id, kind]
 	var err = http.request(server + path, ["Content-Type: application/json"], HTTPClient.METHOD_POST, JSON.stringify(body))
@@ -176,6 +185,8 @@ func _response(result: int, code: int, _headers: PackedStringArray, bytes: Packe
 			join_button.disabled = false
 		return
 	errors = 0
+	if data.has("server_time"):
+		update_server_clock(float(data.server_time))
 	if request_kind in ["create", "join"]:
 		player_id = data.player
 		token = data.token
@@ -210,8 +221,30 @@ func _response(result: int, code: int, _headers: PackedStringArray, bytes: Packe
 		else:
 			commands = commands.filter(func(c): return c.seq > int(data.accepted))
 			if data.world is Dictionary:
-				apply_world(data.world)
+				var stamp = float(data.get("world_time", -1))
+				if stamp < 0 or stamp > last_world_time:
+					apply_world(data.world, stamp / 1000.0 if stamp >= 0 else -1.0)
+					last_world_time = stamp
 		room_label.text = "ID %s · %d/8 · %s%s" % [room_id, peers.size() + 1, "СОЗДАТЕЛЬ" if is_host else "ЗРИТЕЛЬ", " · ПАУЗА ХОЗЯИНА" if world_paused else ""]
+
+func update_server_clock(server_msec: float) -> void:
+	var now = Time.get_ticks_usec() / 1000000.0
+	var round_trip = clampf(now - request_sent_at, 0, 2.0)
+	var estimate = server_msec / 1000.0 - now + round_trip * 0.5
+	best_round_trip = minf(best_round_trip, round_trip)
+	if not clock_initialized:
+		server_offset = estimate
+		clock_initialized = true
+	elif round_trip <= best_round_trip + 0.05:
+		# A slow first response must not leave the room clock permanently behind.
+		# Slow outliers cannot move a clock calibrated by faster round trips.
+		if absf(estimate - server_offset) > 0.2:
+			server_offset = estimate
+		else:
+			server_offset += clampf((estimate - server_offset) * 0.1, -0.01, 0.01)
+
+func server_clock() -> float:
+	return Time.get_ticks_usec() / 1000000.0 + server_offset
 
 func _process(delta: float) -> void:
 	var ui_size = game.get_viewport().get_visible_rect().size
@@ -234,8 +267,8 @@ func _process(delta: float) -> void:
 		return
 	exit_button.visible = game.paused or game.dead or game.finished
 	clock += delta
-	if not busy and clock >= 0.2:
-		clock = 0
+	if not busy and clock >= SYNC_INTERVAL:
+		clock = fmod(clock, SYNC_INTERVAL)
 		var body = {"token": token, "state": local_state(), "commands": commands}
 		if is_host:
 			body.world = world_state()
@@ -244,18 +277,17 @@ func _process(delta: float) -> void:
 	for peer in peers.values():
 		if peer.state == null:
 			continue
-		peer.car.position = peer.car.position.lerp(v(peer.state.car), minf(1, delta * 12))
-		if peer.state.has("tilt"):
-			peer.car.rotation.x = lerp_angle(peer.car.rotation.x, peer.state.tilt[0], minf(1, delta * 12))
-			peer.car.rotation.z = lerp_angle(peer.car.rotation.z, peer.state.tilt[2], minf(1, delta * 12))
-		peer.car.rotation.y = lerp_angle(peer.car.rotation.y, peer.state.heading, minf(1, delta * 12))
-		peer.avatar.position = peer.avatar.position.lerp(v(peer.state.pos), minf(1, delta * 12))
-		peer.avatar.rotation.y = lerp_angle(peer.avatar.rotation.y, peer.state.yaw, minf(1, delta * 12))
+		var car_pose = peer.car_motion.render(server_clock())
+		peer.car.position = car_pose.position
+		peer.car.rotation = car_pose.rotation
+		var avatar_pose = peer.avatar_motion.render(server_clock())
+		peer.avatar.position = avatar_pose.position
+		peer.avatar.rotation.y = avatar_pose.rotation.y
 		peer.avatar.visible = not peer.state.in_car
 		var collapsed = int(peer.state.get("beers", 0)) >= 30
-		peer.avatar.rotation.z = lerp_angle(peer.avatar.rotation.z, PI / 2 if collapsed else 0.0, minf(1, delta * 8))
+		peer.avatar.rotation.z = lerp_angle(peer.avatar.rotation.z, PI / 2 if collapsed else 0.0, 1.0 - exp(-delta * 8))
 		if collapsed:
-			peer.avatar.position.y = v(peer.state.pos).y + 0.25
+			peer.avatar.position.y = avatar_pose.position.y + 0.25
 		var food_sample = float(peer.state.get("eat", -1))
 		if food_sample != peer.eat_sample:
 			peer.eat_time = food_sample
@@ -263,7 +295,13 @@ func _process(delta: float) -> void:
 		if peer.eat_time >= 0 and not world_paused and not game.paused:
 			peer.eat_time = minf(3.6, peer.eat_time + delta)
 		peer.skewer.visible = peer.eat_time >= 0 and peer.eat_time < 3.6 and not peer.state.in_car
-		peer.can.visible = peer.state.beer >= 0 and not peer.skewer.visible and not peer.state.in_car
+		var drink_sample = float(peer.state.beer)
+		if drink_sample != peer.drink_sample:
+			peer.drink_time = drink_sample
+			peer.drink_sample = drink_sample
+		if peer.drink_time >= 0 and not world_paused and not game.paused:
+			peer.drink_time = minf(3.3, peer.drink_time + delta)
+		peer.can.visible = peer.drink_time >= 0 and peer.drink_time < 3.3 and not peer.skewer.visible and not peer.state.in_car
 		if peer.skewer.visible:
 			peer.arm.rotation.x = lerpf(0.25, 2.3, Props.food_lift(peer.eat_time))
 			peer.arm.rotation.z = -0.45 * Props.food_lift(peer.eat_time)
@@ -271,7 +309,9 @@ func _process(delta: float) -> void:
 			Props.pose_skewer(peer.skewer, peer.eat_time)
 		else:
 			peer.arm.rotation.z = 0
-			peer.arm.rotation.x = 1.6 if peer.state.beer >= 1.25 else 0.5
+			var lift = smoothstep(0.8, 1.25, peer.drink_time) * (1.0 - smoothstep(2.5, 3.3, peer.drink_time))
+			peer.arm.rotation.x = lerpf(0.5, 1.6, lift)
+			peer.can.rotation.x = 0.35 * lift
 		peer.label.position = peer.car.position + Vector3(0, 2.8, 0) if peer.state.in_car else peer.avatar.position + Vector3(0, 2.3, 0)
 	if not is_host:
 		if not world_paused and not game.paused and not game.dead and not game.finished:
@@ -286,13 +326,12 @@ func _process(delta: float) -> void:
 				if distance < nearest_distance:
 					nearest = racer.node
 					nearest_distance = distance
-			if racer_targets.has(racer.id):
-				var target = racer_targets[racer.id]
-				racer.node.position = racer.node.position.lerp(v(target.pos), minf(1, delta * 12))
-				if target.has("tilt"):
-					racer.node.rotation.x = lerp_angle(racer.node.rotation.x, target.tilt[0], minf(1, delta * 12))
-					racer.node.rotation.z = lerp_angle(racer.node.rotation.z, target.tilt[2], minf(1, delta * 12))
-				racer.node.rotation.y = lerp_angle(racer.node.rotation.y, target.yaw, minf(1, delta * 12))
+			if racer_motion.has(racer.id):
+				var frozen = world_paused or game.dead or game.finished
+				var pose = racer_motion[racer.id].render(server_clock(), frozen)
+				racer.node.position = pose.position
+				racer.node.rotation = pose.rotation
+
 
 		if nearest != null:
 			game.rally_audio.position = nearest.position
@@ -332,10 +371,19 @@ func _update_peers(players: Array) -> void:
 			var skewer = arm.get_node("Skewer")
 			var label = Props.label_3d(game, Vector3.ZERO, p.name, 26, 0.012, Color("fff1cb"))
 			label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-			peers[p.id] = {"id": p.id, "car": car, "avatar": avatar, "arm": arm, "can": can, "skewer": skewer, "eat_time": -1.0, "eat_sample": -1.0, "label": label, "last_car": null, "state": null}
+			peers[p.id] = {"id": p.id, "car": car, "avatar": avatar, "arm": arm, "can": can, "skewer": skewer, "eat_time": -1.0, "eat_sample": -1.0, "drink_time": -1.0, "drink_sample": -1.0, "label": label, "last_car": null, "state": null, "car_motion": SnapshotMotion.new(), "avatar_motion": SnapshotMotion.new()}
 			if p.state != null:
 				car.position = v(p.state.car)
 				avatar.position = v(p.state.pos)
+		if p.state != null:
+			var peer = peers[p.id]
+			var switched = peer.state != null and peer.state.in_car != p.state.in_car
+			var sample_time = float(p.state_time) / 1000.0 if p.has("state_time") else server_clock()
+			var tilt = v(p.state.get("tilt", [0, p.state.heading, 0]))
+			tilt.y = p.state.heading
+			peer.car_motion.push(sample_time, v(p.state.car), tilt)
+			peer.avatar_motion.max_speed = 12.0
+			peer.avatar_motion.push(sample_time, v(p.state.pos), Vector3(0, p.state.yaw, 0), switched)
 		peers[p.id].state = p.state
 	for id in peers.keys():
 		if not present.has(id):
@@ -349,6 +397,7 @@ func submit(action: String) -> bool:
 	if commands.size() < 8:
 		sequence += 1
 		commands.append({"seq": sequence, "action": action})
+		clock = SYNC_INTERVAL
 	return true
 
 func _apply_command(c: Dictionary) -> void:
@@ -387,7 +436,8 @@ func stone_state() -> Array:
 	return result
 
 var last_impact = 0
-func apply_stones(w: Dictionary) -> void:
+func apply_stones(w: Dictionary, sample_time: float = -1.0) -> void:
+	var age = clampf(server_clock() - sample_time, 0, 0.15) if sample_time >= 0 else 0.0
 	var count = int(w.get("impacts", {}).get(player_id, 0))
 	if count > last_impact:
 		game.impact_shake = 0.8
@@ -397,26 +447,30 @@ func apply_stones(w: Dictionary) -> void:
 	last_impact = count
 	var present = {}
 	for remote in w.get("stones", []):
+		var velocity = v(remote.velocity) + Vector3(0, -9.8 * age, 0)
+		var position = v(remote.pos) + v(remote.velocity) * age + Vector3(0, -4.9 * age * age, 0)
 		present[remote.id] = true
 		var found = false
 		for stone in game.stones:
 			if stone.id == remote.id:
-				stone.node.position = v(remote.pos)
-				stone.velocity = v(remote.velocity)
+				stone.node.position = stone.node.position.lerp(position, 0.35) if stone.node.position.distance_to(position) < 3 else position
+				stone.velocity = velocity
 				found = true
 		if not found:
-			var node = Props.box(game, v(remote.pos), Vector3.ONE * 0.10, Color("9b9079"))
-			game.stones.append({"id": remote.id, "node": node, "velocity": v(remote.velocity)})
+			var node = Props.box(game, position, Vector3.ONE * 0.10, Color("9b9079"))
+			game.stones.append({"id": remote.id, "node": node, "velocity": velocity})
 	for stone in game.stones.duplicate():
 		if not present.has(stone.id):
 			stone.node.queue_free()
 			game.stones.erase(stone)
 
-func apply_world(w: Dictionary) -> void:
+func apply_world(w: Dictionary, sample_time: float = -1.0) -> void:
+	if sample_time < 0:
+		sample_time = server_clock()
 	game.stage.apply_trees(w.get("fallen", []))
 	for f in w.get("fallen", []):
 		game.tree_requests.erase(int(f.id))
-	apply_stones(w)
+	apply_stones(w, sample_time)
 	world_paused = w.paused
 	if w.get("notice_time", 0) > 0 and w.get("notice", "") != last_notice:
 		last_notice = w.notice
@@ -460,12 +514,18 @@ func apply_world(w: Dictionary) -> void:
 			node.position = v(r.pos)
 			node.set_meta("room_id", r.id)
 			game.racers.append({"id": r.id, "node": node, "state": r.state, "variant": r.variant})
+		if not racer_motion.has(r.id):
+			racer_motion[r.id] = SnapshotMotion.new()
+		var tilt = v(r.get("tilt", [0, r.yaw, 0]))
+		tilt.y = r.yaw
+		racer_motion[r.id].push(sample_time, v(r.pos), tilt)
 		racer_targets[r.id] = r
 	for local in game.racers.duplicate():
 		if not present.has(local.id):
 			local.node.queue_free()
 			game.racers.erase(local)
 			racer_targets.erase(local.id)
+			racer_motion.erase(local.id)
 	game._cancel_tow()
 	for local in game.racers:
 		if local.id == w.tow:

@@ -9,6 +9,7 @@ var variant = 0
 var winter = false
 var points: PackedVector3Array = []
 var clearings: Array[Vector3] = []
+var trails: Array[Dictionary] = []
 var trees: Array[Vector3] = []
 var forest_data: Array[Dictionary] = []
 var forest_layers: Array[MultiMesh] = []
@@ -25,7 +26,18 @@ func _init(selected: int = 0) -> void:
 		else:
 			points.append(Vector3(sin(s / 90.0) * 38.0 + sin(s / 38.0) * 9.0, 5.0 + s * 0.024 + sin(s / 58.0) * 3.7, -s))
 	for s in [140.0, 310.0, 505.0, 690.0]:
-		clearings.append(at(s) + side(s) * (13.0 if s < 500 else -13.0))
+		var direction_sign = 1.0 if s < 500 else -1.0
+		var lookout = at(s) + side(s) * direction_sign * 27.0
+		# The spectator clearings sit above the road. A short switchback makes
+		# them reachable on foot without opening a large treeless corridor.
+		lookout.y = at(s).y + (5.2 if not winter else 4.0) + sin(s * 0.03) * 0.8
+		clearings.append(lookout)
+		var road_entry = at(s) + side(s) * direction_sign * (WIDTH * 0.5 + 1.8)
+		var first_turn = at(s - 9.0) + side(s) * direction_sign * 10.5
+		first_turn.y = at(s - 9.0).y + 1.7
+		var second_turn = at(s + 7.0) + side(s) * direction_sign * 19.0
+		second_turn.y = at(s + 7.0).y + (3.3 if not winter else 2.5)
+		trails.append({"points": [road_entry, first_turn, second_turn, lookout], "width": 2.2})
 
 func at(s: float) -> Vector3:
 	s = clampf(s, 0, LENGTH - 0.001)
@@ -68,21 +80,54 @@ func ground(pos: Vector3) -> float:
 		height += slope * 0.42 + sin(s / 85.0) * slope * 0.15
 	for clearing in clearings:
 		var d = Vector2(pos.x - clearing.x, pos.z - clearing.z).length()
-		height = lerpf(clearing.y, height, smoothstep(7, 16, d))
+		height = lerpf(clearing.y, height, smoothstep(5.5, 11.5, d))
+	for trail in trails:
+		var trail_sample = _trail_sample(pos, trail)
+		if trail_sample.distance < trail.width:
+			var blend = 1.0 - smoothstep(trail.width * 0.55, trail.width, trail_sample.distance)
+			height = lerpf(height, trail_sample.height, blend)
 	return height
+
+func _trail_sample(pos: Vector3, trail: Dictionary) -> Dictionary:
+	var nearest_distance = INF
+	var nearest_height = pos.y
+	var trail_points: Array = trail.points
+	for i in range(trail_points.size() - 1):
+		var a: Vector3 = trail_points[i]
+		var b: Vector3 = trail_points[i + 1]
+		var a2 = Vector2(a.x, a.z)
+		var b2 = Vector2(b.x, b.z)
+		var p2 = Vector2(pos.x, pos.z)
+		var segment = b2 - a2
+		var ratio = clampf((p2 - a2).dot(segment) / maxf(segment.length_squared(), 0.001), 0.0, 1.0)
+		var closest = a2.lerp(b2, ratio)
+		var distance = p2.distance_to(closest)
+		if distance < nearest_distance:
+			nearest_distance = distance
+			nearest_height = lerpf(a.y, b.y, ratio)
+	return {"distance": nearest_distance, "height": nearest_height}
+
+func trail_distance(pos: Vector3) -> float:
+	var distance = INF
+	for trail in trails:
+		distance = minf(distance, float(_trail_sample(pos, trail).distance))
+	return distance
 
 func build() -> void:
 	rng.seed = 7102026 + variant * 971
 	_build_terrain()
 	_build_road()
+	_build_trails()
 	var forest: Array[Dictionary] = []
-	for i in range(520 if winter else 780):
+	for i in range(520 if winter else 1250):
 		var p = Vector3(rng.randf_range(-150, 150), 0, rng.randf_range(-LENGTH - 65, 50))
 		if road_distance(p) < 9:
 			continue
+		if trail_distance(p) < 4.6:
+			continue
 		var in_clearing = false
 		for c in clearings:
-			if Vector2(p.x - c.x, p.z - c.z).length() < 11:
+			if Vector2(p.x - c.x, p.z - c.z).length() < 8.5:
 				in_clearing = true
 		if in_clearing:
 			continue
@@ -137,6 +182,37 @@ func _build_terrain() -> void:
 	mat.vertex_color_is_srgb = true
 	n.material_override = mat
 	add_child(n)
+
+func _build_trails() -> void:
+	# Low-poly gravel footpaths. Their centre line follows the same height
+	# samples used by `ground`, so walkers do not float above the terrain.
+	for trail in trails:
+		var st = SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		var trail_points: Array = trail.points
+		var half_width: float = trail.width * 0.5
+		for i in range(trail_points.size() - 1):
+			var a: Vector3 = trail_points[i]
+			var b: Vector3 = trail_points[i + 1]
+			var forward = Vector3(b.x - a.x, 0, b.z - a.z).normalized()
+			var across = Vector3(-forward.z, 0, forward.x) * half_width
+			var left = a + across
+			var right = a - across
+			var next_left = b + across
+			var next_right = b - across
+			for v in [left, right, next_left, right, next_right, next_left]:
+				v.y = ground(v) + 0.035
+				st.set_color(Color("87775e").lightened(rng.randf_range(-0.06, 0.06)))
+				st.add_vertex(v)
+		st.generate_normals()
+		var mesh_instance = MeshInstance3D.new()
+		mesh_instance.name = "ForestFootpath"
+		mesh_instance.mesh = st.commit()
+		var material = RallyProps.material(Color.WHITE)
+		material.vertex_color_use_as_albedo = true
+		material.vertex_color_is_srgb = true
+		mesh_instance.material_override = material
+		add_child(mesh_instance)
 
 func _build_road() -> void:
 	var st = SurfaceTool.new()
