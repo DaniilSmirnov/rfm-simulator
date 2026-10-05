@@ -242,6 +242,9 @@ func _process(delta: float) -> void:
 		if peer.state == null:
 			continue
 		peer.car.position = peer.car.position.lerp(v(peer.state.car), minf(1, delta * 12))
+		if peer.state.has("tilt"):
+			peer.car.rotation.x = lerp_angle(peer.car.rotation.x, peer.state.tilt[0], minf(1, delta * 12))
+			peer.car.rotation.z = lerp_angle(peer.car.rotation.z, peer.state.tilt[2], minf(1, delta * 12))
 		peer.car.rotation.y = lerp_angle(peer.car.rotation.y, peer.state.heading, minf(1, delta * 12))
 		peer.avatar.position = peer.avatar.position.lerp(v(peer.state.pos), minf(1, delta * 12))
 		peer.avatar.rotation.y = lerp_angle(peer.avatar.rotation.y, peer.state.yaw, minf(1, delta * 12))
@@ -250,6 +253,10 @@ func _process(delta: float) -> void:
 		peer.arm.rotation.x = -1.6 if peer.state.beer >= 1.25 else -0.5
 		peer.label.position = peer.car.position + Vector3(0, 2.8, 0) if peer.state.in_car else peer.avatar.position + Vector3(0, 2.3, 0)
 	if not is_host:
+		if not world_paused and not game.paused and not game.dead and not game.finished:
+			for stone in game.stones:
+				stone.node.position += stone.velocity * delta + Vector3(0, -4.9 * delta * delta, 0)
+				stone.velocity.y -= 9.8 * delta
 		var nearest: Node3D = null
 		var nearest_distance = INF
 		for racer in game.racers:
@@ -261,6 +268,9 @@ func _process(delta: float) -> void:
 			if racer_targets.has(racer.id):
 				var target = racer_targets[racer.id]
 				racer.node.position = racer.node.position.lerp(v(target.pos), minf(1, delta * 12))
+				if target.has("tilt"):
+					racer.node.rotation.x = lerp_angle(racer.node.rotation.x, target.tilt[0], minf(1, delta * 12))
+					racer.node.rotation.z = lerp_angle(racer.node.rotation.z, target.tilt[2], minf(1, delta * 12))
 				racer.node.rotation.y = lerp_angle(racer.node.rotation.y, target.yaw, minf(1, delta * 12))
 
 		if nearest != null:
@@ -277,7 +287,7 @@ static func v(pos: Array) -> Vector3:
 	return Vector3(pos[0], pos[1], pos[2])
 
 func local_state() -> Dictionary:
-	return {"pos": a(game.player_position()), "car": a(game.car.position), "heading": game.heading, "yaw": game.view_yaw, "pitch": game.view_pitch, "in_car": game.in_car, "tow": Input.is_action_pressed("tow") and not game.paused and not game.dead, "beer": game.drink_time}
+	return {"pos": a(game.player_position()), "car": a(game.car.position), "heading": game.heading, "tilt": a(game.car.rotation), "yaw": game.view_yaw, "pitch": game.view_pitch, "in_car": game.in_car, "tow": Input.is_action_pressed("tow") and not game.paused and not game.dead, "beer": game.drink_time}
 
 func _update_peers(players: Array) -> void:
 	var present = {}
@@ -302,7 +312,7 @@ func _update_peers(players: Array) -> void:
 			var can = Props.cylinder(arm, Vector3(0, -0.52, 0), 0.09, 0.09, 0.25, Color("daa44f"))
 			var label = Props.label_3d(game, Vector3.ZERO, p.name, 26, 0.012, Color("fff1cb"))
 			label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-			peers[p.id] = {"car": car, "avatar": avatar, "arm": arm, "can": can, "label": label, "state": null}
+			peers[p.id] = {"id": p.id, "car": car, "avatar": avatar, "arm": arm, "can": can, "label": label, "state": null}
 			if p.state != null:
 				car.position = v(p.state.car)
 				avatar.position = v(p.state.pos)
@@ -347,10 +357,43 @@ func _apply_command(c: Dictionary) -> void:
 func world_state() -> Dictionary:
 	var racers = []
 	for r in game.racers:
-		racers.append({"id": r.id, "variant": r.variant, "pos": a(r.node.position), "yaw": r.node.rotation.y, "state": r.state})
-	return {"camp": a(game.camp.position) if game.camp != null else null, "chairs": game.has_chairs, "cooking": game.cooking, "cook_time": game.cook_time, "eaten": game.eaten, "racing": game.racing, "passed": game.passed, "helped": game.helped, "elapsed": game.elapsed, "clearing": game.target_clearing, "paused": game.paused, "dead": game.dead, "finished": game.finished, "title": game.menu_title.text, "text": game.menu_text.text, "racers": racers, "tow": game.tow_target.get_meta("room_id") if game.tow_target != null else -1, "tow_progress": game.tow_progress, "tow_owner": tow_owner, "notice": game.toast_label.text, "notice_time": game.toast_time}
+		racers.append({"id": r.id, "variant": r.variant, "pos": a(r.node.position), "yaw": r.node.rotation.y, "tilt": a(r.node.rotation), "state": r.state})
+	return {"stones": stone_state(), "impacts": game.impact_serials, "camp": a(game.camp.position) if game.camp != null else null, "chairs": game.has_chairs, "cooking": game.cooking, "cook_time": game.cook_time, "eaten": game.eaten, "racing": game.racing, "passed": game.passed, "helped": game.helped, "elapsed": game.elapsed, "clearing": game.target_clearing, "paused": game.paused, "dead": game.dead, "finished": game.finished, "title": game.menu_title.text, "text": game.menu_text.text, "racers": racers, "tow": game.tow_target.get_meta("room_id") if game.tow_target != null else -1, "tow_progress": game.tow_progress, "tow_owner": tow_owner, "notice": game.toast_label.text, "notice_time": game.toast_time}
+
+func stone_state() -> Array:
+	var result = []
+	for stone in game.stones:
+		result.append({"id": stone.id, "pos": a(stone.node.position), "velocity": a(stone.velocity)})
+	return result
+
+var last_impact = 0
+func apply_stones(w: Dictionary) -> void:
+	var count = int(w.get("impacts", {}).get(player_id, 0))
+	if count > last_impact:
+		game.impact_shake = 0.8
+		if game.in_car:
+			game.condition = maxf(0, game.condition - (count - last_impact) * 0.8)
+		game.toast("Гравий из-под колёс! Отойди дальше от края СУ.")
+	last_impact = count
+	var present = {}
+	for remote in w.get("stones", []):
+		present[remote.id] = true
+		var found = false
+		for stone in game.stones:
+			if stone.id == remote.id:
+				stone.node.position = v(remote.pos)
+				stone.velocity = v(remote.velocity)
+				found = true
+		if not found:
+			var node = Props.box(game, v(remote.pos), Vector3.ONE * 0.10, Color("9b9079"))
+			game.stones.append({"id": remote.id, "node": node, "velocity": v(remote.velocity)})
+	for stone in game.stones.duplicate():
+		if not present.has(stone.id):
+			stone.node.queue_free()
+			game.stones.erase(stone)
 
 func apply_world(w: Dictionary) -> void:
+	apply_stones(w)
 	world_paused = w.paused
 	if w.get("notice_time", 0) > 0 and w.get("notice", "") != last_notice:
 		last_notice = w.notice
@@ -466,8 +509,7 @@ func check_remote_collisions() -> void:
 		for r in game.racers:
 			if r.state in ["racing", "offroad"]:
 				var pos = v(peer.state.pos)
-				var d = Vector2(pos.x - r.node.position.x, pos.z - r.node.position.z).length()
-				if d < (2.6 if peer.state.in_car else 1.65):
+				if game.Motion.swept_hit(r.get("previous", r.node.position) + Vector3(0, 0.7, 0), r.node.position + Vector3(0, 0.7, 0), pos + Vector3(0, 0.7, 0), 2.6 if peer.state.in_car else 1.65):
 					game.die("Раллийная машина задела участника вашей компании.\nСовместный выезд окончен.")
 					return
 

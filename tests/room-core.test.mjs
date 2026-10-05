@@ -90,3 +90,11 @@ test('background heartbeat keeps membership alive without advancing world', () =
   assert.equal(Object.keys(r.data.players).length, 2);
   assert.equal(r.data.world.elapsed, 1);
 });
+
+test('personal car suspension tilt survives sync and invalid tilt falls back safely', () => {
+  const { r, h } = setup();
+  let reply = r.sync({ token: h.token, state: { ...state(), tilt: [0.15, 1, -0.2] } }, 1100);
+  assert.deepEqual(reply.players[0].state.tilt, [0.15, 1, -0.2]);
+  reply = r.sync({ token: h.token, state: { ...state(), tilt: [null, 1, 0] } }, 1200);
+  assert.deepEqual(reply.players[0].state.tilt, [0, 1, 0]);
+});

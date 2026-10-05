@@ -128,6 +128,14 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch and event.pressed and not mobile_mode:
 		enable_mobile()
 
+const Motion = preload("res://scripts/vehicle_motion.gd")
+var vehicle_motion = Motion.new()
+var stones: Array[Dictionary] = []
+var stone_serial = 0
+var impact_serials: Dictionary = {}
+var impact_shake = 0.0
+var stone_clock = 0.0
+
 func _ready() -> void:
 	rng.randomize()
 	_setup_input()
@@ -400,6 +408,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			car.position = stage.at(stage.road_s(car.position))
 			heading = atan2(-stage.direction(stage.road_s(car.position)).x, -stage.direction(stage.road_s(car.position)).z)
 			speed = 0
+			vehicle_motion = Motion.new()
 			toast("Машина возвращена на СУ.")
 		else:
 			toast("Возврат на СУ недоступен во время заездов.")
@@ -424,6 +433,7 @@ func _process(delta: float) -> void:
 	_update_camera(delta)
 	if not room.connected or room.is_host:
 		_update_racers(delta)
+		_update_stones(delta)
 		_update_cooking(delta)
 		if room.connected:
 			room.update_tow(delta)
@@ -456,50 +466,50 @@ func player_position() -> Vector3:
 	return car.position if in_car else walker
 
 func _drive(delta: float) -> void:
-	var throttle = Input.get_axis("back", "forward")
-	var steer = Input.get_axis("left", "right")
-	var offroad = stage.road_distance(car.position) > 4.1
-	var max_speed = 7.0 if offroad else 19.0
-	var acceleration = 5.0 if offroad else 7.0
-	var road_index = int(stage.road_s(car.position) / Stage.STEP)
-	var puddle = not offroad and road_index % 13 == 7
-	if puddle:
-		max_speed = 9.0
-		if road_index != last_pothole and absf(speed) > 11:
-			condition = maxf(0, condition - 1.4)
-			toast("Удар в колее. Перед лужами лучше сбрасывать скорость.")
-		last_pothole = road_index
-	if throttle != 0:
-		speed = move_toward(speed, throttle * max_speed * (0.4 if throttle < 0 else 1.0), acceleration * delta)
-	else:
-		speed = move_toward(speed, 0, delta * 2.7)
-	if Input.is_action_pressed("brake"):
-		speed = move_toward(speed, 0, delta * 19)
-	heading -= steer * delta * clampf(absf(speed) / 6, 0, 1.0) * signf(speed) * 1.15
-	var forward = Vector3(-sin(heading), 0, -cos(heading))
-	var next = car.position + forward * speed * delta
-	next.x = clampf(next.x, -185, 185)
-	next.z = clampf(next.z, -Stage.LENGTH + 5, 10)
-	var hit = false
-	for p in stage.trees:
-		if Vector2(p.x - next.x, p.z - next.z).length_squared() < 2.6:
-			hit = true
-			break
-	if hit:
-		condition = maxf(0, condition - absf(speed) * 1.4)
-		speed *= -0.25
-		toast("Дерево крепче твоего бампера.")
-	else:
-		var rise = stage.ground(next) - stage.ground(car.position)
-		speed = move_toward(speed, 0, maxf(0, rise) * 1.7)
-		car.position = next
-		car.position.y = stage.ground(next) + 0.06
-	car.rotation.y = heading
-	var bumps = sin(elapsed * 27) * minf(absf(speed) * 0.003, 0.045)
-	car.rotation.z = lerpf(car.rotation.z, steer * speed * 0.003 + bumps, delta * 8)
-	car.rotation.x = lerpf(car.rotation.x, -forward.dot(stage.direction(stage.road_s(car.position))) * stage.direction(stage.road_s(car.position)).y + bumps, delta * 5)
-	if offroad and absf(speed) > 5:
-		condition = maxf(0, condition - delta * 0.15)
+	var steps = maxi(1, int(ceil(delta / (1.0 / 120.0))))
+	var dt = delta / steps
+	for step in range(steps):
+		var throttle = Input.get_axis("back", "forward")
+		var steer = Input.get_axis("left", "right")
+		var offroad = stage.road_distance(car.position) > 4.1
+		var max_speed = 7.0 if offroad else 19.0
+		var braking = Input.is_action_pressed("brake")
+		var previous_heading = heading
+		# Bicycle steering with limited gravel adhesion. Velocity keeps its direction in a slide.
+		heading -= steer * dt * clampf(absf(speed) / 6, 0, 1) * signf(speed) * 1.15
+		var forward = Vector3(-sin(heading), 0, -cos(heading))
+		var right = forward.cross(Vector3.UP)
+		var longitudinal = vehicle_motion.velocity.dot(forward)
+		if absf(speed - longitudinal) > 3:
+			vehicle_motion.velocity = forward * speed
+			longitudinal = speed
+		longitudinal = move_toward(longitudinal, throttle * max_speed * (0.4 if throttle < 0 else 1.0), (7.0 if throttle != 0 else 2.7) * dt)
+		if braking:
+			longitudinal = move_toward(longitudinal, 0, 19 * dt)
+		var lateral = vehicle_motion.velocity.dot(right)
+		var friction = stage.grip(car.position) * (3.5 if braking else 8.5) * (1.0 if vehicle_motion.grounded else 0.08)
+		lateral = move_toward(lateral, 0, friction * dt)
+		vehicle_motion.velocity = forward * longitudinal + right * lateral
+		speed = longitudinal
+		var previous = car.position
+		var next = previous + vehicle_motion.velocity * dt
+		next.x = clampf(next.x, -185, 185)
+		next.z = clampf(next.z, -Stage.LENGTH + 5, 10)
+		var hit = false
+		for tree in stage.trees:
+			if Motion.swept_hit(Vector3(previous.x, 0, previous.z), Vector3(next.x, 0, next.z), Vector3(tree.x, 0, tree.z), 1.61):
+				hit = true
+				break
+		if hit:
+			condition = maxf(0, condition - vehicle_motion.velocity.length() * 1.4)
+			vehicle_motion.velocity *= -0.25
+			speed = vehicle_motion.velocity.dot(forward)
+			toast("Дерево крепче твоего бампера.")
+		else:
+			car.position = next
+		vehicle_motion.suspension(car, stage, dt, heading, (heading - previous_heading) / dt * speed)
+		if offroad and absf(speed) > 5:
+			condition = maxf(0, condition - dt * 0.15)
 	if condition <= 0:
 		die("Легковушка сдалась раньше тебя.\nРазбитый СУ победил подвеску.")
 
@@ -523,6 +533,7 @@ func _walk(delta: float) -> void:
 func _update_camera(delta: float) -> void:
 	if capture_mode:
 		return
+	impact_shake = maxf(0, impact_shake - delta)
 	if in_car:
 		var behind = Vector3(sin(heading), 0, cos(heading))
 		var desired = car.position + behind * 8.2 + Vector3(0, 4.4, 0)
@@ -535,6 +546,8 @@ func _update_camera(delta: float) -> void:
 		camera.rotation = Vector3(view_pitch + sip * 0.035, view_yaw, sin(elapsed * 1.7) * 0.012 if beer_timer > 0 else 0)
 		camera.fov = 68 - sip * 2.0
 
+	camera.position += Vector3(sin(elapsed * 91), cos(elapsed * 73), 0) * impact_shake * 0.12
+
 func _toggle_car() -> void:
 	if drink_time >= 0:
 		toast("Сначала допей и освободи руки.")
@@ -544,6 +557,8 @@ func _toggle_car() -> void:
 			toast("Сначала остановись: Space — тормоз.")
 			return
 		in_car = false
+		vehicle_motion.velocity = Vector3.ZERO
+		speed = 0
 		walker = car.position + Vector3(-2.1, 0, 0).rotated(Vector3.UP, heading)
 		walker.y = stage.ground(walker)
 		view_yaw = heading
@@ -737,7 +752,7 @@ func spawn_racer(forced: String = "") -> void:
 	var s = maxf(0, focus - 115)
 	node.position = stage.at(s)
 	node.set_meta("room_id", rally_spawn_count)
-	racers.append({"id": rally_spawn_count, "node": node, "s": s, "focus": focus, "kind": kind, "state": "racing", "offset": 0.0, "age": 0.0, "counted": false, "start": Vector3.ZERO, "target": Vector3.ZERO, "variant": variant})
+	racers.append({"id": rally_spawn_count, "node": node, "s": s, "focus": focus, "kind": kind, "state": "racing", "offset": 0.0, "age": 0.0, "counted": false, "start": Vector3.ZERO, "target": Vector3.ZERO, "variant": variant, "motion": Motion.new(), "previous": node.position, "slide": 0.0, "slide_speed": 0.0})
 	toast("Приближается %s, номер %d!" % [node.get_meta("model"), node.get_meta("number")])
 
 func _update_racers(delta: float) -> void:
@@ -746,13 +761,25 @@ func _update_racers(delta: float) -> void:
 	var nearest_d = 9999.0
 	for racer in racers:
 		var node: Node3D = racer.node
+		racer.previous = node.position
 		racer.age += delta
 		if racer.state == "racing":
 			racer.s += delta * 27
 			var s: float = racer.s
-			node.position = stage.at(s)
-			node.rotation.y = atan2(-stage.direction(s).x, -stage.direction(s).z)
-			node.rotation.z = sin(elapsed * 20) * 0.045
+			var road_yaw = atan2(-stage.direction(s).x, -stage.direction(s).z)
+			var ahead = stage.direction(s + 7)
+			var bend = wrapf(atan2(-ahead.x, -ahead.z) - road_yaw, -PI, PI) / 7.0
+			# Lateral inertia fights the tyres until countersteering catches the slide.
+			var substeps = maxi(1, int(ceil(delta / (1.0 / 120.0))))
+			var dt = delta / substeps
+			for step in range(substeps):
+				racer.slide_speed += (bend * 27.0 * 27.0 - racer.slide * 14.0 - racer.slide_speed * stage.grip(node.position) * 5.0) * dt
+				racer.slide = clampf(racer.slide + racer.slide_speed * dt, -2.6, 2.6)
+			var height = node.position.y
+			node.position = stage.at(s) + stage.side(s) * racer.slide
+			node.position.y = height
+			var countersteer = clampf(racer.slide_speed / 27.0 + racer.slide * 0.035, -0.32, 0.32)
+			racer.motion.suspension(node, stage, delta, road_yaw + countersteer, bend * 729.0)
 			if s >= racer.focus and racer.kind != "pass":
 				racer.state = "offroad"
 				racer.age = 0
@@ -780,8 +807,7 @@ func _update_racers(delta: float) -> void:
 		elif racer.state == "stopped" and racer.age > 18:
 			to_remove.append(racer)
 		if racer.state in ["racing", "offroad"]:
-			var distance = Vector2(node.position.x - player_position().x, node.position.z - player_position().z).length()
-			if distance < (2.6 if in_car else 1.65):
+			if Motion.swept_hit(racer.previous + Vector3(0, 0.7, 0), node.position + Vector3(0, 0.7, 0), player_position() + Vector3(0, 0.7, 0), 2.6 if in_car else 1.65):
 				die("Раллийная машина попала в тебя.\nНа этом выезд закончился.")
 				return
 		var d = node.position.distance_to(player_position())
@@ -798,6 +824,47 @@ func _update_racers(delta: float) -> void:
 			_play_audio(rally_audio)
 	else:
 		rally_audio.stop()
+
+func stone_impact(id: String) -> void:
+	impact_serials[id] = int(impact_serials.get(id, 0)) + 1
+	if id == room.player_id or id == "local":
+		impact_shake = 0.8
+		if in_car:
+			condition = maxf(0, condition - 0.8)
+		toast("Гравий из-под колёс! Отойди дальше от края СУ.")
+
+func _update_stones(delta: float) -> void:
+	stone_clock -= delta
+	if stone_clock <= 0:
+		stone_clock = 0.09
+		for racer in racers:
+			if racer.state != "racing" or not racer.motion.grounded or stones.size() >= 48:
+				continue
+			var s: float = racer.s
+			var direction = stage.direction(s)
+			var side = stage.side(s) * (-1.0 if rng.randf() < 0.5 else 1.0)
+			var node = Props.box(self, Vector3.ZERO, Vector3.ONE * rng.randf_range(0.07, 0.14), Color("9b9079"))
+			node.position = racer.node.position - direction * 1.6 + side * 0.65 + Vector3(0, 0.25, 0)
+			stone_serial += 1
+			stones.append({"id": stone_serial, "node": node, "velocity": direction * rng.randf_range(-5, 3) + side * rng.randf_range(5, 12) + Vector3(0, rng.randf_range(3, 7), 0), "life": 2.0})
+	for stone in stones.duplicate():
+		var previous: Vector3 = stone.node.position
+		var motion: Vector3 = stone.velocity * delta + Vector3(0, -9.8 * delta * delta * 0.5, 0)
+		stone.node.position += motion
+		stone.velocity.y -= 9.8 * delta
+		stone.life -= delta
+		stone.node.rotation += Vector3(7, 4, 6) * delta
+		var hit = Motion.swept_hit(previous, stone.node.position, player_position() + Vector3(0, 1.0, 0), 1.2 if in_car else 0.55)
+		if hit:
+			stone_impact(room.player_id if room.connected else "local")
+		if room.connected:
+			for peer in room.peers.values():
+				if peer.state != null and Motion.swept_hit(previous, stone.node.position, room.v(peer.state.pos) + Vector3(0, 1.0, 0), 1.2 if peer.state.in_car else 0.55):
+					stone_impact(peer.id)
+					hit = true
+		if hit or stone.life <= 0 or stone.node.position.y <= stage.ground(stone.node.position):
+			stone.node.queue_free()
+			stones.erase(stone)
 
 func _update_tow(delta: float) -> void:
 	if tow_target == null and Input.is_action_pressed("tow"):

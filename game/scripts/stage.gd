@@ -34,12 +34,21 @@ func road_distance(pos: Vector3) -> float:
 	var p = at(road_s(pos))
 	return Vector2(pos.x - p.x, pos.z - p.z).length()
 
+func roughness(s: float) -> float:
+	# Broad crests plus broken ruts; deterministic across all room members.
+	return sin(s * 0.46) * 0.075 + sin(s * 1.13) * 0.035 + pow(maxf(0, cos((s - 32.0) * TAU / 46.0)), 10) * 0.55
+
+func grip(pos: Vector3) -> float:
+	if road_distance(pos) > WIDTH * 0.55:
+		return 0.48
+	return 0.42 if int(road_s(pos) / STEP) % 13 == 7 else 0.78
+
 func ground(pos: Vector3) -> float:
 	var s = road_s(pos)
 	var p = at(s)
 	var distance = road_distance(pos)
 	var slope = maxf(0, distance - 10.0)
-	var height = p.y + sin(pos.x * 0.07 + s * 0.013) * slope * 0.08 + slope * 0.20
+	var height = p.y + roughness(s) * (1.0 - smoothstep(3.7, 8.0, distance)) + sin(pos.x * 0.07 + s * 0.013) * slope * 0.08 + slope * 0.20
 	for clearing in clearings:
 		var d = Vector2(pos.x - clearing.x, pos.z - clearing.z).length()
 		height = lerpf(clearing.y, height, smoothstep(7, 16, d))
@@ -114,23 +123,26 @@ func _build_terrain() -> void:
 func _build_road() -> void:
 	var st = SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for i in range(points.size() - 1):
-		var s = i * STEP
-		var a = points[i] + side(s) * WIDTH / 2
-		var b = points[i] - side(s) * WIDTH / 2
-		var c = points[i + 1] + side(s + STEP) * WIDTH / 2
-		var d = points[i + 1] - side(s + STEP) * WIDTH / 2
+	for i in range(int(LENGTH)):
+		var s = float(i)
+		var a = at(s) + side(s) * WIDTH / 2
+		var b = at(s) - side(s) * WIDTH / 2
+		var c = at(s + 1) + side(s + 1) * WIDTH / 2
+		var d = at(s + 1) - side(s + 1) * WIDTH / 2
 		for v in [a, b, c, b, d, c]:
 			st.set_color(Color("9d896b").lightened(rng.randf_range(-0.065, 0.045)))
-			st.add_vertex(v + Vector3(0, 0.04, 0))
+			v.y = ground(v) + 0.04
+			st.add_vertex(v)
 		# Broken muddy wheel tracks, shallow puddles.
-		if i % 3 == 0:
+		if i % 12 == 0:
 			for offset in [-1.0, 1.0]:
 				var p = at(s) + side(s) * offset
+				p.y = ground(p)
 				var rut = RallyProps.box(self, p + Vector3(0, 0.07, 0), Vector3(0.5, 0.025, 2.7), Color("77654c"))
 				rut.rotation.y = atan2(-direction(s).x, -direction(s).z)
-		if i % 13 == 7:
+		if i % 52 == 28:
 			var p = at(s) + side(s) * 1.5
+			p.y = ground(p)
 			var puddle = RallyProps.cylinder(self, p + Vector3(0, 0.10, 0), 1.1, 1.1, 0.025, Color("56645d"), 9)
 			puddle.scale.z = 1.7
 	st.generate_normals()

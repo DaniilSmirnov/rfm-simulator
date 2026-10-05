@@ -59,6 +59,17 @@ func run() -> void:
 	check(host.tow_target != null and host.room.tow_owner == "guest" and host.tow_progress > 0, "guest holds rope using its own car")
 	host.room.update_tow(3.1)
 	check(host.helped == 1 and host.racers[0].state == "racing", "guest tow frees shared rally crew")
+	host.racers[0].node.rotation = Vector3(0.15, 0.2, -0.18)
+	host._update_stones(0.1)
+	host.stone_impact("guest")
+	guest.room.apply_world(host.room.world_state())
+	guest.room._process(0.1)
+	check(guest.stones.size() == host.stones.size() and guest.stones.size() > 0, "shared gravel is replicated")
+	check(absf(guest.racers[0].node.rotation.z + 0.18) < 0.02, "rally suspension roll replicated")
+	var condition_after_hit = guest.condition
+	guest.impact_shake = 0
+	guest.room.apply_world(host.room.world_state())
+	check(guest.condition == condition_after_hit and guest.impact_shake == 0, "repeated impact snapshot does not apply damage twice")
 	host.paused = true
 	guest.room.apply_world(host.room.world_state())
 	check(guest.room.world_paused, "host pause replicated")

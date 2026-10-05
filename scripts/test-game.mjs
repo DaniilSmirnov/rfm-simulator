@@ -10,3 +10,5 @@ run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_mobil
 
 run(process.execPath, ['--test', join(root, 'tests/room-core.test.mjs'), join(root, 'tests/room-session.test.mjs')]);
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_room.gd']);
+
+run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_physics.gd']);
