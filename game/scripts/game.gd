@@ -225,6 +225,15 @@ func _build_environment() -> void:
 		env.ambient_light_energy = 0.27
 		env.fog_light_color = Color("c8dae6")
 		env.fog_density = 0.0012
+	elif stage.urban:
+		sky_mat.sky_top_color = Color("7e9eae")
+		sky_mat.sky_horizon_color = Color("d7d0bd")
+		sky_mat.ground_bottom_color = Color("727873")
+		sky_mat.ground_horizon_color = Color("d7d0bd")
+		env.ambient_light_color = Color("d2cfc2")
+		env.ambient_light_energy = 0.45
+		env.fog_light_color = Color("c4c5bc")
+		env.fog_density = 0.0015
 	world.environment = env
 	add_child(world)
 	var sun = DirectionalLight3D.new()
@@ -333,7 +342,7 @@ func _build_ui() -> void:
 	menu.add_child(mv)
 	_label(mv, "ПЕРЕВАЛ. РАЛЛИ. ШАШЛЫК.", 14, Color("dfb270"))
 	menu_title = _label(mv, "Симулятор\nраллийного овоща", 42)
-	menu_text = _label(mv, "Выбери машину и спецучасток. Доедь до поляны,\nразложи лагерь, жарь шашлык и смотри ралли.", 19)
+	menu_text = _label(mv, "Выбери машину и спецучасток. Доедь до места,\nразложи лагерь, жарь шашлык и смотри ралли.", 19)
 	selection_controls = VBoxContainer.new()
 	selection_controls.add_theme_constant_override("separation", 8)
 	mv.add_child(selection_controls)
@@ -1134,7 +1143,7 @@ func _update_hud() -> void:
 			info_label.text = "ВЫТАСКИВАЕМ ЭКИПАЖ   ·   %d%%   ·   УДЕРЖИВАЙ T" % int(tow_progress * 100)
 	if mobile_mode:
 		if in_car:
-			info_label.text = "%02d КМ/Ч · МАШИНА %d%% · ПОЛЯНА %d м" % [int(absf(speed) * 3.6), int(condition), distance]
+			info_label.text = "%02d КМ/Ч · МАШИНА %d%% · %s %d м" % [int(absf(speed) * 3.6), int(condition), "ПАРКОВКА" if stage.urban else "ПОЛЯНА", distance]
 		else:
 			info_label.text = info_label.text.replace("ЗРИТЕЛЬ    ·    ", "").replace("УДЕРЖИВАЙ T", "УДЕРЖИВАЙ ТРОС")
 		if toast_time > 0:

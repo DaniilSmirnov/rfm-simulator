@@ -5,9 +5,10 @@ const LENGTH = 840.0
 const STEP = 4.0
 const WIDTH = 7.4
 const TREE_CELL_SIZE = 16.0
-const STAGES = ["Лесной перевал · гравий", "Зимний Турини · снег и лёд"]
+const STAGES = ["Лесной перевал · гравий", "Зимний Турини · снег и лёд", "Европейский город · супер СУ"]
 var variant = 0
 var winter = false
+var urban = false
 var points: PackedVector3Array = []
 var clearings: Array[Vector3] = []
 var trails: Array[Dictionary] = []
@@ -22,15 +23,24 @@ var rng = RandomNumberGenerator.new()
 func _init(selected: int = 0) -> void:
 	variant = clampi(selected, 0, STAGES.size() - 1)
 	winter = variant == 1
+	urban = variant == 2
 	for i in range(int(LENGTH / STEP) + 1):
 		var s = i * STEP
 		if winter:
 			points.append(Vector3(sin(s / 48.0) * 58.0 + sin(s / 115.0) * 14.0, 18.0 + s * 0.085 + sin(s / 36.0) * 5.0, -s))
+		elif urban:
+			points.append(Vector3(sin(s / 42.0) * 18.0 + sin(s / 17.0) * 3.2, 2.0 + sin(s / 70.0) * 0.35, -s))
 		else:
 			points.append(Vector3(sin(s / 90.0) * 38.0 + sin(s / 38.0) * 9.0, 5.0 + s * 0.024 + sin(s / 58.0) * 3.7, -s))
 	for s in [140.0, 310.0, 505.0, 690.0]:
 		if winter:
 			clearings.append(at(s) + side(s) * (13.0 if s < 500 else -13.0))
+			continue
+		if urban:
+			var parking_side = 1.0 if s < 500 else -1.0
+			var parking = at(s) + side(s) * parking_side * 10.5
+			parking.y = at(s).y + 0.08
+			clearings.append(parking)
 			continue
 		var direction_sign = 1.0 if s < 500 else -1.0
 		var lookout = at(s) + side(s) * direction_sign * 27.0
@@ -68,6 +78,8 @@ func roughness(s: float) -> float:
 	return sin(s * 0.46) * 0.075 + sin(s * 1.13) * 0.035 + pow(maxf(0, cos((s - 32.0) * TAU / 46.0)), 10) * 0.55
 
 func grip(pos: Vector3) -> float:
+	if urban:
+		return 0.68 if road_distance(pos) < WIDTH * 0.7 else 0.58
 	if winter:
 		if road_distance(pos) > WIDTH * 0.55:
 			return 0.32
@@ -81,7 +93,9 @@ func ground(pos: Vector3) -> float:
 	var p = at(s)
 	var distance = road_distance(pos)
 	var slope = maxf(0, distance - 10.0)
-	var height = p.y + roughness(s) * (1.0 - smoothstep(3.7, 8.0, distance)) + sin(pos.x * 0.07 + s * 0.013) * slope * 0.08 + slope * 0.20
+	var height = p.y + roughness(s) * (1.0 - smoothstep(3.7, 8.0, distance)) + sin(pos.x * 0.07 + s * 0.013) * slope * 0.08 + slope * (0.08 if urban else 0.20)
+	if urban:
+		height = p.y + sin(pos.x * 0.12 + s * 0.04) * 0.025 + slope * 0.08
 	if winter:
 		height += slope * 0.42 + sin(s / 85.0) * slope * 0.15
 	for clearing in clearings:
@@ -125,8 +139,10 @@ func build() -> void:
 	_build_terrain()
 	_build_road()
 	var forest: Array[Dictionary] = []
-	for i in range(520 if winter else 2200):
+	for i in range(100 if urban else (520 if winter else 2200)):
 		var p = Vector3(rng.randf_range(-150, 150), 0, rng.randf_range(-LENGTH - 65, 50))
+		if urban:
+			continue
 		if road_distance(p) < 9:
 			continue
 		if not winter and trail_distance(p) < 3.2:
@@ -151,22 +167,72 @@ func build() -> void:
 		p.y = ground(p)
 		var rock = RallyProps.cylinder(self, p + Vector3(0, 0.2, 0), rng.randf_range(0.3, 1), 0.18, 0.65, Color("7d8070"), 5)
 		rock.rotation.z = rng.randf_range(-0.3, 0.3)
+	if urban:
+		_build_city()
 	for i in range(clearings.size()):
 		var c = clearings[i]
-		RallyProps.cylinder(self, c + Vector3(0, 1.2, 0), 0.07, 0.07, 2.4, Color("d5bc8e"), 5)
-		var sign = RallyProps.box(self, c + Vector3(0, 2.15, 0), Vector3(2, 0.65, 0.12), Color("e5d9b9"))
-		var label = Label3D.new()
-		sign.add_child(label)
-		label.position = Vector3(0, 0, 0.075)
-		label.text = "ПОЛЯНА %d" % (i + 1)
-		label.font_size = 42
-		label.pixel_size = 0.005
-		label.modulate = Color("344537")
-		label.outline_size = 0
+		if urban:
+			_build_parking(c, i)
+		else:
+			RallyProps.cylinder(self, c + Vector3(0, 1.2, 0), 0.07, 0.07, 2.4, Color("d5bc8e"), 5)
+			var sign = RallyProps.box(self, c + Vector3(0, 2.15, 0), Vector3(2, 0.65, 0.12), Color("e5d9b9"))
+			var label = Label3D.new()
+			sign.add_child(label)
+			label.position = Vector3(0, 0, 0.075)
+			label.text = "ПОЛЯНА %d" % (i + 1)
+			label.font_size = 42
+			label.pixel_size = 0.005
+			label.modulate = Color("344537")
+			label.outline_size = 0
 	# Distant angular ridges, original meshes.
 	for i in range(18):
 		var p = Vector3((-1 if i % 2 == 0 else 1) * rng.randf_range(220, 340), 30, -i * 65.0)
 		RallyProps.cylinder(self, p, rng.randf_range(120, 180), 0, rng.randf_range(220, 340) if winter else rng.randf_range(130, 210), Color("c3d1db") if winter else Color("697d70"), 5)
+
+func _build_city() -> void:
+	# Compact European street frontage: pastel row houses, shutters and
+	# occasional trees, leaving the rally road readable between the blocks.
+	for s in range(24, int(LENGTH - 18), 28):
+		for side_sign in [-1.0, 1.0]:
+			var offset = 18.0 + rng.randf_range(0, 5)
+			var pos = at(s) + side(s) * side_sign * offset
+			var height = rng.randf_range(5.0, 8.0)
+			pos.y = ground(pos) + height * 0.5
+			var facade = RallyProps.box(self, pos, Vector3(rng.randf_range(7.0, 10.0), height, rng.randf_range(5.0, 7.0)), [Color("d4b08e"), Color("b8c4bf"), Color("d2c3a7"), Color("c98f7f")][(s / 28 + int(side_sign)) % 4])
+			facade.rotation.y = atan2(-direction(s).x, -direction(s).z)
+			var roof = RallyProps.box(self, pos + Vector3(0, height * 0.56, 0), Vector3(facade.mesh.size.x + 0.3, 0.3, facade.mesh.size.z + 0.3), Color("5b5960"))
+			roof.rotation.y = facade.rotation.y
+			for floor in range(2):
+				var window = RallyProps.box(self, pos + Vector3(0, -height * 0.22 + floor * 2.2, -side(s).dot(Vector3(pos.x - at(s).x, 0, pos.z - at(s).z)) * 0.01), Vector3(1.1, 0.8, 0.06), Color("38566a"))
+				window.rotation.y = facade.rotation.y
+		# Small street trees and lamps break up the continuous facade.
+		if int(s / 28) % 2 == 0:
+			var tree_pos = at(s + 10) + side(s) * 10.0
+			tree_pos.y = ground(tree_pos)
+			RallyProps.cylinder(self, tree_pos + Vector3(0, 1.6, 0), 0.12, 0.09, 3.2, Color("6b5543"), 6)
+			RallyProps.faceted(self, tree_pos + Vector3(0, 3.3, 0), Vector3(1.1, 1.4, 1.1), Color("6c8668"), 7, 4)
+		var lamp_pos = at(s) + side(s) * (WIDTH * 0.5 + 1.1)
+		lamp_pos.y = ground(lamp_pos)
+		RallyProps.cylinder(self, lamp_pos + Vector3(0, 2.2, 0), 0.035, 0.035, 4.4, Color("3e4548"), 6)
+		RallyProps.box(self, lamp_pos + Vector3(0, 4.35, 0), Vector3(0.35, 0.12, 0.35), Color("f1d88b"))
+
+func _build_parking(pos: Vector3, index: int) -> void:
+	var yaw = atan2(-direction(road_s(pos)).x, -direction(road_s(pos)).z)
+	var asphalt = RallyProps.box(self, pos + Vector3(0, 0.025, 0), Vector3(4.8, 0.05, 7.4), Color("464c4d"))
+	asphalt.rotation.y = yaw
+	for side_offset in [-2.0, 2.0]:
+		var line = RallyProps.box(self, pos + Vector3(0, 0.06, 0), Vector3(0.08, 0.015, 6.3), Color("e6d8ad"))
+		line.position += Vector3(side_offset * cos(yaw), 0, side_offset * sin(yaw))
+		line.rotation.y = yaw
+	var sign = RallyProps.box(self, pos + Vector3(0, 1.65, 0), Vector3(1.7, 0.55, 0.08), Color("e8dfc4"))
+	sign.rotation.y = yaw
+	var label = Label3D.new()
+	sign.add_child(label)
+	label.position = Vector3(0, 0, 0.06)
+	label.text = "P %d" % (index + 1)
+	label.font_size = 38
+	label.pixel_size = 0.005
+	label.modulate = Color("344537")
 
 func _build_terrain() -> void:
 	var st = SurfaceTool.new()

@@ -32,7 +32,7 @@ func run() -> void:
 	for game in [host, guest]:
 		game.set_process(false)
 		game.room.set_process(false)
-	check(host.car_choice.item_count == 8 and host.stage_choice.item_count == 2, "menu offers eight cars and two stages")
+	check(host.car_choice.item_count == 8 and host.stage_choice.item_count == 3, "menu offers eight cars and three stages")
 	host.car_choice.cycle(-1)
 	check(host.selected_car == 7 and host.car.get_meta("model") == "Renault Duster", "previous arrow wraps through all selectable car models")
 	host.car_choice.cycle(1)
@@ -44,6 +44,10 @@ func run() -> void:
 	check(host.stage.at(310).distance_to(summer.at(310)) > 15, "winter stage has its own alignment and elevation")
 	check(host.stage.grip(host.stage.at(310)) < summer.grip(summer.at(310)), "winter surface has lower grip")
 	summer.free()
+	var city = Stage.new(2)
+	city.build()
+	check(city.urban and city.clearings.size() == 4 and city.trees.is_empty(), "city super stage has four street parking spots")
+	city.free()
 	guest.select_player_car(2)
 	host.room.request_kind = "create"
 	host.room._response(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), JSON.stringify({"player": "host", "token": "h", "host": true, "room": "ABC123", "slot": 0, "car_model": 5, "stage": 1}).to_utf8_buffer())
