@@ -20,18 +20,20 @@ export class RoomState {
     if (!p) throw new RoomError(401, 'Участник не найден. Войди в комнату заново.');
     return p;
   }
-  add(name, now, host = false) {
+  add(name, now, host = false, options = {}) {
     if (!host && (!this.data.host || this.data.closed)) throw new RoomError(404, 'Комната не найдена или закрыта.');
     if (host && this.data.host) throw new RoomError(409, 'Этот ID занят.');
     if (Object.keys(this.data.players).length >= MAX_PLAYERS) throw new RoomError(409, 'Комната заполнена: максимум 8 игроков.');
     const used = new Set(Object.values(this.data.players).map(p => p.slot));
     let slot = 0;
     while (used.has(slot)) slot++;
+    const car_model = Number.isSafeInteger(options.car_model) && options.car_model >= 0 && options.car_model < 8 ? options.car_model : slot;
+    if (host) this.data.stage = options.stage === 1 ? 1 : 0;
     const id = crypto.randomUUID();
-    const p = { id, slot, token: crypto.randomUUID(), name: String(name || 'Овощ').replace(/[\u0000-\u001f]/g, '').trim().slice(0, 24) || 'Овощ', seen: now, state: null, seq: 0 };
+    const p = { id, slot, car_model, token: crypto.randomUUID(), name: String(name || 'Овощ').replace(/[\u0000-\u001f]/g, '').trim().slice(0, 24) || 'Овощ', seen: now, state: null, seq: 0 };
     this.data.players[id] = p;
     if (host) this.data.host = id;
-    return { player: id, token: p.token, host, name: p.name, slot };
+    return { player: id, token: p.token, host, name: p.name, slot, car_model, stage: this.data.stage ?? 0 };
   }
   sync(body, now) {
     if (this.data.closed) throw new RoomError(410, 'Создатель вышел. Комната закрыта.');
@@ -52,8 +54,8 @@ export class RoomState {
         p.seq = c.seq;
       }
     }
-    return { host: this.data.host, world: this.data.world, accepted: p.seq,
-      players: Object.values(this.data.players).map(({ id, name, slot, state }) => ({ id, name, slot, state })),
+    return { stage: this.data.stage ?? 0, host: this.data.host, world: this.data.world, accepted: p.seq,
+      players: Object.values(this.data.players).map(({ id, name, slot, car_model, state }) => ({ id, name, slot, car_model: car_model ?? slot, state })),
       commands: p.id === this.data.host ? this.data.commands : [] };
   }
   heartbeat(token, now) {

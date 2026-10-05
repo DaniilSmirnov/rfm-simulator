@@ -4,6 +4,9 @@ class_name RallyStage
 const LENGTH = 840.0
 const STEP = 4.0
 const WIDTH = 7.4
+const STAGES = ["Лесной перевал · гравий", "Зимний Турини · снег и лёд"]
+var variant = 0
+var winter = false
 var points: PackedVector3Array = []
 var clearings: Array[Vector3] = []
 var trees: Array[Vector3] = []
@@ -12,10 +15,15 @@ var forest_layers: Array[MultiMesh] = []
 var fallen: Dictionary = {}
 var rng = RandomNumberGenerator.new()
 
-func _init() -> void:
+func _init(selected: int = 0) -> void:
+	variant = clampi(selected, 0, STAGES.size() - 1)
+	winter = variant == 1
 	for i in range(int(LENGTH / STEP) + 1):
 		var s = i * STEP
-		points.append(Vector3(sin(s / 90.0) * 38.0 + sin(s / 38.0) * 9.0, 5.0 + s * 0.024 + sin(s / 58.0) * 3.7, -s))
+		if winter:
+			points.append(Vector3(sin(s / 48.0) * 58.0 + sin(s / 115.0) * 14.0, 18.0 + s * 0.085 + sin(s / 36.0) * 5.0, -s))
+		else:
+			points.append(Vector3(sin(s / 90.0) * 38.0 + sin(s / 38.0) * 9.0, 5.0 + s * 0.024 + sin(s / 58.0) * 3.7, -s))
 	for s in [140.0, 310.0, 505.0, 690.0]:
 		clearings.append(at(s) + side(s) * (13.0 if s < 500 else -13.0))
 
@@ -42,6 +50,10 @@ func roughness(s: float) -> float:
 	return sin(s * 0.46) * 0.075 + sin(s * 1.13) * 0.035 + pow(maxf(0, cos((s - 32.0) * TAU / 46.0)), 10) * 0.55
 
 func grip(pos: Vector3) -> float:
+	if winter:
+		if road_distance(pos) > WIDTH * 0.55:
+			return 0.32
+		return 0.22 if int(road_s(pos) / 32) % 3 == 1 else 0.47
 	if road_distance(pos) > WIDTH * 0.55:
 		return 0.48
 	return 0.42 if int(road_s(pos) / STEP) % 13 == 7 else 0.78
@@ -52,17 +64,19 @@ func ground(pos: Vector3) -> float:
 	var distance = road_distance(pos)
 	var slope = maxf(0, distance - 10.0)
 	var height = p.y + roughness(s) * (1.0 - smoothstep(3.7, 8.0, distance)) + sin(pos.x * 0.07 + s * 0.013) * slope * 0.08 + slope * 0.20
+	if winter:
+		height += slope * 0.42 + sin(s / 85.0) * slope * 0.15
 	for clearing in clearings:
 		var d = Vector2(pos.x - clearing.x, pos.z - clearing.z).length()
 		height = lerpf(clearing.y, height, smoothstep(7, 16, d))
 	return height
 
 func build() -> void:
-	rng.seed = 7102026
+	rng.seed = 7102026 + variant * 971
 	_build_terrain()
 	_build_road()
 	var forest: Array[Dictionary] = []
-	for i in range(780):
+	for i in range(520 if winter else 780):
 		var p = Vector3(rng.randf_range(-150, 150), 0, rng.randf_range(-LENGTH - 65, 50))
 		if road_distance(p) < 9:
 			continue
@@ -100,7 +114,7 @@ func build() -> void:
 	# Distant angular ridges, original meshes.
 	for i in range(18):
 		var p = Vector3((-1 if i % 2 == 0 else 1) * rng.randf_range(220, 340), 30, -i * 65.0)
-		RallyProps.cylinder(self, p, rng.randf_range(120, 180), 0, rng.randf_range(130, 210), Color("697d70"), 5)
+		RallyProps.cylinder(self, p, rng.randf_range(120, 180), 0, rng.randf_range(220, 340) if winter else rng.randf_range(130, 210), Color("c3d1db") if winter else Color("697d70"), 5)
 
 func _build_terrain() -> void:
 	var st = SurfaceTool.new()
@@ -113,7 +127,7 @@ func _build_terrain() -> void:
 			var d = Vector3(x + 4, 0, z + 4)
 			for v in [a, b, c, b, d, c]:
 				v.y = ground(v) - 0.25
-				st.set_color(Color(0.32, 0.38, 0.25).lightened(rng.randf_range(-0.07, 0.07)))
+				st.set_color((Color("b6c9d3") if winter else Color(0.32, 0.38, 0.25)).lightened(rng.randf_range(-0.07, 0.07)))
 				st.add_vertex(v)
 	st.generate_normals()
 	var n = MeshInstance3D.new()
@@ -134,7 +148,7 @@ func _build_road() -> void:
 		var c = at(s + 1) + side(s + 1) * WIDTH / 2
 		var d = at(s + 1) - side(s + 1) * WIDTH / 2
 		for v in [a, b, c, b, d, c]:
-			st.set_color(Color("9d896b").lightened(rng.randf_range(-0.065, 0.045)))
+			st.set_color((Color("708a9c") if winter else Color("9d896b")).lightened(rng.randf_range(-0.065, 0.045)))
 			v.y = ground(v) + 0.04
 			st.add_vertex(v)
 		# Broken muddy wheel tracks, shallow puddles.
@@ -142,13 +156,19 @@ func _build_road() -> void:
 			for offset in [-1.0, 1.0]:
 				var p = at(s) + side(s) * offset
 				p.y = ground(p)
-				var rut = RallyProps.box(self, p + Vector3(0, 0.07, 0), Vector3(0.5, 0.025, 2.7), Color("77654c"))
+				var rut = RallyProps.box(self, p + Vector3(0, 0.07, 0), Vector3(0.5, 0.025, 2.7), Color("586974") if winter else Color("77654c"))
 				rut.rotation.y = atan2(-direction(s).x, -direction(s).z)
 		if i % 52 == 28:
 			var p = at(s) + side(s) * 1.5
 			p.y = ground(p)
 			var puddle = RallyProps.cylinder(self, p + Vector3(0, 0.10, 0), 1.1, 1.1, 0.025, Color("56645d"), 9)
 			puddle.scale.z = 1.7
+		if winter and i % 8 == 0:
+			for offset in [-4.7, 4.7]:
+				var p = at(s) + side(s) * offset
+				p.y = ground(p)
+				var bank = RallyProps.box(self, p + Vector3(0, 0.23, 0), Vector3(1.7, 0.65, 9.0), Color("e1edf1"))
+				bank.rotation.y = atan2(-direction(s).x, -direction(s).z)
 	st.generate_normals()
 	var n = MeshInstance3D.new()
 	n.mesh = st.commit()
@@ -186,7 +206,7 @@ func _build_forest(forest: Array[Dictionary]) -> void:
 			var y = h * (0.32 if layer == 0 else 0.47 + (layer - 1) * 0.18)
 			mm.set_instance_transform(i, Transform3D(Basis.from_scale(Vector3(radius, height, radius)), tree_data.position + Vector3(0, y, 0)))
 			var shade: float = tree_data.shade
-			mm.set_instance_color(i, Color("67543d") if layer == 0 else Color(0.17 + shade, 0.28 + shade, 0.21 + shade))
+			mm.set_instance_color(i, Color("67543d") if layer == 0 else ((Color("78958a") if layer == 1 else Color("b8cdd3")).lightened(shade) if winter else Color(0.17 + shade, 0.28 + shade, 0.21 + shade)))
 		var instance = MultiMeshInstance3D.new()
 		instance.name = "ForestLayer%d" % layer
 		instance.multimesh = mm
@@ -236,7 +256,7 @@ func apply_trees(snapshot: Array) -> void:
 static func flat(pos: Vector3) -> Vector2:
 	return Vector2(pos.x, pos.z)
 
-func obstacle_hit(start: Vector3, end: Vector3, radius: float) -> int:
+func obstacle_hit(start: Vector3, end: Vector3, radius: float, allow_escape: bool = false) -> int:
 	var a = flat(start)
 	var b = flat(end)
 	for index in range(trees.size()):
@@ -248,6 +268,15 @@ func obstacle_hit(start: Vector3, end: Vector3, radius: float) -> int:
 			d += flat(f.direction) * forest_data[index].height * 0.64 * sin(smoothstep(0, 1.3, f.age) * PI * 0.5)
 			width = 0.35
 		var padding = radius + width
+		# A growing fallen trunk can overlap a parked car. Permit motion out of
+		# that volume, while retaining swept collision when approaching it.
+		if allow_escape:
+			var nearest = Geometry2D.get_closest_point_to_segment(a, c, d)
+			var outward = a - nearest
+			var start_distance = outward.length()
+			var end_distance = b.distance_to(Geometry2D.get_closest_point_to_segment(b, c, d))
+			if start_distance < padding and end_distance > start_distance + 0.0000001 and outward.dot(b - a) >= 0:
+				continue
 		if maxf(a.x, b.x) + padding < minf(c.x, d.x) or minf(a.x, b.x) - padding > maxf(c.x, d.x) or maxf(a.y, b.y) + padding < minf(c.y, d.y) or minf(a.y, b.y) - padding > maxf(c.y, d.y):
 			continue
 		if Geometry2D.segment_intersects_segment(a, b, c, d) != null:

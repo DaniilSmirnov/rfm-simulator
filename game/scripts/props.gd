@@ -197,9 +197,63 @@ const PLAYER_MODELS = [
 	{"name": "Renault Duster", "color": "a58058", "length": 4.34, "width": 1.82, "height": 1.70, "rear": 1.63, "glass": 0.28, "lights": "square", "grille": 1.05},
 ]
 
+# A closed faceted shell with bevelled cross-sections. Each model has its own
+# bonnet, roof, windscreen, rear deck and wheelbase instead of stacked boxes.
+static func car_shell(parent: Node3D, sections: Array, color: Color) -> MeshInstance3D:
+	var rows = []
+	for section in sections:
+		var z: float = section.x
+		var w: float = section.y
+		var bottom: float = section.z
+		var top: float = section.w
+		rows.append([Vector3(-w * 0.88, bottom, z), Vector3(-w, bottom + 0.08, z), Vector3(-w, top - 0.06, z), Vector3(-w * 0.88, top, z), Vector3(w * 0.88, top, z), Vector3(w, top - 0.06, z), Vector3(w, bottom + 0.08, z), Vector3(w * 0.88, bottom, z)])
+	var vertices = PackedVector3Array()
+	for i in range(rows.size() - 1):
+		for j in range(8):
+			var k = (j + 1) % 8
+			vertices.append_array(PackedVector3Array([rows[i][j], rows[i][k], rows[i + 1][j], rows[i][k], rows[i + 1][k], rows[i + 1][j]]))
+	for index in [0, rows.size() - 1]:
+		for j in range(1, 7):
+			vertices.append_array(PackedVector3Array([rows[index][0], rows[index][j], rows[index][j + 1]]))
+	var normals = PackedVector3Array()
+	var middle = Vector3(0, (sections[0].z + sections[0].w) / 2, (sections[0].x + sections[-1].x) / 2)
+	for i in range(0, vertices.size(), 3):
+		var normal = (vertices[i + 1] - vertices[i]).cross(vertices[i + 2] - vertices[i]).normalized()
+		if normal.dot((vertices[i] + vertices[i + 1] + vertices[i + 2]) / 3 - middle) < 0:
+			normal = -normal
+		for j in range(3):
+			normals.append(normal)
+	var arrays = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	var mesh = ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	var node = MeshInstance3D.new()
+	node.mesh = mesh
+	node.material_override = material(color)
+	node.material_override.cull_mode = BaseMaterial3D.CULL_DISABLED
+	parent.add_child(node)
+	return node
+
+static func car_beam(parent: Node3D, a: Vector3, b: Vector3, width: float, color: Color) -> void:
+	var beam = box(parent, (a + b) / 2, Vector3(width, a.distance_to(b), width), color)
+	beam.quaternion = Quaternion(Vector3.UP, (b - a).normalized())
+
 static func player_car(variant: int = 0) -> Node3D:
 	variant = posmod(variant, PLAYER_MODELS.size())
 	var p: Dictionary = PLAYER_MODELS[variant]
+	var shapes = [
+		[-0.87, -0.40, 0.57, 1.07, 0.72, 0.77], # Granta: compact cabin, high boot.
+		[-1.02, -0.37, 0.68, 1.25, 0.77, 0.80], # Vesta: long, low wedge.
+		[-0.72, -0.59, 1.28, 1.52, 0.63, 0.56], # Niva: upright three-door wagon.
+		[-0.77, -0.61, 0.65, 0.88, 0.68, 0.66], # 2107: rectangular cabin and flat bonnet.
+		[-0.98, -0.32, 0.64, 1.27, 0.78, 0.77], # Solaris: arched roof and swept rear glass.
+		[-0.94, -0.40, 0.70, 1.22, 0.79, 0.78], # Rio: longer bonnet, low rear deck.
+		[-0.79, -0.49, 0.65, 1.03, 0.70, 0.66], # Logan: tall, upright sedan.
+		[-0.91, -0.56, 1.29, 1.66, 0.75, 0.65], # Duster: broad five-door SUV.
+	]
+	var shape: Array = shapes[variant]
 	var root = Node3D.new()
 	root.name = "PlayerCar_%d" % variant
 	root.set_meta("model", p.name)
@@ -210,50 +264,75 @@ static func player_car(variant: int = 0) -> Node3D:
 	var radius = 0.43 if suv else 0.36
 	var front: float = -p.length / 2
 	var rear: float = p.length / 2
-	box(root, Vector3(0, base, 0), Vector3(p.width, 0.55, p.length), paint)
-	box(root, Vector3(0, base + 0.3, front + 0.63), Vector3(p.width * 0.96, 0.13, 1.1), paint)
-	box(root, Vector3(0, (p.height + base + 0.2) * 0.5, (p.rear - 0.65) * 0.5), Vector3(p.width * 0.85, p.height - base - 0.22, p.rear + 0.65), Color("2c454e"))
-	var windshield = box(root, Vector3(0, p.height - 0.27, -0.71), Vector3(p.width * 0.82, 0.48, 0.05), Color("49636a"))
-	windshield.rotation.x = -p.glass
-	box(root, Vector3(0, p.height, (p.rear - 0.42) * 0.5), Vector3(p.width * 0.88, 0.10, p.rear + 0.42), paint)
+	var half: float = p.width / 2
+	var bonnet = base + (0.34 if variant in [2, 3, 6] else 0.27)
+	var body = car_shell(root, [Vector4(front, half * 0.90, base - 0.24, bonnet - 0.13), Vector4(front + 0.38, half, base - 0.26, bonnet - 0.03), Vector4(shape[0], half, base - 0.26, bonnet), Vector4(shape[3], half, base - 0.26, bonnet - 0.02), Vector4(rear, half * 0.93, base - 0.22, bonnet - 0.06)], paint)
+	body.name = "BodyShell"
+	var floor_height = bonnet - 0.02
+	var glass_half = half * 0.86
+	var cabin = car_shell(root, [Vector4(shape[0], glass_half, floor_height - 0.06, floor_height + 0.13), Vector4(shape[1], glass_half * 0.94, floor_height, p.height - 0.06), Vector4(shape[2], glass_half * 0.93, floor_height, p.height - 0.06), Vector4(shape[3], glass_half, floor_height - 0.06, floor_height + 0.13)], Color("304a55"))
+	cabin.name = "GlassCabin"
+	car_shell(root, [Vector4(shape[1] - 0.03, glass_half * 0.94, p.height - 0.07, p.height + 0.02), Vector4(shape[2] + 0.03, glass_half * 0.93, p.height - 0.07, p.height + 0.02)], paint)
 	for side in [-1, 1]:
-		for z in [-0.60, 0.35, p.rear - 0.05]:
-			box(root, Vector3(side * p.width * 0.43, p.height - 0.26, z), Vector3(0.07, 0.48, 0.08), paint)
-		box(root, Vector3(side * p.width * 0.51, base + 0.43, -0.5), Vector3(0.20, 0.13, 0.19), Color("333d3b"))
-		for z in [front + 0.74, rear - 0.74]:
-			var wheel = cylinder(root, Vector3(side * p.width * 0.53, radius, z), radius, radius, 0.25, Color("202827"), 10)
+		var x: float = side * glass_half
+		car_beam(root, Vector3(x, floor_height + 0.04, shape[0]), Vector3(x * 0.94, p.height - 0.04, shape[1]), 0.065, paint)
+		car_beam(root, Vector3(x * 0.93, p.height - 0.04, shape[2]), Vector3(x, floor_height + 0.04, shape[3]), 0.08, paint)
+		var pillar_z: float = 0.32 if variant == 2 else 0.1
+		car_beam(root, Vector3(x, floor_height, pillar_z), Vector3(x * 0.94, p.height - 0.05, pillar_z), 0.07, paint)
+		box(root, Vector3(side * half * 1.08, bonnet + 0.12, shape[0] + 0.04), Vector3(0.21, 0.13, 0.21), Color("28343a"))
+		for z in [front + shape[4], rear - shape[5]]:
+			var wheel = cylinder(root, Vector3(side * half * 1.01, radius, z), radius, radius, 0.26, Color("202827"), 12)
 			wheel.rotation.z = PI / 2
-			var hub = cylinder(root, Vector3(side * p.width * 0.61, radius, z), radius * 0.55, radius * 0.55, 0.03, Color("aeb8b6"), 8)
+			var hub = cylinder(root, Vector3(side * half * 1.17, radius, z), radius * 0.60, radius * 0.60, 0.035, Color("b8c0bf"), 8)
 			hub.rotation.z = PI / 2
+			cylinder(hub, Vector3(0, 0.024, 0), radius * 0.19, radius * 0.19, 0.025, Color("515b5e"), 8)
 			if suv:
-				box(root, Vector3(side * p.width * 0.5, base - 0.02, z), Vector3(0.10, 0.16, 0.9), Color("38413a"))
-		var light_x: float = side * p.width * 0.34
+				box(root, Vector3(side * half, base + 0.02, z), Vector3(0.11, 0.13, 1.00), Color("35413d"))
+		box(root, Vector3(side * half * 1.005, base + 0.19, 0.19), Vector3(0.02, 0.035, 0.15), Color("c5cbc7"))
+		if variant != 2:
+			box(root, Vector3(side * half * 1.005, base + 0.19, 0.89), Vector3(0.02, 0.035, 0.15), Color("c5cbc7"))
+		var light_x: float = side * half * 0.65
 		if p.lights == "round":
-			var light = cylinder(root, Vector3(light_x, base + 0.10, front - 0.025), 0.15, 0.15, 0.05, Color("eee8b4"), 10)
+			var light = cylinder(root, Vector3(light_x, bonnet - 0.18, front - 0.025), 0.15, 0.15, 0.055, Color("eee8b4"), 10)
 			light.rotation.x = PI / 2
 		else:
-			box(root, Vector3(light_x, base + 0.13, front - 0.02), Vector3(0.48 if p.lights == "wide" else 0.38, 0.11 if p.lights == "slim" else 0.22, 0.05), Color("eee8b4"))
-		box(root, Vector3(light_x, base + 0.13, rear + 0.02), Vector3(0.35, 0.28 if suv else 0.15, 0.05), Color("ab3631"))
-	box(root, Vector3(0, base + 0.06, front - 0.04), Vector3(p.grille, 0.26, 0.06), Color("283431"))
+			var lamp = box(root, Vector3(light_x, bonnet - 0.14, front - 0.028), Vector3(0.48 if p.lights == "wide" else 0.38, 0.10 if p.lights == "slim" else 0.21, 0.055), Color("eee8b4"))
+			lamp.rotation.z = side * (0.16 if variant in [0, 1, 4, 5] else 0.0)
+		box(root, Vector3(light_x, bonnet - 0.13, rear + 0.025), Vector3(0.33, 0.30 if suv else 0.17, 0.055), Color("ab3631"))
+	var trim = Color("c6ccc8") if variant in [2, 3] else Color("303d41")
 	for z in [front - 0.045, rear + 0.045]:
-		box(root, Vector3(0, base - 0.23, z), Vector3(p.width, 0.16, 0.10), Color("a7aca2") if variant == 3 else Color("35413d"))
-		box(root, Vector3(0, base - 0.17, z + (-0.06 if z < 0 else 0.06)), Vector3(0.38, 0.10, 0.02), Color("e8e5d0"))
-	if variant == 1: # Vesta's X-shaped front trim.
+		box(root, Vector3(0, base - 0.19, z), Vector3(p.width * 0.97, 0.15, 0.11), trim)
+		box(root, Vector3(0, base - 0.13, z + (-0.07 if z < 0 else 0.07)), Vector3(0.38, 0.10, 0.02), Color("e8e5d0"))
+	box(root, Vector3(0, bonnet - 0.15, front - 0.06), Vector3(p.grille, 0.24, 0.03), Color("1f2e33"))
+	if variant in [0, 1, 4, 5]:
+		box(root, Vector3(0, base - 0.07, front - 0.075), Vector3(1.08 if variant == 4 else 0.91, 0.17, 0.02), Color("1d2b31"))
+	if variant == 1:
 		for side in [-1, 1]:
 			for angle in [-0.6, 0.6]:
-				var trim = box(root, Vector3(side * 0.48, base - 0.02, front - 0.065), Vector3(0.055, 0.39, 0.035), Color("c3c6be"))
-				trim.rotation.z = side * angle
-	if variant == 5:
-		box(root, Vector3(0, base - 0.20, front - 0.08), Vector3(1.10, 0.09, 0.03), Color("1f2928"))
-	if variant == 6:
-		var badge = box(root, Vector3(0, base + 0.09, front - 0.09), Vector3(0.13, 0.17, 0.03), Color("bfc5bf"))
+				var x_trim = box(root, Vector3(side * 0.48, base + 0.02, front - 0.082), Vector3(0.055, 0.39, 0.035), Color("c3c6be"))
+				x_trim.rotation.z = side * angle
+			# The Vesta's distinctive pressed X on each door.
+			for angle in [-0.28, 0.28]:
+				var crease = box(root, Vector3(side * half * 1.006, base + 0.03, 0.38), Vector3(0.015, 0.018, 1.37), paint.darkened(0.17))
+				crease.rotation.x = angle
+	elif variant == 3:
+		box(root, Vector3(0, bonnet - 0.13, front - 0.08), Vector3(0.62, 0.35, 0.025), Color("bdc6c3"))
+		for x in [-0.22, -0.11, 0, 0.11, 0.22]:
+			box(root, Vector3(x, bonnet - 0.13, front - 0.10), Vector3(0.055, 0.27, 0.02), Color("293a3c"))
+	elif variant in [6, 7]:
+		var badge = box(root, Vector3(0, bonnet - 0.10, front - 0.09), Vector3(0.13, 0.17, 0.025), Color("d6dcd5"))
 		badge.rotation.z = PI / 4
+		for x in [-0.35, 0.35]:
+			box(root, Vector3(x, bonnet - 0.1, front - 0.081), Vector3(0.46, 0.025, 0.02), Color("c2cac5"))
+	elif variant == 5:
+		for x in [-0.27, 0.27]:
+			box(root, Vector3(x, bonnet - 0.13, front - 0.084), Vector3(0.40, 0.035, 0.018), Color("b8c5c7"))
 	if variant == 2:
-		var spare = cylinder(root, Vector3(0, base + 0.15, rear + 0.2), 0.38, 0.38, 0.22, Color("25332b"), 10)
+		var spare = cylinder(root, Vector3(0, base + 0.22, rear + 0.18), 0.38, 0.38, 0.22, Color("25332b"), 10)
 		spare.rotation.x = PI / 2
 	if suv:
 		for side in [-1, 1]:
-			box(root, Vector3(side * 0.57, p.height + 0.08, 0.45), Vector3(0.06, 0.07, 1.65), Color("38413a"))
+			box(root, Vector3(side * 0.57, p.height + 0.08, 0.48), Vector3(0.06, 0.07, 1.65), Color("38413a"))
 	return root
 
 static func skewer() -> Node3D:

@@ -17,7 +17,7 @@ export class RallyRoom {
       this.room.expire(now);
       const action = new URL(request.url).pathname.split('/').at(-1);
       let result;
-      if (action === 'create' || action === 'join') result = this.room.add(body.name, now, action === 'create');
+      if (action === 'create' || action === 'join') result = this.room.add(body.name, now, action === 'create', body);
       else if (action === 'heartbeat') result = this.room.heartbeat(body.token, now);
       else if (action === 'sync') result = this.room.sync(body, now);
       else if (action === 'leave') { this.room.leave(body.token); result = { left: true }; }

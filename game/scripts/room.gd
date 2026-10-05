@@ -145,7 +145,7 @@ func connect_room(id: String) -> void:
 	lobby_status.text = "Подключаемся…"
 	create_button.disabled = true
 	join_button.disabled = true
-	_request("create" if id == "" else "join", {"name": name_input.text})
+	_request("create" if id == "" else "join", {"name": name_input.text, "car_model": game.selected_car, "stage": game.selected_stage})
 
 func _request(kind: String, body: Dictionary) -> void:
 	request_kind = kind
@@ -189,11 +189,12 @@ func _response(result: int, code: int, _headers: PackedStringArray, bytes: Packe
 		friends_button.hide()
 		room_label.show()
 		exit_button.show()
+		game.select_stage(int(data.get("stage", 0)))
 		game.start_game()
 		# Separate parked cars at the start; local movement remains responsive.
 		var lane = int(data.get("slot", 0))
 		game.avatar_variant = posmod(lane, Props.SPECTATOR_MODELS.size())
-		game.select_player_car(lane)
+		game.select_player_car(int(data.get("car_model", game.selected_car)))
 		game.car.position = game.stage.at(12 + lane * 6)
 		game.toast("Комната %s · %s. Передай ID друзьям!" % [room_id, game.car.get_meta("model")])
 		print("ROOM_CONNECTED ", room_id, " host=", is_host)
@@ -322,7 +323,7 @@ func _update_peers(players: Array) -> void:
 			continue
 		present[p.id] = true
 		if not peers.has(p.id):
-			var car = Props.player_car(int(p.get("slot", 0)))
+			var car = Props.player_car(int(p.get("car_model", p.get("slot", 0))))
 			game.add_child(car)
 			var avatar = Props.player_avatar(int(p.get("slot", 0)))
 			game.add_child(avatar)

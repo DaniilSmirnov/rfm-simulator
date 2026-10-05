@@ -4,6 +4,14 @@ const Props = preload("res://scripts/props.gd")
 const Stage = preload("res://scripts/stage.gd")
 const MiniMap = preload("res://scripts/minimap.gd")
 var stage: RallyStage
+var selected_stage = 0
+var selected_car = 0
+var selection_controls: VBoxContainer
+var car_choice: HBoxContainer
+var stage_choice: HBoxContainer
+var stage_caption: Label
+var world_environment: WorldEnvironment
+var sunlight: DirectionalLight3D
 var car: Node3D
 var camera: Camera3D
 var camp: Node3D
@@ -191,6 +199,7 @@ func _setup_input() -> void:
 
 func _build_environment() -> void:
 	var world = WorldEnvironment.new()
+	world_environment = world
 	var env = Environment.new()
 	env.background_mode = Environment.BG_SKY
 	var sky = Sky.new()
@@ -208,12 +217,24 @@ func _build_environment() -> void:
 	env.fog_enabled = true
 	env.fog_light_color = Color("9ea995")
 	env.fog_density = 0.0018
+	if stage.winter:
+		sky_mat.sky_top_color = Color("779bbd")
+		sky_mat.sky_horizon_color = Color("cbdde7")
+		sky_mat.ground_horizon_color = Color("dce8eb")
+		env.ambient_light_color = Color("c7d9ed")
+		env.ambient_light_energy = 0.27
+		env.fog_light_color = Color("c8dae6")
+		env.fog_density = 0.0012
 	world.environment = env
 	add_child(world)
 	var sun = DirectionalLight3D.new()
+	sunlight = sun
 	sun.rotation_degrees = Vector3(-36, -32, 0)
 	sun.light_color = Color("ffe3b2")
 	sun.light_energy = 0.85
+	if stage.winter:
+		sun.light_color = Color("d5e3f0")
+		sun.light_energy = 0.52
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 120
 	add_child(sun)
@@ -251,7 +272,7 @@ func _build_ui() -> void:
 	var vb = VBoxContainer.new()
 	top.add_child(vb)
 	title_label = _label(vb, "СИМУЛЯТОР РАЛЛИЙНОГО ОВОЩА", 22)
-	_label(vb, "DYFI-INSPIRED  /  ГОРНЫЙ ЛЕС  /  ДЕМО " + str(ProjectSettings.get_setting("application/config/version")), 12, Color("b2bea1"))
+	stage_caption = _label(vb, Stage.STAGES[selected_stage] + "  /  ДЕМО " + str(ProjectSettings.get_setting("application/config/version")), 12, Color("b2bea1"))
 	var sidebar = PanelContainer.new()
 	mobile_sidebar = sidebar
 	ui.add_child(sidebar)
@@ -308,11 +329,35 @@ func _build_ui() -> void:
 	menu.offset_bottom = 270
 	menu.add_theme_stylebox_override("panel", _panel(Color("23342bf5")))
 	var mv = VBoxContainer.new()
-	mv.add_theme_constant_override("separation", 20)
+	mv.add_theme_constant_override("separation", 12)
 	menu.add_child(mv)
-	_label(mv, "ЛЕС. ГРАВИЙ. ШАШЛЫК.", 14, Color("dfb270"))
+	_label(mv, "ПЕРЕВАЛ. РАЛЛИ. ШАШЛЫК.", 14, Color("dfb270"))
 	menu_title = _label(mv, "Симулятор\nраллийного овоща", 42)
-	menu_text = _label(mv, "Твоя легковушка. Разбитый спецучасток.\nОдна поляна и целый день ралли.\n\nДоедь до лесной поляны, разложи стол и стулья,\nпожарь шашлык и посмотри шесть экипажей.\nЭкипажи могут вылететь или попросить трос.", 19)
+	menu_text = _label(mv, "Выбери машину и спецучасток. Доедь до поляны,\nразложи лагерь, жарь шашлык и смотри ралли.", 19)
+	selection_controls = VBoxContainer.new()
+	selection_controls.add_theme_constant_override("separation", 8)
+	mv.add_child(selection_controls)
+	for kind in ["МАШИНА", "СПЕЦУЧАСТОК"]:
+		var row = HBoxContainer.new()
+		selection_controls.add_child(row)
+		var caption = _label(row, kind, 16)
+		caption.custom_minimum_size.x = 145
+		var choice = preload("res://scripts/menu_choice.gd").new()
+		choice.custom_minimum_size.y = 40
+		choice.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		choice.add_theme_font_size_override("font_size", 18)
+		row.add_child(choice)
+		if kind == "МАШИНА":
+			car_choice = choice
+			for model in Props.PLAYER_MODELS:
+				choice.add_item(model.name)
+			choice.item_selected.connect(select_player_car)
+		else:
+			stage_choice = choice
+			for title in Stage.STAGES:
+				choice.add_item(title)
+			choice.item_selected.connect(select_stage)
+	stage_choice.tooltip_text = "В комнате СУ выбирает создатель. Все участники играют на одной трассе."
 	start_button = Button.new()
 	start_button.text = "ПОЕХАЛИ"
 	start_button.custom_minimum_size.y = 54
@@ -353,6 +398,7 @@ func _setup_audio() -> void:
 
 func start_game() -> void:
 	playing = true
+	selection_controls.hide()
 	menu.hide()
 	for panel in hud_panels:
 		panel.show()
@@ -507,7 +553,7 @@ func _drive(delta: float) -> void:
 		var next = previous + vehicle_motion.velocity * dt
 		next.x = clampf(next.x, -185, 185)
 		next.z = clampf(next.z, -Stage.LENGTH + 5, 10)
-		var tree_index = stage.obstacle_hit(previous, next, 0.95)
+		var tree_index = stage.obstacle_hit(previous, next, 0.95, true)
 		var hit = tree_index >= 0
 		if hit and vehicle_motion.velocity.length() > 5 and not stage.fallen.has(tree_index):
 			knock_tree(tree_index, vehicle_motion.velocity)
@@ -568,7 +614,7 @@ func _walk(delta: float) -> void:
 	var next = walker + dir * delta * (1.4 if drink_time >= 0 or eat_time >= 0 else 4.3)
 	next.x = clampf(next.x, -185, 185)
 	next.z = clampf(next.z, -Stage.LENGTH + 5, 10)
-	var hit = stage.obstacle_hit(walker, next, 0.3) >= 0 or contact_blocked(walker, next, false)
+	var hit = stage.obstacle_hit(walker, next, 0.3, true) >= 0 or contact_blocked(walker, next, false)
 	if not hit:
 		walker = next
 	walker.y = stage.ground(walker)
@@ -771,11 +817,38 @@ func _cancel_drink() -> void:
 		beer_audio.stop()
 
 func select_player_car(variant: int) -> void:
+	selected_car = posmod(variant, Props.PLAYER_MODELS.size())
+	if car_choice != null:
+		car_choice.select(selected_car)
 	var transform_before = car.transform
 	car.queue_free()
-	car = Props.player_car(variant)
+	car = Props.player_car(selected_car)
 	add_child(car)
 	car.transform = transform_before
+
+func select_stage(variant: int) -> void:
+	if playing:
+		return
+	variant = clampi(variant, 0, Stage.STAGES.size() - 1)
+	if variant == selected_stage:
+		return
+	selected_stage = variant
+	stage_caption.text = Stage.STAGES[variant] + "  /  ДЕМО " + str(ProjectSettings.get_setting("application/config/version"))
+	stage_choice.select(variant)
+	stage.free()
+	stage = Stage.new(variant)
+	add_child(stage)
+	stage.build()
+	world_environment.free()
+	sunlight.free()
+	_build_environment()
+	car.position = stage.at(12)
+	heading = atan2(-stage.direction(12).x, -stage.direction(12).z)
+	car.rotation = Vector3(0, heading, 0)
+	vehicle_motion = Motion.new()
+	speed = 0
+	camera.position = stage.at(45) + Vector3(22, 15, 12)
+	camera.look_at(stage.at(70))
 
 func eat_meat() -> bool:
 	if not playing or paused or dead or finished or eat_time >= 0 or drink_time >= 0:

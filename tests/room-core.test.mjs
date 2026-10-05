@@ -3,6 +3,21 @@ import assert from 'node:assert/strict';
 import { RoomState, MAX_PLAYERS } from '../server/room-core.mjs';
 const state = (x = 0) => ({ pos: [x, 1, 2], car: [3, 4, 5], heading: 1, yaw: 2, pitch: 0, in_car: false, tow: false, beer: -1 });
 const setup = () => { const r = new RoomState(); const h = r.add('Хозяин', 1000, true); const g = r.add('Друг', 1000); return { r, h, g }; };
+test('host stage and individual car choices persist through joins, sync and restore', () => {
+  const r = new RoomState();
+  const h = r.add('Host', 1000, true, { stage: 1, car_model: 5 });
+  const g = r.add('Guest', 1000, false, { stage: 0, car_model: 2 });
+  assert.equal(h.stage, 1);
+  assert.equal(g.stage, 1);
+  assert.equal(g.car_model, 2);
+  const restored = new RoomState(structuredClone(r.data));
+  const reply = restored.sync({ token: g.token, state: { ...state(), car_model: 7, stage: 0 } }, 1200);
+  assert.equal(reply.stage, 1);
+  assert.deepEqual(reply.players.map(p => p.car_model), [5, 2]);
+  const late = restored.add('Late', 1300, false, { stage: 0, car_model: Infinity });
+  assert.equal(late.stage, 1);
+  assert.equal(late.car_model, late.slot);
+});
 test('create, join, private tokens and roster without token leaks', () => {
   const { r, h, g } = setup();
   assert.notEqual(h.token, g.token);

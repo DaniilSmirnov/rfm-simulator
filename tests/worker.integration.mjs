@@ -22,11 +22,14 @@ try {
   assert.ok(ready, 'Worker must start: ' + logs);
   assert.equal((await api('/api/rooms', { name: 'X' }, { Origin: 'https://foreign.test' })).status, 403);
   assert.equal((await api('/api/rooms/000000/join', { name: 'X' })).status, 404);
-  const host = await api('/api/rooms', { name: 'Host' });
+  const host = await api('/api/rooms', { name: 'Host', stage: 1, car_model: 5 });
   assert.equal(host.status, 200);
   const base = `/api/rooms/${host.room}`;
-  const guest = await api(base + '/join', { name: 'Guest' });
+  const guest = await api(base + '/join', { name: 'Guest', stage: 0, car_model: 2 });
   assert.equal(guest.status, 200);
+  assert.equal(host.stage, 1);
+  assert.equal(guest.stage, 1);
+  assert.equal(guest.car_model, 2);
   const state = { pos: [0, 1, 2], car: [2, 3, 4], heading: 0, yaw: 0, pitch: 0, in_car: false, tow: false, beer: -1, eat: 1.85 };
   assert.equal((await api(base + '/sync', { token: 'wrong', state })).status, 401);
   await api(base + '/sync', { token: host.token, state, world: { camp: [12, 3, 40], paused: false } });
@@ -34,6 +37,8 @@ try {
   assert.deepEqual(shared.world.camp, [12, 3, 40]);
   assert.equal(shared.players.length, 2);
   assert.deepEqual(shared.players.map(p => p.slot), [0, 1]);
+  assert.deepEqual(shared.players.map(p => p.car_model), [5, 2]);
+  assert.equal(shared.stage, 1);
   assert.equal(shared.players.find(p => p.id === guest.player).state.eat, 1.85);
   const hostSync = await api(base + '/sync', { token: host.token, state });
   assert.equal(hostSync.commands[0].action, 'table');
