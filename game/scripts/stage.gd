@@ -190,27 +190,16 @@ func build() -> void:
 		RallyProps.cylinder(self, p, rng.randf_range(120, 180), 0, rng.randf_range(220, 340) if winter else rng.randf_range(130, 210), Color("c3d1db") if winter else Color("697d70"), 5)
 
 func _build_city() -> void:
-	# Dense European street frontage: Parisian/Prague-like pastel facades,
-	# mansard roofs, repeated windows and small balconies.
-	for s in range(24, int(LENGTH - 18), 28):
+	# Continuous Paris/Prague-style blocks. The central square interrupts the
+	# blocks, while the rest of the route is lined wall-to-wall with houses.
+	for s in range(20, int(LENGTH - 18), 14):
+		if absf(float(s) - 420.0) < 30.0:
+			continue
 		for side_sign in [-1.0, 1.0]:
-			var offset = 18.0 + rng.randf_range(0, 5)
-			var pos = at(s) + side(s) * side_sign * offset
-			var height = rng.randf_range(7.0, 11.0)
-			pos.y = ground(pos) + height * 0.5
-			var facade = RallyProps.box(self, pos, Vector3(rng.randf_range(7.0, 10.0), height, rng.randf_range(5.0, 7.0)), [Color("d4b08e"), Color("b8c4bf"), Color("d2c3a7"), Color("c98f7f")][(s / 28 + int(side_sign)) % 4])
-			facade.rotation.y = atan2(-direction(s).x, -direction(s).z)
-			var roof = RallyProps.box(self, pos + Vector3(0, height * 0.56, 0), Vector3(facade.mesh.size.x + 0.3, 0.3, facade.mesh.size.z + 0.3), Color("5b5960"))
-			roof.rotation.y = facade.rotation.y
-			for floor in range(3):
-				var window = RallyProps.box(self, pos + Vector3(0, -height * 0.22 + floor * 2.2, -side(s).dot(Vector3(pos.x - at(s).x, 0, pos.z - at(s).z)) * 0.01), Vector3(1.1, 0.8, 0.06), Color("38566a"))
-				window.rotation.y = facade.rotation.y
-				if floor > 0 and int(s / 28 + side_sign) % 3 == 0:
-					var balcony = RallyProps.box(self, pos + Vector3(side_sign * 0.85, -height * 0.22 + floor * 2.2 - 0.52, 0), Vector3(1.8, 0.08, 0.75), Color("6e6256"))
-					balcony.rotation.y = facade.rotation.y
-		# Small street trees and lamps break up the continuous facade.
-		if int(s / 28) % 2 == 0:
-			var tree_pos = at(s + 10) + side(s) * 10.0
+			var pos = at(s) + side(s) * side_sign * 17.0
+			_build_city_building(s, side_sign, pos)
+		if int(s / 14) % 4 == 0:
+			var tree_pos = at(s + 6) + side(s) * 10.5
 			tree_pos.y = ground(tree_pos)
 			RallyProps.cylinder(self, tree_pos + Vector3(0, 1.6, 0), 0.12, 0.09, 3.2, Color("6b5543"), 6)
 			RallyProps.faceted(self, tree_pos + Vector3(0, 3.3, 0), Vector3(1.1, 1.4, 1.1), Color("6c8668"), 7, 4)
@@ -218,21 +207,57 @@ func _build_city() -> void:
 		lamp_pos.y = ground(lamp_pos)
 		RallyProps.cylinder(self, lamp_pos + Vector3(0, 2.2, 0), 0.035, 0.035, 4.4, Color("3e4548"), 6)
 		RallyProps.box(self, lamp_pos + Vector3(0, 4.35, 0), Vector3(0.35, 0.12, 0.35), Color("f1d88b"))
-	for s in [110, 220, 330, 545, 665, 770]:
+	for s in [100, 210, 320, 530, 640, 750]:
 		_build_cross_street(float(s))
 	_build_city_square(420.0)
+
+func _build_city_building(s: float, side_sign: float, pos: Vector3) -> void:
+	var building = Node3D.new()
+	building.name = "ParisPragueBuilding_%03d_%d" % [s, 1 if side_sign > 0 else -1]
+	add_child(building)
+	building.position = pos
+	building.rotation.y = atan2(-direction(s).x, -direction(s).z)
+	var width = rng.randf_range(9.5, 11.5)
+	var depth = rng.randf_range(13.0, 14.5)
+	var height = rng.randf_range(9.0, 12.0)
+	var facade_color = [Color("d4b08e"), Color("b8c4bf"), Color("d2c3a7"), Color("c98f7f"), Color("d2a7a2")][int(s / 14 + side_sign) % 5]
+	RallyProps.box(building, Vector3(0, height * 0.5, 0), Vector3(width, height, depth), facade_color)
+	# Mansard roof, cornice and a shallow parapet give the silhouette a French feel.
+	RallyProps.box(building, Vector3(0, height + 0.18, 0), Vector3(width + 0.35, 0.35, depth + 0.35), Color("eee0c2"))
+	RallyProps.box(building, Vector3(0, height + 0.65, 0), Vector3(width - 0.4, 0.8, depth - 0.5), Color("57535a"))
+	var front_x = -side_sign * (width * 0.5 + 0.045)
+	for floor in range(4):
+		var y = 1.45 + floor * 2.25
+		for window_z in [-4.0, 0.0, 4.0]:
+			var window = RallyProps.box(building, Vector3(front_x, y, window_z), Vector3(0.07, 0.95, 1.15), Color("38566a"))
+			var shutter_a = RallyProps.box(building, Vector3(front_x - side_sign * 0.08, y, window_z - 0.7), Vector3(0.04, 1.0, 0.16), Color("53646a"))
+			var shutter_b = RallyProps.box(building, Vector3(front_x - side_sign * 0.08, y, window_z + 0.7), Vector3(0.04, 1.0, 0.16), Color("53646a"))
+			window.rotation.y = 0
+			shutter_a.rotation.y = 0
+			shutter_b.rotation.y = 0
+			if floor > 0 and int(s / 14 + window_z) % 3 == 0:
+				var balcony = RallyProps.box(building, Vector3(front_x - side_sign * 0.15, y - 0.62, window_z), Vector3(0.12, 0.08, 2.0), Color("6e6256"))
+				RallyProps.box(building, Vector3(front_x - side_sign * 0.15, y - 0.35, window_z - 0.82), Vector3(0.10, 0.55, 0.08), Color("6e6256"))
+				RallyProps.box(building, Vector3(front_x - side_sign * 0.15, y - 0.35, window_z + 0.82), Vector3(0.10, 0.55, 0.08), Color("6e6256"))
+	# Tall ground-floor entrance and a shop awning.
+	RallyProps.box(building, Vector3(front_x, 0.95, 0), Vector3(0.08, 1.9, 1.2), Color("3e4144"))
+	RallyProps.box(building, Vector3(front_x - side_sign * 0.12, 2.05, 0), Vector3(0.12, 0.12, 1.7), Color("c18d5d"))
 
 func _build_cross_street(s: float) -> void:
 	var center = at(s)
 	center.y = ground(center) + 0.08
 	var yaw = atan2(-direction(s).x, -direction(s).z) + PI * 0.5
-	var street = RallyProps.box(self, center, Vector3(8.5, 0.06, 34.0), Color("555a59"))
-	street.name = "CityCrossStreet"
-	street.rotation.y = yaw
+	var cross = Node3D.new()
+	cross.name = "CityCrossStreet_%03d" % int(s)
+	add_child(cross)
+	cross.position = center
+	cross.rotation.y = yaw
+	RallyProps.box(cross, Vector3.ZERO, Vector3(8.5, 0.06, 120.0), Color("555a59"))
+	RallyProps.box(cross, Vector3(-5.4, 0.10, 0), Vector3(2.2, 0.12, 120.0), Color("b6aa91"))
+	RallyProps.box(cross, Vector3(5.4, 0.10, 0), Vector3(2.2, 0.12, 120.0), Color("b6aa91"))
 	# A pair of pale zebra bands makes the intersection readable at speed.
 	for offset in [-2.0, 2.0]:
-		var stripe = RallyProps.box(self, center + direction(s) * offset + Vector3(0, 0.045, 0), Vector3(8.0, 0.018, 0.35), Color("e4ddc6"))
-		stripe.rotation.y = yaw
+		RallyProps.box(cross, Vector3(offset, 0.045, 0), Vector3(8.0, 0.018, 0.35), Color("e4ddc6"))
 
 func _build_city_square(s: float) -> void:
 	var center = at(s)

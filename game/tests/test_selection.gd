@@ -47,6 +47,13 @@ func run() -> void:
 	var city = Stage.new(2)
 	city.build()
 	check(city.urban and city.clearings.size() == 4 and city.trees.is_empty(), "city super stage has four street parking spots")
+	var city_buildings = 0
+	var city_cross_streets = 0
+	for child in city.get_children():
+		city_buildings += 1 if child.name.begins_with("ParisPragueBuilding") else 0
+		city_cross_streets += 1 if child.name.begins_with("CityCrossStreet") else 0
+	check(city_buildings > 100, "city is lined with continuous European building blocks")
+	check(city_cross_streets == 6 and city.get_node_or_null("CityCentralSquare") != null, "city has six full cross streets and a central square")
 	city.free()
 	guest.select_player_car(2)
 	host.room.request_kind = "create"
