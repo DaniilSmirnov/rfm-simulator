@@ -190,21 +190,24 @@ func build() -> void:
 		RallyProps.cylinder(self, p, rng.randf_range(120, 180), 0, rng.randf_range(220, 340) if winter else rng.randf_range(130, 210), Color("c3d1db") if winter else Color("697d70"), 5)
 
 func _build_city() -> void:
-	# Compact European street frontage: pastel row houses, shutters and
-	# occasional trees, leaving the rally road readable between the blocks.
+	# Dense European street frontage: Parisian/Prague-like pastel facades,
+	# mansard roofs, repeated windows and small balconies.
 	for s in range(24, int(LENGTH - 18), 28):
 		for side_sign in [-1.0, 1.0]:
 			var offset = 18.0 + rng.randf_range(0, 5)
 			var pos = at(s) + side(s) * side_sign * offset
-			var height = rng.randf_range(5.0, 8.0)
+			var height = rng.randf_range(7.0, 11.0)
 			pos.y = ground(pos) + height * 0.5
 			var facade = RallyProps.box(self, pos, Vector3(rng.randf_range(7.0, 10.0), height, rng.randf_range(5.0, 7.0)), [Color("d4b08e"), Color("b8c4bf"), Color("d2c3a7"), Color("c98f7f")][(s / 28 + int(side_sign)) % 4])
 			facade.rotation.y = atan2(-direction(s).x, -direction(s).z)
 			var roof = RallyProps.box(self, pos + Vector3(0, height * 0.56, 0), Vector3(facade.mesh.size.x + 0.3, 0.3, facade.mesh.size.z + 0.3), Color("5b5960"))
 			roof.rotation.y = facade.rotation.y
-			for floor in range(2):
+			for floor in range(3):
 				var window = RallyProps.box(self, pos + Vector3(0, -height * 0.22 + floor * 2.2, -side(s).dot(Vector3(pos.x - at(s).x, 0, pos.z - at(s).z)) * 0.01), Vector3(1.1, 0.8, 0.06), Color("38566a"))
 				window.rotation.y = facade.rotation.y
+				if floor > 0 and int(s / 28 + side_sign) % 3 == 0:
+					var balcony = RallyProps.box(self, pos + Vector3(side_sign * 0.85, -height * 0.22 + floor * 2.2 - 0.52, 0), Vector3(1.8, 0.08, 0.75), Color("6e6256"))
+					balcony.rotation.y = facade.rotation.y
 		# Small street trees and lamps break up the continuous facade.
 		if int(s / 28) % 2 == 0:
 			var tree_pos = at(s + 10) + side(s) * 10.0
@@ -215,6 +218,41 @@ func _build_city() -> void:
 		lamp_pos.y = ground(lamp_pos)
 		RallyProps.cylinder(self, lamp_pos + Vector3(0, 2.2, 0), 0.035, 0.035, 4.4, Color("3e4548"), 6)
 		RallyProps.box(self, lamp_pos + Vector3(0, 4.35, 0), Vector3(0.35, 0.12, 0.35), Color("f1d88b"))
+	for s in [110, 220, 330, 545, 665, 770]:
+		_build_cross_street(float(s))
+	_build_city_square(420.0)
+
+func _build_cross_street(s: float) -> void:
+	var center = at(s)
+	center.y = ground(center) + 0.08
+	var yaw = atan2(-direction(s).x, -direction(s).z) + PI * 0.5
+	var street = RallyProps.box(self, center, Vector3(8.5, 0.06, 34.0), Color("555a59"))
+	street.name = "CityCrossStreet"
+	street.rotation.y = yaw
+	# A pair of pale zebra bands makes the intersection readable at speed.
+	for offset in [-2.0, 2.0]:
+		var stripe = RallyProps.box(self, center + direction(s) * offset + Vector3(0, 0.045, 0), Vector3(8.0, 0.018, 0.35), Color("e4ddc6"))
+		stripe.rotation.y = yaw
+
+func _build_city_square(s: float) -> void:
+	var center = at(s)
+	center.y = ground(center) + 0.10
+	var plaza = RallyProps.cylinder(self, center, 18.0, 18.0, 0.12, Color("777979"), 32)
+	plaza.name = "CityCentralSquare"
+	RallyProps.cylinder(self, center + Vector3(0, 0.08, 0), 13.5, 13.5, 0.05, Color("5b6060"), 32)
+	var island = RallyProps.cylinder(self, center + Vector3(0, 0.18, 0), 6.0, 6.0, 0.22, Color("b3a58c"), 12)
+	island.name = "MonumentIsland"
+	RallyProps.box(self, center + Vector3(0, 1.0, 0), Vector3(3.8, 1.6, 3.8), Color("d0c3a9"))
+	RallyProps.box(self, center + Vector3(0, 1.9, 0), Vector3(2.7, 0.25, 2.7), Color("9d907a"))
+	RallyProps.cylinder(self, center + Vector3(0, 5.0, 0), 0.85, 0.58, 6.0, Color("6d7170"), 10)
+	RallyProps.cylinder(self, center + Vector3(0, 8.1, 0), 1.15, 0.0, 2.0, Color("4c5150"), 8)
+	var monument_label = Label3D.new()
+	add_child(monument_label)
+	monument_label.position = center + Vector3(0, 10.0, -2.3)
+	monument_label.text = "PLACE DU RALLYE"
+	monument_label.font_size = 40
+	monument_label.pixel_size = 0.006
+	monument_label.modulate = Color("eee2c6")
 
 func _build_parking(pos: Vector3, index: int) -> void:
 	var yaw = atan2(-direction(road_s(pos)).x, -direction(road_s(pos)).z)
