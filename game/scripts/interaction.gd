@@ -23,6 +23,10 @@ func current() -> Dictionary:
 		return {"action": "stand", "label": "Встать со стула"}
 	var items: Array = []
 	offer(items, game.car.position + Vector3(0, 0.9, 0), 1.4, 4, "car", "Сесть в машину")
+	if game.packing.active():
+		for item in game.packing.items():
+			offer(items, item.node.position + Vector3(0, item.height, 0), item.radius, 3.5, "pack", item.label, item.node.position)
+		return select_target(items)
 	var owner = game.chair_owner()
 	if game.personal_chairs.has(owner):
 		offer(items, game.personal_chairs[owner].position + Vector3(0, 0.65, 0), 0.5, 2.5, "sit", "Сесть на стул")
@@ -55,6 +59,9 @@ func current() -> Dictionary:
 		var table = game.camp if source == -1 else game.spectators.groups[source].table
 		if table != null:
 			offer(items, table.position + Vector3(0, 0.75, 0), 0.85, 3, "beer" if game.beer_timer <= 0 else "", "Выпить пиво" if game.beer_timer <= 0 else "")
+	return select_target(items)
+
+func select_target(items: Array) -> Dictionary:
 	if items.is_empty():
 		return {}
 	items.sort_custom(func(a, b): return a.depth < b.depth)
@@ -75,6 +82,7 @@ func activate() -> void:
 	if target.is_empty():
 		return
 	match target.action:
+		"pack": game.packing.pack(target.value)
 		"car": game._toggle_car()
 		"sit": game.sit_down()
 		"stand": game.stand_up()

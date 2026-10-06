@@ -9,7 +9,7 @@ var request_sent_at = 0.0
 var last_world_time = -1.0
 var racer_motion: Dictionary = {}
 const Props = preload("res://scripts/props.gd")
-const SHARED_ACTIONS = ["table", "chairs", "grill", "flag", "eat", "rally", "random_spot", "collect", "mount_mushroom", "eat_mushroom", "eat_berries"]
+const SHARED_ACTIONS = ["table", "chairs", "grill", "flag", "eat", "rally", "random_spot", "collect", "mount_mushroom", "eat_mushroom", "eat_berries", "pack"]
 var game: Node3D
 var http: HTTPRequest
 var server = "http://127.0.0.1:8787"
@@ -439,10 +439,21 @@ func _apply_command(c: Dictionary) -> void:
 		game.beers = old.beers
 		return
 	match c.action:
-		"table": game.place_table(spot, yaw)
-		"chairs": game.place_chairs(spot, yaw, str(c.get("player", "guest")))
-		"grill": game.start_grill(spot, yaw)
-		"flag": game.place_flag(spot, yaw, str(c.get("player", "guest")))
+		"pack":
+			if spot != Vector3.INF:
+				game.packing.pack(spot, true)
+		"table":
+			if not game.packing.active():
+				game.place_table(spot, yaw)
+		"chairs":
+			if not game.packing.active():
+				game.place_chairs(spot, yaw, str(c.get("player", "guest")))
+		"grill":
+			if not game.packing.active():
+				game.start_grill(spot, yaw)
+		"flag":
+			if not game.packing.active():
+				game.place_flag(spot, yaw, str(c.get("player", "guest")))
 		"eat": game.commit_meat(int(placement.get("source", -2)))
 		"collect": game.foraging.collect(int(placement.get("resource_id", -1)), str(c.get("player", "guest")))
 		"mount_mushroom": game.foraging.mount(int(placement.get("source", -2)), str(c.get("player", "guest")))
@@ -525,6 +536,20 @@ func apply_world(w: Dictionary, sample_time: float = -1.0) -> void:
 	if w.get("notice_time", 0) > 0 and w.get("notice", "") != last_notice:
 		last_notice = w.notice
 		game.toast(last_notice)
+	# Full snapshots reconcile removals as well as additions.
+	if w.camp == null and game.camp != null:
+		game.packing.remove({"kind": "table", "node": game.camp})
+	if w.has("chair_poses"):
+		for owner in game.personal_chairs.keys():
+			if not w.chair_poses.has(owner):
+				game.packing.remove({"kind": "chair", "owner": owner, "node": game.personal_chairs[owner]})
+	if w.has("flag_poses"):
+		for owner in game.personal_flags.keys():
+			if not w.flag_poses.has(owner):
+				for node in game.personal_flags[owner].duplicate():
+					game.packing.remove({"kind": "flag", "owner": owner, "node": node})
+	if not w.cooking and game.grill != null:
+		game.packing.remove({"kind": "grill", "node": game.grill})
 	if w.camp != null:
 		if game.camp == null:
 			game.camp = Node3D.new()

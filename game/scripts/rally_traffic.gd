@@ -13,7 +13,7 @@ static func nominal(racer: Dictionary, s: float) -> float:
 static func plan(game: Node3D, racer: Dictionary) -> Dictionary:
 	var stage = game.stage
 	var s: float = racer.s
-	var limit: float = stage.rally_speed(s) * racer.get("pace", 1.0)
+	var limit: float = game.race_speed(s) * racer.get("pace", 1.0)
 	var current: float = racer.get("line", racer.slide)
 	var base = clampf(nominal(racer, s) + racer.slide, -1.45, 1.45)
 	var positions: Array[Dictionary] = [{"pos": game.car.position, "speed": 0.0}]
@@ -25,19 +25,19 @@ static func plan(game: Node3D, racer: Dictionary) -> Dictionary:
 	for other in game.racers:
 		if other.id == racer.id:
 			continue
-		var other_speed = other.get("drive_speed", stage.rally_speed(other.s)) if other.state == "racing" else 0.0
+		var other_speed = other.get("drive_speed", game.race_speed(other.s)) if other.state == "racing" else 0.0
 		positions.append({"pos": other.node.position, "speed": other_speed})
 	var blockers: Array[Dictionary] = []
 	var closest = INF
 	for object in positions:
-		var station: float = stage.road_s(object.pos)
+		var station: float = game.race_station(object.pos)
 		var gap = station - s
 		if gap < -6 or gap > maxf(38, limit * 2.2):
 			continue
-		var center = stage.at(station)
+		var center = game.race_at(station)
 		if absf(object.pos.y - center.y) > 4:
 			continue
-		var lateral: float = (object.pos - center).dot(stage.side(station))
+		var lateral: float = (object.pos - center).dot(game.race_side(station))
 		if absf(lateral) > MAX_LINE + CLEARANCE:
 			continue
 		# A car pulling away does not require overtaking. Close cars remain
@@ -59,7 +59,7 @@ static func plan(game: Node3D, racer: Dictionary) -> Dictionary:
 			if absf(candidate - blocker.line) < CLEARANCE:
 				clear = false
 				break
-		if not clear or not _clear_path(stage, racer, candidate, distance):
+		if not clear or not _clear_path(game, racer, candidate, distance):
 			continue
 		var cost = absf(candidate - base) * 0.5 + absf(candidate - current) * 0.25
 		if racer.get("avoiding", false):
@@ -80,14 +80,15 @@ static func plan(game: Node3D, racer: Dictionary) -> Dictionary:
 		chosen = current
 	return {"line": chosen, "speed": speed, "avoiding": true, "advance": advance}
 
-static func _clear_path(stage, racer: Dictionary, target: float, distance: float) -> bool:
+static func _clear_path(game, racer: Dictionary, target: float, distance: float) -> bool:
+	var stage = game.stage
 	var previous: Vector3 = racer.node.position
 	var current: float = racer.get("line", racer.slide)
 	for i in range(1, 7):
 		var ahead = distance * i / 6.0
 		var s: float = minf(stage.LENGTH - 0.01, racer.s + ahead)
 		var line = lerpf(current, target, smoothstep(0, minf(26, distance * 0.65), ahead))
-		var point = stage.at(s) + stage.side(s) * line
+		var point = game.race_at(s) + game.race_side(s) * line
 		point.y = stage.ground(point)
 		if not stage.rock_hit(previous, point, 0.95).is_empty() or stage.obstacle_hit(previous, point, 0.95, true) >= 0:
 			return false

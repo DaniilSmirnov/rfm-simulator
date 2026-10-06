@@ -135,7 +135,16 @@ func run() -> void:
 	check(not scene.finished, "ten crews cannot finish before closing police")
 	scene.course.phase = "complete"
 	scene._check_finish()
-	check(scene.finished, "full picnic, ten crews and closing police complete demo")
+	check(not scene.finished, "first pass does not complete the outing")
+	scene.course.pass_index = 2
+	scene._check_finish()
+	check(not scene.finished, "second pass waits for camp packing")
+	for item in scene.packing.items():
+		scene.walker = item.node.position
+		scene.packing.pack(item.node.position)
+	scene.in_car = true
+	scene._check_finish()
+	check(scene.finished, "two passes and packed camp complete the outing")
 	print("RESULT: %d checks, %d failures" % [checks, failures])
 	await scene._shutdown_audio()
 	scene.queue_free()

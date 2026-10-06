@@ -265,3 +265,15 @@ test('running and airborne pedestrian poses survive sync but cannot apply to sea
   assert.equal(reply.players[0].state.running, false);
   assert.equal(reply.players[0].state.airborne, false);
 });
+
+test('packing commands preserve target position and retries cannot duplicate cleanup', () => {
+  const { r, h, g } = setup();
+  const placement = { pos: [1, 1, 2], yaw: 0 };
+  const body = { token: g.token, state: state(), commands: [{ seq: 1, action: 'pack', placement }] };
+  r.sync(body, 1100); r.sync(body, 1200);
+  const reply = r.sync({ token: h.token, state: state() }, 1300);
+  assert.equal(reply.commands.length, 1);
+  assert.equal(reply.commands[0].action, 'pack');
+  assert.deepEqual(reply.commands[0].placement, placement);
+  assert.equal(reply.commands[0].player, g.player);
+});

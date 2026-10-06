@@ -44,7 +44,15 @@ func run() -> void:
 	check(not game.finished, "picnic with ten crews waits for closing police")
 	game.course.phase = "complete"
 	game._check_finish()
-	check(game.finished, "picnic with ten crews and closing police finishes the demo")
+	check(not game.finished, "first pass cannot finish the outing")
+	game.course.pass_index = 2
+	game._check_finish()
+	check(not game.finished, "second closing police waits for packing")
+	game.walker = game.camp.position
+	game.packing.pack(game.camp.position)
+	game.in_car = true
+	game._check_finish()
+	check(game.finished, "two passes, packed equipment and returning to car finish the outing")
 	await game._shutdown_audio()
 	game.queue_free()
 	await process_frame

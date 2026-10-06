@@ -9,7 +9,7 @@ func _initialize() -> void:
 func finish_vehicle(game) -> void:
 	var racer = game.racers[-1]
 	racer.s = game.stage.LENGTH - 2.0
-	racer.node.position = game.stage.at(racer.s)
+	racer.node.position = game.race_at(racer.s)
 	racer.previous = racer.node.position
 	racer.slide = 0.0
 	racer.slide_speed = 0.0
@@ -70,7 +70,29 @@ func run() -> void:
 		game.course.update(game, 20)
 		check(game.racers.size() == 1, "closing police never spawns twice")
 		finish_vehicle(game)
-		check(game.course.phase == "complete" and game.racers.is_empty(), "route completion by closing police closes the stage")
+		check(game.course.phase == "intermission" and game.course.pass_index == 1 and game.course.remaining == 60, "first closing police starts a sixty-second turnaround")
+		game.course.update(game, 59)
+		check(game.racers.is_empty() and game.course.pass_index == 1, "reverse convoy waits for the whole break")
+		game.course.update(game, 1)
+		check(game.course.pass_index == 2 and game.racers[-1].id == 301 and game.passed == 0 and game.rally_spawn_count == 0, "second pass resets ten-crew counters and uses unique identities")
+		var reverse = game.racers[-1]
+		check(reverse.node.position.distance_to(game.stage.at(game.stage.LENGTH)) < 0.01, "reverse police starts at the original finish")
+		var forward = -reverse.node.basis.z
+		check(forward.dot(-game.stage.direction(game.stage.LENGTH)) > 0.99, "reverse car faces the opposite direction immediately")
+		finish_vehicle(game)
+		for index in range(3):
+			check(game.course.phase == "zero" and game.course.zero_index == index + 1, "reverse pass repeats the safety convoy")
+			finish_vehicle(game)
+		game.course.update(game, 5)
+		check(game.racers.size() == 1 and game.racers[0].id == 201, "same first crew returns with a new pass identity")
+		game.racers[0].node.free()
+		game.racers.clear()
+		game.passed = 10
+		game.rally_spawn_count = 10
+		game.course.update(game, 0.1)
+		check(game.racers[-1].id == 305 and game.course.phase == "closing_police", "second pass ends with its own closing police")
+		finish_vehicle(game)
+		check(game.course.phase == "complete" and game.racers.is_empty(), "only second closing police completes both passes")
 		game.course.update(game, 300)
 		check(game.racers.is_empty() and game.rally_spawn_count == 10 and game.passed == 10, "closed stage never restarts or creates an eleventh racer")
 		game.rally_spawn_count = 0

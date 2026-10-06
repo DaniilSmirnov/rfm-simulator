@@ -55,8 +55,8 @@ func solid(parent: Node3D, local: Vector3, radius: float, height: float) -> void
 
 func build() -> void:
 	name = "CourseOfficials"
-	arch(4.0, "СТАРТ", false)
-	arch(stage.LENGTH - 8.0, "ФИНИШ", true)
+	arch(4.0, "Rally Fans Map", false)
+	arch(stage.LENGTH - 8.0, "Rally Fans Map", true)
 	station(24.0, 1.0, "Старт")
 	station(stage.LENGTH - 30.0, -1.0, "Финиш")
 	var positions: Array = [180.0, 420.0, 650.0] if stage.winter else [165.0, 365.0, 570.0, 730.0]
@@ -98,7 +98,6 @@ func arch(s: float, caption: String, finish: bool) -> void:
 	for face in [-1.0, 1.0]:
 		var yaw = PI if face < 0 else 0.0
 		Props.label_3d(gate, Vector3(0, 4.55, face * 0.37), caption, 112, 0.007, Color.WHITE, yaw)
-		Props.label_3d(gate, Vector3(0, 4.25, face * 0.37), "RALLY FAN MAPS", 44, 0.004, Color("fff1dc"), yaw)
 		for side in [-1.0, 1.0]:
 			for x in range(5):
 				for y in range(3):

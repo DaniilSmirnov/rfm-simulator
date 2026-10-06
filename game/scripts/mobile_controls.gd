@@ -53,17 +53,18 @@ func _layout() -> void:
 		var target = game.interaction.current()
 		actions = [["Поляна", "random_spot", false]]
 		if not target.is_empty():
-			var label = str(target.label).replace("Сесть в машину", "В машину").replace("Сесть на стул", "На стул").replace("Встать со стула", "Встать").replace("Собрать гриб", "Собрать").replace("Собрать ягоды", "Собрать").replace("Насадить гриб", "Насадить").replace("Съесть шашлык", "Шашлык").replace("Съесть гриб", "Есть гриб").replace("Выпить пиво", "Пиво")
+			var label = str(target.label).replace("Сесть в машину", "В машину").replace("Сесть на стул", "На стул").replace("Встать со стула", "Встать").replace("Собрать гриб", "Собрать").replace("Собрать ягоды", "Собрать").replace("Насадить гриб", "Насадить").replace("Съесть шашлык", "Шашлык").replace("Съесть гриб", "Есть гриб").replace("Выпить пиво", "Пиво").replace("Потушить и собрать мангал", "Убрать мангал").replace("Собрать ", "Убрать ")
 			actions.push_front([label, "interact", false])
 		if not game.seated and game.beers < 30:
 			actions.append(["Бег", "sprint", true])
 			actions.append(["Прыжок", "jump", false])
-		actions.append(["Стол", "table", false])
-		actions.append(["Стул", "chairs", false])
-		if game.camp != null and game.has_chairs:
-			actions.append(["Мангал", "grill", false])
-		if game.flag_count() < game.FLAGS_PER_PLAYER:
-			actions.append(["Флаг", "flag", false])
+		if not game.packing.active():
+			actions.append(["Стол", "table", false])
+			actions.append(["Стул", "chairs", false])
+			if game.camp != null and game.has_chairs:
+				actions.append(["Мангал", "grill", false])
+			if game.flag_count() < game.FLAGS_PER_PLAYER:
+				actions.append(["Флаг", "flag", false])
 		if game.foraging.can_eat("berries"):
 			actions.append(["Ягоды", "eat_berries", false])
 		if game.tow_target != null or game.nearby_tow_racer():

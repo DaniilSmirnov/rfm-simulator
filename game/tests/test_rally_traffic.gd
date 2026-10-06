@@ -23,13 +23,13 @@ func pair(game, moving: bool = false) -> Array:
 	var follower = game.racers[1]
 	lead.s = 190.0
 	lead.focus = 650.0
-	lead.node.position = game.stage.at(190)
+	lead.node.position = game.race_at(190)
 	lead.state = "racing" if moving else "stranded"
 	lead.pace = 0.55
 	lead.drive_speed = 13.2
 	follower.s = 150.0
 	follower.focus = 650.0
-	follower.node.position = game.stage.at(150)
+	follower.node.position = game.race_at(150)
 	follower.line = 0.0
 	follower.slide = 0.0
 	follower.pace = 1.15
@@ -79,19 +79,32 @@ func run() -> void:
 	cars = pair(game)
 	lead = cars[0]
 	follower = cars[1]
-	lead.node.position += game.stage.side(lead.s) * -1.6
-	game.car.position = game.stage.at(lead.s) + game.stage.side(lead.s) * 1.6
+	lead.node.position += game.race_side(lead.s) * -1.6
+	game.car.position = game.race_at(lead.s) + game.race_side(lead.s) * 1.6
 	for i in range(180):
 		game._update_racers(1.0 / 24)
 	check(follower.state == "racing" and follower.drive_speed < 0.5 and follower.s > 170 and follower.s < lead.s - 5, "blocked road produces a waiting queue instead of another stranded crew")
 	var waiting: float = follower.s
-	lead.node.position += game.stage.side(lead.s) * -20
+	lead.node.position += game.race_side(lead.s) * -20
 	game.car.position = Vector3(170, 2, 5)
 	for i in range(60):
 		game._update_racers(1.0 / 24)
 	check(follower.state == "racing" and follower.s > waiting + 5, "waiting crew automatically resumes when the road becomes clear")
 	var snapshot = game.room.world_state()
 	check(snapshot.racers.size() == 2 and snapshot.racers[1].pos == game.room.a(follower.node.position), "multiplayer snapshot carries the actual chosen rally trajectory")
+	game.course.pass_index = 2
+	cars = pair(game)
+	lead = cars[0]
+	follower = cars[1]
+	var plan = game.Traffic.plan(game, follower)
+	check(plan.avoiding, "reverse traffic recognizes a blocker ahead in travel direction")
+	safe = true
+	for i in range(160):
+		game._update_racers(1.0 / 24)
+		safe = safe and follower.state == "racing" and follower.node.position.distance_to(lead.node.position) > 2.5
+	check(safe and follower.s > lead.s + 12, "reverse crew safely overtakes stranded car")
+	game.recover_racer(lead)
+	check(lead.state == "racing" and lead.node.position.distance_to(game.race_at(lead.s)) < 0.01 and (-lead.node.basis.z).dot(game.race_direction(lead.s)) > 0.99, "recovery rejoins road in reverse travel direction")
 	clear_cars(game)
 	await game._shutdown_audio()
 	game.queue_free()

@@ -1,5 +1,6 @@
 extends Node3D
 
+var packing = preload("res://scripts/camp_packing.gd").new()
 var interaction = preload("res://scripts/interaction.gd").new()
 var seated = false
 var jump_height = 0.0
@@ -104,6 +105,9 @@ func valid_furniture_spot(spot: Vector3, kind: String, ignored_owner: String = "
 	return true
 
 func begin_placement(kind: String) -> void:
+	if packing.active():
+		toast("Выезд завершён. Соберите предметы через F.")
+		return
 	if seated:
 		stand_up()
 	if in_car or beers >= 30:
@@ -293,6 +297,7 @@ var stone_clock = 0.0
 func _ready() -> void:
 	foraging.game = self
 	interaction.game = self
+	packing.game = self
 	rng.randomize()
 	_setup_input()
 	stage = Stage.new()
@@ -638,7 +643,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		eat_foraged("berries")
 		return
 	for shared_action in room.SHARED_ACTIONS:
-		if shared_action != "eat" and event.is_action_pressed(shared_action) and room.submit(shared_action):
+		if shared_action not in ["eat", "pack"] and event.is_action_pressed(shared_action) and room.submit(shared_action):
 			return
 	if event.is_action_pressed("interact"):
 		_toggle_car()
@@ -682,7 +687,7 @@ func _process(delta: float) -> void:
 	if not room.connected or room.is_host:
 		elapsed += delta
 		course.update(self, delta)
-	elif course.phase == "countdown":
+	elif course.phase in ["countdown", "intermission"]:
 		course.remaining = maxf(0, course.remaining - delta)
 	stage.update_fallen(delta)
 	_update_intoxication(delta)
@@ -1260,19 +1265,39 @@ func spawn_course_car(role: String, id: int, zero_index: int = 0) -> void:
 	var node = Props.course_car(role, zero_index)
 	var racer = _add_course_vehicle(node, id, "pass", 0, role, zero_index)
 	racer.pace = 0.72
-	racer.drive_speed = stage.rally_speed(0) * racer.pace
+	racer.drive_speed = race_speed(0) * racer.pace
 	racer.bias = 0.0
 	racer.phase = 0.0
 	toast(course.caption())
 
+func race_station(point: Vector3) -> float:
+	var station = stage.road_s(point)
+	return Stage.LENGTH - station if course.pass_index == 2 else station
+
+func race_at(progress: float) -> Vector3:
+	var station = clampf(progress, 0, Stage.LENGTH)
+	return stage.at(Stage.LENGTH - station if course.pass_index == 2 else station)
+
+func race_direction(progress: float) -> Vector3:
+	var station = clampf(progress, 0, Stage.LENGTH)
+	return -stage.direction(Stage.LENGTH - station) if course.pass_index == 2 else stage.direction(station)
+
+func race_side(progress: float) -> Vector3:
+	return race_direction(progress).cross(Vector3.UP).normalized()
+
+func race_speed(progress: float) -> float:
+	return stage.rally_speed(Stage.LENGTH - progress if course.pass_index == 2 else progress)
+
 func _add_course_vehicle(node: Node3D, id: int, kind: String, variant: int, role: String = "racer", zero_index: int = 0) -> Dictionary:
-	var focus = clampf(stage.road_s(player_position()), 45, Stage.LENGTH - 80)
+	var focus = clampf(race_station(player_position()), 45, Stage.LENGTH - 80)
 	add_child(node)
 	var s = 0.0 if stage.urban or role != "racer" else maxf(0, focus - 115)
-	node.position = stage.at(s)
+	node.position = race_at(s)
+	var direction = race_direction(s)
+	node.rotation.y = atan2(-direction.x, -direction.z)
 	node.set_meta("room_id", id)
 	var driver = Traffic.profile(id)
-	var racer = {"bias": driver.bias, "phase": driver.phase, "pace": driver.pace, "line": 0.0, "drive_speed": stage.rally_speed(s) * driver.pace, "avoiding": false, "avoid_line": 0.0, "role": role, "zero_index": zero_index, "id": id, "node": node, "s": s, "focus": focus, "kind": kind, "state": "racing", "offset": 0.0, "age": 0.0, "counted": false, "start": Vector3.ZERO, "target": Vector3.ZERO, "variant": variant, "motion": Motion.new(), "previous": node.position, "slide": 0.0, "slide_speed": 0.0}
+	var racer = {"bias": driver.bias, "phase": driver.phase, "pace": driver.pace, "line": 0.0, "drive_speed": race_speed(s) * driver.pace, "avoiding": false, "avoid_line": 0.0, "role": role, "zero_index": zero_index, "id": id, "node": node, "s": s, "focus": focus, "kind": kind, "state": "racing", "offset": 0.0, "age": 0.0, "counted": false, "start": Vector3.ZERO, "target": Vector3.ZERO, "variant": variant, "motion": Motion.new(), "previous": node.position, "slide": 0.0, "slide_speed": 0.0}
 	racers.append(racer)
 	return racer
 
@@ -1291,7 +1316,7 @@ func spawn_racer(forced: String = "") -> void:
 	var variant = [5, 0, 1, 2, 3, 4][rally_spawn_count % Props.RALLY_MODELS.size()]
 	rally_spawn_count += 1
 	var node = Props.car(Color.WHITE, true, variant)
-	_add_course_vehicle(node, rally_spawn_count, kind, variant)
+	_add_course_vehicle(node, rally_spawn_count + (course.pass_index - 1) * 200, kind, variant)
 	toast("Приближается %s, номер %d!" % [node.get_meta("model"), node.get_meta("number")])
 
 func _update_racers(delta: float) -> void:
@@ -1310,7 +1335,7 @@ func _update_racers(delta: float) -> void:
 			var traffic = Traffic.plan(self, racer)
 			racer.avoiding = traffic.avoiding
 			racer.avoid_line = traffic.line
-			var actual_speed = move_toward(float(racer.get("drive_speed", stage.rally_speed(racer.s))), float(traffic.speed), delta * (Traffic.BRAKE if traffic.speed < racer.get("drive_speed", 0) else 8.0))
+			var actual_speed = move_toward(float(racer.get("drive_speed", race_speed(racer.s))), float(traffic.speed), delta * (Traffic.BRAKE if traffic.speed < racer.get("drive_speed", 0) else 8.0))
 			# The braking envelope is also a hard speed cap for long frame gaps.
 			actual_speed = minf(actual_speed, float(traffic.speed)) if traffic.speed < actual_speed else actual_speed
 			actual_speed = minf(actual_speed, float(traffic.get("advance", INF)) / maxf(delta, 0.001))
@@ -1320,8 +1345,8 @@ func _update_racers(delta: float) -> void:
 			racer.line = move_toward(float(racer.get("line", 0.0)), float(traffic.line), delta * minf(2.8, actual_speed * 0.14))
 
 			var s: float = racer.s
-			var road_yaw = atan2(-stage.direction(s).x, -stage.direction(s).z)
-			var ahead = stage.direction(s + 7)
+			var road_yaw = atan2(-race_direction(s).x, -race_direction(s).z)
+			var ahead = race_direction(s + 7)
 			var bend = wrapf(atan2(-ahead.x, -ahead.z) - road_yaw, -PI, PI) / 7.0
 			# Lateral inertia fights the tyres until countersteering catches the slide.
 			var substeps = maxi(1, int(ceil(delta / (1.0 / 120.0))))
@@ -1330,7 +1355,7 @@ func _update_racers(delta: float) -> void:
 				racer.slide_speed += ((0.0 if service else bend * race_speed * race_speed) - racer.slide * 14.0 - racer.slide_speed * stage.grip(node.position) * 5.0) * dt
 				racer.slide = clampf(racer.slide + racer.slide_speed * dt, -2.6, 2.6)
 			var height = node.position.y
-			node.position = stage.at(s) + stage.side(s) * racer.line
+			node.position = race_at(s) + race_side(s) * racer.line
 			node.position.y = height
 			var countersteer = clampf(racer.slide_speed / race_speed + racer.slide * 0.035, -0.32, 0.32)
 			var movement = node.position - racer.previous
@@ -1340,10 +1365,10 @@ func _update_racers(delta: float) -> void:
 				racer.state = "offroad"
 				racer.age = 0
 				racer.start = node.position
-				var side_sign = signf((player_position() - node.position).dot(stage.side(s)))
+				var side_sign = signf((player_position() - node.position).dot(race_side(s)))
 				if side_sign == 0:
 					side_sign = 1
-				racer.target = stage.at(s + 7) + stage.side(s) * side_sign * (15 if racer.kind == "crash" else 6)
+				racer.target = race_at(s + 7) + race_side(s) * side_sign * (15 if racer.kind == "crash" else 6)
 				racer.target.y = stage.ground(racer.target)
 				toast("ВЫЛЕТ! Отойди с траектории!" if racer.kind == "crash" else "Экипаж застрял. Нужен трос — T рядом с машиной.")
 			elif s > racer.focus + 45 and not racer.counted:
@@ -1463,8 +1488,8 @@ func _update_stones(delta: float) -> void:
 			if stage.urban and stage.road_distance(racer.node.position) < Stage.WIDTH * 0.7:
 				continue # Clean asphalt does not throw a constant stream of gravel.
 			var s: float = racer.s
-			var direction = stage.direction(s)
-			var side = stage.side(s) * (-1.0 if rng.randf() < 0.5 else 1.0)
+			var direction = race_direction(s)
+			var side = race_side(s) * (-1.0 if rng.randf() < 0.5 else 1.0)
 			var node = Props.box(self, Vector3.ZERO, Vector3.ONE * rng.randf_range(0.07, 0.14), Color("9b9079"))
 			node.position = racer.node.position - direction * 1.6 + side * 0.65 + Vector3(0, 0.25, 0)
 			stone_serial += 1
@@ -1539,7 +1564,9 @@ func _update_hud() -> void:
 	course_label.text = course.caption()
 	var distance = int(player_position().distance_to(stage.clearings[target_clearing]))
 	quest_label.text = "%s Найти место  ·  %d м\n%s Разложить стол\n%s Поставить стулья\n%s Пожарить и съесть шашлык\n%s Посмотреть %d экипажей" % ["[x]" if camp != null else "[ ]", distance, "[x]" if camp != null else "[ ]", "[x]" if has_chairs else "[ ]", "[x]" if eaten else "[ ]", "[x]" if passed >= RALLY_CREW_LIMIT else "[ ]", RALLY_CREW_LIMIT]
-	status_label.text = "ЭКИПАЖИ %d/%d   ·   ПОМОЩЬ %d\nПИВО %d   ·   ВЫЕЗД %02d:%02d" % [passed, RALLY_CREW_LIMIT, helped, beers, int(elapsed) / 60, int(elapsed) % 60]
+	if packing.active():
+		quest_label.text = "Оба прохода завершены\nСобрать лагерь: осталось %d предметов\nF — собрать предмет, глядя на него\nЗатем все возвращаются в свои машины" % packing.remaining()
+	status_label.text = "ПРОХОД %d/2 · ЭКИПАЖИ %d/%d · ПОМОЩЬ %d\nПИВО %d · ВЫЕЗД %02d:%02d" % [course.pass_index, passed, RALLY_CREW_LIMIT, helped, beers, int(elapsed) / 60, int(elapsed) % 60]
 	if in_car:
 		info_label.text = "%02d КМ/Ч    ·    ЛЕГКОВУШКА %d%%    ·    %s" % [int(absf(speed) * 3.6), int(condition), "ОБОЧИНА" if stage.road_distance(car.position) > 4 else "ГРАВИЙ / КОЛЕЯ"]
 		hint_label.text = "WASD / стрелки — газ и руль   ·   Space — тормоз   ·   F — выйти   ·   Q — случайная поляна   ·   Home — вернуть на СУ"
@@ -1564,11 +1591,13 @@ func _update_hud() -> void:
 		status_label.text += "\nГРИБЫ %d · ЯГОДЫ %d" % [bag.mushrooms, bag.berries]
 		var target = interaction.current()
 		if not target.is_empty():
-			hint_label.text = "F — " + target.label + "   ·   Z/C/G/V — поставить предмет"
+			hint_label.text = "F — " + target.label + ("" if packing.active() else "   ·   Z/C/G/V — поставить предмет")
 		elif seated:
 			hint_label.text = "F — встать со стула"
 		if foraging.can_eat("berries"):
 			hint_label.text += " · K — съесть ягоды"
+	if packing.active() and packing.remaining() == 0:
+		hint_label.text = "Лагерь собран. Садитесь в свои машины через F; ждём всех друзей." if in_car else "Лагерь собран. Подойди к своей машине и нажми F."
 	if mobile_mode:
 		if in_car and tow_target == null:
 			info_label.text = "%02d КМ/Ч · МАШИНА %d%% · %s %d м" % [int(absf(speed) * 3.6), int(condition), "ПАРКОВКА" if stage.urban else "ПОЛЯНА", distance]
@@ -1586,11 +1615,14 @@ func _update_hud() -> void:
 	minimap.queue_redraw()
 
 func _check_finish() -> void:
-	if dead:
+	if dead or finished or not packing.active() or packing.remaining() > 0 or not in_car or eat_time >= 0 or drink_time >= 0:
 		return
-	if camp != null and has_chairs and eaten and eat_time < 0 and passed >= RALLY_CREW_LIMIT and course.phase == "complete":
-		finished = true
-		_show_result("Идеальный раллийный овощ", "Шашлык съеден. Ралли посмотрено. Ты выжил.\n\nЭкипажи: %d  ·  Помощь тросом: %d\nПиво: %d  ·  Машина: %d%%\n\nРаллийный выезд удался." % [passed, helped, beers, condition])
+	# In a room, wait for every connected spectator to get back in their car.
+	for peer in room.peers.values():
+		if peer.state == null or not peer.state.in_car:
+			return
+	finished = true
+	_show_result("Раллийный выезд завершён", "Оба прохода посмотрены. Лагерь собран. Все вернулись в машины.\n\nЭкипажи: %d  ·  Помощь: %d\nПиво: %d  ·  Машина: %d%%\n\nДо следующего ралли!" % [RALLY_CREW_LIMIT + passed, helped, beers, condition])
 
 func die(reason: String) -> void:
 	dead = true
@@ -1684,9 +1716,9 @@ func nearby_tow_racer() -> bool:
 
 func recover_racer(racer: Dictionary) -> void:
 	# Restart ahead of the impact, with no old slide/impulse or swept crash path.
-	racer.s = clampf(stage.road_s(racer.node.position) + 12.0, 0, Stage.LENGTH - 2)
-	racer.node.position = stage.at(racer.s)
-	var direction = stage.direction(racer.s)
+	racer.s = clampf(race_station(racer.node.position) + 12.0, 0, Stage.LENGTH - 2)
+	racer.node.position = race_at(racer.s)
+	var direction = race_direction(racer.s)
 	racer.node.rotation = Vector3(0, atan2(-direction.x, -direction.z), 0)
 	racer.previous = racer.node.position
 	racer.start = racer.node.position
@@ -1697,7 +1729,7 @@ func recover_racer(racer: Dictionary) -> void:
 	racer.line = 0.0
 	racer.avoiding = false
 	racer.avoid_line = 0.0
-	racer.drive_speed = stage.rally_speed(racer.s) * racer.get("pace", 1.0)
+	racer.drive_speed = race_speed(racer.s) * racer.get("pace", 1.0)
 	racer.state = "racing"
 	racer.kind = "pass"
 	count_racer(racer)
