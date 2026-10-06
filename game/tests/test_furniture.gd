@@ -48,23 +48,28 @@ func run() -> void:
 	check(not host.valid_furniture_spot(host.stage.at(140), "table"), "furniture cannot be placed on rally road")
 	host.walker = origin + Vector3(0, 0, 6)
 	host.begin_placement("flag")
-	check(host.placement_preview.get_child_count() == 1 and host.placement_preview.find_children("*", "MeshInstance3D", true, false).size() == 2, "flag preview has its pole and cloth attached to the scene")
+	check(host.placement_preview.get_child_count() == 1 and host.placement_preview.find_children("*", "MeshInstance3D", true, false).size() == 6, "flag preview has its pole, opaque cloth and four text meshes attached to the scene")
 	host.cancel_placement()
 	check(host.place_flag(host.walker + Vector3(2, 0, 0), 0.0), "first personal Rally Fan Maps flag can be placed")
 	var placed_flag = host.personal_flags["host"][0]
 	var flag_cloth = placed_flag.get_child(1)
 	check(placed_flag.get_parent() == host and flag_cloth.is_visible_in_tree(), "placed flag and cloth are visible in the game scene")
-	var wordmarks = placed_flag.find_children("*", "Label3D", true, false)
 	var rally_labels = 0
 	var maps_labels = 0
-	var visible_wordmarks = wordmarks.size() == 4
-	for label in wordmarks:
-		rally_labels += int(label.text == "RALLY")
-		maps_labels += int(label.text == "FAN MAPS")
-		visible_wordmarks = visible_wordmarks and label.is_visible_in_tree() and not label.double_sided
-	check(visible_wordmarks and rally_labels == 2 and maps_labels == 2, "Rally Fan Maps wordmark is rendered as visible 3D text on both faces")
-	check(flag_cloth.material_override.albedo_texture != null, "flag cloth uses an export-safe Rally Fan Maps texture")
-	check(flag_cloth.material_override.transparency == BaseMaterial3D.TRANSPARENCY_ALPHA and flag_cloth.material_override.cull_mode == BaseMaterial3D.CULL_DISABLED, "flag cloth renders transparent and double-sided in Web builds")
+	var visible_wordmarks = true
+	var text_count = 0
+	for node in placed_flag.find_children("*", "MeshInstance3D", true, false):
+		if not node.mesh is TextMesh:
+			continue
+		text_count += 1
+		rally_labels += int(node.mesh.text == "RALLY")
+		maps_labels += int(node.mesh.text == "FAN MAPS")
+		visible_wordmarks = visible_wordmarks and node.is_visible_in_tree() and not node.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX].is_empty()
+		visible_wordmarks = visible_wordmarks and node.material_override.transparency == BaseMaterial3D.TRANSPARENCY_DISABLED and absf(node.position.z) >= 0.03
+		check(absf(wrapf(node.rotation.y - (PI if node.position.z < 0 else 0.0), -PI, PI)) < 0.001, "text faces outward without mirroring")
+	check(visible_wordmarks and text_count == 4 and rally_labels == 2 and maps_labels == 2, "Rally Fan Maps has opaque vector text on both faces")
+	check(placed_flag.find_children("*", "Label3D", true, false).is_empty() and flag_cloth.material_override.albedo_texture == null, "flag has no icon texture or transparent text layer")
+	check(flag_cloth.mesh is ArrayMesh and flag_cloth.material_override.transparency == BaseMaterial3D.TRANSPARENCY_DISABLED and flag_cloth.material_override.cull_mode == BaseMaterial3D.CULL_DISABLED, "flag silhouette is opaque geometry visible on both sides")
 	check(host.flag_count() == 1, "flag count is tracked per player")
 	check(host.place_flag(host.walker + Vector3(3, 0, 0), 0.4), "second personal flag can be placed")
 	check(host.place_flag(host.walker + Vector3(4, 0, 0), 0.8), "third personal flag can be placed")

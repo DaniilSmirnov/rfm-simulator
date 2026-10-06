@@ -28,6 +28,17 @@ jobs:
       - run: npm run test:server
       - run: npx wrangler deploy --dry-run --outdir .cache/worker
 
+      - name: Render and verify text flag faces
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "true"
+        run: xvfb-run -a .cache/godot/Godot_v4.4.1-stable_linux.x86_64 --path game --rendering-method gl_compatibility --script res://tests/flag_preview.gd
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: flag-preview
+          path: flag-*.png
+          if-no-files-found: warn
+
       - name: Render city reference views
         env:
           LIBGL_ALWAYS_SOFTWARE: "true"

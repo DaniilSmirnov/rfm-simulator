@@ -1,8 +1,6 @@
 extends RefCounted
 class_name RallyProps
 
-const RFM_FLAG_TEXTURE = preload("res://branding/rfm-flag.svg")
-
 static func material(color: Color) -> StandardMaterial3D:
 	var m = StandardMaterial3D.new()
 	m.albedo_color = color
@@ -665,29 +663,47 @@ static func rally_fan_flag(parent: Node3D, pos: Vector3, yaw: float, index: int 
 	root.set_meta("rally_fan_maps_flag", true)
 	root.set_meta("flag_index", index)
 	parent.add_child(root)
-	# Feather-shaped textured cloth. It is double-sided so it stays visible from either side.
+	# The silhouette is geometry, not an alpha texture: no transparent sorting.
 	cylinder(root, Vector3(0, 1.55, 0), 0.055, 0.045, 3.1, Color("263238"), 7)
 	var cloth = MeshInstance3D.new()
-	var quad = QuadMesh.new()
-	quad.size = Vector2(1.44, 2.65)
-	cloth.mesh = quad
-	var cloth_material = StandardMaterial3D.new()
-	cloth_material.albedo_texture = RFM_FLAG_TEXTURE
-	cloth_material.albedo_color = Color.WHITE
-	cloth_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	cloth.name = "FlagCloth"
+	var outline = PackedVector2Array([
+		Vector2(-0.66, 1.26), Vector2(-0.28, 1.325), Vector2(0.32, 1.28),
+		Vector2(0.64, 1.12), Vector2(0.54, 0.58), Vector2(0.68, 0.04),
+		Vector2(0.53, -0.58), Vector2(0.63, -1.25), Vector2(-0.65, -1.18),
+		Vector2(-0.57, -0.58), Vector2(-0.69, 0.12), Vector2(-0.57, 0.72)
+	])
+	var vertices = PackedVector3Array()
+	for i in range(outline.size()):
+		var next = outline[(i + 1) % outline.size()]
+		vertices.append_array(PackedVector3Array([Vector3.ZERO, Vector3(outline[i].x, outline[i].y, 0), Vector3(next.x, next.y, 0)]))
+	cloth.mesh = panel_mesh(vertices)
+	var cloth_material = material(Color("ee531b"))
 	cloth_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	cloth_material.cull_mode = BaseMaterial3D.CULL_DISABLED
 	cloth.material_override = cloth_material
 	root.add_child(cloth)
 	cloth.position = Vector3(0.72, 1.65, 0)
-	# Godot's SVG importer does not render SVG text. Use actual 3D glyphs
-	# on each face, so the wordmark survives both native and Web exports.
+	# Opaque vector glyphs avoid SVG import and Label3D alpha sorting entirely.
+	# Separate outward-facing meshes keep the back readable, not mirrored.
 	for face in [-1, 1]:
-		var text_yaw = PI if face < 0 else 0.0
-		var top = label_3d(root, Vector3(0.72, 1.46, face * 0.018), "RALLY", 48, 0.006, Color("fff4e6"), text_yaw)
-		var bottom = label_3d(root, Vector3(0.72, 1.28, face * 0.018), "FAN MAPS", 38, 0.006, Color("fff4e6"), text_yaw)
-		for label in [top, bottom]:
-			label.double_sided = false
+		for line in range(2):
+			var text = MeshInstance3D.new()
+			text.name = "Wordmark_%s_%d" % ["Front" if face > 0 else "Back", line]
+			var glyphs = TextMesh.new()
+			glyphs.font = ThemeDB.fallback_font
+			glyphs.text = "RALLY" if line == 0 else "FAN MAPS"
+			glyphs.font_size = 64 if line == 0 else 48
+			glyphs.pixel_size = 0.004
+			glyphs.depth = 0.0
+			text.mesh = glyphs
+			var ink = material(Color("fff4e6"))
+			ink.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			text.material_override = ink
+			text.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			root.add_child(text)
+			text.position = Vector3(0.72, 1.75 if line == 0 else 1.34, face * 0.035)
+			text.rotation.y = PI if face < 0 else 0.0
 	return root
 
 static func label_3d(parent: Node3D, pos: Vector3, text: String, size: int, pixel_size: float, color: Color, yaw: float = 0.0) -> Label3D:
