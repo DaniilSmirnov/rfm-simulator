@@ -272,7 +272,7 @@ func _ready() -> void:
 		start_game()
 
 func _setup_input() -> void:
-	var bindings = {"forward": [KEY_W, KEY_UP], "back": [KEY_S, KEY_DOWN], "left": [KEY_A, KEY_LEFT], "right": [KEY_D, KEY_RIGHT], "brake": [KEY_SPACE], "interact": [KEY_E], "table": [KEY_F], "chairs": [KEY_C], "grill": [KEY_G], "beer": [KEY_B], "eat": [KEY_X], "rally": [KEY_R], "tow": [KEY_T], "random_spot": [KEY_Q], "recover": [KEY_HOME], "pause_demo": [KEY_ESCAPE]}
+	var bindings = {"forward": [KEY_W, KEY_UP], "back": [KEY_S, KEY_DOWN], "left": [KEY_A, KEY_LEFT], "right": [KEY_D, KEY_RIGHT], "brake": [KEY_SPACE], "interact": [KEY_E], "table": [KEY_F], "chairs": [KEY_C], "grill": [KEY_G], "beer": [KEY_B], "eat": [KEY_X], "rally": [KEY_R], "tow": [KEY_T], "random_spot": [KEY_Q], "recover": [KEY_HOME], "pause_demo": [KEY_ESCAPE], "placement_confirm": [KEY_ENTER], "placement_rotate": [], "placement_cancel": []}
 	for action in bindings:
 		if not InputMap.has_action(action):
 			InputMap.add_action(action)
