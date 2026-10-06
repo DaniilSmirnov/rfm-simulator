@@ -530,6 +530,8 @@ func rock_hit(start: Vector3, end: Vector3, radius: float, allow_escape: bool = 
 			t = (-projection - sqrt(discriminant)) / length_squared
 			if t < 0 or t > 1:
 				continue
+		if lerpf(start.y, end.y, t) > rock.pos.y + rock.height:
+			continue
 		if t >= earliest:
 			continue
 		var point = a + travel * t

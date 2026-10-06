@@ -15,6 +15,7 @@ func run() -> void:
 	var hit = stage.rock_hit(origin + Vector3(-5, 0, 0), origin + Vector3(5, 0, 0), 0.85)
 	check(not hit.is_empty() and hit.position.x < origin.x and hit.normal.x < -0.9, "fast car sweep hits the near face of a rock")
 	check(stage.rock_hit(origin + Vector3(-5, 2, 0), origin + Vector3(5, 2, 0), 0.85).is_empty(), "airborne cars can clear a rock")
+	check(stage.rock_hit(origin + Vector3(-5, 2, 0), origin + Vector3(5, 0, 0), 0.85).is_empty(), "landing beyond a rock does not create a false midair hit")
 	check(stage.rock_hit(origin + Vector3(0.1, 0, 0), origin + Vector3(0.2, 0, 0), 0.85).is_empty(), "overlapping cars can move out of rock contact")
 	check(not stage.rock_hit(origin + Vector3(0.2, 0, 0), origin + Vector3(0.1, 0, 0), 0.85).is_empty(), "moving farther into a rock remains blocked")
 	var solver = Motion.new()
@@ -72,6 +73,15 @@ func run() -> void:
 	check(snapshot.racers[0].state == "rock_bounce" and snapshot.racers[0].has("tilt"), "room shares rally rock rebound and suspension pose")
 	game._update_racers(0.9)
 	check(racer.state == "stopped", "rally rebound settles to a stopped car")
+	var passed = game.passed
+	racer.state = "offroad"
+	racer.counted = false
+	racer.age = 0.0
+	racer.start = origin + Vector3(-4, 0, 0)
+	racer.target = origin + Vector3(1, 0, 0)
+	racer.node.position = racer.start
+	game._update_racers(0.8)
+	check(game.passed == passed + 1, "rock hit on final offroad frame counts the crew once")
 	var node = Node3D.new()
 	game.add_child(node)
 	node.position = origin + Vector3(0, 0.3, 5)

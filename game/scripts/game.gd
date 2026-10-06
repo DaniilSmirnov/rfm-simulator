@@ -1152,7 +1152,9 @@ func _update_racers(delta: float) -> void:
 			if t >= 1:
 				racer.state = "stranded" if racer.kind == "stuck" else "stopped"
 				racer.age = 0
-				passed += 1
+				if not racer.counted:
+					racer.counted = true
+					passed += 1
 		elif racer.state == "rock_bounce":
 			var steps = maxi(1, int(ceil(delta / (1.0 / 120.0))))
 			var dt = delta / steps
