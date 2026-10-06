@@ -47,3 +47,9 @@ jobs:
           npm install --no-save --package-lock=false playwright@1.63.0
           npx playwright install --with-deps chromium
           node scripts/test-web-physics.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: branding-loading
+          path: .cache/branding-loading.png
+          if-no-files-found: warn

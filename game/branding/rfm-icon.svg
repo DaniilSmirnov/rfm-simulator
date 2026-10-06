@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" role="img" aria-label="Rally Fans Map">
+  <rect width="180" height="180" rx="38" fill="#ff3b0a"/>
+  <path fill="#fff" d="M23 42.3v14.4l78.5 31.1 5.3-13.4L23 42.3Zm0 22.7v14.1l62.8 24.8 5.2-13.4L23 65Zm9.3 27.9v14.3l48.8 19.3 5.2-13.4-54-20.2Z"/>
+  <circle cx="114.6" cy="105.9" r="34.6" fill="#fff"/>
+  <circle cx="114.6" cy="105.9" r="13.1" fill="#ff3b0a"/>
+</svg>

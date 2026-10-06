@@ -47,7 +47,40 @@ try {
     console.log('[browser]', text);
   });
   page.on('pageerror', error => { fail = String(error); });
-  await page.goto('http://127.0.0.1:' + server.address().port);
+  // Hold the engine download to inspect the actual exported loading screen.
+  let releaseEngine;
+  const engineGate = new Promise(resolve => { releaseEngine = resolve; });
+  await page.route('**/index.wasm.gz', async route => { await engineGate; await route.continue(); });
+  try {
+    await page.goto('http://127.0.0.1:' + server.address().port, { waitUntil: 'domcontentloaded' });
+    await page.locator('#status-splash').waitFor({ state: 'visible' });
+    await page.waitForFunction(() => {
+      const image = document.getElementById('status-splash');
+      return image.complete && image.naturalWidth > 0;
+    });
+    const branded = await page.evaluate(async () => {
+      const isBrand = image => {
+        const canvas = document.createElement('canvas');
+        canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
+        const ctx = canvas.getContext('2d'); ctx.drawImage(image, 0, 0);
+        const [r, g, b, a] = ctx.getImageData(Math.floor(canvas.width * 0.5), Math.floor(canvas.height * 0.1), 1, 1).data;
+        return r > 240 && g > 40 && g < 80 && b < 30 && a === 255;
+      };
+      const splash = document.getElementById('status-splash');
+      const links = [...document.querySelectorAll('link')].filter(link => ['icon', 'apple-touch-icon'].includes(link.rel));
+      if (!links.some(link => link.rel === 'icon') || !links.some(link => link.rel === 'apple-touch-icon')) return false;
+      for (const link of links) {
+        const image = new Image(); image.src = link.href; await image.decode();
+        if (!isBrand(image)) return false;
+      }
+      return isBrand(splash);
+    });
+    if (!branded) throw new Error('Exported splash/favicon/apple-touch-icon are not Rally Fans Map branded');
+    await page.screenshot({ path: join(root, '.cache/branding-loading.png') });
+    console.log('Rally Fans Map loading screen and browser icons verified.');
+  } finally {
+    releaseEngine();
+  }
   const until = Date.now() + 90000;
   while (!pass && !fail && Date.now() < until) await page.waitForTimeout(250);
   if (fail || !pass) throw new Error(fail || 'Exported Web physics check timed out');
