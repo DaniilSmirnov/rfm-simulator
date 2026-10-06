@@ -73,7 +73,6 @@ func run() -> void:
 			logged = true
 			print("OVERTAKE COLLISION: frame=%d lead=%.2f/%s/line%.2f/speed%.2f follower=%.2f/%s/line%.2f/speed%.2f distance=%.2f" % [i, lead.s, lead.state, lead.line, lead.drive_speed, follower.s, follower.state, follower.line, follower.drive_speed, lead.node.position.distance_to(follower.node.position)])
 		safe = safe and follower.state == "racing" and lead.state == "racing"
-	print("OVERTAKE END: lead=%.2f/%s follower=%.2f/%s passed=%s safe=%s" % [lead.s, lead.state, follower.s, follower.state, overtook, safe])
 	check(overtook and safe, "faster moving crew overtakes a slower moving crew without collision")
 	cars = pair(game)
 	lead = cars[0]

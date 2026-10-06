@@ -294,7 +294,9 @@ func _square() -> void:
 	_solid(root, Vector3(0, 0.05, 0), Vector3(25, 0.2, 25), "island")
 	for i in range(8):
 		var a = i * TAU / 8
-		_lamp(root.position + Vector3(cos(a) * 32, 0, sin(a) * 32), 1)
+		var p = root.position + Vector3(cos(a) * 42, 0, sin(a) * 42)
+		if stage.road_distance(p) > 5.2:
+			_lamp(p, 1)
 	_batch(root, root.transform)
 
 func _solid(parent: Node3D, center: Vector3, size: Vector3, kind: String) -> void:
