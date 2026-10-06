@@ -239,3 +239,16 @@ test('seated posture is synchronized only for pedestrians and defaults off', () 
   reply = r.sync({ token: h.token, state: state() }, 1300);
   assert.equal(reply.players[0].state.seated, false);
 });
+
+test('BMW model 9 survives joins and restored rooms while out-of-range models fall back', () => {
+  const r = new RoomState();
+  const h = r.add('BMW Host', 1000, true, { car_model: 9 });
+  const g = r.add('BMW Guest', 1000, false, { car_model: 9 });
+  assert.equal(h.car_model, 9);
+  assert.equal(g.car_model, 9);
+  const restored = new RoomState(structuredClone(r.data));
+  const reply = restored.sync({ token: g.token, state: state() }, 1100);
+  assert.deepEqual(reply.players.map(p => p.car_model), [9, 9]);
+  const late = restored.add('Late', 1200, false, { car_model: 10 });
+  assert.equal(late.car_model, late.slot);
+});

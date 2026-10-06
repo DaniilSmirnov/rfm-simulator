@@ -14,7 +14,7 @@ func _initialize() -> void:
 func run() -> void:
 	var names = {}
 	var shapes = {}
-	for i in range(9):
+	for i in range(Props.PLAYER_MODELS.size()):
 		var car = Props.player_car(i)
 		names[car.get_meta("model")] = true
 		var signature = ""
@@ -23,7 +23,7 @@ func run() -> void:
 				signature += str(part.mesh.get_aabb(), part.transform)
 		shapes[signature] = true
 		car.free()
-	check(names.size() == 9 and shapes.size() == 9, "nine models have different names and geometry")
+	check(names.size() == 10 and shapes.size() == 10, "ten models have different names and geometry")
 	var host = load("res://main.tscn").instantiate()
 	var guest = load("res://main.tscn").instantiate()
 	root.add_child(host)

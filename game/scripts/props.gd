@@ -198,6 +198,7 @@ const PLAYER_MODELS = [
 	{"name": "Renault Logan", "color": "c6c9b9", "length": 4.35, "width": 1.73, "height": 1.53, "rear": 0.87, "glass": 0.27, "lights": "square", "grille": 0.90},
 	{"name": "Renault Duster", "color": "a58058", "length": 4.34, "width": 1.82, "height": 1.70, "rear": 1.63, "glass": 0.28, "lights": "square", "grille": 1.05},
 	{"name": "ВАЗ-2112 Лодка", "color": "283f87", "length": 4.17, "width": 1.68, "height": 1.47, "rear": 0.98, "glass": 0.30, "lights": "square", "grille": 0.75},
+	{"name": "BMW M3 F80", "color": "c92530", "length": 4.68, "width": 1.88, "height": 1.46, "rear": 1.00, "glass": 0.40, "lights": "slim", "grille": 0.80},
 ]
 
 # A closed faceted shell with bevelled cross-sections. Each model has its own
@@ -358,10 +359,126 @@ static func player_car_2112_boat() -> Node3D:
 		box(root, Vector3(0, 1.83, z), Vector3(0.055, 0.38, 0.055), Color("202a2d"))
 	return root
 
+
+static func player_car_m3_f80() -> Node3D:
+	var root = Node3D.new()
+	root.name = "PlayerCar_9"
+	root.set_meta("model", "BMW M3 F80")
+	root.set_meta("variant", 9)
+	var paint = Color("c92530")
+	var black = Color("171d23")
+	var glass = Color("263c4a")
+	var silver = Color("929ca3")
+	# Wide four-door sedan: long bonnet, rearward cabin and separate short boot.
+	var body = car_shell(root, [
+		Vector4(-2.34, 0.84, 0.34, 0.79),
+		Vector4(-1.91, 0.93, 0.33, 0.91),
+		Vector4(-1.42, 0.98, 0.33, 0.96),
+		Vector4(-0.98, 0.93, 0.33, 1.00),
+		Vector4(0.66, 0.93, 0.33, 0.99),
+		Vector4(1.39, 1.00, 0.33, 1.00),
+		Vector4(1.84, 0.96, 0.34, 0.99),
+		Vector4(2.34, 0.86, 0.36, 0.88)
+	], paint)
+	body.name = "BodyShellM3F80"
+	body.material_override.roughness = 0.38
+	var cabin = car_shell(root, [
+		Vector4(-0.99, 0.78, 0.98, 1.04),
+		Vector4(-0.43, 0.71, 0.98, 1.40),
+		Vector4(0.57, 0.70, 0.98, 1.41),
+		Vector4(1.20, 0.77, 0.98, 1.06)
+	], glass)
+	cabin.name = "GlassCabinM3F80"
+	var roof = car_shell(root, [
+		Vector4(-0.45, 0.72, 1.39, 1.44),
+		Vector4(-0.15, 0.73, 1.41, 1.46),
+		Vector4(0.57, 0.71, 1.40, 1.45)
+	], black)
+	roof.name = "CarbonRoofM3"
+	var bonnet = car_shell(root, [
+		Vector4(-1.91, 0.26, 0.89, 0.94),
+		Vector4(-1.40, 0.31, 0.93, 1.01),
+		Vector4(-1.03, 0.27, 0.96, 1.03)
+	], paint)
+	bonnet.name = "BonnetPowerDome"
+	for side in [-1.0, 1.0]:
+		car_beam(root, Vector3(side * 0.79, 1.01, -1.00), Vector3(side * 0.72, 1.42, -0.44), 0.065, paint)
+		car_beam(root, Vector3(side * 0.78, 1.01, 0.14), Vector3(side * 0.71, 1.42, 0.14), 0.055, black)
+		car_beam(root, Vector3(side * 0.71, 1.43, 0.58), Vector3(side * 0.80, 1.02, 1.23), 0.085, paint)
+		# Two door handles, seams and an angular rear quarter window on each side.
+		for z in [-0.03, 0.89]:
+			box(root, Vector3(side * 0.935, 0.90, z), Vector3(0.025, 0.035, 0.16), paint.lightened(0.12))
+		for z in [-0.92, 0.18, 1.05]:
+			car_beam(root, Vector3(side * 0.936, 0.45, z), Vector3(side * 0.937, 0.94, z), 0.012, paint.darkened(0.32))
+		box(root, Vector3(side * 0.95, 0.36, 0.10), Vector3(0.12, 0.10, 2.80), paint.darkened(0.18)).name = "SideSkirt_%s" % side
+		box(root, Vector3(side * 0.951, 0.81, -1.00), Vector3(0.02, 0.12, 0.28), black)
+		box(root, Vector3(side * 1.00, 1.12, -0.86), Vector3(0.25, 0.13, 0.22), black)
+		car_beam(root, Vector3(side * 0.81, 1.09, -0.76), Vector3(side * 0.98, 1.12, -0.86), 0.05, paint)
+		for wheel_index in range(2):
+			var z = -1.42 if wheel_index == 0 else 1.39
+			var wheel = cylinder(root, Vector3(side * 0.94, 0.36, z), 0.36, 0.36, 0.26, black, 16)
+			wheel.rotation.z = PI / 2
+			wheel.name = "M3Wheel_%s_%d" % [side, wheel_index]
+			var rim = cylinder(root, Vector3(side * 1.077, 0.36, z), 0.27, 0.27, 0.018, Color("252a30"), 16)
+			rim.rotation.z = PI / 2
+			# Ten split spokes and a small blue centre cap.
+			for spoke in range(10):
+				var angle = spoke * TAU / 10.0
+				car_beam(root, Vector3(side * 1.094, 0.36 + sin(angle) * 0.06, z + cos(angle) * 0.06), Vector3(side * 1.094, 0.36 + sin(angle + 0.10) * 0.25, z + cos(angle + 0.10) * 0.25), 0.025, silver)
+			var cap = cylinder(root, Vector3(side * 1.106, 0.36, z), 0.055, 0.055, 0.025, Color("316c9e"), 8)
+			cap.rotation.z = PI / 2
+			# Faceted painted lips outline the widened arches.
+			for segment in range(10):
+				var start = segment * PI / 10.0
+				var finish = (segment + 1) * PI / 10.0
+				car_beam(root, Vector3(side * 1.01, 0.36 + sin(start) * 0.40, z + cos(start) * 0.40), Vector3(side * 1.01, 0.36 + sin(finish) * 0.40, z + cos(finish) * 0.40), 0.065, paint)
+	# Separate kidney grilles with vertical slats, joining angular twin-projector lamps.
+	for side in [-1.0, 1.0]:
+		var kidney = box(root, Vector3(side * 0.215, 0.82, -2.355), Vector3(0.38, 0.22, 0.035), silver)
+		kidney.name = "KidneyGrille_%s" % side
+		box(root, Vector3(side * 0.215, 0.82, -2.379), Vector3(0.33, 0.18, 0.025), black)
+		for slat in range(5):
+			box(root, Vector3(side * 0.215 - 0.12 + slat * 0.06, 0.82, -2.397), Vector3(0.018, 0.17, 0.013), Color("515960"))
+		quad_panel(root, PackedVector3Array([
+			Vector3(side * 0.42, 0.73, -2.37), Vector3(side * 0.86, 0.78, -2.29),
+			Vector3(side * 0.84, 0.94, -2.27), Vector3(side * 0.42, 0.92, -2.37)
+		]), black).name = "HeadlightM3_%s" % side
+		for eye in range(2):
+			var x = side * (0.51 + eye * 0.20)
+			var z = -2.39 + eye * 0.043
+			box(root, Vector3(x, 0.81, z), Vector3(0.115, 0.025, 0.02), Color("edf4ff"))
+			for edge in [-1.0, 1.0]:
+				var led = box(root, Vector3(x + edge * 0.06, 0.846, z), Vector3(0.022, 0.07, 0.02), Color("edf4ff"))
+				led.rotation.z = edge * 0.24
+		box(root, Vector3(side * 0.66, 0.52, -2.34), Vector3(0.39, 0.23, 0.07), black)
+		box(root, Vector3(side * 0.66, 0.51, -2.384), Vector3(0.33, 0.027, 0.015), Color("424b50"))
+	box(root, Vector3(0, 0.44, -2.37), Vector3(0.81, 0.17, 0.055), black).name = "M3LowerIntake"
+	box(root, Vector3(0, 0.33, -2.38), Vector3(1.79, 0.065, 0.17), black)
+	box(root, Vector3(0, 0.62, -2.39), Vector3(0.43, 0.11, 0.025), Color("e4e4dd"))
+	var badge = cylinder(root, Vector3(0, 0.92, -2.32), 0.045, 0.045, 0.012, Color("3674ac"), 8)
+	badge.rotation.x = PI / 2
+	# L-shaped rear lamps, boot lip, black diffuser and four exhaust tips.
+	box(root, Vector3(0, 1.015, 2.03), Vector3(1.67, 0.045, 0.12), black).name = "M3BootLip"
+	box(root, Vector3(0, 0.40, 2.35), Vector3(1.66, 0.18, 0.075), black).name = "M3RearDiffuser"
+	for side in [-1.0, 1.0]:
+		box(root, Vector3(side * 0.62, 0.84, 2.354), Vector3(0.47, 0.17, 0.04), Color("721c27")).name = "TaillightM3_%s" % side
+		box(root, Vector3(side * 0.62, 0.89, 2.38), Vector3(0.43, 0.028, 0.018), Color("eb4544"))
+		box(root, Vector3(side * 0.82, 0.84, 2.38), Vector3(0.028, 0.10, 0.018), Color("eb4544"))
+		for tip in range(2):
+			var pipe = cylinder(root, Vector3(side * (0.52 + tip * 0.16), 0.36, 2.42), 0.065, 0.065, 0.18, silver, 10)
+			pipe.rotation.x = PI / 2
+			pipe.name = "M3Exhaust_%s_%d" % [side, tip]
+			var opening = cylinder(root, Vector3(side * (0.52 + tip * 0.16), 0.36, 2.515), 0.047, 0.047, 0.012, black, 10)
+			opening.rotation.x = PI / 2
+	box(root, Vector3(0, 0.71, 2.385), Vector3(0.43, 0.13, 0.025), Color("e4e4dd"))
+	return root
+
 static func player_car(variant: int = 0) -> Node3D:
 	variant = posmod(variant, PLAYER_MODELS.size())
 	if variant == 8:
 		return player_car_2112_boat()
+	if variant == 9:
+		return player_car_m3_f80()
 	var p: Dictionary = PLAYER_MODELS[variant]
 	var shapes = [
 		[-0.87, -0.40, 0.57, 1.07, 0.72, 0.77], # Granta: compact cabin, high boot.
