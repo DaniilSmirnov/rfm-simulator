@@ -1,0 +1,61 @@
+name: Rebuild mini engine
+on:
+  push:
+    branches: [main]
+    paths: [engine/custom.py, .github/workflows/engine.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: mini-engine
+  cancel-in-progress: false
+jobs:
+  engine:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: write
+    env:
+      WRANGLER_SEND_METRICS: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Prepare pinned compiler and source
+        run: |
+          python3 -m pip install scons==4.8.1
+          git clone --depth 1 https://github.com/emscripten-core/emsdk.git .cache/emsdk
+          .cache/emsdk/emsdk install 3.1.64
+          .cache/emsdk/emsdk activate 3.1.64
+          git clone --depth 1 --branch 4.4.1-stable https://github.com/godotengine/godot.git .cache/godot-source
+          cp engine/custom.py .cache/godot-source/custom.py
+      - name: Compile mini template with 3D physics
+        run: |
+          source .cache/emsdk/emsdk_env.sh
+          cd .cache/godot-source
+          scons platform=web target=template_release lto=thin -j2
+      - name: Update checked engine archive and hashes
+        run: |
+          cp .cache/godot-source/bin/godot.web.template_release.wasm32.nothreads.zip engine/web-template.zip
+          python3 scripts/hash-engine.py
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: npm run test:server
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mini-engine-physics
+          path: |
+            engine/web-template.zip
+            engine/manifest.json
+      - name: Publish verified engine to main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add engine/web-template.zip engine/manifest.json
+          git diff --cached --quiet && exit 0
+          git commit -m "Update mini Web engine with Godot 3D physics"
+          git pull --rebase origin main
+          git push origin HEAD:main
