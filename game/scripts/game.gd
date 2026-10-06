@@ -2,6 +2,12 @@ extends Node3D
 
 var interaction = preload("res://scripts/interaction.gd").new()
 var seated = false
+var jump_height = 0.0
+var jump_velocity = 0.0
+const WALK_SPEED = 4.3
+const RUN_SPEED = 7.2
+const JUMP_SPEED = 5.5
+const WALK_GRAVITY = 18.0
 var seat_exit = Vector3.ZERO
 var crosshair: Label
 
@@ -326,7 +332,7 @@ func _ready() -> void:
 		start_game()
 
 func _setup_input() -> void:
-	var bindings = {"forward": [KEY_W, KEY_UP], "back": [KEY_S, KEY_DOWN], "left": [KEY_A, KEY_LEFT], "right": [KEY_D, KEY_RIGHT], "brake": [KEY_SPACE], "interact": [KEY_F], "table": [KEY_Z], "flag": [KEY_V], "chairs": [KEY_C], "grill": [KEY_G], "beer": [KEY_B], "eat": [], "collect": [], "mount_mushroom": [], "eat_mushroom": [], "eat_berries": [KEY_K], "rally": [KEY_R], "tow": [KEY_T], "random_spot": [KEY_Q], "map": [KEY_M], "recover": [KEY_HOME], "pause_demo": [KEY_ESCAPE], "placement_confirm": [KEY_ENTER], "placement_rotate": [], "placement_cancel": []}
+	var bindings = {"forward": [KEY_W, KEY_UP], "back": [KEY_S, KEY_DOWN], "left": [KEY_A, KEY_LEFT], "right": [KEY_D, KEY_RIGHT], "brake": [KEY_SPACE], "jump": [KEY_SPACE], "sprint": [KEY_SHIFT], "interact": [KEY_F], "table": [KEY_Z], "flag": [KEY_V], "chairs": [KEY_C], "grill": [KEY_G], "beer": [KEY_B], "eat": [], "collect": [], "mount_mushroom": [], "eat_mushroom": [], "eat_berries": [KEY_K], "rally": [KEY_R], "tow": [KEY_T], "random_spot": [KEY_Q], "map": [KEY_M], "recover": [KEY_HOME], "pause_demo": [KEY_ESCAPE], "placement_confirm": [KEY_ENTER], "placement_rotate": [], "placement_cancel": []}
 	for action in bindings:
 		if not InputMap.has_action(action):
 			InputMap.add_action(action)
@@ -618,6 +624,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		view_pitch = clampf(view_pitch - event.relative.y * 0.0025, -1.15, 1.1)
 	if drink_time >= 0 or eat_time >= 0 or (room.connected and not room.is_host and room.world_paused):
 		return
+	if event.is_action_pressed("jump") and not in_car:
+		jump()
+		return
 	for furniture_action in ["table", "chairs", "grill", "flag"]:
 		if event.is_action_pressed(furniture_action):
 			begin_placement(furniture_action)
@@ -838,13 +847,31 @@ func _walk(delta: float) -> void:
 	if motion.length() > 1:
 		motion = motion.normalized()
 	var dir = Vector3(motion.x, 0, motion.y).rotated(Vector3.UP, view_yaw)
-	var next = walker + dir * delta * (1.4 if drink_time >= 0 or eat_time >= 0 else 4.3)
+	var next = walker + dir * delta * (1.4 if drink_time >= 0 or eat_time >= 0 else (RUN_SPEED if running() else WALK_SPEED))
 	next.x = clampf(next.x, -185, 185)
 	next.z = clampf(next.z, -Stage.LENGTH + 5, 10)
 	var hit = (stage.urban and not stage.city.hit(walker, next, 0.3).is_empty()) or not stage.rock_hit(walker, next, 0.3).is_empty() or stage.obstacle_hit(walker, next, 0.3, true) >= 0 or contact_blocked(walker, next, false)
 	if not hit:
 		walker = next
-	walker.y = stage.ground(walker)
+	var remaining = maxf(0, delta)
+	while remaining > 0.000001:
+		var step = minf(remaining, 1.0 / 120.0)
+		jump_height += jump_velocity * step - WALK_GRAVITY * step * step * 0.5
+		jump_velocity -= WALK_GRAVITY * step
+		if jump_height <= 0:
+			jump_height = 0
+			jump_velocity = 0
+		remaining -= step
+	walker.y = stage.ground(walker) + jump_height
+
+func running() -> bool:
+	return not in_car and not seated and beers < 30 and not paused and not dead and not finished and drink_time < 0 and eat_time < 0 and Input.is_action_pressed("sprint") and (absf(Input.get_axis("left", "right")) + absf(Input.get_axis("forward", "back"))) > 0.01
+
+func jump() -> bool:
+	if not playing or in_car or seated or beers >= 30 or paused or dead or finished or drink_time >= 0 or eat_time >= 0 or jump_height > 0.01 or jump_velocity > 0:
+		return false
+	jump_velocity = JUMP_SPEED
+	return true
 
 func _update_camera(delta: float) -> void:
 	if capture_mode:
@@ -871,6 +898,8 @@ func _update_camera(delta: float) -> void:
 	camera.position += Vector3(sin(elapsed * 91), cos(elapsed * 73), 0) * impact_shake * 0.12
 
 func _toggle_car() -> void:
+	if jump_height > 0.01 or jump_velocity > 0:
+		return
 	if beers >= 30:
 		toast("Ты лежишь. На сегодня поездки закончились.")
 		return
@@ -1120,6 +1149,8 @@ func select_stage(variant: int) -> void:
 	variant = clampi(variant, 0, Stage.STAGES.size() - 1)
 	if variant == selected_stage:
 		return
+	jump_height = 0
+	jump_velocity = 0
 	selected_stage = variant
 	stage_caption.text = Stage.STAGES[variant] + "  /  ДЕМО " + str(ProjectSettings.get_setting("application/config/version"))
 	stage_choice.select(variant)
@@ -1455,7 +1486,7 @@ func _update_stones(delta: float) -> void:
 			stones.erase(stone)
 
 func walking_intent() -> Vector3:
-	if in_car or seated or paused or dead or finished or beers >= 30 or drink_time >= 0 or eat_time >= 0:
+	if in_car or seated or jump_height > 0.01 or paused or dead or finished or beers >= 30 or drink_time >= 0 or eat_time >= 0:
 		return Vector3.ZERO
 	var input = Vector2(Input.get_axis("left", "right"), Input.get_axis("forward", "back")).limit_length(1)
 	return Vector3(input.x, 0, input.y).rotated(Vector3.UP, view_yaw)
@@ -1514,7 +1545,7 @@ func _update_hud() -> void:
 	else:
 		var cook_status = "ШАШЛЫК ГОТОВ" if cook_time >= 35 else ("ШАШЛЫК %d%%" % int(cook_time / 35 * 100) if cooking else "МАНГАЛ НЕ РАЗОЖЖЁН")
 		info_label.text = "ЗРИТЕЛЬ    ·    %s · ШАМПУРЫ %d/16    ·    %s" % [cook_status, grill_servings, course.caption()]
-		hint_label.text = "WASD — идти   ·   мышь — смотреть   ·   F — действие   ·   Z — стол   ·   C — стулья   ·   G — мангал   ·   R — статус СУ"
+		hint_label.text = "WASD — идти   ·   Shift — бег   ·   Space — прыжок   ·   мышь — смотреть   ·   F — действие   ·   Z — стол   ·   C — стулья   ·   G — мангал   ·   R — статус СУ"
 		if drink_time >= 0:
 			info_label.text = "ОТКРЫВАЕМ БАНКУ" if drink_time < 1.25 else "ЗА ХОРОШИЙ ВЫЕЗД!"
 		if eat_time >= 0:
@@ -1690,7 +1721,7 @@ func knock_city(contact: Dictionary, velocity: Vector3) -> void:
 
 func sit_down() -> void:
 	var owner = chair_owner()
-	if not personal_chairs.has(owner) or in_car or beers >= 30:
+	if not personal_chairs.has(owner) or in_car or beers >= 30 or jump_height > 0.01 or jump_velocity > 0:
 		return
 	seat_exit = walker
 	var chair: Node3D = personal_chairs[owner]

@@ -55,6 +55,9 @@ func _layout() -> void:
 		if not target.is_empty():
 			var label = str(target.label).replace("Сесть в машину", "В машину").replace("Сесть на стул", "На стул").replace("Встать со стула", "Встать").replace("Собрать гриб", "Собрать").replace("Собрать ягоды", "Собрать").replace("Насадить гриб", "Насадить").replace("Съесть шашлык", "Шашлык").replace("Съесть гриб", "Есть гриб").replace("Выпить пиво", "Пиво")
 			actions.push_front([label, "interact", false])
+		if not game.seated and game.beers < 30:
+			actions.append(["Бег", "sprint", true])
+			actions.append(["Прыжок", "jump", false])
 		actions.append(["Стол", "table", false])
 		actions.append(["Стул", "chairs", false])
 		if game.camp != null and game.has_chairs:

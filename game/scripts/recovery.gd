@@ -20,9 +20,11 @@ static func update(game, players: Dictionary, delta: float) -> void:
 	game.tow_progress = 0
 	var forces = {}
 	var helpers = {}
-	for id in players:
-		var p: Dictionary = players[id]
-		if p.get("in_car", true) or int(p.get("beers", 0)) >= 30:
+	var participants = players.duplicate()
+	participants.merge(game.spectators.push_helpers())
+	for id in participants:
+		var p: Dictionary = participants[id]
+		if p.get("in_car", true) or p.get("seated", false) or p.get("airborne", false) or int(p.get("beers", 0)) >= 30:
 			continue
 		var pos = game.room.v(p.pos)
 		var push = game.room.v(p.get("push", [0, 0, 0])).limit_length(1.0)
@@ -31,7 +33,7 @@ static func update(game, players: Dictionary, delta: float) -> void:
 		var strength = 0.0
 		var rope = false
 		for racer in game.racers:
-			if not game.can_tow_racer(racer):
+			if int(p.get("racer", racer.id)) != racer.id or not game.can_tow_racer(racer):
 				continue
 			var offset: Vector3 = racer.node.position - pos
 			if absf(offset.y) > 3:

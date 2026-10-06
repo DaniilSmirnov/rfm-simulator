@@ -5,6 +5,7 @@ var game: Node3D
 var groups: Array[Dictionary] = []
 var people: Array[Dictionary] = []
 var clock = 0.0
+var actor_targets: Dictionary = {}
 
 func rebuild() -> void:
 	for child in get_children():
@@ -12,6 +13,7 @@ func rebuild() -> void:
 	groups.clear()
 	people.clear()
 	clock = 0.0
+	actor_targets.clear()
 	var stage = game.stage
 	for i in range(stage.clearings.size()):
 		var clearing = stage.clearings[i]
@@ -77,7 +79,7 @@ func _add_group(center: Vector3, s: float, id: int, count: int) -> void:
 		chair.position = grounded(avatar.position + forward * 0.85)
 		chair.rotation.y = avatar.rotation.y
 		var arm = avatar.get_node("RightArm")
-		people.append({"id": id * 2 + j, "group": group_index, "avatar": avatar, "arm": arm, "can": arm.get_node("BeerCan"), "food": arm.get_node("Skewer"), "action": "idle", "time": -1.0, "eat_cycle": -1})
+		people.append({"id": id * 2 + j, "group": group_index, "avatar": avatar, "arm": arm, "can": arm.get_node("BeerCan"), "food": arm.get_node("Skewer"), "action": "idle", "time": -1.0, "eat_cycle": -1, "home": avatar.position, "watch": watch_spot(s + j * 2.0, avatar.position), "helper": -1})
 
 func activity(id: int, time: float) -> Dictionary:
 	var period = 15.0 + float((id * 7) % 11)
@@ -99,9 +101,38 @@ func update(world_time: float, delta: float, guest: bool) -> void:
 	else:
 		clock = world_time
 	for person in people:
+		var previous_position: Vector3 = person.avatar.position
 		var pose = activity(person.id, clock)
 		var group: Dictionary = groups[int(person.group)]
 		var action = pose.action
+		if guest and actor_targets.has(person.id):
+			var target: Dictionary = actor_targets[person.id]
+			person.avatar.position = person.avatar.position.lerp(game.room.v(target.pos), 1.0 - exp(-delta * 10))
+			person.avatar.rotation.y = lerp_angle(person.avatar.rotation.y, float(target.yaw), 1.0 - exp(-delta * 10))
+			person.helper = int(target.get("helper", -1))
+			action = str(target.action)
+			if action in ["beer", "eat"]:
+				target.time = minf(3.3 if action == "beer" else 3.6, float(target.time) + delta)
+			pose.time = float(target.time) if action in ["beer", "eat"] else -1.0
+		else:
+			var racer = nearby_stranded(person)
+			person.helper = -1
+			if not racer.is_empty() and game.playing and not game.paused and not game.dead and not game.finished:
+				person.helper = racer.id
+				var road = game.Recovery.road_direction(game, racer)
+				var rear: Vector3 = racer.node.position - road * 2.0 + game.stage.side(game.stage.road_s(racer.node.position)) * ((person.id % 3) - 1) * 0.35
+				move_person(person, rear, delta)
+				person.avatar.rotation.y = atan2(-road.x, -road.z)
+				action = "push" if person.avatar.position.distance_to(rear) < 0.6 else "help"
+			else:
+				var destination: Vector3 = person.home if action in ["beer", "eat"] else person.watch
+				move_person(person, destination, delta)
+				if action in ["beer", "eat"] and person.avatar.position.distance_to(person.home) > 0.7:
+					action = "return"
+				elif action == "idle" and passing_car(person.avatar.position):
+					action = "cheer"
+				var toward: Vector3 = game.stage.at(game.stage.road_s(person.avatar.position)) - person.avatar.position
+				person.avatar.rotation.y = atan2(-toward.x, -toward.z)
 		if action == "eat" and int(group.servings) <= 0 and int(person.eat_cycle) != int(pose.cycle):
 			action = "idle"
 		person.action = action
@@ -125,6 +156,17 @@ func update(world_time: float, delta: float, guest: bool) -> void:
 			var lift = smoothstep(0.8, 1.25, pose.time) * (1.0 - smoothstep(2.5, 3.3, pose.time))
 			person.arm.rotation.x = lerpf(0.5, 1.6, lift)
 			person.can.rotation.x = 0.35 * lift
+		var moving: bool = person.avatar.position.distance_to(previous_position) > 0.001
+		for leg_name in ["LeftLeg", "RightLeg"]:
+			person.avatar.get_node(leg_name).rotation.x = sin(clock * 8 + person.id) * 0.4 * (-1 if leg_name == "LeftLeg" else 1) if moving else 0.0
+		var left_arm = person.avatar.get_node("LeftArm")
+		left_arm.rotation = Vector3.ZERO
+		if action == "cheer":
+			person.arm.rotation = Vector3(2.5, 0, -0.5 + sin(clock * 8 + person.id) * 0.28)
+			left_arm.rotation = Vector3(2.5, 0, 0.5 + sin(clock * 8 + person.id + 1) * 0.28)
+		elif action == "push":
+			person.arm.rotation.x = PI / 2
+			left_arm.rotation.x = PI / 2
 		person.avatar.get_node("Head").rotation.y = sin(clock * 0.35 + person.id) * 0.08
 
 
@@ -182,3 +224,85 @@ func occupied(spot: Vector3) -> bool:
 		if spot.distance_to(person.avatar.position) < 0.8:
 			return true
 	return false
+
+func watch_spot(s: float, home: Vector3) -> Vector3:
+	var sign = 1.0 if (home - game.stage.at(s)).dot(game.stage.side(s)) >= 0 else -1.0
+	for shift in [0.0, 4.0, -4.0, 8.0, -8.0]:
+		var point = grounded(game.stage.at(s + shift) + game.stage.side(s + shift) * sign * 6.4)
+		if game.stage.road_distance(point) < 5.5 or game.stage.obstacle_hit(point, point, 0.4) >= 0 or not game.stage.rock_hit(point, point, 0.4, false).is_empty():
+			continue
+		if game.stage.urban and not game.stage.city.hit(point, point, 0.4, false).is_empty():
+			continue
+		return point
+	return home
+
+func move_person(person: Dictionary, destination: Vector3, delta: float) -> void:
+	var start: Vector3 = person.avatar.position
+	var direction = destination - start
+	direction.y = 0
+	var distance = direction.length()
+	if distance < 0.08 or delta <= 0:
+		return
+	for turn in [0.0, 0.65, -0.65, 1.1, -1.1]:
+		var next = start + direction.normalized().rotated(Vector3.UP, turn) * minf(distance, delta * 2.7)
+		next.y = game.stage.ground(next)
+		if game.stage.obstacle_hit(start, next, 0.3, true) >= 0 or not game.stage.rock_hit(start, next, 0.3).is_empty():
+			continue
+		if game.stage.urban and not game.stage.city.hit(start, next, 0.3).is_empty():
+			continue
+		var blocked = false
+		for group in groups:
+			if next.distance_to(group.car.position) < 2.0 and next.distance_to(group.car.position) < start.distance_to(group.car.position):
+				blocked = true
+		if blocked:
+			continue
+		if person.helper < 0 and game.stage.road_distance(next) < 5.2:
+			continue
+		person.avatar.position = next
+		return
+
+func nearby_stranded(person: Dictionary) -> Dictionary:
+	var nearest = 24.0
+	var found: Dictionary = {}
+	for racer in game.racers:
+		if not game.can_tow_racer(racer):
+			continue
+		var distance: float = person.home.distance_to(racer.node.position)
+		if distance < nearest:
+			nearest = distance
+			found = racer
+	return found
+
+func passing_car(point: Vector3) -> bool:
+	for racer in game.racers:
+		if racer.state in ["racing", "offroad", "rock_bounce"] and racer.node.position.distance_to(point) < 42:
+			return true
+	return false
+
+func push_helpers() -> Dictionary:
+	var result = {}
+	for person in people:
+		if person.helper < 0 or person.action != "push":
+			continue
+		for racer in game.racers:
+			if racer.id == person.helper and game.can_tow_racer(racer):
+				var road = game.Recovery.road_direction(game, racer)
+				result["npc_%d" % person.id] = {"pos": game.room.a(person.avatar.position), "in_car": false, "tow": false, "push": game.room.a(road), "beers": 0, "racer": racer.id}
+	return result
+
+func actor_snapshot() -> Array:
+	var result: Array = []
+	for person in people:
+		result.append({"id": person.id, "pos": game.room.a(person.avatar.position), "yaw": person.avatar.rotation.y, "action": person.action, "time": person.time, "helper": person.helper})
+	return result
+
+func apply_actor_snapshot(poses: Array) -> void:
+	var first = actor_targets.is_empty()
+	actor_targets.clear()
+	for pose in poses:
+		actor_targets[int(pose.id)] = pose
+		if first:
+			for person in people:
+				if person.id == int(pose.id):
+					person.avatar.position = game.room.v(pose.pos)
+					person.avatar.rotation.y = float(pose.yaw)

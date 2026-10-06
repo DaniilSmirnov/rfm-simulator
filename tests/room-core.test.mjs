@@ -252,3 +252,16 @@ test('BMW model 9 survives joins and restored rooms while out-of-range models fa
   const late = restored.add('Late', 1200, false, { car_model: 10 });
   assert.equal(late.car_model, late.slot);
 });
+
+test('running and airborne pedestrian poses survive sync but cannot apply to seated drivers', () => {
+  const { r, h } = setup();
+  let reply = r.sync({ token: h.token, state: { ...state(), running: true, airborne: true } }, 1100);
+  assert.equal(reply.players[0].state.running, true);
+  assert.equal(reply.players[0].state.airborne, true);
+  reply = r.sync({ token: h.token, state: { ...state(), running: true, airborne: true, in_car: true } }, 1200);
+  assert.equal(reply.players[0].state.running, false);
+  assert.equal(reply.players[0].state.airborne, false);
+  reply = r.sync({ token: h.token, state: { ...state(), running: true, airborne: true, seated: true } }, 1300);
+  assert.equal(reply.players[0].state.running, false);
+  assert.equal(reply.players[0].state.airborne, false);
+});
