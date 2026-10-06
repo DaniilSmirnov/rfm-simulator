@@ -65,7 +65,7 @@ func run() -> void:
 	check(absf(game.placement_yaw - PI / 8) < 0.01, "touch rotates furniture preview")
 	c.touch_begin(1, button(c, "placement_confirm"))
 	check(game.camp != null and button(c, "chairs").x > 0, "camp button advances from table to chairs")
-	game.walker = game.stage.clearings[0] + Vector3(4, 0, 0)
+	game.walker = game.stage.clearings[0] + Vector3(-3, 0, 0)
 	c.touch_begin(1, button(c, "chairs"))
 	c.touch_begin(1, button(c, "placement_confirm"))
 	check(game.has_chairs and button(c, "grill").x > 0, "camp button advances from chairs to grill")
