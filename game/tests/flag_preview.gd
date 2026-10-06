@@ -8,7 +8,9 @@ func _initialize() -> void:
 func white_pixels(image: Image, camera: Camera3D, flag: Node3D, height: float) -> int:
 	var a = camera.unproject_position(flag.to_global(Vector3(0.12, height + 0.18, 0)))
 	var b = camera.unproject_position(flag.to_global(Vector3(1.32, height - 0.18, 0)))
-	var area = Rect2(a, Vector2.ZERO).expand(b)
+	# Project coordinates use the stretched viewport; PNGs use render pixels.
+	var scale = Vector2(image.get_size()) / root.get_visible_rect().size
+	var area = Rect2(a * scale, Vector2.ZERO).expand(b * scale)
 	var count = 0
 	for y in range(maxi(0, floori(area.position.y)), mini(image.get_height(), ceili(area.end.y))):
 		for x in range(maxi(0, floori(area.position.x)), mini(image.get_width(), ceili(area.end.x))):
@@ -39,7 +41,7 @@ func run() -> void:
 	for angle in [0.0, 0.9]:
 		flag.rotation.y = angle
 		for face in [-1, 1]:
-			camera.position = flag.to_global(Vector3(0.72, 1.65, face * 5.0))
+			camera.position = flag.to_global(Vector3(0.72 + (1.5 if angle > 0 else 0.0), 1.65, face * 5.0))
 			camera.look_at(flag.to_global(Vector3(0.72, 1.65, 0)))
 			var image = await frame()
 			var top = white_pixels(image, camera, flag, 1.75)

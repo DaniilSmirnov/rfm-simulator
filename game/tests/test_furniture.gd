@@ -59,11 +59,11 @@ func run() -> void:
 	var visible_wordmarks = true
 	var text_count = 0
 	for node in placed_flag.find_children("*", "MeshInstance3D", true, false):
-		if not node.mesh is TextMesh:
+		if not node.has_meta("wordmark"):
 			continue
 		text_count += 1
-		rally_labels += int(node.mesh.text == "RALLY")
-		maps_labels += int(node.mesh.text == "FAN MAPS")
+		rally_labels += int(node.get_meta("wordmark") == "RALLY")
+		maps_labels += int(node.get_meta("wordmark") == "FAN MAPS")
 		visible_wordmarks = visible_wordmarks and node.is_visible_in_tree() and not node.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX].is_empty()
 		visible_wordmarks = visible_wordmarks and node.material_override.transparency == BaseMaterial3D.TRANSPARENCY_DISABLED and absf(node.position.z) >= 0.03
 		check(absf(wrapf(node.rotation.y - (PI if node.position.z < 0 else 0.0), -PI, PI)) < 0.001, "text faces outward without mirroring")

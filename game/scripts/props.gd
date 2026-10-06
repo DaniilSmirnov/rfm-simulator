@@ -655,6 +655,36 @@ const RALLY_MODELS = [
 	{"name": "Семёрка TAXI 65", "body": "727c83", "accent": "e5e7d8", "length": 4.12, "roof_end": 1.02, "lights": "square", "number": 65, "sponsor": "ТАТНЕФТЬ", "trim": "bcc4c2"},
 ]
 
+# Compact block lettering uses only triangles, including on minimal Web templates.
+static func flag_wordmark(text: String, pixel: float) -> ArrayMesh:
+	var glyphs = {
+		"R": ["11110", "10001", "10001", "11110", "10100", "10010", "10001"],
+		"A": ["01110", "10001", "10001", "11111", "10001", "10001", "10001"],
+		"L": ["10000", "10000", "10000", "10000", "10000", "10000", "11111"],
+		"Y": ["10001", "10001", "01010", "00100", "00100", "00100", "00100"],
+		"F": ["11111", "10000", "10000", "11110", "10000", "10000", "10000"],
+		"N": ["10001", "11001", "11001", "10101", "10011", "10011", "10001"],
+		"M": ["10001", "11011", "10101", "10101", "10001", "10001", "10001"],
+		"P": ["11110", "10001", "10001", "11110", "10000", "10000", "10000"],
+		"S": ["01111", "10000", "10000", "01110", "00001", "00001", "11110"]
+	}
+	var vertices = PackedVector3Array()
+	var width = float(text.length() * 6 - 1)
+	for i in range(text.length()):
+		var rows: Array = glyphs.get(text.substr(i, 1), [])
+		for row in range(rows.size()):
+			for col in range(5):
+				if rows[row].substr(col, 1) != "1":
+					continue
+				var x = (i * 6 + col - width * 0.5) * pixel
+				var y = (3.5 - row) * pixel
+				var a = Vector3(x, y, 0)
+				var b = Vector3(x + pixel, y, 0)
+				var c = Vector3(x + pixel, y - pixel, 0)
+				var d = Vector3(x, y - pixel, 0)
+				vertices.append_array(PackedVector3Array([a, b, c, a, c, d]))
+	return panel_mesh(vertices)
+
 static func rally_fan_flag(parent: Node3D, pos: Vector3, yaw: float, index: int = 0) -> Node3D:
 	var root = Node3D.new()
 	root.name = "RallyFanMapsFlag_%d" % (index + 1)
@@ -684,21 +714,18 @@ static func rally_fan_flag(parent: Node3D, pos: Vector3, yaw: float, index: int 
 	cloth.material_override = cloth_material
 	root.add_child(cloth)
 	cloth.position = Vector3(0.72, 1.65, 0)
-	# Opaque vector glyphs avoid SVG import and Label3D alpha sorting entirely.
+	# Opaque glyph triangles avoid font generation, SVG import and alpha sorting.
 	# Separate outward-facing meshes keep the back readable, not mirrored.
 	for face in [-1, 1]:
 		for line in range(2):
 			var text = MeshInstance3D.new()
 			text.name = "Wordmark_%s_%d" % ["Front" if face > 0 else "Back", line]
-			var glyphs = TextMesh.new()
-			glyphs.font = ThemeDB.fallback_font
-			glyphs.text = "RALLY" if line == 0 else "FAN MAPS"
-			glyphs.font_size = 64 if line == 0 else 48
-			glyphs.pixel_size = 0.004
-			glyphs.depth = 0.0
-			text.mesh = glyphs
+			var title = "RALLY" if line == 0 else "FAN MAPS"
+			text.set_meta("wordmark", title)
+			text.mesh = flag_wordmark(title, 0.035 if line == 0 else 0.023)
 			var ink = material(Color("fff4e6"))
 			ink.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			ink.cull_mode = BaseMaterial3D.CULL_DISABLED
 			text.material_override = ink
 			text.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			root.add_child(text)
