@@ -14,6 +14,9 @@ func run() -> void:
 	game.room.set_process(false)
 	game.select_stage(2)
 	game.start_game()
+	for panel in game.hud_panels:
+		panel.hide()
+	game.toast_label.hide()
 	game.camera.fov = 58
 	game.camera.position = Vector3(115, 130, -170)
 	game.camera.look_at(Vector3(20, 2, -180))

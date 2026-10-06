@@ -511,7 +511,7 @@ func start_game() -> void:
 	for panel in hud_panels:
 		panel.show()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if mobile_mode or (room.connected and OS.has_feature("web")) else Input.MOUSE_MODE_CAPTURED
-	toast("Доедь до любой поляны. Q — выбрать случайную на карте.")
+	toast("Доедь до любой парковки. Q — выбрать случайную на карте." if stage.urban else "Доедь до любой поляны. Q — выбрать случайную на карте.")
 
 func _menu_action() -> void:
 	if (dead or finished) and room.connected:
@@ -581,7 +581,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		start_rally()
 	elif event.is_action_pressed("random_spot"):
 		target_clearing = rng.randi_range(0, stage.clearings.size() - 1)
-		toast("Выбрана поляна %d. Оранжевая точка на карте." % (target_clearing + 1))
+		toast(("Выбрана парковка %d. Оранжевая точка на карте." if stage.urban else "Выбрана поляна %d. Оранжевая точка на карте.") % (target_clearing + 1))
 	elif event.is_action_pressed("recover"):
 		if not racing:
 			car.position = stage.at(stage.road_s(car.position))

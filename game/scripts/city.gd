@@ -36,6 +36,17 @@ func build() -> void:
 				var p = Vector3(x, 2, z + side * 17)
 				if _site_clear(p):
 					_building(p, PI / 2, -side, int(absf(x) / 10 + absf(z) * 0.1 + side * 5))
+	# Enclose the square with townhouses instead of ending it in empty grass.
+	for x in range(-55, 56, 10):
+		var p = Vector3(x, 2, -370)
+		if _site_clear(p):
+			_building(p, PI / 2, 1, int((x + 55) / 10) + 2)
+	for x in [-50.0, 50.0]:
+		for z in range(-305, -356, -10):
+			var p = Vector3(x, 2, z)
+			if _site_clear(p):
+				_building(p, 0, signf(x), int(-z / 10 + x / 10))
+	_decorate_exposed_walls()
 	# Street lamps are actual rigid bodies; visual meshes remain attached to them.
 	for x in [-24.0, 24.0, 120.0]:
 		for z in range(-15, -300, -24):
@@ -116,6 +127,7 @@ func _building(p: Vector3, yaw: float, side: float, seed_value: int) -> void:
 	stage.add_child(root)
 	root.position = p
 	root.rotation.y = yaw
+	root.set_meta("front_side", side)
 	var style = posmod(seed_value, 5)
 	var height = 8.5 + style * 1.25
 	var width = 10.0
@@ -173,6 +185,42 @@ func _building(p: Vector3, yaw: float, side: float, seed_value: int) -> void:
 	_solid(root, Vector3(0, height / 2, 0), Vector3(width, height, depth), "building")
 	_batch(root, root.transform)
 
+func _decorate_exposed_walls() -> void:
+	for object in obstacles:
+		if object.kind != "building":
+			continue
+		var root = object.body.get_parent()
+		var height: float = object.half.y * 2
+		var front_side: float = root.get_meta("front_side")
+		_secondary_facade(root, Vector3(front_side * 5.03, 0, 0), front_side * PI / 2, height)
+		for side in [-1.0, 1.0]:
+			var neighbor = root.transform * Vector3(0, 0, side * 10)
+			var exposed = true
+			for other in obstacles:
+				if other.kind == "building" and other != object and other.body.get_parent().position.distance_to(neighbor) < 0.2:
+					exposed = false
+					break
+			if exposed:
+				_secondary_facade(root, Vector3(0, 0, side * 5.03), 0 if side > 0 else PI, height)
+		_batch(root, root.transform)
+
+func _secondary_facade(parent: Node3D, p: Vector3, yaw: float, height: float) -> void:
+	var wall = Node3D.new()
+	parent.add_child(wall)
+	wall.position = p
+	wall.rotation.y = yaw
+	var trim = Color("ded8c9")
+	for floor in range(int(height / 2.6)):
+		var y = 1.4 + floor * 2.6
+		Props.box(wall, Vector3(0, y + 1.25, 0.08), Vector3(10.1, 0.14, 0.16), trim)
+		for x in [-3.1, 0.0, 3.1]:
+			Props.box(wall, Vector3(x, y, 0.02), Vector3(1.35, 1.6, 0.08), Color("658390"))
+			for dx in [-0.78, 0.78]:
+				Props.box(wall, Vector3(x + dx, y, 0.10), Vector3(0.14, 1.86, 0.14), trim)
+			for dy in [-0.88, 0.88]:
+				Props.box(wall, Vector3(x, y + dy, 0.10), Vector3(1.7, 0.15, 0.14), trim)
+			Props.box(wall, Vector3(x, y, 0.14), Vector3(0.07, 1.6, 0.08), trim)
+
 func _roof_mesh(style: int) -> ArrayMesh:
 	var st = SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -201,6 +249,7 @@ func _square() -> void:
 	root.name = "CityCentralSquare"
 	stage.add_child(root)
 	root.position = Vector3(0, 2, -320)
+	Props.box(root, Vector3(0, 0.01, -15), Vector3(120, 0.02, 100), Color("b6b1a4"))
 	# Annulus, not a disk: the carriageway never cuts through the monument.
 	var st = SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -226,15 +275,22 @@ func _square() -> void:
 	var monument = Node3D.new()
 	root.add_child(monument)
 	monument.name = "VictoryColumn"
-	Props.box(monument, Vector3(0, 0.65, 0), Vector3(4.5, 1.3, 4.5), Color("bbb5a4"))
-	Props.box(monument, Vector3(0, 1.45, 0), Vector3(3.5, 0.3, 3.5), Color("e2d6c0"))
-	Props.cylinder(monument, Vector3(0, 5.0, 0), 0.65, 0.55, 7, Color("c6c1af"), 12)
-	Props.cylinder(monument, Vector3(0, 8.6, 0), 1.0, 1.0, 0.35, Color("ded5bf"), 12)
-	Props.cylinder(monument, Vector3(0, 9.6, 0), 0.48, 0.2, 1.7, Color("847753"), 8)
-	Props.cylinder(monument, Vector3(0, 10.6, 0), 0.25, 0.25, 0.45, Color("8f835d"), 8)
-	var arm = Props.box(monument, Vector3(0.55, 10.1, 0), Vector3(1.2, 0.16, 0.2), Color("847753"))
-	arm.rotation.z = 0.65
-	_solid(root, Vector3(0, 5, 0), Vector3(4.5, 10.5, 4.5), "monument")
+	Props.box(monument, Vector3(0, 0.65, 0), Vector3(6.0, 1.3, 6.0), Color("bbb5a4"))
+	Props.box(monument, Vector3(0, 1.45, 0), Vector3(4.8, 0.3, 4.8), Color("e2d6c0"))
+	Props.box(monument, Vector3(0, 2.6, 0), Vector3(3.2, 2.0, 3.2), Color("bdb8a8"))
+	for side in [-1.0, 1.0]:
+		Props.box(monument, Vector3(side * 1.62, 2.6, 0), Vector3(0.06, 1.0, 1.2), Color("7a826c"))
+	Props.cylinder(monument, Vector3(0, 8.6, 0), 1.1, 0.85, 10, Color("c6c1af"), 16)
+	Props.cylinder(monument, Vector3(0, 13.85, 0), 1.35, 1.35, 0.5, Color("ded5bf"), 16)
+	var bronze = Color("617969")
+	Props.cylinder(monument, Vector3(0, 15.3, 0), 0.75, 0.38, 2.4, bronze, 8)
+	Props.cylinder(monument, Vector3(0, 16.85, 0), 0.35, 0.35, 0.7, bronze, 8)
+	for side in [-1.0, 1.0]:
+		var arm = Props.box(monument, Vector3(side * 0.85, 16.0, 0), Vector3(1.6, 0.20, 0.24), bronze)
+		arm.rotation.z = side * 0.5
+		var wing = Props.box(monument, Vector3(side * 1.35, 15.9, 0.3), Vector3(2.2, 0.9, 0.15), bronze)
+		wing.rotation.z = side * 0.55
+	_solid(root, Vector3(0, 9.0, 0), Vector3(6.0, 18.0, 6.0), "monument")
 	_solid(root, Vector3(0, 0.05, 0), Vector3(25, 0.2, 25), "island")
 	for i in range(8):
 		var a = i * TAU / 8
