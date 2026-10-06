@@ -55,6 +55,8 @@ func _layout() -> void:
 		actions.append(["Стул", "chairs", false])
 		if game.camp != null and game.has_chairs:
 			actions.append(["Мангал", "grill", false])
+		if game.flag_count() < game.FLAGS_PER_PLAYER:
+			actions.append(["Флаг", "flag", false])
 		if game.cook_time >= 35:
 			actions.append(["Есть", "eat", false])
 		if game.near_camp():

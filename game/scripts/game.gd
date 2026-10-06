@@ -45,6 +45,8 @@ var finished = false
 var paused = false
 var has_chairs = false
 var personal_chairs: Dictionary = {}
+var personal_flags: Dictionary = {}
+const FLAGS_PER_PLAYER = 3
 var placement_kind = ""
 var placement_preview: Node3D
 var placement_yaw = 0.0
@@ -56,6 +58,13 @@ func chair_owner() -> String:
 
 func has_personal_chair() -> bool:
 	return personal_chairs.has(chair_owner())
+
+func flag_owner() -> String:
+	return chair_owner()
+
+func flag_count(owner: String = "") -> int:
+	var key = flag_owner() if owner == "" else owner
+	return personal_flags.get(key, []).size()
 
 func valid_furniture_spot(spot: Vector3, kind: String, ignored_owner: String = "") -> bool:
 	if spectators != null and spectators.occupied(spot):
@@ -77,6 +86,10 @@ func valid_furniture_spot(spot: Vector3, kind: String, ignored_owner: String = "
 			continue
 		if spot.distance_to(personal_chairs[owner].position) < 1.1:
 			return false
+	for owner in personal_flags:
+		for flag in personal_flags[owner]:
+			if spot.distance_to(flag.position) < 1.0:
+				return false
 	return true
 
 func begin_placement(kind: String) -> void:
@@ -84,6 +97,9 @@ func begin_placement(kind: String) -> void:
 		toast("Для размещения выйди из машины и встань на ноги.")
 		return
 	cancel_placement()
+	if kind == "flag" and flag_count() >= FLAGS_PER_PLAYER:
+		toast("Можно поставить только три флага.")
+		return
 	placement_kind = kind
 	placement_yaw = view_yaw
 	placement_preview = Node3D.new()
@@ -92,6 +108,7 @@ func begin_placement(kind: String) -> void:
 		"table": Props.table(placement_preview)
 		"chairs": Props.chair(placement_preview, Vector3.ZERO)
 		"grill": Props.grill(placement_preview)
+		"flag": Props.rally_fan_flag(placement_preview, Vector3.ZERO, 0.0, flag_count())
 	placement_material = Props.material(Color("82c991"))
 	for child in placement_preview.find_children("*", "MeshInstance3D", true, false):
 		child.material_override = placement_material
@@ -130,6 +147,7 @@ func confirm_placement() -> void:
 			"table": place_table(spot, yaw)
 			"chairs": place_chairs(spot, yaw)
 			"grill": start_grill(spot, yaw)
+			"flag": place_flag(spot, yaw)
 	cancel_placement()
 
 var cooking = false
@@ -294,7 +312,7 @@ func _ready() -> void:
 		start_game()
 
 func _setup_input() -> void:
-	var bindings = {"forward": [KEY_W, KEY_UP], "back": [KEY_S, KEY_DOWN], "left": [KEY_A, KEY_LEFT], "right": [KEY_D, KEY_RIGHT], "brake": [KEY_SPACE], "interact": [KEY_E], "table": [KEY_F], "chairs": [KEY_C], "grill": [KEY_G], "beer": [KEY_B], "eat": [KEY_X], "rally": [KEY_R], "tow": [KEY_T], "random_spot": [KEY_Q], "recover": [KEY_HOME], "pause_demo": [KEY_ESCAPE], "placement_confirm": [KEY_ENTER], "placement_rotate": [], "placement_cancel": []}
+	var bindings = {"forward": [KEY_W, KEY_UP], "back": [KEY_S, KEY_DOWN], "left": [KEY_A, KEY_LEFT], "right": [KEY_D, KEY_RIGHT], "brake": [KEY_SPACE], "interact": [KEY_E], "table": [KEY_F], "flag": [KEY_V], "chairs": [KEY_C], "grill": [KEY_G], "beer": [KEY_B], "eat": [KEY_X], "rally": [KEY_R], "tow": [KEY_T], "random_spot": [KEY_Q], "map": [KEY_M], "recover": [KEY_HOME], "pause_demo": [KEY_ESCAPE], "placement_confirm": [KEY_ENTER], "placement_rotate": [], "placement_cancel": []}
 	for action in bindings:
 		if not InputMap.has_action(action):
 			InputMap.add_action(action)
@@ -525,6 +543,7 @@ func start_game() -> void:
 	course_label.text = course.caption()
 	for panel in hud_panels:
 		panel.show()
+	mobile_sidebar.show()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if mobile_mode or (room.connected and OS.has_feature("web")) else Input.MOUSE_MODE_CAPTURED
 	toast("Доедь до любой парковки. Q — выбрать случайную на карте." if stage.urban else "Доедь до любой поляны. Q — выбрать случайную на карте.")
 
@@ -556,6 +575,9 @@ func _unhandled_input(event: InputEvent) -> void:
 				return
 		else:
 			return
+	if event.is_action_pressed("map") and playing and not dead and not finished:
+		mobile_sidebar.visible = not mobile_sidebar.visible
+		return
 	if event.is_action_pressed("pause_demo") and playing and not dead and not finished:
 		paused = not paused
 		menu.visible = paused
@@ -568,12 +590,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event is InputEventMouseButton and event.pressed and not mobile_mode and room.connected:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-	if event is InputEventMouseMotion and not in_car and not mobile_mode:
+	if event is InputEventMouseMotion and not mobile_mode:
 		view_yaw -= event.relative.x * 0.0025
 		view_pitch = clampf(view_pitch - event.relative.y * 0.0025, -1.15, 1.1)
 	if drink_time >= 0 or eat_time >= 0 or (room.connected and not room.is_host and room.world_paused):
 		return
-	for furniture_action in ["table", "chairs", "grill"]:
+	for furniture_action in ["table", "chairs", "grill", "flag"]:
 		if event.is_action_pressed(furniture_action):
 			begin_placement(furniture_action)
 			return
@@ -588,6 +610,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		place_chairs()
 	elif event.is_action_pressed("grill"):
 		start_grill()
+	elif event.is_action_pressed("flag"):
+		begin_placement("flag")
 	elif event.is_action_pressed("beer"):
 		drink_beer()
 	elif event.is_action_pressed("eat"):
@@ -799,11 +823,12 @@ func _update_camera(delta: float) -> void:
 	collapse_time = minf(0.8, collapse_time + delta) if beers >= 30 else 0.0
 	var collapse = smoothstep(0, 0.8, collapse_time)
 	if in_car:
-		var behind = Vector3(sin(heading), 0, cos(heading))
+		var orbit = view_yaw
+		var behind = Vector3(sin(orbit), 0, cos(orbit))
 		var desired = car.position + behind * 8.2 + Vector3(0, 4.4, 0)
 		desired.y = maxf(desired.y, stage.ground(desired) + 1.1)
 		camera.position = camera.position.lerp(desired, 1 - exp(-delta * 7))
-		camera.look_at(car.position + Vector3(0, 1.1, 0))
+		camera.look_at(car.position + Vector3(0, 1.1, 0) - behind * 1.5)
 	else:
 		camera.position = walker + Vector3(0, lerpf(1.72, 0.36, collapse) + sin(elapsed * 12) * 0.015, 0)
 		var sip = sin(clampf((drink_time - 1.3) / 1.2, 0, 1) * PI) if drink_time >= 0 else 0.0
@@ -835,6 +860,7 @@ func _toggle_car() -> void:
 		toast("F — стол, C — стулья, G — мангал. Устанавливай вне СУ.")
 	elif walker.distance_to(car.position) < 4:
 		in_car = true
+		view_yaw = heading
 		speed = 0
 	else:
 		toast("Подойди к своей машине, чтобы сесть.")
@@ -887,6 +913,21 @@ func apply_chair(owner: String, spot: Vector3, yaw: float) -> void:
 	personal_chairs[owner].position.y = stage.ground(spot)
 	personal_chairs[owner].rotation.y = yaw
 	has_chairs = not personal_chairs.is_empty()
+
+func place_flag(spot: Vector3 = Vector3.INF, yaw: float = 0.0, owner: String = "", replicated: bool = false) -> bool:
+	var moving = spot != Vector3.INF
+	if owner == "":
+		owner = flag_owner()
+	if not replicated and (in_car or not moving or flag_count(owner) >= FLAGS_PER_PLAYER):
+		return false
+	if not valid_furniture_spot(spot, "flag"):
+		return false
+	var flags: Array = personal_flags.get(owner, [])
+	var node = Props.rally_fan_flag(self, spot, yaw, flags.size())
+	node.position.y = stage.ground(spot)
+	flags.append(node)
+	personal_flags[owner] = flags
+	return true
 
 func start_grill(spot: Vector3 = Vector3.INF, yaw: float = 0.0, replicated: bool = false) -> bool:
 	var moving = spot != Vector3.INF

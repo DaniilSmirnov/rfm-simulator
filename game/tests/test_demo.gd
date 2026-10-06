@@ -20,12 +20,6 @@ func run() -> void:
 	scene.set_process(false)
 	check(scene.stage.points.size() == 211, "840m stage generated")
 	check(scene.stage.clearings.size() == 4, "four spectator clearings")
-check(scene.stage.rally_flags.size() == 3, "three Rally Fan Maps flags are placed")
-	check(scene.stage.flag_positions.size() == 3, "flag positions are deterministic")
-	for i in range(scene.stage.rally_flags.size()):
-		var flag = scene.stage.rally_flags[i]
-		check(flag.has_meta("rally_fan_maps_flag") and flag.get_meta("flag_index") == i, "flag %d carries the RFM marker" % (i + 1))
-		check(flag.get_child_count() > 2, "flag %d has a pole and branded cloth" % (i + 1))
 	check(scene.stage.trails.size() == 4, "each spectator clearing has a forest footpath")
 	check(scene.stage.trees.size() > 900, "summer gravel stage has a dense forest")
 	check(scene.stage.trail_distance(scene.stage.trails[0].points[2]) < 0.01, "footpath reaches the raised lookout")

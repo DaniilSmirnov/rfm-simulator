@@ -44,6 +44,12 @@ func run() -> void:
 	guest.room.apply_world(snapshot)
 	check(guest.personal_chairs.size() == 2, "repeated snapshots never duplicate chairs")
 	check(not host.valid_furniture_spot(host.stage.at(140), "table"), "furniture cannot be placed on rally road")
+	host.walker = origin + Vector3(0, 0, 6)
+	check(host.place_flag(host.walker + Vector3(2, 0, 0), 0.0), "first personal Rally Fan Maps flag can be placed")
+	check(host.flag_count() == 1, "flag count is tracked per player")
+	check(host.place_flag(host.walker + Vector3(3, 0, 0), 0.4), "second personal flag can be placed")
+	check(host.place_flag(host.walker + Vector3(4, 0, 0), 0.8), "third personal flag can be placed")
+	check(not host.place_flag(host.walker + Vector3(5, 0, 0), 1.2), "fourth flag is rejected")
 	for game in [host, guest]:
 		await game._shutdown_audio()
 		game.queue_free()

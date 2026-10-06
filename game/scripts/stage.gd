@@ -195,7 +195,6 @@ func build() -> void:
 		_build_woodland_details()
 	if urban:
 		_build_city()
-	_build_rally_fan_flags()
 	for i in range(clearings.size()):
 		var c = clearings[i]
 		if urban:
@@ -215,22 +214,6 @@ func build() -> void:
 	for i in range(0 if urban else 18):
 		var p = Vector3((-1 if i % 2 == 0 else 1) * rng.randf_range(220, 340), 30, -i * 65.0)
 		RallyProps.cylinder(self, p, rng.randf_range(120, 180), 0, rng.randf_range(220, 340) if winter else rng.randf_range(130, 210), Color("c3d1db") if winter else Color("697d70"), 5)
-
-func _build_rally_fan_flags() -> void:
-	rally_flags.clear()
-	flag_positions.clear()
-	# Three shared, deterministic spectator markers: start, the middle section and finish.
-	# They sit outside the racing line, so they never affect cars or recovery physics.
-	var stations = [24.0, 420.0, 816.0]
-	var sides = [1.0, -1.0, 1.0]
-	for i in range(stations.size()):
-		var station: float = stations[i]
-		var p = at(station) + side(station) * sides[i] * 10.5
-		p.y = ground(p)
-		var yaw = atan2(-direction(station).x, -direction(station).z) + PI / 2.0
-		var flag = RallyProps.rally_fan_flag(self, p, yaw, i)
-		rally_flags.append(flag)
-		flag_positions.append(p)
 
 func _build_city() -> void:
 	city = City.new()

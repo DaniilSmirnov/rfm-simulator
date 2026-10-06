@@ -9,7 +9,7 @@ var request_sent_at = 0.0
 var last_world_time = -1.0
 var racer_motion: Dictionary = {}
 const Props = preload("res://scripts/props.gd")
-const SHARED_ACTIONS = ["table", "chairs", "grill", "eat", "rally", "random_spot"]
+const SHARED_ACTIONS = ["table", "chairs", "grill", "flag", "eat", "rally", "random_spot"]
 var game: Node3D
 var http: HTTPRequest
 var server = "http://127.0.0.1:8787"
@@ -432,6 +432,7 @@ func _apply_command(c: Dictionary) -> void:
 		"table": game.place_table(spot, yaw)
 		"chairs": game.place_chairs(spot, yaw, str(c.get("player", "guest")))
 		"grill": game.start_grill(spot, yaw)
+		"flag": game.place_flag(spot, yaw, str(c.get("player", "guest")))
 		"eat": game.commit_meat()
 		"rally": game.start_rally()
 		"random_spot":
@@ -447,10 +448,15 @@ func world_state() -> Dictionary:
 	for owner in game.personal_chairs:
 		var chair = game.personal_chairs[owner]
 		chair_poses[owner] = {"pos": a(chair.position), "yaw": chair.rotation.y}
+	var flag_poses = {}
+	for owner in game.personal_flags:
+		flag_poses[owner] = []
+		for flag in game.personal_flags[owner]:
+			flag_poses[owner].append({"pos": a(flag.position), "yaw": flag.rotation.y})
 	var racers = []
 	for r in game.racers:
 		racers.append({"id": r.id, "role": r.get("role", "racer"), "zero_index": r.get("zero_index", 0), "variant": r.variant, "pos": a(r.node.position), "yaw": r.node.rotation.y, "tilt": a(r.node.rotation), "state": r.state, "recovery_progress": r.get("recovery_progress", 0), "recovery_helpers": r.get("recovery_helpers", 0)})
-	return {"course": game.course.snapshot(), "city_lamps": game.stage.city.snapshot() if game.stage.urban else [], "chair_poses": chair_poses, "table_yaw": game.camp.rotation.y if game.camp != null else 0.0, "grill_pose": {"pos": a(game.grill.position), "yaw": game.grill.rotation.y} if game.grill != null else null, "fallen": game.stage.tree_snapshot(), "stones": stone_state(), "impacts": game.impact_serials, "camp": a(game.camp.position) if game.camp != null else null, "chairs": game.has_chairs, "cooking": game.cooking, "cook_time": game.cook_time, "eaten": game.eaten, "racing": game.racing, "passed": game.passed, "helped": game.helped, "elapsed": game.elapsed, "clearing": game.target_clearing, "paused": game.paused, "dead": game.dead, "finished": game.finished, "title": game.menu_title.text, "text": game.menu_text.text, "racers": racers, "tow": game.tow_target.get_meta("room_id") if game.tow_target != null else -1, "tow_progress": game.tow_progress, "tow_owner": tow_owner, "recovery_links": game.recovery_links, "recovery_helpers": game.recovery_helpers, "notice": game.toast_label.text, "notice_time": game.toast_time}
+	return {"course": game.course.snapshot(), "city_lamps": game.stage.city.snapshot() if game.stage.urban else [], "chair_poses": chair_poses, "flag_poses": flag_poses, "table_yaw": game.camp.rotation.y if game.camp != null else 0.0, "grill_pose": {"pos": a(game.grill.position), "yaw": game.grill.rotation.y} if game.grill != null else null, "fallen": game.stage.tree_snapshot(), "stones": stone_state(), "impacts": game.impact_serials, "camp": a(game.camp.position) if game.camp != null else null, "chairs": game.has_chairs, "cooking": game.cooking, "cook_time": game.cook_time, "eaten": game.eaten, "racing": game.racing, "passed": game.passed, "helped": game.helped, "elapsed": game.elapsed, "clearing": game.target_clearing, "paused": game.paused, "dead": game.dead, "finished": game.finished, "title": game.menu_title.text, "text": game.menu_text.text, "racers": racers, "tow": game.tow_target.get_meta("room_id") if game.tow_target != null else -1, "tow_progress": game.tow_progress, "tow_owner": tow_owner, "recovery_links": game.recovery_links, "recovery_helpers": game.recovery_helpers, "notice": game.toast_label.text, "notice_time": game.toast_time}
 
 func stone_state() -> Array:
 	var result = []
@@ -511,6 +517,22 @@ func apply_world(w: Dictionary, sample_time: float = -1.0) -> void:
 			Props.table(game.camp)
 		game.camp.position = v(w.camp)
 		game.camp.rotation.y = float(w.get("table_yaw", 0.0))
+	if w.has("flag_poses"):
+		for owner in w.flag_poses:
+			var poses = w.flag_poses[owner]
+			var existing: Array = game.personal_flags.get(owner, [])
+			while existing.size() > poses.size():
+				var old_flag = existing.pop_back()
+				old_flag.queue_free()
+			for i in range(poses.size()):
+				var pose = poses[i]
+				if i >= existing.size():
+					game.place_flag(v(pose.pos), float(pose.yaw), str(owner), true)
+					existing = game.personal_flags.get(owner, [])
+				else:
+					existing[i].position = v(pose.pos)
+					existing[i].rotation.y = float(pose.yaw)
+			game.personal_flags[owner] = existing
 	if w.has("chair_poses"):
 		for owner in w.chair_poses:
 			var pose = w.chair_poses[owner]
