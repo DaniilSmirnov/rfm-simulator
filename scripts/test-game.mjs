@@ -3,6 +3,7 @@ import { getGodot, root, run } from './godot.mjs';
 const godot = await getGodot();
 const project = join(root, 'game');
 run(godot, ['--headless', '--editor', '--path', project, '--import']);
+run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_crowd_navigation.gd']);
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_run_jump_npc.gd']);
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_course_officials.gd']);
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_city_physics.gd']);

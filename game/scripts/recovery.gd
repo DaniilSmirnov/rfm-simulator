@@ -22,6 +22,7 @@ static func update(game, players: Dictionary, delta: float) -> void:
 	var helpers = {}
 	var participants = players.duplicate()
 	participants.merge(game.spectators.push_helpers())
+	participants.merge(game.stage.officials.push_helpers(game))
 	for id in participants:
 		var p: Dictionary = participants[id]
 		if p.get("in_car", true) or p.get("seated", false) or p.get("airborne", false) or int(p.get("beers", 0)) >= 30:

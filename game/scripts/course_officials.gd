@@ -1,5 +1,8 @@
 extends Node3D
-# Deterministic course furniture: no room commands or extra network traffic.
+# Fixed stations, with host-authoritative marshal movement.
+const Navigation = preload("res://scripts/crowd_navigation.gd")
+var people: Array[Dictionary] = []
+var targets: Dictionary = {}
 const Props = preload("res://scripts/props.gd")
 var stage: Node3D
 var arches: Array[Node3D] = []
@@ -44,7 +47,11 @@ func solid(parent: Node3D, local: Vector3, radius: float, height: float) -> void
 	shape.height = height
 	collider.shape = shape
 	body.add_child(collider)
-	stage.rocks.append({"pos": parent.position + local.rotated(Vector3.UP, parent.rotation.y), "radius": radius, "height": height, "official": true})
+	var record = {"pos": parent.position + local.rotated(Vector3.UP, parent.rotation.y), "radius": radius, "height": height, "official": true}
+	if parent.get_meta("role", "") == "marshal":
+		record.actor = parent
+		parent.set_meta("solid_record", record)
+	stage.rocks.append(record)
 
 func build() -> void:
 	name = "CourseOfficials"
@@ -65,6 +72,7 @@ func build() -> void:
 		marshal.rotation.y = atan2(-toward.x, -toward.z)
 		marshals.append(marshal)
 		solid(marshal, Vector3.ZERO, 0.33, 1.75)
+		people.append({"id": i, "avatar": marshal, "home": marshal.position, "helper": -1, "action": "watch"})
 
 func arch(s: float, caption: String, finish: bool) -> void:
 	var gate = Node3D.new()
@@ -138,3 +146,78 @@ func station(s: float, sign: float, title: String) -> void:
 	Props.table(desk)
 	Props.box(desk, Vector3(0, 0.91, 0), Vector3(0.35, 0.035, 0.25), Color("ece9d7"))
 	Props.box(desk, Vector3(0.4, 0.96, 0), Vector3(0.17, 0.10, 0.11), Color("293339"))
+
+func update(game, delta: float, guest: bool) -> void:
+	for person in people:
+		var avatar: Node3D = person.avatar
+		var previous: Vector3 = avatar.position
+		var facing = avatar.position - Vector3(0, 0, 1)
+		if guest and targets.has(person.id):
+			var pose: Dictionary = targets[person.id]
+			avatar.position = avatar.position.lerp(game.room.v(pose.pos), 1 - exp(-delta * 10))
+			avatar.rotation.y = lerp_angle(avatar.rotation.y, float(pose.yaw), 1 - exp(-delta * 10))
+			person.helper = int(pose.helper)
+			person.action = str(pose.action)
+		elif not guest:
+			var racer = game.spectators.nearby_stranded(person)
+			person.helper = -1
+			if not racer.is_empty():
+				person.helper = racer.id
+				var road = game.Recovery.road_direction(game, racer)
+				var rear: Vector3 = racer.node.position - road * 2.0
+				Navigation.move(game, person, rear, delta, false)
+				person.action = "push" if avatar.position.distance_to(rear) < 0.6 else "help"
+				facing = avatar.position + road
+			else:
+				Navigation.move(game, person, person.home, delta)
+				person.action = "watch"
+				var nearest = 65.0
+				facing = game.stage.at(game.stage.road_s(person.home))
+				for crew in game.racers:
+					if crew.state not in ["racing", "offroad", "rock_bounce"]:
+						continue
+					var distance: float = crew.node.position.distance_to(avatar.position)
+					if distance < nearest:
+						nearest = distance
+						facing = crew.node.position
+			var direction = facing - avatar.position
+			direction.y = 0
+			if direction.length() > 0.05:
+				avatar.rotation.y = lerp_angle(avatar.rotation.y, atan2(-direction.x, -direction.z), 1 - exp(-delta * 8))
+		var moving = avatar.position.distance_to(previous) > 0.001
+		for side in ["Left", "Right"]:
+			avatar.get_node(side + "Arm").rotation.x = PI / 2 if person.action == "push" else 0.08
+			avatar.get_node(side + "Leg").rotation.x = sin(game.elapsed * 8 + person.id) * 0.4 * (-1 if side == "Left" else 1) if moving else 0.0
+		# Keep manual swept collisions and the real static shape with the moving actor.
+		var record: Dictionary = avatar.get_meta("solid_record")
+		record.pos = avatar.position
+
+func push_helpers(game) -> Dictionary:
+	var result = {}
+	for person in people:
+		if person.action != "push" or person.helper < 0:
+			continue
+		for racer in game.racers:
+			if racer.id == person.helper and game.can_tow_racer(racer):
+				result["marshal_%d" % person.id] = {"pos": game.room.a(person.avatar.position), "in_car": false, "tow": false, "push": game.room.a(game.Recovery.road_direction(game, racer)), "beers": 0, "racer": racer.id}
+	return result
+
+func snapshot() -> Array:
+	var result: Array = []
+	for person in people:
+		var p: Vector3 = person.avatar.position
+		result.append({"id": person.id, "pos": [p.x, p.y, p.z], "yaw": person.avatar.rotation.y, "helper": person.helper, "action": person.action})
+	return result
+
+func apply_snapshot(poses: Array) -> void:
+	var first = targets.is_empty()
+	targets.clear()
+	for pose in poses:
+		targets[int(pose.id)] = pose
+		if first:
+			for person in people:
+				if person.id == int(pose.id):
+					person.avatar.position = Vector3(pose.pos[0], pose.pos[1], pose.pos[2])
+					person.avatar.rotation.y = float(pose.yaw)
+					var record: Dictionary = person.avatar.get_meta("solid_record")
+					record.pos = person.avatar.position

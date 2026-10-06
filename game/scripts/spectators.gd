@@ -1,5 +1,6 @@
 extends Node3D
 # Fixed camps and a shared timeline make NPCs identical for late-joining clients.
+const Navigation = preload("res://scripts/crowd_navigation.gd")
 const Props = preload("res://scripts/props.gd")
 var game: Node3D
 var groups: Array[Dictionary] = []
@@ -237,29 +238,7 @@ func watch_spot(s: float, home: Vector3) -> Vector3:
 	return home
 
 func move_person(person: Dictionary, destination: Vector3, delta: float) -> void:
-	var start: Vector3 = person.avatar.position
-	var direction = destination - start
-	direction.y = 0
-	var distance = direction.length()
-	if distance < 0.08 or delta <= 0:
-		return
-	for turn in [0.0, 0.65, -0.65, 1.1, -1.1]:
-		var next = start + direction.normalized().rotated(Vector3.UP, turn) * minf(distance, delta * 2.7)
-		next.y = game.stage.ground(next)
-		if game.stage.obstacle_hit(start, next, 0.3, true) >= 0 or not game.stage.rock_hit(start, next, 0.3).is_empty():
-			continue
-		if game.stage.urban and not game.stage.city.hit(start, next, 0.3).is_empty():
-			continue
-		var blocked = false
-		for group in groups:
-			if next.distance_to(group.car.position) < 2.0 and next.distance_to(group.car.position) < start.distance_to(group.car.position):
-				blocked = true
-		if blocked:
-			continue
-		if person.helper < 0 and game.stage.road_distance(next) < 5.2:
-			continue
-		person.avatar.position = next
-		return
+	Navigation.move(game, person, destination, delta, person.helper < 0)
 
 func nearby_stranded(person: Dictionary) -> Dictionary:
 	var nearest = 24.0

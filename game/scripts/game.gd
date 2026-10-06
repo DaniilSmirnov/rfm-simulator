@@ -695,6 +695,7 @@ func _process(delta: float) -> void:
 	_update_camera(delta)
 	_update_placement()
 	spectators.update(elapsed, delta, room.connected and not room.is_host)
+	stage.officials.update(self, delta, room.connected and not room.is_host)
 	foraging.update_visuals()
 	if not room.connected or room.is_host:
 		_update_racers(delta)
