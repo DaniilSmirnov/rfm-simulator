@@ -1272,6 +1272,8 @@ func _update_stones(delta: float) -> void:
 		for racer in racers:
 			if racer.state != "racing" or not racer.motion.grounded or stones.size() >= 48:
 				continue
+			if stage.urban and stage.road_distance(racer.node.position) < Stage.WIDTH * 0.7:
+				continue # Clean asphalt does not throw a constant stream of gravel.
 			var s: float = racer.s
 			var direction = stage.direction(s)
 			var side = stage.side(s) * (-1.0 if rng.randf() < 0.5 else 1.0)
@@ -1443,7 +1445,7 @@ func _advance_gravel(stone: Dictionary, delta: float) -> bool:
 	var previous: Vector3 = stone.node.position
 	var next: Vector3 = previous + stone.velocity * delta + Vector3(0, -4.9 * delta * delta, 0)
 	stone.velocity.y -= 9.8 * delta
-	var contact = stage.rock_hit(previous, next, 0.06)
+	var contact = stage.city.hit(previous, next, 0.06, true, Vector3.ZERO) if stage.urban else stage.rock_hit(previous, next, 0.06)
 	if not contact.is_empty():
 		next = contact.position
 		var normal: Vector3 = contact.normal

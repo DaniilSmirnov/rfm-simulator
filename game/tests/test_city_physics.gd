@@ -35,6 +35,15 @@ func run() -> void:
 	var hit = stage.city.hit(center + Vector3(-20, 0, 0), center + Vector3(20, 0, 0), 0.85)
 	check(not hit.is_empty(), "fast vehicles cannot tunnel through city solids")
 	check(obstacle.body is StaticBody3D, "city solids use real static physics bodies")
+	var building = stage.city.obstacles.filter(func(item): return item.kind == "building")[0]
+	var wall_center = stage.city._relative_pose(building.body).origin
+	var pebble = Node3D.new()
+	game.add_child(pebble)
+	pebble.position = wall_center - Vector3(20, 0, 0)
+	var stone = {"node": pebble, "velocity": Vector3(80, 0, 0), "bounces": 0}
+	game._advance_gravel(stone, 0.5)
+	check(stone.velocity.x < 0 and stone.bounces == 1, "airborne stone rebounds from a real city facade")
+	pebble.free()
 	var lamp = stage.city.lamps[0]
 	check(lamp.body is RigidBody3D and lamp.body.freeze, "lamp is an anchored rigid body before a collision")
 	var before: Vector3 = lamp.body.position

@@ -345,14 +345,14 @@ func _relative_pose(node: Node3D) -> Transform3D:
 		parent = parent.get_parent()
 	return pose
 
-func hit(start: Vector3, end: Vector3, radius: float, escape: bool = true) -> Dictionary:
+func hit(start: Vector3, end: Vector3, radius: float, escape: bool = true, center_offset: Vector3 = Vector3(0, 0.35, 0)) -> Dictionary:
 	var result = {}
 	var earliest = INF
 	for object in obstacles:
 		var pose = _relative_pose(object.body)
 		var inverse = pose.affine_inverse()
-		var a: Vector3 = inverse * (start + Vector3(0, 0.35, 0))
-		var b: Vector3 = inverse * (end + Vector3(0, 0.35, 0))
+		var a: Vector3 = inverse * (start + center_offset)
+		var b: Vector3 = inverse * (end + center_offset)
 		var half: Vector3 = object.half + Vector3.ONE * radius
 		var travel = b - a
 		var inside = absf(a.x) < half.x and absf(a.y) < half.y and absf(a.z) < half.z
