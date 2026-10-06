@@ -9,7 +9,7 @@ const zipSha = 'd6e382fb531019f85630c1f485a561a0d20c4a2344b6c3847735cfee7da812aa
 const filename = 'Godot_v4.4.1-stable_linux.x86_64';
 
 export function run(command, args) {
-  const result = spawnSync(command, args, { cwd: root, stdio: 'inherit' });
+  const result = spawnSync(command, args, { cwd: root, stdio: 'inherit', timeout: 180000 });
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`${command} failed (${result.status ?? result.signal})`);
 }
