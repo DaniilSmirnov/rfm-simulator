@@ -891,7 +891,9 @@ func _update_camera(delta: float) -> void:
 	if in_car:
 		var orbit = view_yaw
 		var behind = Vector3(sin(orbit), 0, cos(orbit))
-		var desired = car.position + behind * 8.2 + Vector3(0, 4.4, 0)
+		var elevation = clampf(atan2(4.4, 8.2) - (view_pitch + 0.12), 0.14, 1.25)
+		var distance = Vector2(8.2, 4.4).length()
+		var desired = car.position + behind * cos(elevation) * distance + Vector3.UP * sin(elevation) * distance
 		desired.y = maxf(desired.y, stage.ground(desired) + 1.1)
 		camera.position = camera.position.lerp(desired, 1 - exp(-delta * 7))
 		camera.look_at(car.position + Vector3(0, 1.1, 0) - behind * 1.5)

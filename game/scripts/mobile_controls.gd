@@ -96,6 +96,8 @@ func touch_begin(index: int, pos: Vector2) -> void:
 	_layout()
 	if fingers.has(index):
 		touch_end(index)
+	if map_open and game.mobile_sidebar.get_global_rect().has_point(pos):
+		return
 	for button in buttons:
 		if button.rect.has_point(pos):
 			fingers[index] = {"kind": "button", "button": button, "pressed": true}
@@ -114,12 +116,13 @@ func touch_begin(index: int, pos: Vector2) -> void:
 	if pos.distance_to(stick_center) < 115 and not _has_role("stick"):
 		fingers[index] = {"kind": "stick"}
 		_move_stick(pos)
-	elif not game.in_car and pos.x > size.x * 0.32 and not _has_role("look"):
-		if map_open and game.mobile_sidebar.get_global_rect().has_point(pos):
-			return
+	elif not _has_role("look"):
 		fingers[index] = {"kind": "look"}
 
 func touch_drag(index: int, pos: Vector2, relative: Vector2) -> void:
+	if not active() or world_blocked():
+		reset_input()
+		return
 	if not fingers.has(index):
 		return
 	var finger: Dictionary = fingers[index]

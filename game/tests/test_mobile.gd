@@ -36,6 +36,20 @@ func run() -> void:
 	c.touch_begin(1, button(c, "forward"))
 	c.touch_begin(2, c.stick_center + Vector2(60, 0))
 	check(Input.is_action_pressed("forward") and Input.is_action_pressed("right"), "gas and steering support multitouch")
+	var look_point = Vector2(c.size.x * 0.6, 225)
+	var drive_yaw = game.view_yaw
+	var drive_pitch = game.view_pitch
+	var drive_heading = game.heading
+	c.touch_begin(3, look_point)
+	c.touch_drag(3, look_point + Vector2(70, 50), Vector2(70, 50))
+	check(game.view_yaw != drive_yaw and game.view_pitch != drive_pitch and game.heading == drive_heading and Input.is_action_pressed("forward") and Input.is_action_pressed("right"), "driver swipes horizontally and vertically while holding gas and steering")
+	c.touch_begin(4, look_point + Vector2(-100, 0))
+	var owned_yaw = game.view_yaw
+	c.touch_drag(4, look_point, Vector2(100, 0))
+	check(game.view_yaw == owned_yaw, "another finger cannot steal the active camera gesture")
+	c.touch_end(4)
+	c.touch_end(3)
+	check(Input.is_action_pressed("forward") and Input.is_action_pressed("right"), "releasing camera finger preserves gas and steering")
 	c.touch_end(2)
 	check(Input.is_action_pressed("forward") and not Input.is_action_pressed("right"), "releasing steering preserves held gas")
 	c.touch_drag(1, Vector2.ZERO, Vector2.ZERO)
@@ -44,6 +58,33 @@ func run() -> void:
 	check(Input.is_action_pressed("forward"), "sliding back onto pedal resumes gas")
 	c.touch_end(1)
 	check(not Input.is_action_pressed("forward"), "lifting pedal finger releases gas")
+	var car_before = game.car.position
+	game.car.position = Vector3(0, 40, 0)
+	game.view_pitch = -0.12
+	game._update_camera(1)
+	var camera_height = game.camera.position.y
+	var left_free = Vector2(c.size.x * 0.18, 225)
+	c.touch_begin(5, left_free)
+	c.touch_drag(5, left_free + Vector2(40, 80), Vector2(40, 80))
+	game._update_camera(1)
+	check(game.camera.position.y > camera_height + 0.5 and c.fingers.get(5, {}).get("kind", "") == "look", "free left-side swipe changes actual third-person camera height")
+	c.touch_end(5)
+	game.car.position = car_before
+	c.map_open = true
+	c._process(0)
+	var map_center = game.mobile_sidebar.get_global_rect().get_center()
+	var map_yaw = game.view_yaw
+	c.touch_begin(6, map_center)
+	c.touch_drag(6, map_center + Vector2(80, 0), Vector2(80, 0))
+	check(not c.fingers.has(6) and game.view_yaw == map_yaw, "open map consumes its area without rotating the camera")
+	c.map_open = false
+	c._process(0)
+	c.touch_begin(7, look_point)
+	game.paused = true
+	var paused_yaw = game.view_yaw
+	c.touch_drag(7, look_point + Vector2(80, 0), Vector2(80, 0))
+	check(game.view_yaw == paused_yaw and c.fingers.is_empty(), "pause immediately cancels a camera drag")
+	game.paused = false
 	c.touch_begin(1, button(c, "interact"))
 	c._process(0)
 	check(not game.in_car, "touch exit switches to walking controls")
