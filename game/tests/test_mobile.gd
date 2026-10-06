@@ -82,14 +82,18 @@ func run() -> void:
 	c.last_size = Vector2.ZERO
 	c._process(0)
 	check(c.fingers.is_empty() and not Input.is_action_pressed("right"), "resize reset clears touches")
-	game.in_car = true
+	game._cancel_drink()
+	game.in_car = false
 	game.tow_target = Node3D.new()
 	game.add_child(game.tow_target)
 	c._process(0)
 	c.touch_begin(4, button(c, "tow"))
-	check(Input.is_action_pressed("tow"), "attached rope can be held from the car")
+	check(Input.is_action_pressed("tow"), "rope can be held on foot")
 	c.touch_end(4)
 	check(not Input.is_action_pressed("tow"), "lifting rope finger releases tow")
+	game.in_car = true
+	c._layout()
+	check(not c.buttons.any(func(b): return b.action == "tow"), "driver has no rope button")
 	game.dead = true
 	c._process(0)
 	check(not c.active() and c.buttons.is_empty(), "result screen disables touch gameplay")

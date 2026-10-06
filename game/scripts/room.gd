@@ -334,6 +334,7 @@ func _process(delta: float) -> void:
 				racer.node.rotation = pose.rotation
 
 
+		game.draw_recovery_ropes()
 		if nearest != null:
 			game.rally_audio.position = nearest.position
 			game.rally_audio.pitch_scale = 1.8
@@ -360,7 +361,7 @@ func lamp_requests() -> Array:
 	return result.slice(0, 8)
 
 func local_state() -> Dictionary:
-	return {"pos": a(game.player_position()), "car": a(game.car.position), "heading": game.heading, "tilt": a(game.car.rotation), "yaw": game.view_yaw, "pitch": game.view_pitch, "in_car": game.in_car, "tow": Input.is_action_pressed("tow") and not game.paused and not game.dead and game.beers < 30, "speed": game.speed, "beers": game.beers, "trees": tree_requests(), "lamps": lamp_requests(), "beer": game.drink_time, "eat": game.eat_time}
+	return {"pos": a(game.player_position()), "car": a(game.car.position), "heading": game.heading, "tilt": a(game.car.rotation), "yaw": game.view_yaw, "pitch": game.view_pitch, "in_car": game.in_car, "tow": Input.is_action_pressed("tow") and not game.in_car and not game.paused and not game.dead and not game.finished and game.beers < 30 and game.drink_time < 0 and game.eat_time < 0, "push": a(game.walking_intent()), "speed": game.speed, "beers": game.beers, "trees": tree_requests(), "lamps": lamp_requests(), "beer": game.drink_time, "eat": game.eat_time}
 
 func _update_peers(players: Array) -> void:
 	var present = {}
@@ -392,6 +393,8 @@ func _update_peers(players: Array) -> void:
 			peer.avatar_motion.max_speed = 12.0
 			peer.avatar_motion.push(sample_time, v(p.state.pos), Vector3(0, p.state.yaw, 0), switched)
 		peers[p.id].state = p.state
+		if p.state != null:
+			peers[p.id].last_state_time = float(p.state_time) / 1000.0 if p.has("state_time") else server_clock()
 	for id in peers.keys():
 		if not present.has(id):
 			for node in [peers[id].car, peers[id].avatar, peers[id].label]:
@@ -446,8 +449,8 @@ func world_state() -> Dictionary:
 		chair_poses[owner] = {"pos": a(chair.position), "yaw": chair.rotation.y}
 	var racers = []
 	for r in game.racers:
-		racers.append({"id": r.id, "role": r.get("role", "racer"), "zero_index": r.get("zero_index", 0), "variant": r.variant, "pos": a(r.node.position), "yaw": r.node.rotation.y, "tilt": a(r.node.rotation), "state": r.state})
-	return {"course": game.course.snapshot(), "city_lamps": game.stage.city.snapshot() if game.stage.urban else [], "chair_poses": chair_poses, "table_yaw": game.camp.rotation.y if game.camp != null else 0.0, "grill_pose": {"pos": a(game.grill.position), "yaw": game.grill.rotation.y} if game.grill != null else null, "fallen": game.stage.tree_snapshot(), "stones": stone_state(), "impacts": game.impact_serials, "camp": a(game.camp.position) if game.camp != null else null, "chairs": game.has_chairs, "cooking": game.cooking, "cook_time": game.cook_time, "eaten": game.eaten, "racing": game.racing, "passed": game.passed, "helped": game.helped, "elapsed": game.elapsed, "clearing": game.target_clearing, "paused": game.paused, "dead": game.dead, "finished": game.finished, "title": game.menu_title.text, "text": game.menu_text.text, "racers": racers, "tow": game.tow_target.get_meta("room_id") if game.tow_target != null else -1, "tow_progress": game.tow_progress, "tow_owner": tow_owner, "notice": game.toast_label.text, "notice_time": game.toast_time}
+		racers.append({"id": r.id, "role": r.get("role", "racer"), "zero_index": r.get("zero_index", 0), "variant": r.variant, "pos": a(r.node.position), "yaw": r.node.rotation.y, "tilt": a(r.node.rotation), "state": r.state, "recovery_progress": r.get("recovery_progress", 0), "recovery_helpers": r.get("recovery_helpers", 0)})
+	return {"course": game.course.snapshot(), "city_lamps": game.stage.city.snapshot() if game.stage.urban else [], "chair_poses": chair_poses, "table_yaw": game.camp.rotation.y if game.camp != null else 0.0, "grill_pose": {"pos": a(game.grill.position), "yaw": game.grill.rotation.y} if game.grill != null else null, "fallen": game.stage.tree_snapshot(), "stones": stone_state(), "impacts": game.impact_serials, "camp": a(game.camp.position) if game.camp != null else null, "chairs": game.has_chairs, "cooking": game.cooking, "cook_time": game.cook_time, "eaten": game.eaten, "racing": game.racing, "passed": game.passed, "helped": game.helped, "elapsed": game.elapsed, "clearing": game.target_clearing, "paused": game.paused, "dead": game.dead, "finished": game.finished, "title": game.menu_title.text, "text": game.menu_text.text, "racers": racers, "tow": game.tow_target.get_meta("room_id") if game.tow_target != null else -1, "tow_progress": game.tow_progress, "tow_owner": tow_owner, "recovery_links": game.recovery_links, "recovery_helpers": game.recovery_helpers, "notice": game.toast_label.text, "notice_time": game.toast_time}
 
 func stone_state() -> Array:
 	var result = []
@@ -536,6 +539,8 @@ func apply_world(w: Dictionary, sample_time: float = -1.0) -> void:
 		for local in game.racers:
 			if local.id == r.id:
 				local.state = r.state
+				local.recovery_progress = float(r.get("recovery_progress", 0))
+				local.recovery_helpers = int(r.get("recovery_helpers", 0))
 				exists = true
 				break
 		if not exists:
@@ -562,12 +567,9 @@ func apply_world(w: Dictionary, sample_time: float = -1.0) -> void:
 		if local.id == w.tow:
 			game.tow_target = local.node
 	game.tow_progress = w.tow_progress
-	tow_owner = w.tow_owner
-	if game.tow_target != null:
-		var origin = game.car.position
-		if peers.has(tow_owner) and peers[tow_owner].state != null:
-			origin = v(peers[tow_owner].state.car)
-		game.rope_mesh = Props.rope(game, origin + Vector3(0, 0.5, 0), game.tow_target.position + Vector3(0, 0.5, 0))
+	game.recovery_links = w.get("recovery_links", []).duplicate(true)
+	game.recovery_helpers = int(w.get("recovery_helpers", 0))
+	game.draw_recovery_ropes()
 	if (w.dead or w.finished) and not game.dead and not game.finished:
 		game.dead = w.dead
 		game.finished = w.finished
@@ -576,41 +578,11 @@ func apply_world(w: Dictionary, sample_time: float = -1.0) -> void:
 func update_tow(delta: float) -> void:
 	var players = {player_id: local_state()}
 	for id in peers:
-		if peers[id].state != null:
-			players[id] = peers[id].state
-	if game.tow_target == null:
-		tow_owner = ""
-		for id in players:
-			var p = players[id]
-			if not p.tow:
-				continue
-			for r in game.racers:
-				if game.can_tow_racer(r) and v(p.pos).distance_to(r.node.position) < 5 and v(p.car).distance_to(r.node.position) <= 24:
-					game.tow_target = r.node
-					tow_owner = id
-					break
-			if game.tow_target != null:
-				break
-	if game.tow_target == null:
-		return
-	if not players.has(tow_owner):
-		game._cancel_tow()
-		return
-	var p = players[tow_owner]
-	var origin = v(p.car)
-	if origin.distance_to(game.tow_target.position) > 26:
-		game._cancel_tow()
-		return
-	if game.rope_mesh != null:
-		game.rope_mesh.queue_free()
-	game.rope_mesh = Props.rope(game, origin + Vector3(0, 0.5, 0), game.tow_target.position + Vector3(0, 0.5, 0))
-	if p.tow and (p.in_car or v(p.pos).distance_to(game.tow_target.position) < 6):
-		game.tow_progress += delta / 6
-		if game.tow_progress >= 1:
-			for r in game.racers:
-				if r.node == game.tow_target:
-					game.recover_racer(r)
-			game._cancel_tow()
+		var peer: Dictionary = peers[id]
+		if peer.state != null and server_clock() - float(peer.get("last_state_time", server_clock())) <= 1.0:
+			players[id] = peer.state
+	game.Recovery.update(game, players, delta)
+	tow_owner = str(game.recovery_links[0].player) if not game.recovery_links.is_empty() else ""
 
 func check_remote_collisions() -> void:
 	var people = [{"id": player_id, "state": local_state()}]

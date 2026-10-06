@@ -108,7 +108,9 @@ func run() -> void:
 	scene._update_racers(1.2)
 	check(r.state == "stranded", "car stranded off road")
 	scene.car.position = r.node.position + Vector3(8, 0, 0)
-	scene.walker = r.node.position + Vector3(3, 0, 0)
+	scene.walker = r.node.position + scene.Recovery.road_direction(scene, r) * 3
+	scene.stage.trees.clear()
+	scene.stage.rocks.clear()
 	Input.action_press("tow")
 	scene._update_tow(0.1)
 	check(scene.tow_target != null, "tow attaches near stranded car")

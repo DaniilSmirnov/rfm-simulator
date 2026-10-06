@@ -49,8 +49,6 @@ func _layout() -> void:
 		actions = [["Поставить", "placement_confirm", false], ["Повернуть", "placement_rotate", false], ["Отмена", "placement_cancel", false]]
 	elif game.in_car:
 		actions = [["Выйти", "interact", false], ["Вернуть", "recover", false], ["Поляна", "random_spot", false], ["Назад", "back", true], ["Тормоз", "brake", true], ["Газ", "forward", true]]
-		if game.tow_target != null or game.nearby_tow_racer():
-			actions[1] = ["Трос", "tow", true]
 	else:
 		actions = [["Сесть", "interact", false], ["Поляна", "random_spot", false]]
 		actions.append(["Стол", "table", false])

@@ -183,3 +183,18 @@ test('lamp collision requests retain bounded identities and direction', () => {
   assert.deepEqual(reply.players[0].state.lamps, [{ id: 2, dir: [1, 0, 0] }]);
   assert.deepEqual(reply.players[0].state.trees, [{ id: 6000, dir: [1, 0, 0] }]);
 });
+
+test('pedestrian push intents are bounded and ropes cannot be pulled from a car', () => {
+  const { r, h, g } = setup();
+  let reply = r.sync({ token: g.token, state: { ...state(), tow: true, push: [10, 3, -10] } }, 1100);
+  let p = reply.players.find(p => p.id === g.player).state;
+  assert.deepEqual(p.push, [1, 0, -1]);
+  assert.equal(p.tow, true);
+  reply = r.sync({ token: g.token, state: { ...state(), in_car: true, tow: true, push: [Infinity, 0, 0] } }, 1200);
+  p = reply.players.find(p => p.id === g.player).state;
+  assert.equal(p.tow, false);
+  assert.deepEqual(p.push, [0, 0, 0]);
+  reply = r.sync({ token: h.token, state: state(), world: { recovery_helpers: 3, recovery_links: [{ player: g.player, racer: 1, pos: [0, 1, 2] }] } }, 1300);
+  assert.equal(reply.world.recovery_helpers, 3);
+  assert.equal(reply.world.recovery_links.length, 1);
+});

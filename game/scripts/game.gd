@@ -26,6 +26,10 @@ const EAT_DURATION = 3.6
 var beer_prop: Node3D
 var avatar_variant = 0
 var rope_mesh: MeshInstance3D
+var recovery_ropes: Array = []
+var recovery_links: Array = []
+var recovery_helpers = 0
+const Recovery = preload("res://scripts/recovery.gd")
 var in_car = true
 var heading = 0.0
 var view_yaw = 0.0
@@ -1221,7 +1225,7 @@ func _update_racers(delta: float) -> void:
 				racer.age = 0.0
 		elif racer.state in ["stopped", "stranded"]:
 			racer.motion.suspension(node, stage, delta, node.rotation.y)
-			if racer.state == "stopped" and not service and racer.age > 18 and racer.node != tow_target:
+			if racer.state == "stopped" and not service and racer.age > 18 and racer.node != tow_target and float(racer.get("recovery_progress", 0)) <= 0 and int(racer.get("recovery_helpers", 0)) == 0:
 				to_remove.append(racer)
 		if moving_before:
 			var contact = stage.rock_hit(racer.previous, node.position, 0.85)
@@ -1331,43 +1335,44 @@ func _update_stones(delta: float) -> void:
 			stone.node.queue_free()
 			stones.erase(stone)
 
+func walking_intent() -> Vector3:
+	if in_car or paused or dead or finished or beers >= 30 or drink_time >= 0 or eat_time >= 0:
+		return Vector3.ZERO
+	var input = Vector2(Input.get_axis("left", "right"), Input.get_axis("forward", "back")).limit_length(1)
+	return Vector3(input.x, 0, input.y).rotated(Vector3.UP, view_yaw)
+
 func _update_tow(delta: float) -> void:
-	if tow_target == null and Input.is_action_pressed("tow"):
+	Recovery.update(self, {"local": room.local_state()}, delta)
+
+func _clear_recovery_ropes() -> void:
+	for rope in recovery_ropes:
+		if is_instance_valid(rope):
+			rope.queue_free()
+	recovery_ropes.clear()
+	rope_mesh = null
+
+func draw_recovery_ropes() -> void:
+	_clear_recovery_ropes()
+	for link in recovery_links:
 		for racer in racers:
-			if can_tow_racer(racer) and player_position().distance_to(racer.node.position) < 5:
-				if car.position.distance_to(racer.node.position) > 24:
-					toast("Подгони свою машину ближе: трос длиной 24 метра.")
-					return
-				tow_target = racer.node
-				tow_progress = 0
-				toast("Трос закреплён. Удерживай T рядом с экипажем или в своей машине.")
-				break
-	if tow_target == null:
-		return
-	var length = car.position.distance_to(tow_target.position)
-	if length > 26:
-		_cancel_tow()
-		toast("Трос сорвался: машины слишком далеко друг от друга.")
-		return
-	if rope_mesh != null:
-		rope_mesh.queue_free()
-	rope_mesh = Props.rope(self, car.position + Vector3(0, 0.5, 0), tow_target.position + Vector3(0, 0.5, 0))
-	if Input.is_action_pressed("tow") and (in_car or walker.distance_to(tow_target.position) < 6):
-		tow_progress += delta / 6
-		if tow_progress >= 1:
-			for racer in racers:
-				if racer.node == tow_target:
-					recover_racer(racer)
-					break
-			_cancel_tow()
-			toast("Вытащили! Экипаж благодарит и продолжает СУ.")
+			if racer.id != int(link.racer):
+				continue
+			var origin = room.v(link.pos)
+			if link.player == room.player_id or (not room.connected and link.player == "local"):
+				origin = walker
+			elif room.peers.has(link.player) and room.peers[link.player].has("avatar"):
+				origin = room.peers[link.player].avatar.position
+			var rope = Props.rope(self, origin + Vector3(0, 1, 0), racer.node.position + Vector3(0, 0.5, 0))
+			recovery_ropes.append(rope)
+			if rope_mesh == null:
+				rope_mesh = rope
 
 func _cancel_tow() -> void:
 	tow_target = null
 	tow_progress = 0
-	if rope_mesh != null:
-		rope_mesh.queue_free()
-		rope_mesh = null
+	recovery_links.clear()
+	recovery_helpers = 0
+	_clear_recovery_ropes()
 
 func toast(message: String) -> void:
 	if mobile_mode:
@@ -1398,11 +1403,11 @@ func _update_hud() -> void:
 		if beers >= 30:
 			info_label.text = "ТЫ ЛЕЖИШЬ · ХОДИТЬ БОЛЬШЕ НЕ ПОЛУЧИТСЯ"
 		if tow_target != null:
-			info_label.text = "ВЫТАСКИВАЕМ ЭКИПАЖ   ·   %d%%   ·   УДЕРЖИВАЙ T" % int(tow_progress * 100)
+			info_label.text = "ПОМОЩЬ %d%% · УЧАСТНИКОВ %d" % [int(tow_progress * 100), recovery_helpers]
 	if tow_target != null:
 		info_label.text = "ВЫТАСКИВАЕМ ЭКИПАЖ   ·   %d%%   ·   УДЕРЖИВАЙ T" % int(tow_progress * 100)
 	elif nearby_tow_racer():
-		hint_label.text += "   ·   T — закрепить трос и вытянуть экипаж"
+		hint_label.text += "   ·   Иди в машину, чтобы толкать · T — тяни пешком со стороны дороги"
 	if mobile_mode:
 		if in_car and tow_target == null:
 			info_label.text = "%02d КМ/Ч · МАШИНА %d%% · %s %d м" % [int(absf(speed) * 3.6), int(condition), "ПАРКОВКА" if stage.urban else "ПОЛЯНА", distance]
@@ -1505,7 +1510,7 @@ func can_tow_racer(racer: Dictionary) -> bool:
 
 func nearby_tow_racer() -> bool:
 	for racer in racers:
-		if can_tow_racer(racer) and player_position().distance_to(racer.node.position) < 5:
+		if not in_car and can_tow_racer(racer) and walker.distance_to(racer.node.position) < 6:
 			return true
 	return false
 
@@ -1529,6 +1534,8 @@ func recover_racer(racer: Dictionary) -> void:
 	racer.kind = "pass"
 	count_racer(racer)
 	racer.age = 0.0
+	for key in ["recovery_start", "recovery_goal", "recovery_progress", "recovery_helpers"]:
+		racer.erase(key)
 	helped += 1
 
 func count_racer(racer: Dictionary) -> void:
