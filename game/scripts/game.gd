@@ -180,6 +180,11 @@ var drunk_phase = 0.0
 var drunk_strength = 0.0
 const DRUNK_FADE_SECONDS = 60.0
 var collapse_time = 0.0
+const SOBER_SECONDS = 180.0
+var sober_remaining = 0.0
+var sobriety_panel: PanelContainer
+var sobriety_label: Label
+var sobriety_bar: ProgressBar
 var tree_requests: Dictionary = {}
 var lamp_requests: Dictionary = {}
 var beers = 0
@@ -491,6 +496,30 @@ func _build_ui() -> void:
 	toast_label.add_theme_color_override("font_shadow_color", Color("182820"))
 	toast_label.add_theme_constant_override("shadow_offset_x", 2)
 	toast_label.add_theme_constant_override("shadow_offset_y", 2)
+	sobriety_panel = PanelContainer.new()
+	ui.add_child(sobriety_panel)
+	sobriety_panel.anchor_left = 0.25
+	sobriety_panel.anchor_right = 0.75
+	sobriety_panel.offset_top = 150
+	sobriety_panel.offset_bottom = 245
+	sobriety_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	sobriety_panel.add_theme_stylebox_override("panel", _panel(Color("25352bf2")))
+	var recovery_box = VBoxContainer.new()
+	recovery_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	sobriety_panel.add_child(recovery_box)
+	sobriety_label = _label(recovery_box, "", 22, Color("fff0cb"))
+	sobriety_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sobriety_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	sobriety_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	sobriety_bar = ProgressBar.new()
+	sobriety_bar.max_value = SOBER_SECONDS
+	sobriety_bar.custom_minimum_size.y = 24
+	sobriety_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var recovery_fill = StyleBoxFlat.new()
+	recovery_fill.bg_color = Color("ee531b")
+	sobriety_bar.add_theme_stylebox_override("fill", recovery_fill)
+	recovery_box.add_child(sobriety_bar)
+	sobriety_panel.hide()
 	menu = PanelContainer.new()
 	ui.add_child(menu)
 	menu.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
@@ -692,6 +721,7 @@ func _process(delta: float) -> void:
 	elif course.phase in ["countdown", "intermission"]:
 		course.remaining = maxf(0, course.remaining - delta)
 	stage.update_fallen(delta)
+	_update_sobriety(delta)
 	_update_intoxication(delta)
 	if in_car:
 		_drive(delta)
@@ -729,6 +759,24 @@ func _process(delta: float) -> void:
 		get_viewport().get_texture().get_image().save_png("res://../preview.png")
 		await _shutdown_audio()
 		get_tree().quit()
+
+func _update_sobriety(delta: float) -> void:
+	if not playing or paused or dead or finished or (room.connected and not room.is_host and room.world_paused):
+		return
+	if beers < 30:
+		sober_remaining = 0.0
+		return
+	if sober_remaining <= 0:
+		sober_remaining = SOBER_SECONDS
+	sober_remaining = maxf(0, sober_remaining - delta)
+	if sober_remaining <= 0:
+		beers = 0
+		drunk_strength = 0
+		drunk_phase = 0
+		collapse_time = 0
+		beer_timer = 0
+		sobriety_panel.hide()
+		toast("Ты протрезвел. Можно встать, собрать вещи и вернуться в машину.")
 
 func _update_intoxication(delta: float) -> void:
 	drunk_strength = maxf(0.0, drunk_strength - delta / DRUNK_FADE_SECONDS)
@@ -915,7 +963,7 @@ func _toggle_car() -> void:
 	if jump_height > 0.01 or jump_velocity > 0:
 		return
 	if beers >= 30:
-		toast("Ты лежишь. На сегодня поездки закончились.")
+		toast("Ты лежишь. Дождись восстановления — три минуты.")
 		return
 	if drink_time >= 0 or eat_time >= 0:
 		toast("Сначала закончи есть или пить и освободи руки.")
@@ -1075,6 +1123,8 @@ func _update_cooking(delta: float) -> void:
 			toast("Шашлык готов! Подойди к лагерю и нажми X.")
 
 func drink_beer() -> bool:
+	if beers >= 30:
+		return false
 	if cargo.held.has(chair_owner()):
 		return false
 	if not playing or paused or dead or finished:
@@ -1129,18 +1179,26 @@ func _update_drinking(delta: float) -> void:
 			drunk_strength = minf(1.0, drunk_strength + 0.45)
 		beer_timer = 1.0
 		if beers >= 30:
+			sober_remaining = SOBER_SECONDS
+			cancel_placement()
+			if seated:
+				stand_up()
+			jump_height = 0
+			jump_velocity = 0
 			if in_car:
 				in_car = false
 				walker = car.position
 				walker.y = stage.ground(walker)
+			walker.y = stage.ground(walker)
 			vehicle_motion.velocity = Vector3.ZERO
 			speed = 0
-			toast("Тридцатая банка. Ты упал и больше не можешь ходить.")
+			toast("Тридцатая банка. Ты упал. Восстановление займёт три минуты.")
 		beer_audio.stream = load("res://audio/beer-sip.wav")
 		_play_audio(beer_audio)
 	if drink_time >= DRINK_DURATION:
 		_cancel_drink()
-		toast("За хороший выезд! X — готовый шашлык. Заезды начнутся автоматически.")
+		if beers < 30:
+			toast("За хороший выезд! X — готовый шашлык. Заезды начнутся автоматически.")
 
 func _cancel_drink() -> void:
 	drink_time = -1.0
@@ -1577,6 +1635,11 @@ func toast(message: String) -> void:
 		toast_time = 5
 
 func _update_hud() -> void:
+	sobriety_panel.visible = beers >= 30 and playing and not dead and not finished
+	if sobriety_panel.visible:
+		var seconds = ceili(sober_remaining if sober_remaining > 0 else SOBER_SECONDS)
+		sobriety_label.text = "ПРОТРЕЗВЛЕНИЕ · ВСТАНЕШЬ ЧЕРЕЗ %02d:%02d" % [seconds / 60, seconds % 60]
+		sobriety_bar.value = SOBER_SECONDS - (sober_remaining if sober_remaining > 0 else SOBER_SECONDS)
 	course_label.text = course.caption()
 	var distance = int(player_position().distance_to(stage.clearings[target_clearing]))
 	quest_label.text = "%s Найти место  ·  %d м\n%s Разложить стол\n%s Поставить стулья\n%s Пожарить и съесть шашлык\n%s Посмотреть %d экипажей" % ["[x]" if camp != null else "[ ]", distance, "[x]" if camp != null else "[ ]", "[x]" if has_chairs else "[ ]", "[x]" if eaten else "[ ]", "[x]" if passed >= RALLY_CREW_LIMIT else "[ ]", RALLY_CREW_LIMIT]
@@ -1595,7 +1658,7 @@ func _update_hud() -> void:
 		if eat_time >= 0:
 			info_label.text = "ЕДИМ ЯГОДЫ" if eat_kind == "berries" else ("ЕДИМ ГРИБЫ" if eat_kind == "mushroom" else "ЕДИМ ШАШЛЫК")
 		if beers >= 30:
-			info_label.text = "ТЫ ЛЕЖИШЬ · ХОДИТЬ БОЛЬШЕ НЕ ПОЛУЧИТСЯ"
+			info_label.text = "ТЫ ЛЕЖИШЬ · ОТДОХНИ ДО ВОССТАНОВЛЕНИЯ"
 		if tow_target != null:
 			info_label.text = "ПОМОЩЬ %d%% · УЧАСТНИКОВ %d" % [int(tow_progress * 100), recovery_helpers]
 	if tow_target != null:
@@ -1631,6 +1694,7 @@ func _update_hud() -> void:
 	minimap.queue_redraw()
 
 func _check_finish() -> void:
+	cargo.release_departed()
 	if dead or finished or not packing.active() or packing.remaining() > 0 or not in_car or eat_time >= 0 or drink_time >= 0:
 		return
 	# In a room, wait for every connected spectator to get back in their car.
@@ -1645,6 +1709,7 @@ func die(reason: String) -> void:
 	_show_result("Выезд окончен", reason + "\n\nЭкипажи: %d  ·  Помощь тросом: %d\nШашлык: %s" % [passed, helped, "съеден" if eaten else "не съеден"])
 
 func _show_result(title: String, body: String) -> void:
+	sobriety_panel.hide()
 	cancel_placement()
 	_cancel_drink()
 	_cancel_eat()

@@ -76,12 +76,41 @@ func run() -> void:
 	guest.room.apply_world(host.room.world_state())
 	check(guest.packing.remaining() == 0 and not guest.cooking and guest.smoke == null and guest.foraging.skewers.get("-1", []).is_empty(), "repeated snapshots remove table, chair, grill, smoke and all flags")
 	host.in_car = true
-	host.room.peers["guest"] = {"state": {"in_car": false}}
+	guest.in_car = false
+	host.room._update_peers([{"id": "guest", "name": "Друг", "state": guest.room.local_state()}])
 	host._check_finish()
-	check(not host.finished, "host waits for a friend still outside their car")
-	host.room.peers["guest"].state.in_car = true
+	check(not host.finished, "host waits for a connected friend outside their car")
+	# Simulate an item that was already collected, then its carrier leaving.
+	host.cargo.held["guest"] = {"kind": "table", "owner": "host", "returning": true}
+	host.room._update_peers([])
+	check(host.room.peers.is_empty() and not host.cargo.held.has("guest") and host.packing.remaining() == 0, "departed carrier leaves no pending box or phantom spectator")
 	host._check_finish()
-	check(host.finished, "shared outing finishes when cleanup is done and everyone is in a car")
+	check(host.finished, "collected outing finishes after a friend leaves and remaining players sit in cars")
+	guest.room.apply_world(host.room.world_state())
+	check(guest.finished, "successful finish is included in the shared world snapshot")
+	# Leaving must never silently pack furniture that remains in the world.
+	host.finished = false
+	host.menu.hide()
+	host.in_car = false
+	host.apply_chair("departed", host.walker + Vector3(2, 0, 0), 0)
+	host.place_flag(host.walker + Vector3(0, 0, 4), 0, "departed", true)
+	host.cargo.held["host"] = {"kind": "grill", "owner": "departed", "returning": true}
+	host.room._update_peers([])
+	host.in_car = true
+	host._check_finish()
+	check(not host.finished and host.packing.remaining() == 3, "departed owner's installed gear and a friend's carried box still require cleanup")
+	host.in_car = false
+	host.walker = trunk_spot
+	check(host.cargo.return_item(trunk_spot), "a friend's box can return to own car after its owner leaves")
+	for item in host.packing.items():
+		host.walker = item.node.position
+		check(host.packing.pack(item.node.position), "remaining player packs departed owner's equipment")
+		if item.kind != "flag":
+			host.walker = trunk_spot
+			check(host.cargo.return_item(trunk_spot), "departed owner's chair returns to remaining player's car")
+	host.in_car = true
+	host._check_finish()
+	check(host.finished and host.packing.remaining() == 0, "finish succeeds after packing all abandoned gear")
 	host.room.peers.clear()
 	for arch in host.stage.officials.arches:
 		check(arch.get_meta("caption") == "Rally Fans Map", "both arches display only Rally Fans Map")

@@ -425,6 +425,7 @@ func _update_peers(players: Array) -> void:
 			for node in [peers[id].car, peers[id].avatar, peers[id].label]:
 				node.queue_free()
 			peers.erase(id)
+	game.cargo.release_departed()
 
 func submit(action: String, placement: Dictionary = {}) -> bool:
 	if not connected or is_host or action not in SHARED_ACTIONS:

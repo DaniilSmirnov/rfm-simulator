@@ -72,10 +72,41 @@ func run() -> void:
 	check(game.camera.position.y < game.walker.y + 0.5, "collapsed view lies near ground")
 	game._cancel_drink()
 	game.beer_timer = 0
-	check(game.drink_beer(), "beer remains available even after thirty")
+	check(not game.drink_beer(), "collapsed player cannot restart the timer by drinking")
 	game._cancel_drink()
-	game.beers = 0
+	game._update_hud()
+	check(game.sobriety_panel.visible and game.sobriety_bar.value == 0 and game.sober_remaining == 180, "collapse starts a visible three-minute recovery bar")
+	game._update_sobriety(60)
+	game._update_hud()
+	check(game.sober_remaining == 120 and game.sobriety_bar.value == 60, "recovery bar advances with elapsed gameplay")
+	game.paused = true
+	game._process(30)
+	check(game.sober_remaining == 120, "local pause freezes recovery")
+	game.paused = false
+	game.room.connected = true
+	game.room.is_host = false
+	game.room.world_paused = true
+	game._update_sobriety(30)
+	check(game.sober_remaining == 120, "host pause freezes a guest's recovery")
+	game.room.world_paused = false
+	game.room.connected = false
+	game._update_sobriety(119.9)
+	check(game.beers == 30 and game.sober_remaining > 0, "player stays down before three minutes")
+	game._update_sobriety(0.1)
+	game._update_camera(0.1)
+	game._update_hud()
+	check(game.beers == 0 and game.sober_remaining == 0 and game.drunk_strength == 0 and game.collapse_time == 0 and not game.sobriety_panel.visible and game.camera.position.y > game.walker.y + 1.5, "after three minutes player is sober and standing")
+	position_before = game.walker
+	Input.action_press("forward")
+	game._walk(0.1)
+	Input.action_release("forward")
+	check(game.walker.distance_to(position_before) > 0.05, "walking is available again after recovery")
+	check(game.drink_beer(), "beer becomes available again after recovery")
+	game._cancel_drink()
 	game.walker = game.car.position + Vector3(0, 0, 2.5)
+	game._toggle_car()
+	check(game.in_car, "recovered player can enter car for the end of the outing")
+	game.in_car = false
 	check(game.contact_blocked(game.walker, game.car.position, false), "walker cannot pass through parked car")
 	var remote = game.room.local_state()
 	remote.pos = game.room.a(game.stage.clearings[0])
@@ -88,6 +119,10 @@ func run() -> void:
 	game.room._update_peers([{"id": "friend", "slot": 1, "name": "Друг", "state": remote}])
 	game.room._process(0.8)
 	check(absf(game.room.peers.friend.avatar.rotation.z - PI / 2) < 0.01, "friends see collapsed avatar")
+	remote.beers = 0
+	game.room._update_peers([{"id": "friend", "slot": 1, "name": "Друг", "state": remote}])
+	game.room._process(0.8)
+	check(absf(game.room.peers.friend.avatar.rotation.z) < 0.01, "friends see the recovered avatar stand up")
 	var person = game.room.v(remote.pos)
 	game.speed = 2
 	check(game.contact_blocked(person + Vector3(-3, 0, 0), person + Vector3(-1, 0, 0), true) and not game.dead, "slow vehicle contact stops without killing pedestrian")

@@ -186,13 +186,19 @@ func offers(items: Array, interaction) -> void:
 			var box_point: Vector3 = cars[owner].pos + Vector3((i - 1) * 0.39, p.floor + 0.18, p.rear - 0.30).rotated(Vector3.UP, cars[owner].heading)
 			interaction.offer(items, box_point, 0.19, 3.3, "take_gear", "Взять " + ["стол", "стул", "мангал"][i], KINDS[i])
 
+# A departed carrier's box is considered loaded into their departed car.
+# Installed items stay in the camp and can still be collected by friends.
+func release_departed() -> void:
+	if not game.room.connected or not game.room.is_host:
+		return
+	for departed in held.keys():
+		if departed != game.chair_owner() and not game.room.peers.has(departed):
+			held.erase(departed)
+
 func update(delta: float) -> void:
 	refresh_opened()
 	var owner = game.chair_owner()
-	if game.room.connected and game.room.is_host:
-		for departed in held.keys():
-			if departed != owner and not game.room.peers.has(departed):
-				held.erase(departed)
+	release_departed()
 	Props.update_player_trunk(game.car, bool(opened.get(owner, false)), boxes(owner), delta)
 	var carry = held.get(owner, {})
 	var kind = str(carry.get("kind", ""))
