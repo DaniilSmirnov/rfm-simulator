@@ -32,9 +32,9 @@ func run() -> void:
 	for game in [host, guest]:
 		game.set_process(false)
 		game.room.set_process(false)
-	check(host.car_choice.item_count == 8 and host.stage_choice.item_count == 3, "menu offers eight cars and three stages")
+	check(host.car_choice.item_count == 9 and host.stage_choice.item_count == 3, "menu offers eight cars and three stages")
 	host.car_choice.cycle(-1)
-	check(host.selected_car == 7 and host.car.get_meta("model") == "Renault Duster", "previous arrow wraps through all selectable car models")
+	check(host.selected_car == 8 and host.car.get_meta("model") == "ВАЗ-2112 Лодка", "previous arrow wraps through all selectable car models")
 	host.car_choice.cycle(1)
 	check(host.selected_car == 0, "next arrow returns to first car")
 	host.car_choice.item_selected.emit(5)

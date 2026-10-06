@@ -27,7 +27,7 @@ export class RoomState {
     const used = new Set(Object.values(this.data.players).map(p => p.slot));
     let slot = 0;
     while (used.has(slot)) slot++;
-    const car_model = Number.isSafeInteger(options.car_model) && options.car_model >= 0 && options.car_model < 8 ? options.car_model : slot;
+    const car_model = Number.isSafeInteger(options.car_model) && options.car_model >= 0 && options.car_model < 9 ? options.car_model : slot;
     if (host) this.data.stage = Number.isSafeInteger(options.stage) ? Math.max(0, Math.min(2, options.stage)) : 0;
     const id = crypto.randomUUID();
     const p = { id, slot, car_model, token: crypto.randomUUID(), name: String(name || 'Овощ').replace(/[\u0000-\u001f]/g, '').trim().slice(0, 24) || 'Овощ', seen: now, state: null, seq: 0 };

@@ -195,6 +195,7 @@ const PLAYER_MODELS = [
 	{"name": "Kia Rio", "color": "a74d43", "length": 4.40, "width": 1.74, "height": 1.47, "rear": 0.93, "glass": 0.43, "lights": "slim", "grille": 0.56},
 	{"name": "Renault Logan", "color": "c6c9b9", "length": 4.35, "width": 1.73, "height": 1.53, "rear": 0.87, "glass": 0.27, "lights": "square", "grille": 0.90},
 	{"name": "Renault Duster", "color": "a58058", "length": 4.34, "width": 1.82, "height": 1.70, "rear": 1.63, "glass": 0.28, "lights": "square", "grille": 1.05},
+	{"name": "ВАЗ-2112 Лодка", "color": "283f87", "length": 4.17, "width": 1.68, "height": 1.47, "rear": 0.98, "glass": 0.30, "lights": "square", "grille": 0.75},
 ]
 
 # A closed faceted shell with bevelled cross-sections. Each model has its own
@@ -252,6 +253,7 @@ static func player_car(variant: int = 0) -> Node3D:
 		[-0.94, -0.40, 0.70, 1.22, 0.79, 0.78], # Rio: longer bonnet, low rear deck.
 		[-0.79, -0.49, 0.65, 1.03, 0.70, 0.66], # Logan: tall, upright sedan.
 		[-0.91, -0.56, 1.29, 1.66, 0.75, 0.65], # Duster: broad five-door SUV.
+		[-0.96, -0.43, 0.60, 1.08, 0.68, 0.70], # 2112: low hatchback nose and steep rear glass.
 	]
 	var shape: Array = shapes[variant]
 	var root = Node3D.new()
@@ -265,7 +267,7 @@ static func player_car(variant: int = 0) -> Node3D:
 	var front: float = -p.length / 2
 	var rear: float = p.length / 2
 	var half: float = p.width / 2
-	var bonnet = base + (0.34 if variant in [2, 3, 6] else 0.27)
+	var bonnet = base + (0.34 if variant in [2, 3, 6, 8] else 0.27)
 	var body = car_shell(root, [Vector4(front, half * 0.90, base - 0.24, bonnet - 0.13), Vector4(front + 0.38, half, base - 0.26, bonnet - 0.03), Vector4(shape[0], half, base - 0.26, bonnet), Vector4(shape[3], half, base - 0.26, bonnet - 0.02), Vector4(rear, half * 0.93, base - 0.22, bonnet - 0.06)], paint)
 	body.name = "BodyShell"
 	var floor_height = bonnet - 0.02
@@ -333,6 +335,18 @@ static func player_car(variant: int = 0) -> Node3D:
 	if suv:
 		for side in [-1, 1]:
 			box(root, Vector3(side * 0.57, p.height + 0.08, 0.48), Vector3(0.06, 0.07, 1.65), Color("38413a"))
+	if variant == 8:
+		# Real-world 2112 details: hatch spoiler, black steel wheels and a roof rack.
+		box(root, Vector3(0, p.height + 0.08, 0.72), Vector3(1.18, 0.08, 0.16), Color("1d2b35"))
+		for z in [-0.62, 0.62]:
+			box(root, Vector3(0, p.height + 0.11, z), Vector3(1.35, 0.08, 0.12), Color("252e30"))
+		# Inflatable boat strapped across the roof, with a recessed dark interior.
+		faceted(root, Vector3(0, p.height + 0.48, 0), Vector3(0.72, 0.30, 1.72), Color("747d7e"), 10, 5)
+		faceted(root, Vector3(0, p.height + 0.60, 0), Vector3(0.48, 0.12, 1.40), Color("354448"), 10, 4)
+		for z in [-0.62, 0.62]:
+			box(root, Vector3(0, p.height + 0.46, z), Vector3(1.48, 0.045, 0.10), Color("e0b83f"))
+			box(root, Vector3(0, p.height + 0.36, z), Vector3(0.055, 0.36, 0.055), Color("202a2d"))
+		root.set_meta("roof_cargo", "inflatable_boat")
 	return root
 
 static func skewer() -> Node3D:
