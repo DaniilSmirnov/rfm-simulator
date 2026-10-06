@@ -103,6 +103,10 @@ func run() -> void:
 		var extra = scene.racers.pop_back()
 		extra.node.queue_free()
 	r.s = r.focus - 1
+	# Teleport the complete vehicle fixture, not only its progress along the road.
+	# Otherwise collision sweeps cross the forest from the old spawn position.
+	r.node.position = scene.stage.at(r.s)
+	r.previous = r.node.position
 	scene._update_racers(0.1)
 	check(r.state == "offroad", "stranding begins at spectator zone")
 	scene._update_racers(1.2)
