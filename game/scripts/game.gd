@@ -58,6 +58,8 @@ func valid_furniture_spot(spot: Vector3, kind: String, ignored_owner: String = "
 		return false
 	if stage.road_distance(spot) < 6.0:
 		return false
+	if stage.urban and not stage.city.hit(spot, spot, 0.8, false).is_empty():
+		return false
 	if not stage.rock_hit(spot, spot, 0.8, false).is_empty():
 		return false
 	if stage.obstacle_hit(spot, spot, 0.8) >= 0:
@@ -134,6 +136,7 @@ var drunk_strength = 0.0
 const DRUNK_FADE_SECONDS = 60.0
 var collapse_time = 0.0
 var tree_requests: Dictionary = {}
+var lamp_requests: Dictionary = {}
 var beers = 0
 var beer_timer = 0.0
 const DRINK_DURATION = 3.3
@@ -695,6 +698,19 @@ func _drive(delta: float) -> void:
 				impact_shake = minf(0.8, closing * 0.055)
 				rock_impact_timer = 0.4
 				toast("Удар о камень! Можно отъехать назад.")
+		if stage.urban:
+			var city_hit = stage.city.hit(previous, next, 0.85)
+			if not city_hit.is_empty():
+				next = city_hit.position
+				var impact_speed = vehicle_motion.velocity.length()
+				knock_city(city_hit, vehicle_motion.velocity)
+				var closing = vehicle_motion.rock_impulse(city_hit.normal, heading)
+				speed = vehicle_motion.velocity.dot(forward)
+				if closing > 1 and rock_impact_timer <= 0:
+					condition = maxf(0, condition - minf(20.0, closing * 0.85))
+					impact_shake = minf(0.8, impact_speed * 0.055)
+					rock_impact_timer = 0.4
+					toast("Столкновение с городским объектом!")
 		var tree_index = stage.obstacle_hit(previous, next, 0.95, true)
 		var hit = tree_index >= 0
 		if hit and vehicle_motion.velocity.length() > 5 and not stage.fallen.has(tree_index):
@@ -760,7 +776,7 @@ func _walk(delta: float) -> void:
 	var next = walker + dir * delta * (1.4 if drink_time >= 0 or eat_time >= 0 else 4.3)
 	next.x = clampf(next.x, -185, 185)
 	next.z = clampf(next.z, -Stage.LENGTH + 5, 10)
-	var hit = not stage.rock_hit(walker, next, 0.3).is_empty() or stage.obstacle_hit(walker, next, 0.3, true) >= 0 or contact_blocked(walker, next, false)
+	var hit = (stage.urban and not stage.city.hit(walker, next, 0.3).is_empty()) or not stage.rock_hit(walker, next, 0.3).is_empty() or stage.obstacle_hit(walker, next, 0.3, true) >= 0 or contact_blocked(walker, next, false)
 	if not hit:
 		walker = next
 	walker.y = stage.ground(walker)
@@ -1101,7 +1117,7 @@ func spawn_racer(forced: String = "") -> void:
 	rally_spawn_count += 1
 	var node = Props.car(Color.WHITE, true, variant)
 	add_child(node)
-	var s = maxf(0, focus - 115)
+	var s = 0.0 if stage.urban else maxf(0, focus - 115)
 	node.position = stage.at(s)
 	node.set_meta("room_id", rally_spawn_count)
 	racers.append({"id": rally_spawn_count, "node": node, "s": s, "focus": focus, "kind": kind, "state": "racing", "offset": 0.0, "age": 0.0, "counted": false, "start": Vector3.ZERO, "target": Vector3.ZERO, "variant": variant, "motion": Motion.new(), "previous": node.position, "slide": 0.0, "slide_speed": 0.0})
@@ -1117,7 +1133,8 @@ func _update_racers(delta: float) -> void:
 		var moving_before = racer.state in ["racing", "offroad"]
 		racer.age += delta
 		if racer.state == "racing":
-			racer.s += delta * 27
+			var race_speed = stage.rally_speed(racer.s)
+			racer.s += delta * race_speed
 			var s: float = racer.s
 			var road_yaw = atan2(-stage.direction(s).x, -stage.direction(s).z)
 			var ahead = stage.direction(s + 7)
@@ -1126,13 +1143,13 @@ func _update_racers(delta: float) -> void:
 			var substeps = maxi(1, int(ceil(delta / (1.0 / 120.0))))
 			var dt = delta / substeps
 			for step in range(substeps):
-				racer.slide_speed += (bend * 27.0 * 27.0 - racer.slide * 14.0 - racer.slide_speed * stage.grip(node.position) * 5.0) * dt
+				racer.slide_speed += (bend * race_speed * race_speed - racer.slide * 14.0 - racer.slide_speed * stage.grip(node.position) * 5.0) * dt
 				racer.slide = clampf(racer.slide + racer.slide_speed * dt, -2.6, 2.6)
 			var height = node.position.y
 			node.position = stage.at(s) + stage.side(s) * racer.slide
 			node.position.y = height
-			var countersteer = clampf(racer.slide_speed / 27.0 + racer.slide * 0.035, -0.32, 0.32)
-			racer.motion.suspension(node, stage, delta, road_yaw + countersteer, bend * 729.0)
+			var countersteer = clampf(racer.slide_speed / race_speed + racer.slide * 0.035, -0.32, 0.32)
+			racer.motion.suspension(node, stage, delta, road_yaw + countersteer, bend * race_speed * race_speed)
 			if s >= racer.focus and racer.kind != "pass":
 				racer.state = "offroad"
 				racer.age = 0
@@ -1145,7 +1162,7 @@ func _update_racers(delta: float) -> void:
 				toast("ВЫЛЕТ! Отойди с траектории!" if racer.kind == "crash" else "Экипаж застрял. Нужен трос — T рядом с машиной.")
 			elif s > racer.focus + 45 and not racer.counted:
 				count_racer(racer)
-			if s >= Stage.LENGTH - 1 or s > racer.focus + 150:
+			if s >= Stage.LENGTH - 1 or (not stage.urban and s > racer.focus + 150):
 				to_remove.append(racer)
 		elif racer.state == "offroad":
 			var t = minf(1, racer.age / (0.7 if racer.kind == "crash" else 1.1))
@@ -1161,7 +1178,7 @@ func _update_racers(delta: float) -> void:
 			var dt = delta / steps
 			for step in range(steps):
 				var next: Vector3 = node.position + racer.motion.velocity * dt
-				var contact = stage.rock_hit(node.position, next, 0.85)
+				var contact = stage.city.hit(node.position, next, 0.85) if stage.urban else stage.rock_hit(node.position, next, 0.85)
 				if not contact.is_empty():
 					next = contact.position
 					racer.motion.rock_impulse(contact.normal, node.rotation.y)
@@ -1182,6 +1199,18 @@ func _update_racers(delta: float) -> void:
 				racer.motion.velocity.y = 0
 				node.position = contact.position
 				racer.motion.rock_impulse(contact.normal, node.rotation.y)
+				racer.state = "rock_bounce"
+				racer.age = 0.0
+				count_racer(racer)
+		if stage.urban and moving_before:
+			var city_hit = stage.city.hit(racer.previous, node.position, 0.85)
+			if not city_hit.is_empty():
+				var velocity: Vector3 = (node.position - racer.previous) / maxf(delta, 0.001)
+				knock_city(city_hit, velocity)
+				node.position = city_hit.position
+				racer.motion.velocity = velocity
+				racer.motion.velocity.y = 0
+				racer.motion.rock_impulse(city_hit.normal, node.rotation.y)
 				racer.state = "rock_bounce"
 				racer.age = 0.0
 				count_racer(racer)
@@ -1466,3 +1495,11 @@ func count_racer(racer: Dictionary) -> void:
 		return
 	racer.counted = true
 	passed = mini(RALLY_CREW_LIMIT, passed + 1)
+
+func knock_city(contact: Dictionary, velocity: Vector3) -> void:
+	if contact.get("kind", "") != "lamp" or velocity.length() <= 5:
+		return
+	if room.connected and not room.is_host:
+		lamp_requests[int(contact.id)] = velocity.normalized()
+	else:
+		stage.city.knock_lamp(int(contact.id), velocity)

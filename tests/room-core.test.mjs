@@ -175,3 +175,11 @@ test('furniture commands never forward remote or nonfinite coordinates', () => {
   const reply = r.sync({ token: h.token, state: state() }, 1200);
   assert.deepEqual(reply.commands.map(c => c.placement), [{}, {}]);
 });
+
+
+test('lamp collision requests retain bounded identities and direction', () => {
+  const { r, h } = setup();
+  const reply = r.sync({ token: h.token, state: { ...state(), speed: 12, lamps: [{ id: 2, dir: [1, 0, 0] }, { id: -1, dir: [1, 0, 0] }, { id: 600, dir: [1, 0, 0] }, { id: 3, dir: [null, 0, 0] }], trees: [{ id: 6000, dir: [1, 0, 0] }] } }, 1100);
+  assert.deepEqual(reply.players[0].state.lamps, [{ id: 2, dir: [1, 0, 0] }]);
+  assert.deepEqual(reply.players[0].state.trees, [{ id: 6000, dir: [1, 0, 0] }]);
+});

@@ -1,6 +1,8 @@
 extends Node3D
 class_name RallyStage
 
+const City = preload("res://scripts/city.gd")
+var city: Node3D
 const LENGTH = 840.0
 const STEP = 4.0
 const WIDTH = 7.4
@@ -31,7 +33,7 @@ func _init(selected: int = 0) -> void:
 		if winter:
 			points.append(Vector3(sin(s / 48.0) * 58.0 + sin(s / 115.0) * 14.0, 18.0 + s * 0.085 + sin(s / 36.0) * 5.0, -s))
 		elif urban:
-			points.append(Vector3(sin(s / 42.0) * 18.0 + sin(s / 17.0) * 3.2, 2.0 + sin(s / 70.0) * 0.35, -s))
+			points.append(urban_at(s))
 		else:
 			points.append(Vector3(sin(s / 90.0) * 38.0 + sin(s / 38.0) * 9.0, 5.0 + s * 0.024 + sin(s / 58.0) * 3.7, -s))
 	for s in [140.0, 310.0, 505.0, 690.0]:
@@ -39,9 +41,10 @@ func _init(selected: int = 0) -> void:
 			clearings.append(at(s) + side(s) * (13.0 if s < 500 else -13.0))
 			continue
 		if urban:
-			var parking_side = 1.0 if s < 500 else -1.0
-			var parking = at(s) + side(s) * parking_side * 10.5
-			parking.y = at(s).y + 0.08
+			var parking_s = [140.0, 310.0, 505.0, 770.0][clearings.size()]
+			var parking_side = 1.0 if clearings.is_empty() else -1.0
+			var parking = at(parking_s) + side(parking_s) * parking_side * 10.5
+			parking.y = at(parking_s).y + 0.08
 			clearings.append(parking)
 			continue
 		var direction_sign = 1.0 if s < 500 else -1.0
@@ -69,19 +72,32 @@ func side(s: float) -> Vector3:
 	return direction(s).cross(Vector3.UP).normalized()
 
 func road_s(pos: Vector3) -> float:
+	if urban:
+		return urban_nearest(pos).s
 	return clampf(-pos.z, 0, LENGTH)
 
 func road_distance(pos: Vector3) -> float:
+	if urban:
+		var distance: float = urban_nearest(pos).distance
+		if pos.z <= 0 and pos.z >= -300:
+			for x in [-24.0, 24.0, 120.0]:
+				distance = minf(distance, absf(pos.x - x))
+		if pos.x >= -86 and pos.x <= 134:
+			for z in City.CROSS_Z:
+				distance = minf(distance, absf(pos.z - z))
+		return distance
 	var p = at(road_s(pos))
 	return Vector2(pos.x - p.x, pos.z - p.z).length()
 
 func roughness(s: float) -> float:
+	if urban:
+		return 0.0
 	# Broad crests plus broken ruts; deterministic across all room members.
 	return sin(s * 0.46) * 0.075 + sin(s * 1.13) * 0.035 + pow(maxf(0, cos((s - 32.0) * TAU / 46.0)), 10) * 0.55
 
 func grip(pos: Vector3) -> float:
 	if urban:
-		return 0.68 if road_distance(pos) < WIDTH * 0.7 else 0.58
+		return 1.05 if road_distance(pos) < WIDTH * 0.7 else 0.58
 	if winter:
 		if road_distance(pos) > WIDTH * 0.55:
 			return 0.32
@@ -91,6 +107,8 @@ func grip(pos: Vector3) -> float:
 	return 0.42 if int(road_s(pos) / STEP) % 13 == 7 else 0.78
 
 func ground(pos: Vector3) -> float:
+	if urban:
+		return 2.0
 	var s = road_s(pos)
 	var p = at(s)
 	var distance = road_distance(pos)
@@ -163,7 +181,7 @@ func build() -> void:
 	forest_data = forest
 	_rebuild_tree_index()
 	_build_forest(forest)
-	for i in range(100):
+	for i in range(0 if urban else 100):
 		var s = rng.randf_range(20, LENGTH - 15)
 		var p = at(s) + side(s) * rng.randf_range(-6, 6)
 		if road_distance(p) < 4.3:
@@ -193,99 +211,15 @@ func build() -> void:
 			label.modulate = Color("344537")
 			label.outline_size = 0
 	# Distant angular ridges, original meshes.
-	for i in range(18):
+	for i in range(0 if urban else 18):
 		var p = Vector3((-1 if i % 2 == 0 else 1) * rng.randf_range(220, 340), 30, -i * 65.0)
 		RallyProps.cylinder(self, p, rng.randf_range(120, 180), 0, rng.randf_range(220, 340) if winter else rng.randf_range(130, 210), Color("c3d1db") if winter else Color("697d70"), 5)
 
 func _build_city() -> void:
-	# Continuous Paris/Prague-style blocks. The central square interrupts the
-	# blocks, while the rest of the route is lined wall-to-wall with houses.
-	for s in range(20, int(LENGTH - 18), 14):
-		if absf(float(s) - 420.0) < 30.0:
-			continue
-		for side_sign in [-1.0, 1.0]:
-			var pos = at(s) + side(s) * side_sign * 17.0
-			_build_city_building(s, side_sign, pos)
-		if int(s / 14) % 4 == 0:
-			var tree_pos = at(s + 6) + side(s) * 10.5
-			tree_pos.y = ground(tree_pos)
-			RallyProps.cylinder(self, tree_pos + Vector3(0, 1.6, 0), 0.12, 0.09, 3.2, Color("6b5543"), 6)
-			RallyProps.faceted(self, tree_pos + Vector3(0, 3.3, 0), Vector3(1.1, 1.4, 1.1), Color("6c8668"), 7, 4)
-		var lamp_pos = at(s) + side(s) * (WIDTH * 0.5 + 1.1)
-		lamp_pos.y = ground(lamp_pos)
-		RallyProps.cylinder(self, lamp_pos + Vector3(0, 2.2, 0), 0.035, 0.035, 4.4, Color("3e4548"), 6)
-		RallyProps.box(self, lamp_pos + Vector3(0, 4.35, 0), Vector3(0.35, 0.12, 0.35), Color("f1d88b"))
-	for s in [100, 210, 320, 530, 640, 750]:
-		_build_cross_street(float(s))
-	_build_city_square(420.0)
-
-func _build_city_building(s: float, side_sign: float, pos: Vector3) -> void:
-	var building = Node3D.new()
-	building.name = "ParisPragueBuilding_%03d_%d" % [s, 1 if side_sign > 0 else -1]
-	add_child(building)
-	building.position = pos
-	building.rotation.y = atan2(-direction(s).x, -direction(s).z)
-	var width = rng.randf_range(9.5, 11.5)
-	var depth = rng.randf_range(13.0, 14.5)
-	var height = rng.randf_range(9.0, 12.0)
-	var facade_color = [Color("d4b08e"), Color("b8c4bf"), Color("d2c3a7"), Color("c98f7f"), Color("d2a7a2")][int(s / 14 + side_sign) % 5]
-	RallyProps.box(building, Vector3(0, height * 0.5, 0), Vector3(width, height, depth), facade_color)
-	# Mansard roof, cornice and a shallow parapet give the silhouette a French feel.
-	RallyProps.box(building, Vector3(0, height + 0.18, 0), Vector3(width + 0.35, 0.35, depth + 0.35), Color("eee0c2"))
-	RallyProps.box(building, Vector3(0, height + 0.65, 0), Vector3(width - 0.4, 0.8, depth - 0.5), Color("57535a"))
-	var front_x = -side_sign * (width * 0.5 + 0.045)
-	for floor in range(4):
-		var y = 1.45 + floor * 2.25
-		for window_z in [-4.0, 0.0, 4.0]:
-			var window = RallyProps.box(building, Vector3(front_x, y, window_z), Vector3(0.07, 0.95, 1.15), Color("38566a"))
-			var shutter_a = RallyProps.box(building, Vector3(front_x - side_sign * 0.08, y, window_z - 0.7), Vector3(0.04, 1.0, 0.16), Color("53646a"))
-			var shutter_b = RallyProps.box(building, Vector3(front_x - side_sign * 0.08, y, window_z + 0.7), Vector3(0.04, 1.0, 0.16), Color("53646a"))
-			window.rotation.y = 0
-			shutter_a.rotation.y = 0
-			shutter_b.rotation.y = 0
-			if floor > 0 and int(s / 14 + window_z) % 3 == 0:
-				var balcony = RallyProps.box(building, Vector3(front_x - side_sign * 0.15, y - 0.62, window_z), Vector3(0.12, 0.08, 2.0), Color("6e6256"))
-				RallyProps.box(building, Vector3(front_x - side_sign * 0.15, y - 0.35, window_z - 0.82), Vector3(0.10, 0.55, 0.08), Color("6e6256"))
-				RallyProps.box(building, Vector3(front_x - side_sign * 0.15, y - 0.35, window_z + 0.82), Vector3(0.10, 0.55, 0.08), Color("6e6256"))
-	# Tall ground-floor entrance and a shop awning.
-	RallyProps.box(building, Vector3(front_x, 0.95, 0), Vector3(0.08, 1.9, 1.2), Color("3e4144"))
-	RallyProps.box(building, Vector3(front_x - side_sign * 0.12, 2.05, 0), Vector3(0.12, 0.12, 1.7), Color("c18d5d"))
-
-func _build_cross_street(s: float) -> void:
-	var center = at(s)
-	center.y = ground(center) + 0.08
-	var yaw = atan2(-direction(s).x, -direction(s).z) + PI * 0.5
-	var cross = Node3D.new()
-	cross.name = "CityCrossStreet_%03d" % int(s)
-	add_child(cross)
-	cross.position = center
-	cross.rotation.y = yaw
-	RallyProps.box(cross, Vector3.ZERO, Vector3(8.5, 0.06, 120.0), Color("555a59"))
-	RallyProps.box(cross, Vector3(-5.4, 0.10, 0), Vector3(2.2, 0.12, 120.0), Color("b6aa91"))
-	RallyProps.box(cross, Vector3(5.4, 0.10, 0), Vector3(2.2, 0.12, 120.0), Color("b6aa91"))
-	# A pair of pale zebra bands makes the intersection readable at speed.
-	for offset in [-2.0, 2.0]:
-		RallyProps.box(cross, Vector3(offset, 0.045, 0), Vector3(8.0, 0.018, 0.35), Color("e4ddc6"))
-
-func _build_city_square(s: float) -> void:
-	var center = at(s)
-	center.y = ground(center) + 0.10
-	var plaza = RallyProps.cylinder(self, center, 18.0, 18.0, 0.12, Color("777979"), 32)
-	plaza.name = "CityCentralSquare"
-	RallyProps.cylinder(self, center + Vector3(0, 0.08, 0), 13.5, 13.5, 0.05, Color("5b6060"), 32)
-	var island = RallyProps.cylinder(self, center + Vector3(0, 0.18, 0), 6.0, 6.0, 0.22, Color("b3a58c"), 12)
-	island.name = "MonumentIsland"
-	RallyProps.box(self, center + Vector3(0, 1.0, 0), Vector3(3.8, 1.6, 3.8), Color("d0c3a9"))
-	RallyProps.box(self, center + Vector3(0, 1.9, 0), Vector3(2.7, 0.25, 2.7), Color("9d907a"))
-	RallyProps.cylinder(self, center + Vector3(0, 5.0, 0), 0.85, 0.58, 6.0, Color("6d7170"), 10)
-	RallyProps.cylinder(self, center + Vector3(0, 8.1, 0), 1.15, 0.0, 2.0, Color("4c5150"), 8)
-	var monument_label = Label3D.new()
-	add_child(monument_label)
-	monument_label.position = center + Vector3(0, 10.0, -2.3)
-	monument_label.text = "PLACE DU RALLYE"
-	monument_label.font_size = 40
-	monument_label.pixel_size = 0.006
-	monument_label.modulate = Color("eee2c6")
+	city = City.new()
+	city.stage = self
+	add_child(city)
+	city.build()
 
 func _build_parking(pos: Vector3, index: int) -> void:
 	var yaw = atan2(-direction(road_s(pos)).x, -direction(road_s(pos)).z)
@@ -347,17 +281,17 @@ func _build_road() -> void:
 		var c = at(s + 1) + side(s + 1) * WIDTH / 2
 		var d = at(s + 1) - side(s + 1) * WIDTH / 2
 		for v in [a, b, c, b, d, c]:
-			st.set_color((Color("708a9c") if winter else Color("9d896b")).lightened(rng.randf_range(-0.065, 0.045)))
+			st.set_color((Color("708a9c") if winter else (Color("484e50") if urban else Color("9d896b"))).lightened(rng.randf_range(-0.065, 0.045)))
 			v.y = ground(v) + 0.04
 			st.add_vertex(v)
 		# Broken muddy wheel tracks, shallow puddles.
-		if i % 12 == 0:
+		if not urban and i % 12 == 0:
 			for offset in [-1.0, 1.0]:
 				var p = at(s) + side(s) * offset
 				p.y = ground(p)
 				var rut = RallyProps.box(self, p + Vector3(0, 0.07, 0), Vector3(0.5, 0.025, 2.7), Color("586974") if winter else Color("77654c"))
 				rut.rotation.y = atan2(-direction(s).x, -direction(s).z)
-		if i % 52 == 28:
+		if not urban and i % 52 == 28:
 			var p = at(s) + side(s) * 1.5
 			p.y = ground(p)
 			var puddle = RallyProps.cylinder(self, p + Vector3(0, 0.10, 0), 1.1, 1.1, 0.025, Color("56645d"), 9)
@@ -737,3 +671,46 @@ func _build_woodland_details() -> void:
 	twig.radial_segments = 4
 	twig.rings = 1
 	_detail_batch("AntHillTwigs", twig, twig_poses, twig_colors)
+
+func urban_at(s: float) -> Vector3:
+	if s <= 320:
+		return Vector3(-24, 2, -s)
+	s -= 320
+	if s <= PI * 24:
+		var angle = PI + s / 24
+		return Vector3(cos(angle) * 24, 2, -320 + sin(angle) * 24)
+	s -= PI * 24
+	if s <= 204:
+		return Vector3(24, 2, -320 + s)
+	s -= 204
+	if s <= PI * 8:
+		var angle = PI - s / 16
+		return Vector3(40 + cos(angle) * 16, 2, -116 + sin(angle) * 16)
+	s -= PI * 8
+	if s <= 64:
+		return Vector3(40 + s, 2, -100)
+	s -= 64
+	if s <= PI * 8:
+		var angle = PI / 2 - s / 16
+		return Vector3(104 + cos(angle) * 16, 2, -116 + sin(angle) * 16)
+	s -= PI * 8
+	return Vector3(120, 2, -116 - s)
+
+func urban_nearest(pos: Vector3) -> Dictionary:
+	var best = INF
+	var station = 0.0
+	var p = flat(pos)
+	for i in range(points.size() - 1):
+		var a = flat(points[i])
+		var segment = flat(points[i + 1]) - a
+		var ratio = clampf((p - a).dot(segment) / maxf(segment.length_squared(), 0.000001), 0, 1)
+		var distance = p.distance_squared_to(a + segment * ratio)
+		if distance < best:
+			best = distance
+			station = (i + ratio) * STEP
+	return {"s": station, "distance": sqrt(best)}
+
+func rally_speed(s: float) -> float:
+	if not urban:
+		return 27.0
+	return 10.0 if s > 304 and s < 320 + PI * 24 + 16 else (14.0 if s > 584 and s < 732 else 24.0)

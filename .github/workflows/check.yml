@@ -27,3 +27,13 @@ jobs:
       - run: npm run build
       - run: npm run test:server
       - run: npx wrangler deploy --dry-run --outdir .cache/worker
+
+      - name: Render city reference views
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "true"
+        run: xvfb-run -a .cache/godot/Godot_v4.4.1-stable_linux.x86_64 --path game --rendering-method gl_compatibility --script res://tests/city_preview.gd
+      - uses: actions/upload-artifact@v4
+        with:
+          name: city-preview
+          path: city-*.png
+          if-no-files-found: error

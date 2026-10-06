@@ -352,8 +352,14 @@ func tree_requests() -> Array:
 		result.append({"id": index, "dir": a(game.tree_requests[index])})
 	return result.slice(0, 8)
 
+func lamp_requests() -> Array:
+	var result = []
+	for index in game.lamp_requests:
+		result.append({"id": index, "dir": a(game.lamp_requests[index])})
+	return result.slice(0, 8)
+
 func local_state() -> Dictionary:
-	return {"pos": a(game.player_position()), "car": a(game.car.position), "heading": game.heading, "tilt": a(game.car.rotation), "yaw": game.view_yaw, "pitch": game.view_pitch, "in_car": game.in_car, "tow": Input.is_action_pressed("tow") and not game.paused and not game.dead and game.beers < 30, "speed": game.speed, "beers": game.beers, "trees": tree_requests(), "beer": game.drink_time, "eat": game.eat_time}
+	return {"pos": a(game.player_position()), "car": a(game.car.position), "heading": game.heading, "tilt": a(game.car.rotation), "yaw": game.view_yaw, "pitch": game.view_pitch, "in_car": game.in_car, "tow": Input.is_action_pressed("tow") and not game.paused and not game.dead and game.beers < 30, "speed": game.speed, "beers": game.beers, "trees": tree_requests(), "lamps": lamp_requests(), "beer": game.drink_time, "eat": game.eat_time}
 
 func _update_peers(players: Array) -> void:
 	var present = {}
@@ -440,7 +446,7 @@ func world_state() -> Dictionary:
 	var racers = []
 	for r in game.racers:
 		racers.append({"id": r.id, "variant": r.variant, "pos": a(r.node.position), "yaw": r.node.rotation.y, "tilt": a(r.node.rotation), "state": r.state})
-	return {"chair_poses": chair_poses, "table_yaw": game.camp.rotation.y if game.camp != null else 0.0, "grill_pose": {"pos": a(game.grill.position), "yaw": game.grill.rotation.y} if game.grill != null else null, "fallen": game.stage.tree_snapshot(), "stones": stone_state(), "impacts": game.impact_serials, "camp": a(game.camp.position) if game.camp != null else null, "chairs": game.has_chairs, "cooking": game.cooking, "cook_time": game.cook_time, "eaten": game.eaten, "racing": game.racing, "passed": game.passed, "helped": game.helped, "elapsed": game.elapsed, "clearing": game.target_clearing, "paused": game.paused, "dead": game.dead, "finished": game.finished, "title": game.menu_title.text, "text": game.menu_text.text, "racers": racers, "tow": game.tow_target.get_meta("room_id") if game.tow_target != null else -1, "tow_progress": game.tow_progress, "tow_owner": tow_owner, "notice": game.toast_label.text, "notice_time": game.toast_time}
+	return {"city_lamps": game.stage.city.snapshot() if game.stage.urban else [], "chair_poses": chair_poses, "table_yaw": game.camp.rotation.y if game.camp != null else 0.0, "grill_pose": {"pos": a(game.grill.position), "yaw": game.grill.rotation.y} if game.grill != null else null, "fallen": game.stage.tree_snapshot(), "stones": stone_state(), "impacts": game.impact_serials, "camp": a(game.camp.position) if game.camp != null else null, "chairs": game.has_chairs, "cooking": game.cooking, "cook_time": game.cook_time, "eaten": game.eaten, "racing": game.racing, "passed": game.passed, "helped": game.helped, "elapsed": game.elapsed, "clearing": game.target_clearing, "paused": game.paused, "dead": game.dead, "finished": game.finished, "title": game.menu_title.text, "text": game.menu_text.text, "racers": racers, "tow": game.tow_target.get_meta("room_id") if game.tow_target != null else -1, "tow_progress": game.tow_progress, "tow_owner": tow_owner, "notice": game.toast_label.text, "notice_time": game.toast_time}
 
 func stone_state() -> Array:
 	var result = []
@@ -482,6 +488,10 @@ func apply_stones(w: Dictionary, sample_time: float = -1.0) -> void:
 func apply_world(w: Dictionary, sample_time: float = -1.0) -> void:
 	if sample_time < 0:
 		sample_time = server_clock()
+	if game.stage.urban:
+		game.stage.city.apply_snapshot(w.get("city_lamps", []))
+		for item in w.get("city_lamps", []):
+			game.lamp_requests.erase(int(item.id))
 	game.stage.apply_trees(w.get("fallen", []))
 	for f in w.get("fallen", []):
 		game.tree_requests.erase(int(f.id))
@@ -609,6 +619,11 @@ func check_remote_collisions() -> void:
 			continue
 		var previous = v(peer.state.car) if peer.last_car == null else peer.last_car
 		var current = v(peer.state.car)
+		if game.stage.urban:
+			for request in peer.state.get("lamps", []):
+				var index = int(request.id)
+				if index >= 0 and index < game.stage.city.lamps.size() and current.distance_to(game.stage.city.lamps[index].body.position) < 5 and absf(float(peer.state.get("speed", 0))) > 5:
+					game.stage.city.knock_lamp(index, v(request.dir))
 		for request in peer.state.get("trees", []):
 			var index = int(request.id)
 			if index >= 0 and index < game.stage.trees.size() and current.distance_to(game.stage.trees[index]) < 4 and absf(float(peer.state.get("speed", 0))) > 1:
