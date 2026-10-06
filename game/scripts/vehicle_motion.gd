@@ -37,3 +37,16 @@ static func swept_hit(start: Vector3, end: Vector3, target: Vector3, radius: flo
 	var segment = end - start
 	var t = clampf((target - start).dot(segment) / maxf(segment.length_squared(), 0.0001), 0, 1)
 	return (start + segment * t).distance_to(target) < radius
+
+# Preserve tangential momentum instead of reversing the whole velocity.
+func rock_impulse(normal: Vector3, yaw: float) -> float:
+	var closing = maxf(0.0, -velocity.dot(normal))
+	if closing <= 0.001:
+		return 0.0
+	velocity += normal * closing * 1.25
+	velocity *= 0.82
+	vertical_speed = maxf(vertical_speed, minf(2.8, closing * 0.17))
+	var right = Vector3(-sin(yaw), 0, -cos(yaw)).cross(Vector3.UP)
+	roll = clampf(roll + normal.dot(right) * closing * 0.018, -0.35, 0.35)
+	pitch = clampf(pitch - closing * 0.008, -0.35, 0.35)
+	return closing

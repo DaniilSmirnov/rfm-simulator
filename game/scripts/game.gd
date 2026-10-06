@@ -32,6 +32,7 @@ var view_yaw = 0.0
 var view_pitch = -0.12
 var speed = 0.0
 var condition = 100.0
+var rock_impact_timer = 0.0
 var last_pothole = -1
 var walker = Vector3.ZERO
 var playing = false
@@ -56,6 +57,8 @@ func valid_furniture_spot(spot: Vector3, kind: String, ignored_owner: String = "
 	if spectators != null and spectators.occupied(spot):
 		return false
 	if stage.road_distance(spot) < 6.0:
+		return false
+	if not stage.rock_hit(spot, spot, 0.8, false).is_empty():
 		return false
 	if stage.obstacle_hit(spot, spot, 0.8) >= 0:
 		return false
@@ -675,10 +678,21 @@ func _drive(delta: float) -> void:
 		lateral = move_toward(lateral, 0, friction * dt)
 		vehicle_motion.velocity = forward * longitudinal + right * lateral
 		speed = longitudinal
+		rock_impact_timer = maxf(0.0, rock_impact_timer - dt)
 		var previous = car.position
 		var next = previous + vehicle_motion.velocity * dt
 		next.x = clampf(next.x, -185, 185)
 		next.z = clampf(next.z, -Stage.LENGTH + 5, 10)
+		var rock_hit = stage.rock_hit(previous, next, 0.85)
+		if not rock_hit.is_empty():
+			next = rock_hit.position
+			var closing = vehicle_motion.rock_impulse(rock_hit.normal, heading)
+			speed = vehicle_motion.velocity.dot(forward)
+			if closing > 1.0 and rock_impact_timer <= 0:
+				condition = maxf(0, condition - minf(14.0, closing * 0.65))
+				impact_shake = minf(0.8, closing * 0.055)
+				rock_impact_timer = 0.4
+				toast("Удар о камень! Можно отъехать назад.")
 		var tree_index = stage.obstacle_hit(previous, next, 0.95, true)
 		var hit = tree_index >= 0
 		if hit and vehicle_motion.velocity.length() > 5 and not stage.fallen.has(tree_index):
@@ -744,7 +758,7 @@ func _walk(delta: float) -> void:
 	var next = walker + dir * delta * (1.4 if drink_time >= 0 or eat_time >= 0 else 4.3)
 	next.x = clampf(next.x, -185, 185)
 	next.z = clampf(next.z, -Stage.LENGTH + 5, 10)
-	var hit = stage.obstacle_hit(walker, next, 0.3, true) >= 0 or contact_blocked(walker, next, false)
+	var hit = not stage.rock_hit(walker, next, 0.3).is_empty() or stage.obstacle_hit(walker, next, 0.3, true) >= 0 or contact_blocked(walker, next, false)
 	if not hit:
 		walker = next
 	walker.y = stage.ground(walker)
@@ -1096,6 +1110,7 @@ func _update_racers(delta: float) -> void:
 	for racer in racers:
 		var node: Node3D = racer.node
 		racer.previous = node.position
+		var moving_before = racer.state in ["racing", "offroad"]
 		racer.age += delta
 		if racer.state == "racing":
 			racer.s += delta * 27
@@ -1138,9 +1153,38 @@ func _update_racers(delta: float) -> void:
 				racer.state = "stranded" if racer.kind == "stuck" else "stopped"
 				racer.age = 0
 				passed += 1
-		elif racer.state == "stopped" and racer.age > 18:
-			to_remove.append(racer)
-		if racer.state in ["racing", "offroad"]:
+		elif racer.state == "rock_bounce":
+			var steps = maxi(1, int(ceil(delta / (1.0 / 120.0))))
+			var dt = delta / steps
+			for step in range(steps):
+				var next: Vector3 = node.position + racer.motion.velocity * dt
+				var contact = stage.rock_hit(node.position, next, 0.85)
+				if not contact.is_empty():
+					next = contact.position
+					racer.motion.rock_impulse(contact.normal, node.rotation.y)
+				node.position = next
+				racer.motion.velocity = racer.motion.velocity.move_toward(Vector3.ZERO, dt * 16.0)
+				racer.motion.suspension(node, stage, dt, node.rotation.y)
+			if racer.age >= 0.8:
+				racer.state = "stopped"
+				racer.age = 0.0
+		elif racer.state in ["stopped", "stranded"]:
+			racer.motion.suspension(node, stage, delta, node.rotation.y)
+			if racer.state == "stopped" and racer.age > 18:
+				to_remove.append(racer)
+		if moving_before:
+			var contact = stage.rock_hit(racer.previous, node.position, 0.85)
+			if not contact.is_empty():
+				racer.motion.velocity = (node.position - racer.previous) / maxf(delta, 0.001)
+				racer.motion.velocity.y = 0
+				node.position = contact.position
+				racer.motion.rock_impulse(contact.normal, node.rotation.y)
+				racer.state = "rock_bounce"
+				racer.age = 0.0
+				if not racer.counted:
+					racer.counted = true
+					passed += 1
+		if racer.state in ["racing", "offroad", "rock_bounce"]:
 			var tree_hit = stage.obstacle_hit(racer.previous, node.position, 0.95)
 			if tree_hit >= 0:
 				if not stage.fallen.has(tree_hit):
@@ -1151,7 +1195,7 @@ func _update_racers(delta: float) -> void:
 			if Motion.swept_hit(racer.previous + Vector3(0, 0.7, 0), node.position + Vector3(0, 0.7, 0), player_position() + Vector3(0, 0.7, 0), 2.6 if in_car else 1.65):
 				die("Раллийная машина попала в тебя.\nНа этом выезд закончился.")
 				return
-		if racer.state in ["racing", "offroad"]:
+		if racer.state in ["racing", "offroad", "rock_bounce"]:
 			var blockers = [car.position]
 			for peer in room.peers.values():
 				if peer.state != null:
@@ -1202,12 +1246,10 @@ func _update_stones(delta: float) -> void:
 			var node = Props.box(self, Vector3.ZERO, Vector3.ONE * rng.randf_range(0.07, 0.14), Color("9b9079"))
 			node.position = racer.node.position - direction * 1.6 + side * 0.65 + Vector3(0, 0.25, 0)
 			stone_serial += 1
-			stones.append({"id": stone_serial, "node": node, "velocity": direction * rng.randf_range(-5, 3) + side * rng.randf_range(5, 12) + Vector3(0, rng.randf_range(3, 7), 0), "life": 2.0})
+			stones.append({"id": stone_serial, "node": node, "velocity": direction * rng.randf_range(-5, 3) + side * rng.randf_range(5, 12) + Vector3(0, rng.randf_range(3, 7), 0), "life": 2.0, "bounces": 0})
 	for stone in stones.duplicate():
 		var previous: Vector3 = stone.node.position
-		var motion: Vector3 = stone.velocity * delta + Vector3(0, -9.8 * delta * delta * 0.5, 0)
-		stone.node.position += motion
-		stone.velocity.y -= 9.8 * delta
+		var alive = _advance_gravel(stone, delta)
 		stone.life -= delta
 		stone.node.rotation += Vector3(7, 4, 6) * delta
 		var hit = Motion.swept_hit(previous, stone.node.position, player_position() + Vector3(0, 1.0, 0), 1.2 if in_car else 0.55)
@@ -1218,7 +1260,7 @@ func _update_stones(delta: float) -> void:
 				if peer.state != null and Motion.swept_hit(previous, stone.node.position, room.v(peer.state.pos) + Vector3(0, 1.0, 0), 1.2 if peer.state.in_car else 0.55):
 					stone_impact(peer.id)
 					hit = true
-		if hit or stone.life <= 0 or stone.node.position.y <= stage.ground(stone.node.position):
+		if hit or stone.life <= 0 or not alive:
 			stone.node.queue_free()
 			stones.erase(stone)
 
@@ -1363,3 +1405,28 @@ func _shutdown_audio() -> void:
 func _play_audio(audio: Node) -> void:
 	if DisplayServer.get_name() != "headless":
 		audio.play()
+
+# Also used by guests for prediction between authoritative room snapshots.
+func _advance_gravel(stone: Dictionary, delta: float) -> bool:
+	var previous: Vector3 = stone.node.position
+	var next: Vector3 = previous + stone.velocity * delta + Vector3(0, -4.9 * delta * delta, 0)
+	stone.velocity.y -= 9.8 * delta
+	var contact = stage.rock_hit(previous, next, 0.06)
+	if not contact.is_empty():
+		next = contact.position
+		var normal: Vector3 = contact.normal
+		var closing = stone.velocity.dot(normal)
+		if closing < 0:
+			stone.velocity -= normal * closing * 1.4
+			stone.velocity *= 0.7
+			stone.bounces = int(stone.get("bounces", 0)) + 1
+	var floor_height = stage.ground(next) + 0.05
+	var alive = true
+	if next.y <= floor_height:
+		next.y = floor_height
+		if stone.velocity.y < 0:
+			stone.bounces = int(stone.get("bounces", 0)) + 1
+			alive = stone.bounces <= 2 and absf(stone.velocity.y) > 1.0
+			stone.velocity = Vector3(stone.velocity.x * 0.58, -stone.velocity.y * 0.4, stone.velocity.z * 0.58)
+	stone.node.position = next
+	return alive and int(stone.get("bounces", 0)) <= 2

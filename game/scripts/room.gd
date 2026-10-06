@@ -316,12 +316,12 @@ func _process(delta: float) -> void:
 	if not is_host:
 		if not world_paused and not game.paused and not game.dead and not game.finished:
 			for stone in game.stones:
-				stone.node.position += stone.velocity * delta + Vector3(0, -4.9 * delta * delta, 0)
-				stone.velocity.y -= 9.8 * delta
+				if not game._advance_gravel(stone, delta):
+					stone.node.hide()
 		var nearest: Node3D = null
 		var nearest_distance = INF
 		for racer in game.racers:
-			if racer.state in ["racing", "offroad"] and not world_paused and not game.dead and not game.finished:
+			if racer.state in ["racing", "offroad", "rock_bounce"] and not world_paused and not game.dead and not game.finished:
 				var distance = racer.node.position.distance_to(game.player_position())
 				if distance < nearest_distance:
 					nearest = racer.node
@@ -445,7 +445,7 @@ func world_state() -> Dictionary:
 func stone_state() -> Array:
 	var result = []
 	for stone in game.stones:
-		result.append({"id": stone.id, "pos": a(stone.node.position), "velocity": a(stone.velocity)})
+		result.append({"id": stone.id, "pos": a(stone.node.position), "velocity": a(stone.velocity), "bounces": int(stone.get("bounces", 0))})
 	return result
 
 var last_impact = 0
@@ -468,10 +468,12 @@ func apply_stones(w: Dictionary, sample_time: float = -1.0) -> void:
 			if stone.id == remote.id:
 				stone.node.position = stone.node.position.lerp(position, 0.35) if stone.node.position.distance_to(position) < 3 else position
 				stone.velocity = velocity
+				stone.bounces = int(remote.get("bounces", 0))
+				stone.node.show()
 				found = true
 		if not found:
 			var node = Props.box(game, position, Vector3.ONE * 0.10, Color("9b9079"))
-			game.stones.append({"id": remote.id, "node": node, "velocity": velocity})
+			game.stones.append({"id": remote.id, "node": node, "velocity": velocity, "bounces": int(remote.get("bounces", 0))})
 	for stone in game.stones.duplicate():
 		if not present.has(stone.id):
 			stone.node.queue_free()
@@ -625,7 +627,7 @@ func check_remote_collisions() -> void:
 		if peer.state == null:
 			continue
 		for r in game.racers:
-			if r.state in ["racing", "offroad"]:
+			if r.state in ["racing", "offroad", "rock_bounce"]:
 				var pos = v(peer.state.pos)
 				if game.Motion.swept_hit(r.get("previous", r.node.position) + Vector3(0, 0.7, 0), r.node.position + Vector3(0, 0.7, 0), pos + Vector3(0, 0.7, 0), 2.6 if peer.state.in_car else 1.65):
 					game.die("Раллийная машина задела участника вашей компании.\nСовместный выезд окончен.")

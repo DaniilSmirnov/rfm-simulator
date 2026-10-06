@@ -12,6 +12,7 @@ var urban = false
 var points: PackedVector3Array = []
 var clearings: Array[Vector3] = []
 var trails: Array[Dictionary] = []
+var rocks: Array[Dictionary] = []
 var trees: Array[Vector3] = []
 var forest_data: Array[Dictionary] = []
 var forest_layers: Array[MultiMesh] = []
@@ -165,7 +166,9 @@ func build() -> void:
 		if road_distance(p) < 4.3:
 			continue
 		p.y = ground(p)
-		var rock = RallyProps.cylinder(self, p + Vector3(0, 0.2, 0), rng.randf_range(0.3, 1), 0.18, 0.65, Color("7d8070"), 5)
+		var radius = rng.randf_range(0.3, 1)
+		var rock = RallyProps.cylinder(self, p + Vector3(0, 0.2, 0), radius, 0.18, 0.65, Color("7d8070"), 5)
+		rocks.append({"pos": p, "radius": radius, "height": 0.75})
 		rock.rotation.z = rng.randf_range(-0.3, 0.3)
 	if urban:
 		_build_city()
@@ -496,3 +499,47 @@ func obstacle_hit(start: Vector3, end: Vector3, radius: float, allow_escape: boo
 		if distance < radius + width:
 			return index
 	return -1
+
+# Earliest swept horizontal circle contact. Height allows cars to jump over rocks.
+# Escape handling prevents an overlapping spawn or a low-speed bump from trapping a car.
+func rock_hit(start: Vector3, end: Vector3, radius: float, allow_escape: bool = true) -> Dictionary:
+	var a = flat(start)
+	var b = flat(end)
+	var travel = b - a
+	var best: Dictionary = {}
+	var earliest = INF
+	for rock in rocks:
+		if minf(start.y, end.y) > rock.pos.y + rock.height:
+			continue
+		var center = flat(rock.pos)
+		var padding: float = rock.radius + radius
+		var offset = a - center
+		var distance = offset.length()
+		var t = 0.0
+		if distance < padding:
+			if allow_escape and (b - center).length() > distance + 0.0000001 and offset.dot(travel) >= 0:
+				continue
+		else:
+			var length_squared = travel.length_squared()
+			if length_squared < 0.00000001:
+				continue
+			var projection = offset.dot(travel)
+			var discriminant = projection * projection - length_squared * (offset.length_squared() - padding * padding)
+			if discriminant < 0:
+				continue
+			t = (-projection - sqrt(discriminant)) / length_squared
+			if t < 0 or t > 1:
+				continue
+		if t >= earliest:
+			continue
+		var point = a + travel * t
+		var normal = (point - center).normalized()
+		if normal.length_squared() < 0.01:
+			normal = -travel.normalized() if travel.length_squared() > 0.000001 else Vector2.RIGHT
+		point = center + normal * (padding + 0.025)
+		var position = start.lerp(end, t)
+		position.x = point.x
+		position.z = point.y
+		earliest = t
+		best = {"position": position, "normal": Vector3(normal.x, 0, normal.y), "time": t}
+	return best
