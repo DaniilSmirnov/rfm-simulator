@@ -37,3 +37,13 @@ jobs:
           name: city-preview
           path: city-*.png
           if-no-files-found: error
+
+      - name: Detect physical Web template
+        id: physics
+        run: node -e 'const fs = require("node:fs"); fs.appendFileSync(process.env.GITHUB_OUTPUT, "enabled=" + Boolean(JSON.parse(fs.readFileSync("engine/manifest.json")).physics_3d) + "\n");'
+      - name: Verify exported physics in Chromium
+        if: steps.physics.outputs.enabled == 'true'
+        run: |
+          npm install --no-save --package-lock=false playwright@1.63.0
+          npx playwright install --with-deps chromium
+          node scripts/test-web-physics.mjs
