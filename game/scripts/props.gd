@@ -526,6 +526,7 @@ static func rally_fan_flag(parent: Node3D, pos: Vector3, yaw: float, index: int 
 	root.rotation.y = yaw
 	root.set_meta("rally_fan_maps_flag", true)
 	root.set_meta("flag_index", index)
+	parent.add_child(root)
 	# Feather-shaped textured cloth. It is double-sided so it stays visible from either side.
 	cylinder(root, Vector3(0, 1.55, 0), 0.055, 0.045, 3.1, Color("263238"), 7)
 	var cloth = MeshInstance3D.new()
