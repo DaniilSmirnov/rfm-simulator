@@ -152,6 +152,8 @@ func confirm_placement() -> void:
 
 var cooking = false
 var cook_time = 0.0
+var grill_servings = 16
+var eat_source_group = -2
 var eaten = false
 var drunk_phase = 0.0
 var drunk_strength = 0.0
@@ -868,6 +870,19 @@ func _toggle_car() -> void:
 func near_camp() -> bool:
 	return camp != null and player_position().distance_to(camp.position) < 7
 
+func nearby_drink_source() -> bool:
+	return near_camp() or (spectators != null and spectators.nearby_table(player_position()) >= 0)
+
+func food_source_group() -> int:
+	if not in_car and near_camp() and grill != null and cook_time >= 35 and grill_servings > 0:
+		return -1
+	if not in_car and spectators != null:
+		return spectators.nearby_grill(player_position())
+	return -2
+
+func can_eat_meat() -> bool:
+	return playing and not paused and not dead and not finished and not in_car and eat_time < 0 and drink_time < 0 and food_source_group() != -2
+
 func place_table(spot: Vector3 = Vector3.INF, yaw: float = 0.0) -> bool:
 	if in_car:
 		return false
@@ -947,6 +962,7 @@ func start_grill(spot: Vector3 = Vector3.INF, yaw: float = 0.0, replicated: bool
 		fire_audio.position = grill.position
 		return true
 	grill = Props.grill(self)
+	grill_servings = 16
 	grill.position = spot
 	grill.position.y = stage.ground(spot)
 	grill.rotation.y = yaw
@@ -988,8 +1004,8 @@ func _update_cooking(delta: float) -> void:
 func drink_beer() -> bool:
 	if not playing or paused or dead or finished:
 		return false
-	if in_car or not near_camp():
-		toast("Пиво осталось у стола. Подойди к лагерю пешком.")
+	if in_car or not nearby_drink_source():
+		toast("Подойди к своему или соседскому столу пешком.")
 		return false
 	if eat_time >= 0 or drink_time >= 0 or beer_timer > 0:
 		toast("Пока хватит. Лучше посмотри ралли.")
@@ -1098,8 +1114,9 @@ func select_stage(variant: int) -> void:
 func eat_meat() -> bool:
 	if not playing or paused or dead or finished or eat_time >= 0 or drink_time >= 0:
 		return false
-	if in_car or not near_camp() or cook_time < 35:
-		toast("Шашлык ещё не готов или ты далеко от лагеря.")
+	eat_source_group = food_source_group()
+	if eat_source_group == -2:
+		toast("Шашлык не готов или рядом нет мангала с порциями.")
 		return false
 	eat_time = 0
 	eat_committed = false
@@ -1109,11 +1126,22 @@ func eat_meat() -> bool:
 	toast("Шампур горячий. Приятного аппетита!")
 	return true
 
-func commit_meat() -> bool:
-	if in_car or not near_camp() or cook_time < 35:
+func commit_meat(source_group: int = -2) -> bool:
+	if in_car:
+		return false
+	var source = source_group
+	if source == -2:
+		source = eat_source_group if eat_source_group != -2 else food_source_group()
+	if source == -1:
+		if grill == null or not near_camp() or cook_time < 35 or grill_servings <= 0:
+			return false
+		grill_servings -= 1
+		Props.set_grill_servings(grill, grill_servings)
+	elif spectators == null or not spectators.consume_serving(source):
 		return false
 	eaten = true
-	toast("Шашлык удался. Осталось насмотреться на ралли.")
+	toast("Шашлык удался. Осталось %d шампуров." % grill_servings if source == -1 else "У NPC нашлась порция шашлыка. Приятного аппетита!")
+	eat_source_group = -2
 	return true
 
 func _update_eating(delta: float) -> void:
@@ -1135,6 +1163,7 @@ func _update_eating(delta: float) -> void:
 
 func _cancel_eat() -> void:
 	eat_time = -1
+	eat_source_group = -2
 	if is_instance_valid(meat_prop):
 		meat_prop.queue_free()
 	meat_prop = null
@@ -1435,7 +1464,7 @@ func _update_hud() -> void:
 		hint_label.text = "WASD / стрелки — газ и руль   ·   Space — тормоз   ·   E — выйти   ·   Q — случайная поляна   ·   Home — вернуть на СУ"
 	else:
 		var cook_status = "ШАШЛЫК ГОТОВ" if cook_time >= 35 else ("ШАШЛЫК %d%%" % int(cook_time / 35 * 100) if cooking else "МАНГАЛ НЕ РАЗОЖЖЁН")
-		info_label.text = "ЗРИТЕЛЬ    ·    %s    ·    %s" % [cook_status, course.caption()]
+		info_label.text = "ЗРИТЕЛЬ    ·    %s · ШАМПУРЫ %d/16    ·    %s" % [cook_status, grill_servings, course.caption()]
 		hint_label.text = "WASD — идти   ·   мышь — смотреть   ·   E — сесть   ·   F — стол   ·   C — стулья   ·   G — мангал   ·   B — пиво   ·   X — есть   ·   R — статус СУ"
 		if drink_time >= 0:
 			info_label.text = "ОТКРЫВАЕМ БАНКУ" if drink_time < 1.25 else "ЗА ХОРОШИЙ ВЫЕЗД!"

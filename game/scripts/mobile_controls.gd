@@ -57,9 +57,9 @@ func _layout() -> void:
 			actions.append(["Мангал", "grill", false])
 		if game.flag_count() < game.FLAGS_PER_PLAYER:
 			actions.append(["Флаг", "flag", false])
-		if game.cook_time >= 35:
+		if game.can_eat_meat():
 			actions.append(["Есть", "eat", false])
-		if game.near_camp():
+		if game.nearby_drink_source():
 			actions.append(["Пиво", "beer", false])
 		if game.tow_target != null or game.nearby_tow_racer():
 			actions.append(["Трос", "tow", true])

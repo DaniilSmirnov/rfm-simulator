@@ -61,7 +61,8 @@ func _add_group(center: Vector3, s: float, id: int, count: int) -> void:
 	var grill = Props.grill(self)
 	grill.position = grounded(center - forward * 2.4)
 	grill.rotation.y = yaw
-	groups.append({"car": car, "table": table, "grill": grill})
+	groups.append({"car": car, "table": table, "grill": grill, "servings": 16, "last_eat_cycle": {}})
+	var group_index = groups.size() - 1
 	for j in range(count):
 		var variant = (id + j + game.stage.variant) % Props.SPECTATOR_MODELS.size()
 		var avatar = Props.player_avatar(variant)
@@ -76,7 +77,7 @@ func _add_group(center: Vector3, s: float, id: int, count: int) -> void:
 		chair.position = grounded(avatar.position + forward * 0.85)
 		chair.rotation.y = avatar.rotation.y
 		var arm = avatar.get_node("RightArm")
-		people.append({"id": id * 2 + j, "avatar": avatar, "arm": arm, "can": arm.get_node("BeerCan"), "food": arm.get_node("Skewer"), "action": "idle", "time": -1.0})
+		people.append({"id": id * 2 + j, "group": group_index, "avatar": avatar, "arm": arm, "can": arm.get_node("BeerCan"), "food": arm.get_node("Skewer"), "action": "idle", "time": -1.0, "eat_cycle": -1})
 
 func activity(id: int, time: float) -> Dictionary:
 	var period = 15.0 + float((id * 7) % 11)
@@ -87,8 +88,8 @@ func activity(id: int, time: float) -> Dictionary:
 	var action = "beer" if choice < 2 else ("eat" if choice < 4 else "idle")
 	var duration = 3.3 if action == "beer" else 3.6
 	if action == "idle" or phase >= duration:
-		return {"action": "idle", "time": -1.0}
-	return {"action": action, "time": phase}
+		return {"action": "idle", "time": -1.0, "cycle": cycle}
+	return {"action": action, "time": phase, "cycle": cycle}
 
 func update(world_time: float, delta: float, guest: bool) -> void:
 	if guest:
@@ -99,22 +100,79 @@ func update(world_time: float, delta: float, guest: bool) -> void:
 		clock = world_time
 	for person in people:
 		var pose = activity(person.id, clock)
-		person.action = pose.action
+		var group: Dictionary = groups[int(person.group)]
+		var action = pose.action
+		if action == "eat" and int(group.servings) <= 0 and int(person.eat_cycle) != int(pose.cycle):
+			action = "idle"
+		person.action = action
 		person.time = pose.time
-		person.can.visible = pose.action == "beer"
-		person.food.visible = pose.action == "eat"
+		if action == "eat" and pose.time >= 1.1 and int(person.eat_cycle) != int(pose.cycle):
+			person.eat_cycle = int(pose.cycle)
+			if not guest and int(group.servings) > 0:
+				group.servings = int(group.servings) - 1
+				Props.set_grill_servings(group.grill, int(group.servings))
+
+		person.can.visible = action == "beer"
+		person.food.visible = action == "eat"
 		person.arm.rotation = Vector3.ZERO
-		if pose.action == "eat":
+		if action == "eat":
 			var lift = Props.food_lift(pose.time)
 			person.arm.rotation.x = lerpf(0.25, 2.3, lift)
 			person.arm.rotation.z = -0.45 * lift
 			person.food.rotation.x = -lift
 			Props.pose_skewer(person.food, pose.time)
-		elif pose.action == "beer":
+		elif action == "beer":
 			var lift = smoothstep(0.8, 1.25, pose.time) * (1.0 - smoothstep(2.5, 3.3, pose.time))
 			person.arm.rotation.x = lerpf(0.5, 1.6, lift)
 			person.can.rotation.x = 0.35 * lift
 		person.avatar.get_node("Head").rotation.y = sin(clock * 0.35 + person.id) * 0.08
+
+
+func nearby_table(spot: Vector3, max_distance: float = 4.5) -> int:
+	var best = max_distance
+	var found = -1
+	for i in range(groups.size()):
+		var group: Dictionary = groups[i]
+		var distance = minf(spot.distance_to(group.table.position), spot.distance_to(group.grill.position))
+		if distance < best:
+			best = distance
+			found = i
+	return found
+
+func nearby_grill(spot: Vector3, max_distance: float = 4.5) -> int:
+	var best = max_distance
+	var found = -1
+	for i in range(groups.size()):
+		var group: Dictionary = groups[i]
+		if int(group.servings) <= 0:
+			continue
+		var distance = minf(spot.distance_to(group.grill.position), spot.distance_to(group.table.position) + 0.7)
+		if distance < best:
+			best = distance
+			found = i
+	return found
+
+func consume_serving(index: int) -> bool:
+	if index < 0 or index >= groups.size():
+		return false
+	var group: Dictionary = groups[index]
+	if int(group.servings) <= 0:
+		return false
+	group.servings = int(group.servings) - 1
+	Props.set_grill_servings(group.grill, int(group.servings))
+	return true
+
+func snapshot() -> Array:
+	var result: Array = []
+	for group in groups:
+		result.append(int(group.servings))
+	return result
+
+func apply_snapshot(remaining: Array) -> void:
+	for i in range(mini(groups.size(), remaining.size())):
+		var count = clampi(int(remaining[i]), 0, 16)
+		groups[i].servings = count
+		Props.set_grill_servings(groups[i].grill, count)
 
 func occupied(spot: Vector3) -> bool:
 	for group in groups:

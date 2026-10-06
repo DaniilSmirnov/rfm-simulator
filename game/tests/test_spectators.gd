@@ -33,6 +33,11 @@ func run() -> void:
 				actions[person.action] = true
 				props_match = props_match and person.can.visible == (person.action == "beer") and person.food.visible == (person.action == "eat")
 		check(props_match, "NPC props match activity")
+		var served = false
+		for group in crowd.groups:
+			served = served or int(group.servings) < 16
+		check(served, "NPCs consume skewers from their own 16-stick grills")
+		check(crowd.snapshot().size() == crowd.groups.size(), "NPC grill servings are snapshot-ready")
 		check(actions.has("beer") and actions.has("eat") and actions.has("idle"), "NPCs alternate between watching, drinking and eating")
 		var second = load("res://scripts/spectators.gd").new()
 		second.game = game

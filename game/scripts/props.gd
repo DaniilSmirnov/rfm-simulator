@@ -761,6 +761,8 @@ static func chair(parent: Node3D, pos: Vector3) -> void:
 
 static func grill(parent: Node3D) -> Node3D:
 	var root = Node3D.new()
+	root.name = "PicnicGrill"
+	root.set_meta("servings", 16)
 	parent.add_child(root)
 	box(root, Vector3(0, 0.65, 0), Vector3(1.05, 0.32, 0.55), Color("393d37"))
 	for x in [-0.43, 0.43]:
@@ -769,9 +771,30 @@ static func grill(parent: Node3D) -> Node3D:
 	box(root, Vector3(0, 0.83, 0), Vector3(0.9, 0.03, 0.4), Color("d9612e"))
 	for i in range(5):
 		box(root, Vector3(-0.36 + i * 0.18, 0.87, 0), Vector3(0.02, 0.02, 0.8), Color("d9cdb4"))
-		for z in [-0.14, 0.0, 0.14]:
-			box(root, Vector3(-0.36 + i * 0.18, 0.91, z), Vector3(0.13, 0.1, 0.13), Color("99542e"))
+	# Sixteen visible parallel skewers. Each skewer is a removable child so all
+	# copies of a grill can show its exact remaining serving count.
+	for i in range(16):
+		var skewer_node = Node3D.new()
+		skewer_node.name = "FoodSkewer_%02d" % i
+		root.add_child(skewer_node)
+		var x = -0.42 + i * 0.056
+		box(skewer_node, Vector3(x, 0.93, 0), Vector3(0.012, 0.018, 0.72), Color("b9b3a3"))
+		box(skewer_node, Vector3(x, 0.95, -0.39), Vector3(0.018, 0.022, 0.16), Color("a57949"))
+		for z in [-0.22, 0, 0.22]:
+			var meat = box(skewer_node, Vector3(x, 0.99, z), Vector3(0.048, 0.055, 0.075), Color("99502e").lightened(float(i % 3) * 0.035))
+			meat.rotation.y = float(i % 2) * 0.25
 	return root
+
+static func set_grill_servings(grill_node: Node3D, servings: int) -> void:
+	if grill_node == null:
+		return
+	var count = clampi(servings, 0, 16)
+	grill_node.set_meta("servings", count)
+	for i in range(16):
+		var skewer_node = grill_node.get_node_or_null("FoodSkewer_%02d" % i)
+		if skewer_node != null:
+			skewer_node.visible = i < count
+
 
 static func rope(parent: Node3D, a: Vector3, b: Vector3) -> MeshInstance3D:
 	var n = cylinder(parent, (a + b) / 2, 0.025, 0.025, a.distance_to(b), Color("e7b44c"), 5)
