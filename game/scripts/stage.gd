@@ -550,7 +550,7 @@ func _detail_batch(name: String, mesh: Mesh, poses: Array, colors: Array, indice
 		if source in ["ForestBerries", "MushroomCaps", "MushroomStems"]:
 			if not collectible_parts.has(source):
 				collectible_parts[source] = {}
-			collectible_parts[source][i if indices.is_empty() else indices[i]] = {"mesh": mm, "instance": i}
+			collectible_parts[source][i if indices.is_empty() else indices[i]] = {"mesh": mm, "instance": i, "pose": pose, "hidden": false}
 	var node = MultiMeshInstance3D.new()
 	node.name = name
 	node.position = center
@@ -809,8 +809,10 @@ func harvest(id: int) -> bool:
 		for index in item.parts[layer]:
 			var part: Dictionary = collectible_parts.get(layer, {}).get(int(index), {})
 			if not part.is_empty():
-				var pose: Transform3D = part.mesh.get_instance_transform(part.instance)
+				var pose: Transform3D = part.pose
 				pose.basis = Basis.from_scale(Vector3.ZERO)
+				part.pose = pose
+				part.hidden = true
 				part.mesh.set_instance_transform(part.instance, pose)
 	return true
 

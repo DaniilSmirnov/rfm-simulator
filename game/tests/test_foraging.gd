@@ -38,7 +38,7 @@ func run() -> void:
 	check(not host.foraging.collect(mushroom), "picked mushroom cannot be collected twice")
 	var cap_index = host.stage.collectibles[mushroom].parts.MushroomCaps[0]
 	var cap = host.stage.collectible_parts.MushroomCaps[cap_index]
-	check(cap.mesh.get_instance_transform(cap.instance).basis.x.length() == 0, "picked mushroom disappears from instanced forest")
+	check(cap.hidden and cap.pose.basis.x.length() == 0, "picked mushroom disappears from instanced forest")
 	host.walker = Vector3(1000, 0, 1000)
 	check(not host.foraging.collect(berry), "remote resources cannot be picked from a distance")
 	host.walker = host.stage.collectibles[berry].pos
@@ -46,7 +46,7 @@ func run() -> void:
 	var berry_parts_hidden = true
 	for index in host.stage.collectibles[berry].parts.ForestBerries:
 		var part = host.stage.collectible_parts.ForestBerries[index]
-		berry_parts_hidden = berry_parts_hidden and part.mesh.get_instance_transform(part.instance).basis.x.length() == 0
+		berry_parts_hidden = berry_parts_hidden and part.hidden and part.pose.basis.x.length() == 0
 	check(berry_parts_hidden, "harvested berries disappear from all affected spatial batches")
 	var guest_mushroom = first_item(host.stage, "mushrooms", mushroom)
 	guest.walker = guest.stage.collectibles[guest_mushroom].pos
