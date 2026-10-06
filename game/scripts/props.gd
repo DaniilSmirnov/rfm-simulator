@@ -964,3 +964,52 @@ static func rope(parent: Node3D, a: Vector3, b: Vector3) -> MeshInstance3D:
 	var n = cylinder(parent, (a + b) / 2, 0.025, 0.025, a.distance_to(b), Color("e7b44c"), 5)
 	n.quaternion = Quaternion(Vector3.UP, (b - a).normalized())
 	return n
+
+static func course_official(role: String, variant: int = 0) -> Node3D:
+	var avatar = player_avatar(variant + 1)
+	avatar.name = "Marshal_%d" % variant if role == "marshal" else "Judge_%d" % variant
+	avatar.set_meta("role", role)
+	var vest = Color("e8f12c") if role == "marshal" else Color("f28a24")
+	var vest_root = Node3D.new()
+	vest_root.name = "SafetyVest"
+	avatar.add_child(vest_root)
+	# Open-front high-visibility vest with two reflective bands, on both faces.
+	for side in [-1.0, 1.0]:
+		box(vest_root, Vector3(side * 0.185, 1.08, -0.245), Vector3(0.29, 0.53, 0.055), vest)
+		box(vest_root, Vector3(side * 0.19, 1.38, -0.07), Vector3(0.13, 0.09, 0.40), vest)
+	box(vest_root, Vector3(0, 1.09, 0.225), Vector3(0.63, 0.55, 0.055), vest)
+	for y in [0.95, 1.15]:
+		for face in [-1.0, 1.0]:
+			box(vest_root, Vector3(0, y, face * 0.278), Vector3(0.62, 0.045, 0.014), Color("e5ece8"))
+	label_3d(vest_root, Vector3(0, 1.27, 0.265), "MARSHAL" if role == "marshal" else "СУДЬЯ", 36, 0.0018, Color("222c31"))
+	for side in ["LeftArm", "RightArm"]:
+		var arm = avatar.get_node(side)
+		arm.rotation.x = 0.08
+	var right = avatar.get_node("RightArm")
+	right.get_node("BeerCan").hide()
+	right.get_node("Skewer").hide()
+	if role == "judge":
+		var clipboard = box(right, Vector3(0, -0.47, -0.13), Vector3(0.19, 0.27, 0.025), Color("dadaca"))
+		clipboard.name = "TimingClipboard"
+		right.rotation.x = 0.65
+	else:
+		box(avatar, Vector3(-0.37, 1.28, 0.07), Vector3(0.11, 0.13, 0.06), Color("263336")).name = "Radio"
+	return avatar
+
+static func judges_car() -> Node3D:
+	var car = player_car(6)
+	car.name = "JudgesCar"
+	car.set_meta("role", "judge_car")
+	car.set_meta("model", "Судейская машина")
+	# White upper body, orange door stripe, amber roof beacon and readable signs.
+	car.get_node("BodyShell").material_override.albedo_color = Color("e5e9e6")
+	for side in [-1.0, 1.0]:
+		box(car, Vector3(side * 0.88, 0.75, 0.2), Vector3(0.025, 0.28, 2.15), Color("ee8529"))
+		label_3d(car, Vector3(side * 0.90, 0.77, 0.15), "СУДЬИ", 54, 0.0024, Color("222c31"), side * PI / 2)
+	box(car, Vector3(0, 1.58, 0.1), Vector3(0.95, 0.07, 0.24), Color("293339"))
+	var beacon = cylinder(car, Vector3(0, 1.72, 0.1), 0.12, 0.09, 0.22, Color("ffb52b"), 8)
+	beacon.name = "AmberBeacon"
+	beacon.material_override.emission_enabled = true
+	beacon.material_override.emission = Color("ffaf26")
+	beacon.material_override.emission_energy_multiplier = 0.6
+	return car

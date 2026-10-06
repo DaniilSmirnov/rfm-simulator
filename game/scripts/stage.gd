@@ -1,6 +1,9 @@
 extends Node3D
 class_name RallyStage
 
+var officials: Node3D
+const Officials = preload("res://scripts/course_officials.gd")
+
 const City = preload("res://scripts/city.gd")
 var city: Node3D
 const LENGTH = 840.0
@@ -217,6 +220,11 @@ func build() -> void:
 	for i in range(0 if urban else 18):
 		var p = Vector3((-1 if i % 2 == 0 else 1) * rng.randf_range(220, 340), 30, -i * 65.0)
 		RallyProps.cylinder(self, p, rng.randf_range(120, 180), 0, rng.randf_range(220, 340) if winter else rng.randf_range(130, 210), Color("c3d1db") if winter else Color("697d70"), 5)
+
+	officials = Officials.new()
+	officials.stage = self
+	add_child(officials)
+	officials.build()
 
 func _build_city() -> void:
 	city = City.new()
