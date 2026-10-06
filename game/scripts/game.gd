@@ -874,8 +874,8 @@ func nearby_drink_source() -> bool:
 	return near_camp() or (spectators != null and spectators.nearby_table(player_position()) >= 0)
 
 func food_source_group() -> int:
-	if not in_car and near_camp() and grill != null and cook_time >= 35 and grill_servings > 0:
-		return -1
+	if not in_car and near_camp() and grill != null:
+		return -1 if cook_time >= 35 and grill_servings > 0 else -2
 	if not in_car and spectators != null:
 		return spectators.nearby_grill(player_position())
 	return -2
