@@ -20,3 +20,5 @@ run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_selec
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_network_motion.gd']);
 
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_furniture.gd']);
+
+run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_spectators.gd']);

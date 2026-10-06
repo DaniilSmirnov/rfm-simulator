@@ -2,6 +2,8 @@ extends Node3D
 
 const Props = preload("res://scripts/props.gd")
 const Stage = preload("res://scripts/stage.gd")
+const Spectators = preload("res://scripts/spectators.gd")
+var spectators: Node3D
 const MiniMap = preload("res://scripts/minimap.gd")
 var stage: RallyStage
 var selected_stage = 0
@@ -51,6 +53,8 @@ func has_personal_chair() -> bool:
 	return personal_chairs.has(chair_owner())
 
 func valid_furniture_spot(spot: Vector3, kind: String, ignored_owner: String = "") -> bool:
+	if spectators != null and spectators.occupied(spot):
+		return false
 	if stage.road_distance(spot) < 6.0:
 		return false
 	if stage.obstacle_hit(spot, spot, 0.8) >= 0:
@@ -243,6 +247,10 @@ func _ready() -> void:
 	add_child(stage)
 	stage.build()
 	_build_environment()
+	spectators = Spectators.new()
+	spectators.game = self
+	add_child(spectators)
+	spectators.rebuild()
 	car = Props.player_car(0)
 	add_child(car)
 	car.position = stage.at(12)
@@ -599,6 +607,7 @@ func _process(delta: float) -> void:
 	_update_eating(delta)
 	_update_camera(delta)
 	_update_placement()
+	spectators.update(elapsed, delta, room.connected and not room.is_host)
 	if not room.connected or room.is_host:
 		_update_racers(delta)
 		_update_stones(delta)
@@ -700,6 +709,10 @@ func contact_blocked(start: Vector3, end: Vector3, driving: bool) -> bool:
 	var people = []
 	if not driving:
 		cars.append(car.position)
+	for group in spectators.groups:
+		cars.append(group.car.position)
+	for person in spectators.people:
+		cars.append(person.avatar.position) # Solid spectators without affecting player-owned chair counts.
 	for racer in racers:
 		cars.append(racer.node.position)
 	for peer in room.peers.values():
@@ -986,6 +999,7 @@ func select_stage(variant: int) -> void:
 	stage = Stage.new(variant)
 	add_child(stage)
 	stage.build()
+	spectators.rebuild()
 	world_environment.free()
 	sunlight.free()
 	_build_environment()
