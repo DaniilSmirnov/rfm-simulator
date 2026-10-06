@@ -15,6 +15,9 @@ var points: PackedVector3Array = []
 var clearings: Array[Vector3] = []
 var trails: Array[Dictionary] = []
 var woodland_details: Dictionary = {}
+var collectibles: Array[Dictionary] = []
+var harvested: Dictionary = {}
+var collectible_parts: Dictionary = {}
 var rocks: Array[Dictionary] = []
 var trees: Array[Vector3] = []
 var forest_data: Array[Dictionary] = []
@@ -510,19 +513,20 @@ func woodland_spot(pos: Vector3, padding: float = 0.0) -> bool:
 			return false
 	return true
 
-func _detail_batch(name: String, mesh: Mesh, poses: Array, colors: Array) -> void:
+func _detail_batch(name: String, mesh: Mesh, poses: Array, colors: Array, indices: Array = []) -> void:
 	if name in ["ForestGrass", "ForestBushes", "ForestBerryBushes", "ForestBerries", "ForestBushStems"]:
 		var cells = {}
 		for i in range(poses.size()):
 			var origin: Vector3 = poses[i].origin
 			var key = Vector2i(floori(origin.x / 64), floori(origin.z / 64))
 			if not cells.has(key):
-				cells[key] = {"poses": [], "colors": []}
+				cells[key] = {"poses": [], "colors": [], "indices": []}
 			cells[key].poses.append(poses[i])
 			cells[key].colors.append(colors[i])
+			cells[key].indices.append(i if indices.is_empty() else indices[i])
 		for key in cells:
 			var prefix = "GrassTile" if name == "ForestGrass" else name + "_Tile"
-			_detail_batch(prefix + "_%d_%d" % [key.x, key.y], mesh, cells[key].poses, cells[key].colors)
+			_detail_batch(prefix + "_%d_%d" % [key.x, key.y], mesh, cells[key].poses, cells[key].colors, cells[key].indices)
 		woodland_details[name] = poses.size()
 		return
 	var mat = RallyProps.material(Color.WHITE)
@@ -542,6 +546,11 @@ func _detail_batch(name: String, mesh: Mesh, poses: Array, colors: Array) -> voi
 		pose.origin -= center
 		mm.set_instance_transform(i, pose)
 		mm.set_instance_color(i, colors[i])
+		var source = name.get_slice("_Tile", 0)
+		if source in ["ForestBerries", "MushroomCaps", "MushroomStems"]:
+			if not collectible_parts.has(source):
+				collectible_parts[source] = {}
+			collectible_parts[source][i if indices.is_empty() else indices[i]] = {"mesh": mm, "instance": i}
 	var node = MultiMeshInstance3D.new()
 	node.name = name
 	node.position = center
@@ -630,6 +639,7 @@ func _build_woodland_details() -> void:
 		var height = detail_rng.randf_range(0.55, 1.35)
 		var bearing = detail_rng.randf() * TAU
 		var berry_bush = i % 3 == 0
+		var berry_begin = berry_poses.size()
 		bush_stem_poses.append(Transform3D(Basis.from_scale(Vector3(0.06, height * 0.7, 0.06)), p + Vector3(0, height * 0.35, 0)))
 		bush_stem_colors.append(Color("635039"))
 		for branch in range(3):
@@ -648,6 +658,11 @@ func _build_woodland_details() -> void:
 			else:
 				bush_poses.append(pose)
 				bush_colors.append(color)
+		if berry_bush:
+			var fruit_indices: Array = []
+			for fruit_index in range(berry_begin, berry_poses.size()):
+				fruit_indices.append(fruit_index)
+			collectibles.append({"kind": "berries", "pos": Vector3(p.x, ground(p), p.z), "quantity": 3, "parts": {"ForestBerries": fruit_indices}})
 	var leaves = SphereMesh.new()
 	leaves.radial_segments = 6
 	leaves.rings = 2
@@ -673,6 +688,7 @@ func _build_woodland_details() -> void:
 			var at = p + Vector3(detail_rng.randf_range(-0.45, 0.45), 0, detail_rng.randf_range(-0.45, 0.45))
 			at.y = ground(at) - 0.24
 			var size = detail_rng.randf_range(0.10, 0.22)
+			collectibles.append({"kind": "mushrooms", "pos": Vector3(at.x, ground(at), at.z), "quantity": 1, "parts": {"MushroomCaps": [cap_poses.size()], "MushroomStems": [stem_poses.size()]}})
 			stem_poses.append(Transform3D(Basis.from_scale(Vector3(size * 0.20, size, size * 0.20)), at + Vector3(0, size * 0.5, 0)))
 			stem_colors.append(Color("c5baa1"))
 			cap_poses.append(Transform3D(Basis.from_scale(Vector3(size, size * 0.45, size)), at + Vector3(0, size, 0)))
@@ -768,3 +784,36 @@ func rally_speed(s: float) -> float:
 	if not urban:
 		return 27.0
 	return 10.0 if s > 304 and s < 320 + PI * 24 + 16 else (14.0 if s > 584 and s < 732 else 24.0)
+
+# Collectible identifiers follow deterministic generation order and are shared by
+# every room member. Harvesting hides the existing instances without new nodes.
+func nearest_collectible(pos: Vector3, reach: float = 1.8) -> int:
+	var best = reach
+	var found = -1
+	for i in range(collectibles.size()):
+		if harvested.has(i):
+			continue
+		var item: Dictionary = collectibles[i]
+		var distance = flat(pos).distance_to(flat(item.pos))
+		if distance < best and absf(pos.y - item.pos.y) < 2.0:
+			best = distance
+			found = i
+	return found
+
+func harvest(id: int) -> bool:
+	if id < 0 or id >= collectibles.size() or harvested.has(id):
+		return false
+	harvested[id] = true
+	var item: Dictionary = collectibles[id]
+	for layer in item.parts:
+		for index in item.parts[layer]:
+			var part: Dictionary = collectible_parts.get(layer, {}).get(int(index), {})
+			if not part.is_empty():
+				var pose: Transform3D = part.mesh.get_instance_transform(part.instance)
+				pose.basis = Basis.from_scale(Vector3.ZERO)
+				part.mesh.set_instance_transform(part.instance, pose)
+	return true
+
+func apply_harvested(ids: Array) -> void:
+	for id in ids:
+		harvest(int(id))

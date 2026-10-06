@@ -198,3 +198,34 @@ test('pedestrian push intents are bounded and ropes cannot be pulled from a car'
   assert.equal(reply.world.recovery_helpers, 3);
   assert.equal(reply.world.recovery_links.length, 1);
 });
+
+test('foraging commands preserve authenticated ownership, resource identifiers and food animation kind', () => {
+  const { r, h, g } = setup();
+  const commands = [
+    { seq: 1, action: 'collect', placement: { resource_id: 123 } },
+    { seq: 2, action: 'mount_mushroom', placement: { source: -1 } },
+    { seq: 3, action: 'eat_mushroom', placement: { source: 2 } },
+    { seq: 4, action: 'eat_berries' },
+  ];
+  let reply = r.sync({ token: g.token, state: { ...state(), food_kind: 'berries', eat: 0.8 }, commands }, 1100);
+  assert.equal(reply.players.find(p => p.id === g.player).state.food_kind, 'berries');
+  reply = r.sync({ token: h.token, state: state() }, 1200);
+  assert.equal(reply.commands.length, 4);
+  assert.ok(reply.commands.every(c => c.player === g.player));
+  assert.deepEqual(reply.commands.map(c => c.placement), [{ resource_id: 123 }, { source: -1 }, { source: 2 }, {}]);
+  r.sync({ token: g.token, state: { ...state(), food_kind: 'mushroom' }, commands }, 1300);
+  reply = r.sync({ token: h.token, state: state() }, 1400);
+  assert.equal(reply.commands.length, 4, 'retries do not queue another harvest or portion');
+  assert.equal(reply.players.find(p => p.id === g.player).state.food_kind, 'mushroom');
+});
+
+test('invalid foraging identifiers and arbitrary food kinds are discarded', () => {
+  const { r, h, g } = setup();
+  r.sync({ token: g.token, state: { ...state(), food_kind: '<bad>' }, commands: [
+    { seq: 1, action: 'collect', placement: { resource_id: -1 } },
+    { seq: 2, action: 'mount_mushroom', placement: { source: Infinity } },
+  ] }, 1100);
+  const reply = r.sync({ token: h.token, state: state() }, 1200);
+  assert.ok(reply.commands.every(c => Object.keys(c.placement).length === 0));
+  assert.equal(reply.players.find(p => p.id === g.player).state.food_kind, 'meat');
+});

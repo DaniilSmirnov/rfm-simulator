@@ -1,5 +1,5 @@
 export const MAX_PLAYERS = 8;
-const COMMANDS = new Set(['table', 'chairs', 'grill', 'flag', 'eat', 'rally', 'random_spot']);
+const COMMANDS = new Set(['table', 'chairs', 'grill', 'flag', 'eat', 'rally', 'random_spot', 'collect', 'mount_mushroom', 'eat_mushroom', 'eat_berries']);
 const vec = value => Array.isArray(value) && value.length === 3 && value.every(n => Number.isFinite(n) && Math.abs(n) < 3000);
 const number = n => Number.isFinite(n) && Math.abs(n) < 100000;
 export class RoomError extends Error {
@@ -40,7 +40,7 @@ export class RoomState {
     const p = this.member(body.token);
     const s = body.state;
     if (!s || !vec(s.pos) || !vec(s.car) || !number(s.heading) || !number(s.yaw) || !number(s.pitch) || typeof s.in_car !== 'boolean') throw new RoomError(400, 'Некорректное состояние игрока.');
-    p.state = { pos: s.pos, car: s.car, heading: s.heading, tilt: vec(s.tilt) ? s.tilt : [0, s.heading, 0], yaw: s.yaw, pitch: s.pitch, in_car: s.in_car, tow: s.tow === true && !s.in_car, push: vec(s.push) ? s.push.map((n, i) => i === 1 ? 0 : Math.max(-1, Math.min(1, n))) : [0, 0, 0], speed: number(s.speed) ? Math.max(-50, Math.min(50, s.speed)) : 0, beers: Number.isSafeInteger(s.beers) ? Math.max(0, Math.min(100000, s.beers)) : 0, trees: Array.isArray(s.trees) ? s.trees.slice(0, 8).filter(t => Number.isSafeInteger(t?.id) && t.id >= 0 && t.id < 20000 && vec(t.dir)).map(t => ({ id: t.id, dir: t.dir })) : [], lamps: Array.isArray(s.lamps) ? s.lamps.slice(0, 8).filter(t => Number.isSafeInteger(t?.id) && t.id >= 0 && t.id < 512 && vec(t.dir)).map(t => ({ id: t.id, dir: t.dir })) : [], eat: Number.isFinite(s.eat) ? Math.max(-1, Math.min(3.6, s.eat)) : -1, beer: Math.max(-1, Math.min(3.3, Number(s.beer) || 0)) };
+    p.state = { pos: s.pos, car: s.car, heading: s.heading, tilt: vec(s.tilt) ? s.tilt : [0, s.heading, 0], yaw: s.yaw, pitch: s.pitch, in_car: s.in_car, tow: s.tow === true && !s.in_car, push: vec(s.push) ? s.push.map((n, i) => i === 1 ? 0 : Math.max(-1, Math.min(1, n))) : [0, 0, 0], speed: number(s.speed) ? Math.max(-50, Math.min(50, s.speed)) : 0, beers: Number.isSafeInteger(s.beers) ? Math.max(0, Math.min(100000, s.beers)) : 0, trees: Array.isArray(s.trees) ? s.trees.slice(0, 8).filter(t => Number.isSafeInteger(t?.id) && t.id >= 0 && t.id < 20000 && vec(t.dir)).map(t => ({ id: t.id, dir: t.dir })) : [], lamps: Array.isArray(s.lamps) ? s.lamps.slice(0, 8).filter(t => Number.isSafeInteger(t?.id) && t.id >= 0 && t.id < 512 && vec(t.dir)).map(t => ({ id: t.id, dir: t.dir })) : [], food_kind: ['meat', 'mushroom', 'berries'].includes(s.food_kind) ? s.food_kind : 'meat', eat: Number.isFinite(s.eat) ? Math.max(-1, Math.min(3.6, s.eat)) : -1, beer: Math.max(-1, Math.min(3.3, Number(s.beer) || 0)) };
     p.seen = now;
     p.state_time = now;
     if (p.id === this.data.host) {
@@ -51,7 +51,14 @@ export class RoomState {
       for (const c of (Array.isArray(body.commands) ? body.commands.slice(0, 8) : [])) {
         if (!Number.isSafeInteger(c.seq) || c.seq <= p.seq || !COMMANDS.has(c.action)) continue;
         if (this.data.commands.length >= 64) throw new RoomError(429, 'Подожди выполнения предыдущих действий.');
-        this.data.commands.push({ id: `${p.id}:${c.seq}`, player: p.id, action: c.action, state: p.state, placement: c.placement && vec(c.placement.pos) && number(c.placement.yaw) && Math.hypot(...c.placement.pos.map((v, i) => v - p.state.pos[i])) <= 5 ? { pos: c.placement.pos, yaw: c.placement.yaw } : {} });
+        const placement = {};
+        if (c.placement && vec(c.placement.pos) && number(c.placement.yaw) && Math.hypot(...c.placement.pos.map((v, i) => v - p.state.pos[i])) <= 5) {
+          placement.pos = c.placement.pos;
+          placement.yaw = c.placement.yaw;
+        }
+        if (Number.isSafeInteger(c.placement?.resource_id) && c.placement.resource_id >= 0 && c.placement.resource_id < 10000) placement.resource_id = c.placement.resource_id;
+        if (Number.isSafeInteger(c.placement?.source) && c.placement.source >= -1 && c.placement.source < 100) placement.source = c.placement.source;
+        this.data.commands.push({ id: `${p.id}:${c.seq}`, player: p.id, action: c.action, state: p.state, placement });
         p.seq = c.seq;
       }
     }

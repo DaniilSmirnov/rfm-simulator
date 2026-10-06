@@ -154,6 +154,9 @@ var cooking = false
 var cook_time = 0.0
 var grill_servings = 16
 var eat_source_group = -2
+var eat_kind = "meat"
+var forage_source = -2
+var foraging = preload("res://scripts/foraging.gd").new()
 var eaten = false
 var drunk_phase = 0.0
 var drunk_strength = 0.0
@@ -275,6 +278,7 @@ var impact_shake = 0.0
 var stone_clock = 0.0
 
 func _ready() -> void:
+	foraging.game = self
 	rng.randomize()
 	_setup_input()
 	stage = Stage.new()
@@ -314,7 +318,7 @@ func _ready() -> void:
 		start_game()
 
 func _setup_input() -> void:
-	var bindings = {"forward": [KEY_W, KEY_UP], "back": [KEY_S, KEY_DOWN], "left": [KEY_A, KEY_LEFT], "right": [KEY_D, KEY_RIGHT], "brake": [KEY_SPACE], "interact": [KEY_E], "table": [KEY_F], "flag": [KEY_V], "chairs": [KEY_C], "grill": [KEY_G], "beer": [KEY_B], "eat": [KEY_X], "rally": [KEY_R], "tow": [KEY_T], "random_spot": [KEY_Q], "map": [KEY_M], "recover": [KEY_HOME], "pause_demo": [KEY_ESCAPE], "placement_confirm": [KEY_ENTER], "placement_rotate": [], "placement_cancel": []}
+	var bindings = {"forward": [KEY_W, KEY_UP], "back": [KEY_S, KEY_DOWN], "left": [KEY_A, KEY_LEFT], "right": [KEY_D, KEY_RIGHT], "brake": [KEY_SPACE], "interact": [KEY_E], "table": [KEY_F], "flag": [KEY_V], "chairs": [KEY_C], "grill": [KEY_G], "beer": [KEY_B], "eat": [KEY_X], "collect": [], "mount_mushroom": [KEY_H], "eat_mushroom": [KEY_J], "eat_berries": [KEY_K], "rally": [KEY_R], "tow": [KEY_T], "random_spot": [KEY_Q], "map": [KEY_M], "recover": [KEY_HOME], "pause_demo": [KEY_ESCAPE], "placement_confirm": [KEY_ENTER], "placement_rotate": [], "placement_cancel": []}
 	for action in bindings:
 		if not InputMap.has_action(action):
 			InputMap.add_action(action)
@@ -601,6 +605,18 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event.is_action_pressed(furniture_action):
 			begin_placement(furniture_action)
 			return
+	if event.is_action_pressed("collect") or (event.is_action_pressed("interact") and foraging.nearest() >= 0):
+		foraging.collect()
+		return
+	if event.is_action_pressed("mount_mushroom"):
+		foraging.mount()
+		return
+	if event.is_action_pressed("eat_berries"):
+		eat_foraged("berries")
+		return
+	if event.is_action_pressed("eat_mushroom"):
+		eat_foraged("mushroom")
+		return
 	for shared_action in room.SHARED_ACTIONS:
 		if shared_action != "eat" and event.is_action_pressed(shared_action) and room.submit(shared_action):
 			return
@@ -659,6 +675,7 @@ func _process(delta: float) -> void:
 	_update_camera(delta)
 	_update_placement()
 	spectators.update(elapsed, delta, room.connected and not room.is_host)
+	foraging.update_visuals()
 	if not room.connected or room.is_host:
 		_update_racers(delta)
 		_update_stones(delta)
@@ -1118,12 +1135,26 @@ func eat_meat() -> bool:
 	if eat_source_group == -2:
 		toast("Шашлык не готов или рядом нет мангала с порциями.")
 		return false
+	eat_kind = "meat"
 	eat_time = 0
 	eat_committed = false
 	meat_prop = Props.meat_hand(avatar_variant)
 	camera.add_child(meat_prop)
 	_update_eating(0)
 	toast("Шампур горячий. Приятного аппетита!")
+	return true
+
+func eat_foraged(kind: String) -> bool:
+	if not foraging.can_eat(kind):
+		return false
+	eat_kind = kind
+	forage_source = foraging.nearby_source() if kind == "mushroom" else -2
+	eat_time = 0
+	eat_committed = false
+	meat_prop = Props.meat_hand(avatar_variant, kind)
+	camera.add_child(meat_prop)
+	_update_eating(0)
+	toast("Едим ягоды." if kind == "berries" else "Едим гриб с шампура.")
 	return true
 
 func commit_meat(source_group: int = -2) -> bool:
@@ -1151,18 +1182,23 @@ func _update_eating(delta: float) -> void:
 	var lift = Props.food_lift(eat_time)
 	meat_prop.position = Vector3(0.34, -0.72, -0.70).lerp(Vector3(0.10, -0.43, -0.39), lift)
 	meat_prop.rotation = Vector3(-0.18 * lift, 0.15, -0.25 + lift * 0.17)
-	Props.pose_skewer(meat_prop, eat_time)
+	Props.pose_food(meat_prop, eat_time, eat_kind)
 	if not eat_committed and eat_time >= 2.6:
 		eat_committed = true
 		if not room.connected or room.is_host:
-			commit_meat()
+			if eat_kind == "meat":
+				commit_meat()
+			else:
+				foraging.consume(eat_kind, "", forage_source)
 		else:
-			room.submit("eat")
+			room.submit("eat" if eat_kind == "meat" else "eat_" + eat_kind, {"source": forage_source})
 	if eat_time >= EAT_DURATION:
 		_cancel_eat()
 
 func _cancel_eat() -> void:
 	eat_time = -1
+	eat_kind = "meat"
+	forage_source = -2
 	eat_source_group = -2
 	if is_instance_valid(meat_prop):
 		meat_prop.queue_free()
@@ -1469,7 +1505,7 @@ func _update_hud() -> void:
 		if drink_time >= 0:
 			info_label.text = "ОТКРЫВАЕМ БАНКУ" if drink_time < 1.25 else "ЗА ХОРОШИЙ ВЫЕЗД!"
 		if eat_time >= 0:
-			info_label.text = "ЕДИМ ШАШЛЫК"
+			info_label.text = "ЕДИМ ЯГОДЫ" if eat_kind == "berries" else ("ЕДИМ ГРИБЫ" if eat_kind == "mushroom" else "ЕДИМ ШАШЛЫК")
 		if beers >= 30:
 			info_label.text = "ТЫ ЛЕЖИШЬ · ХОДИТЬ БОЛЬШЕ НЕ ПОЛУЧИТСЯ"
 		if tow_target != null:
@@ -1478,6 +1514,18 @@ func _update_hud() -> void:
 		info_label.text = "ВЫТАСКИВАЕМ ЭКИПАЖ   ·   %d%%   ·   УДЕРЖИВАЙ T" % int(tow_progress * 100)
 	elif nearby_tow_racer():
 		hint_label.text += "   ·   Иди в машину, чтобы толкать · T — тяни пешком со стороны дороги"
+	if not in_car:
+		var bag = foraging.stock()
+		status_label.text += "\nГРИБЫ %d · ЯГОДЫ %d" % [bag.mushrooms, bag.berries]
+		var found = foraging.nearest()
+		if found >= 0:
+			hint_label.text = "E — собрать " + ("гриб" if stage.collectibles[found].kind == "mushrooms" else "ягоды")
+		if foraging.can_mount():
+			hint_label.text += " · H — насадить гриб (%d свободных шампуров)" % foraging.free_skewers(foraging.nearby_source())
+		if foraging.can_eat("mushroom"):
+			hint_label.text += " · J — съесть гриб"
+		if foraging.can_eat("berries"):
+			hint_label.text += " · K — съесть ягоды"
 	if mobile_mode:
 		if in_car and tow_target == null:
 			info_label.text = "%02d КМ/Ч · МАШИНА %d%% · %s %d м" % [int(absf(speed) * 3.6), int(condition), "ПАРКОВКА" if stage.urban else "ПОЛЯНА", distance]
@@ -1485,6 +1533,11 @@ func _update_hud() -> void:
 			info_label.text = info_label.text.replace("ЗРИТЕЛЬ    ·    ", "").replace("УДЕРЖИВАЙ T", "УДЕРЖИВАЙ ТРОС")
 		if toast_time > 0:
 			info_label.text += "\n" + toast_label.text
+		elif not in_car and foraging.nearest() >= 0:
+			info_label.text += "\nРядом грибы или ягоды — можно собрать."
+	if mobile_mode and not in_car:
+		var bag = foraging.stock()
+		info_label.text += "\nГрибы %d · Ягоды %d" % [bag.mushrooms, bag.berries]
 	minimap.queue_redraw()
 
 func _check_finish() -> void:

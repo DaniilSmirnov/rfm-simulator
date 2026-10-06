@@ -471,20 +471,31 @@ static func player_car(variant: int = 0) -> Node3D:
 static func skewer() -> Node3D:
 	var root = Node3D.new()
 	root.name = "Skewer"
-	box(root, Vector3(0, 0.08, 0), Vector3(0.022, 0.68, 0.022), Color("b6b8ad"))
-	box(root, Vector3(0, -0.29, 0), Vector3(0.05, 0.14, 0.04), Color("725135"))
+	box(root, Vector3(0, 0.08, 0), Vector3(0.022, 0.68, 0.022), Color("b6b8ad")).name = "SkewerStick"
+	box(root, Vector3(0, -0.29, 0), Vector3(0.05, 0.14, 0.04), Color("725135")).name = "SkewerHandle"
 	for i in range(3):
 		var meat = box(root, Vector3(0, i * 0.11 + 0.06, 0), Vector3(0.12, 0.09, 0.10), Color("9e5130").lightened(i * 0.035))
 		meat.name = "Meat%d" % i
 		meat.rotation.y = i * 0.5
 		box(meat, Vector3(0, 0.02, 0.051), Vector3(0.10, 0.016, 0.007), Color("563b27"))
+	for i in range(3):
+		var mushroom = Node3D.new()
+		mushroom.name = "Mushroom%d" % i
+		root.add_child(mushroom)
+		cylinder(mushroom, Vector3(0, i * 0.13 + 0.03, 0), 0.025, 0.02, 0.07, Color("dbcc9b"), 5)
+		faceted(mushroom, Vector3(0, i * 0.13 + 0.08, 0), Vector3(0.16, 0.08, 0.14), Color("916137"), 6, 3)
+		mushroom.hide()
+		var berry = faceted(root, Vector3((i - 1) * 0.055, 0.06 + i * 0.025, -0.03), Vector3.ONE * 0.09, Color("b83d39"), 6, 3)
+		berry.name = "Berry%d" % i
+		berry.hide()
 	return root
 
-static func meat_hand(variant: int = 0) -> Node3D:
+static func meat_hand(variant: int = 0, kind: String = "meat") -> Node3D:
 	var profile = spectator_profile(variant)
 	var skin = Color(profile.skin)
 	var forearm = Color(profile.shirt) if profile.hat == "beanie" else skin
 	var root = skewer()
+	pose_food(root, 0.0, kind)
 	var sleeve = faceted(root, Vector3(0.07, -0.48, 0.08), Vector3(0.17, 0.35, 0.19), forearm, 8, 4)
 	sleeve.rotation.z = -0.18
 	box(root, Vector3(0, -0.24, 0.04), Vector3(0.13, 0.14, 0.12), skin)
@@ -492,6 +503,16 @@ static func meat_hand(variant: int = 0) -> Node3D:
 		if child is GeometryInstance3D:
 			child.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	return root
+
+static func pose_food(node: Node3D, time: float, kind: String = "meat") -> void:
+	node.set_meta("food_kind", kind)
+	node.get_node("SkewerStick").visible = kind != "berries"
+	node.get_node("SkewerHandle").visible = kind != "berries"
+	for i in range(3):
+		var remains = (2 - i) >= food_bites(time)
+		node.get_node("Meat%d" % i).visible = kind == "meat" and remains
+		node.get_node("Mushroom%d" % i).visible = kind == "mushroom" and remains
+		node.get_node("Berry%d" % i).visible = kind == "berries" and remains
 
 static func food_lift(time: float) -> float:
 	if time < 0:
@@ -793,20 +814,33 @@ static func grill(parent: Node3D) -> Node3D:
 		var x = -0.42 + i * 0.056
 		box(skewer_node, Vector3(x, 0.93, 0), Vector3(0.012, 0.018, 0.72), Color("b9b3a3"))
 		box(skewer_node, Vector3(x, 0.95, -0.39), Vector3(0.018, 0.022, 0.16), Color("a57949"))
+		var meat_group = Node3D.new()
+		meat_group.name = "MeatPieces"
+		skewer_node.add_child(meat_group)
 		for z in [-0.22, 0, 0.22]:
-			var meat = box(skewer_node, Vector3(x, 0.99, z), Vector3(0.048, 0.055, 0.075), Color("99502e").lightened(float(i % 3) * 0.035))
+			var meat = box(meat_group, Vector3(x, 0.99, z), Vector3(0.048, 0.055, 0.075), Color("99502e").lightened(float(i % 3) * 0.035))
 			meat.rotation.y = float(i % 2) * 0.25
+		var mushroom_group = Node3D.new()
+		mushroom_group.name = "MushroomFood"
+		skewer_node.add_child(mushroom_group)
+		for z in [-0.2, 0.0, 0.2]:
+			cylinder(mushroom_group, Vector3(x, 0.96, z), 0.015, 0.012, 0.05, Color("d3c49b"), 5)
+			faceted(mushroom_group, Vector3(x, 1.0, z), Vector3(0.055, 0.035, 0.07), Color("956337"), 5, 2)
+		mushroom_group.hide()
 	return root
 
 static func set_grill_servings(grill_node: Node3D, servings: int) -> void:
 	if grill_node == null:
 		return
 	var count = clampi(servings, 0, 16)
+	var mushrooms = clampi(int(grill_node.get_meta("mushrooms", 0)), 0, 16 - count)
 	grill_node.set_meta("servings", count)
 	for i in range(16):
 		var skewer_node = grill_node.get_node_or_null("FoodSkewer_%02d" % i)
 		if skewer_node != null:
-			skewer_node.visible = i < count
+			skewer_node.visible = i < count + mushrooms
+			skewer_node.get_node("MeatPieces").visible = i < count
+			skewer_node.get_node("MushroomFood").visible = i >= count and i < count + mushrooms
 
 
 static func rope(parent: Node3D, a: Vector3, b: Vector3) -> MeshInstance3D:
