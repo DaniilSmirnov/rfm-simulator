@@ -50,23 +50,19 @@ func _layout() -> void:
 	elif game.in_car:
 		actions = [["Выйти", "interact", false], ["Вернуть", "recover", false], ["Поляна", "random_spot", false], ["Назад", "back", true], ["Тормоз", "brake", true], ["Газ", "forward", true]]
 	else:
-		actions = [["Собрать" if game.foraging.nearest() >= 0 else "Сесть", "interact", false], ["Поляна", "random_spot", false]]
+		var target = game.interaction.current()
+		actions = [["Поляна", "random_spot", false]]
+		if not target.is_empty():
+			var label = str(target.label).replace("Сесть в машину", "В машину").replace("Сесть на стул", "На стул").replace("Встать со стула", "Встать").replace("Собрать гриб", "Собрать").replace("Собрать ягоды", "Собрать").replace("Насадить гриб", "Насадить").replace("Съесть шашлык", "Шашлык").replace("Съесть гриб", "Есть гриб").replace("Выпить пиво", "Пиво")
+			actions.push_front([label, "interact", false])
 		actions.append(["Стол", "table", false])
 		actions.append(["Стул", "chairs", false])
 		if game.camp != null and game.has_chairs:
 			actions.append(["Мангал", "grill", false])
 		if game.flag_count() < game.FLAGS_PER_PLAYER:
 			actions.append(["Флаг", "flag", false])
-		if game.foraging.can_mount():
-			actions.append(["Насадить", "mount_mushroom", false])
-		if game.foraging.can_eat("mushroom"):
-			actions.append(["Гриб", "eat_mushroom", false])
 		if game.foraging.can_eat("berries"):
 			actions.append(["Ягоды", "eat_berries", false])
-		if game.can_eat_meat():
-			actions.append(["Есть", "eat", false])
-		if game.nearby_drink_source():
-			actions.append(["Пиво", "beer", false])
 		if game.tow_target != null or game.nearby_tow_racer():
 			actions.append(["Трос", "tow", true])
 	var width = 100.0

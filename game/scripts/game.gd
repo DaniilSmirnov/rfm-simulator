@@ -1,5 +1,10 @@
 extends Node3D
 
+var interaction = preload("res://scripts/interaction.gd").new()
+var seated = false
+var seat_exit = Vector3.ZERO
+var crosshair: Label
+
 const Props = preload("res://scripts/props.gd")
 const Stage = preload("res://scripts/stage.gd")
 const Spectators = preload("res://scripts/spectators.gd")
@@ -93,6 +98,8 @@ func valid_furniture_spot(spot: Vector3, kind: String, ignored_owner: String = "
 	return true
 
 func begin_placement(kind: String) -> void:
+	if seated:
+		stand_up()
 	if in_car or beers >= 30:
 		toast("Для размещения выйди из машины и встань на ноги.")
 		return
@@ -114,7 +121,7 @@ func begin_placement(kind: String) -> void:
 		child.material_override = placement_material
 		child.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_update_placement()
-	toast("Выбери место: WASD и обзор. Q — повернуть, E — поставить, Esc — отменить.")
+	toast("Выбери место: WASD и обзор. Q — повернуть, F — поставить, Esc — отменить.")
 
 func _update_placement() -> void:
 	if placement_preview == null:
@@ -279,6 +286,7 @@ var stone_clock = 0.0
 
 func _ready() -> void:
 	foraging.game = self
+	interaction.game = self
 	rng.randomize()
 	_setup_input()
 	stage = Stage.new()
@@ -318,7 +326,7 @@ func _ready() -> void:
 		start_game()
 
 func _setup_input() -> void:
-	var bindings = {"forward": [KEY_W, KEY_UP], "back": [KEY_S, KEY_DOWN], "left": [KEY_A, KEY_LEFT], "right": [KEY_D, KEY_RIGHT], "brake": [KEY_SPACE], "interact": [KEY_E], "table": [KEY_F], "flag": [KEY_V], "chairs": [KEY_C], "grill": [KEY_G], "beer": [KEY_B], "eat": [KEY_X], "collect": [], "mount_mushroom": [KEY_H], "eat_mushroom": [KEY_J], "eat_berries": [KEY_K], "rally": [KEY_R], "tow": [KEY_T], "random_spot": [KEY_Q], "map": [KEY_M], "recover": [KEY_HOME], "pause_demo": [KEY_ESCAPE], "placement_confirm": [KEY_ENTER], "placement_rotate": [], "placement_cancel": []}
+	var bindings = {"forward": [KEY_W, KEY_UP], "back": [KEY_S, KEY_DOWN], "left": [KEY_A, KEY_LEFT], "right": [KEY_D, KEY_RIGHT], "brake": [KEY_SPACE], "interact": [KEY_F], "table": [KEY_Z], "flag": [KEY_V], "chairs": [KEY_C], "grill": [KEY_G], "beer": [KEY_B], "eat": [], "collect": [], "mount_mushroom": [], "eat_mushroom": [], "eat_berries": [KEY_K], "rally": [KEY_R], "tow": [KEY_T], "random_spot": [KEY_Q], "map": [KEY_M], "recover": [KEY_HOME], "pause_demo": [KEY_ESCAPE], "placement_confirm": [KEY_ENTER], "placement_rotate": [], "placement_cancel": []}
 	for action in bindings:
 		if not InputMap.has_action(action):
 			InputMap.add_action(action)
@@ -403,6 +411,15 @@ func _build_ui() -> void:
 	canvas.add_child(ui)
 	ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	crosshair = _label(ui, "·", 24, Color("fff0cb"))
+	crosshair.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	crosshair.offset_left = -16
+	crosshair.offset_right = 16
+	crosshair.offset_top = -16
+	crosshair.offset_bottom = 16
+	crosshair.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	crosshair.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	crosshair.hide()
 	var top = PanelContainer.new()
 	mobile_top = top
 	ui.add_child(top)
@@ -509,7 +526,7 @@ func _build_ui() -> void:
 	start_button.add_theme_stylebox_override("pressed", _panel(Color("c78f4a")))
 	start_button.pressed.connect(_menu_action)
 	mv.add_child(start_button)
-	menu_help = _label(mv, "WASD — движение   ·   E — выйти   ·   Esc — пауза\nНа ногах: мышь — обзор   ·   F/C/G — лагерь", 14, Color("b2bea1"))
+	menu_help = _label(mv, "WASD — движение   ·   F — выйти   ·   Esc — пауза\nНа ногах: мышь — обзор   ·   Z/C/G — лагерь", 14, Color("b2bea1"))
 
 func _setup_audio() -> void:
 	engine_audio = AudioStreamPlayer.new()
@@ -605,17 +622,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event.is_action_pressed(furniture_action):
 			begin_placement(furniture_action)
 			return
-	if event.is_action_pressed("collect") or (event.is_action_pressed("interact") and foraging.nearest() >= 0):
-		foraging.collect()
-		return
-	if event.is_action_pressed("mount_mushroom"):
-		foraging.mount()
+	if event.is_action_pressed("interact"):
+		interaction.activate()
 		return
 	if event.is_action_pressed("eat_berries"):
 		eat_foraged("berries")
-		return
-	if event.is_action_pressed("eat_mushroom"):
-		eat_foraged("mushroom")
 		return
 	for shared_action in room.SHARED_ACTIONS:
 		if shared_action != "eat" and event.is_action_pressed(shared_action) and room.submit(shared_action):
@@ -821,7 +832,7 @@ func contact_blocked(start: Vector3, end: Vector3, driving: bool) -> bool:
 	return false
 
 func _walk(delta: float) -> void:
-	if beers >= 30:
+	if beers >= 30 or seated:
 		return
 	var motion = Vector2(Input.get_axis("left", "right"), Input.get_axis("forward", "back"))
 	if motion.length() > 1:
@@ -849,7 +860,7 @@ func _update_camera(delta: float) -> void:
 		camera.position = camera.position.lerp(desired, 1 - exp(-delta * 7))
 		camera.look_at(car.position + Vector3(0, 1.1, 0) - behind * 1.5)
 	else:
-		camera.position = walker + Vector3(0, lerpf(1.72, 0.36, collapse) + sin(elapsed * 12) * 0.015, 0)
+		camera.position = walker + Vector3(0, lerpf(1.12 if seated else 1.72, 0.36, collapse) + sin(elapsed * 12) * 0.015, 0)
 		var sip = sin(clampf((drink_time - 1.3) / 1.2, 0, 1) * PI) if drink_time >= 0 else 0.0
 		camera.rotation = Vector3(view_pitch + sip * 0.035, view_yaw, 0.0)
 		camera.fov = 68 - sip * 2.0
@@ -876,7 +887,7 @@ func _toggle_car() -> void:
 		walker = car.position + Vector3(-2.1, 0, 0).rotated(Vector3.UP, heading)
 		walker.y = stage.ground(walker)
 		view_yaw = heading
-		toast("F — стол, C — стулья, G — мангал. Устанавливай вне СУ.")
+		toast("Z — стол, C — стулья, G — мангал. Устанавливай вне СУ.")
 	elif walker.distance_to(car.position) < 4:
 		in_car = true
 		view_yaw = heading
@@ -1128,10 +1139,10 @@ func select_stage(variant: int) -> void:
 	camera.position = stage.at(45) + Vector3(22, 15, 12)
 	camera.look_at(stage.at(70))
 
-func eat_meat() -> bool:
+func eat_meat(source_group: int = -2) -> bool:
 	if not playing or paused or dead or finished or eat_time >= 0 or drink_time >= 0:
 		return false
-	eat_source_group = food_source_group()
+	eat_source_group = food_source_group() if source_group == -2 else source_group
 	if eat_source_group == -2:
 		toast("Шашлык не готов или рядом нет мангала с порциями.")
 		return false
@@ -1144,11 +1155,13 @@ func eat_meat() -> bool:
 	toast("Шампур горячий. Приятного аппетита!")
 	return true
 
-func eat_foraged(kind: String) -> bool:
-	if not foraging.can_eat(kind):
+func eat_foraged(kind: String, source: int = -2) -> bool:
+	if source == -2 and not foraging.can_eat(kind):
 		return false
 	eat_kind = kind
-	forage_source = foraging.nearby_source() if kind == "mushroom" else -2
+	forage_source = (foraging.nearby_source() if source == -2 else source) if kind == "mushroom" else -2
+	if kind == "mushroom" and (foraging.grill_node(forage_source) == null or player_position().distance_to(foraging.grill_node(forage_source).position) > 4 or foraging.ready_index(forage_source) < 0):
+		return false
 	eat_time = 0
 	eat_committed = false
 	meat_prop = Props.meat_hand(avatar_variant, kind)
@@ -1164,11 +1177,11 @@ func commit_meat(source_group: int = -2) -> bool:
 	if source == -2:
 		source = eat_source_group if eat_source_group != -2 else food_source_group()
 	if source == -1:
-		if grill == null or not near_camp() or cook_time < 35 or grill_servings <= 0:
+		if grill == null or player_position().distance_to(grill.position) > 4 or cook_time < 35 or grill_servings <= 0:
 			return false
 		grill_servings -= 1
 		Props.set_grill_servings(grill, grill_servings)
-	elif spectators == null or not spectators.consume_serving(source):
+	elif spectators == null or source < 0 or source >= spectators.groups.size() or player_position().distance_to(spectators.groups[source].grill.position) > 4 or not spectators.consume_serving(source):
 		return false
 	eaten = true
 	toast("Шашлык удался. Осталось %d шампуров." % grill_servings if source == -1 else "У NPC нашлась порция шашлыка. Приятного аппетита!")
@@ -1191,7 +1204,7 @@ func _update_eating(delta: float) -> void:
 			else:
 				foraging.consume(eat_kind, "", forage_source)
 		else:
-			room.submit("eat" if eat_kind == "meat" else "eat_" + eat_kind, {"source": forage_source})
+			room.submit("eat" if eat_kind == "meat" else "eat_" + eat_kind, {"source": eat_source_group if eat_kind == "meat" else forage_source})
 	if eat_time >= EAT_DURATION:
 		_cancel_eat()
 
@@ -1442,7 +1455,7 @@ func _update_stones(delta: float) -> void:
 			stones.erase(stone)
 
 func walking_intent() -> Vector3:
-	if in_car or paused or dead or finished or beers >= 30 or drink_time >= 0 or eat_time >= 0:
+	if in_car or seated or paused or dead or finished or beers >= 30 or drink_time >= 0 or eat_time >= 0:
 		return Vector3.ZERO
 	var input = Vector2(Input.get_axis("left", "right"), Input.get_axis("forward", "back")).limit_length(1)
 	return Vector3(input.x, 0, input.y).rotated(Vector3.UP, view_yaw)
@@ -1482,7 +1495,7 @@ func _cancel_tow() -> void:
 
 func toast(message: String) -> void:
 	if mobile_mode:
-		var labels = {"Q —": "Поляна —", "Space —": "Тормоз —", "F —": "Стол —", "C —": "Стулья —", "G —": "Мангал —", "X —": "Есть —", "R —": "Заезды —", "— T": "— Трос", ": E.": ": Выйти.", "нажми X": "нажми Есть", "Удерживай T": "Удерживай Трос"}
+		var labels = {"Q —": "Поляна —", "Space —": "Тормоз —", "F —": "Действие —", "Z —": "Стол —", "C —": "Стулья —", "G —": "Мангал —", "X —": "Есть —", "R —": "Заезды —", "— T": "— Трос", ": E.": ": Выйти.", "нажми X": "нажми Есть", "Удерживай T": "Удерживай Трос"}
 		for key in labels:
 			message = message.replace(key, labels[key])
 	if toast_label != null:
@@ -1501,7 +1514,7 @@ func _update_hud() -> void:
 	else:
 		var cook_status = "ШАШЛЫК ГОТОВ" if cook_time >= 35 else ("ШАШЛЫК %d%%" % int(cook_time / 35 * 100) if cooking else "МАНГАЛ НЕ РАЗОЖЖЁН")
 		info_label.text = "ЗРИТЕЛЬ    ·    %s · ШАМПУРЫ %d/16    ·    %s" % [cook_status, grill_servings, course.caption()]
-		hint_label.text = "WASD — идти   ·   мышь — смотреть   ·   E — сесть   ·   F — стол   ·   C — стулья   ·   G — мангал   ·   B — пиво   ·   X — есть   ·   R — статус СУ"
+		hint_label.text = "WASD — идти   ·   мышь — смотреть   ·   E — сесть   ·   F — стол   ·   C — стулья   ·   G — мангал   ·   R — статус СУ"
 		if drink_time >= 0:
 			info_label.text = "ОТКРЫВАЕМ БАНКУ" if drink_time < 1.25 else "ЗА ХОРОШИЙ ВЫЕЗД!"
 		if eat_time >= 0:
@@ -1517,13 +1530,11 @@ func _update_hud() -> void:
 	if not in_car:
 		var bag = foraging.stock()
 		status_label.text += "\nГРИБЫ %d · ЯГОДЫ %d" % [bag.mushrooms, bag.berries]
-		var found = foraging.nearest()
-		if found >= 0:
-			hint_label.text = "E — собрать " + ("гриб" if stage.collectibles[found].kind == "mushrooms" else "ягоды")
-		if foraging.can_mount():
-			hint_label.text += " · H — насадить гриб (%d свободных шампуров)" % foraging.free_skewers(foraging.nearby_source())
-		if foraging.can_eat("mushroom"):
-			hint_label.text += " · J — съесть гриб"
+		var target = interaction.current()
+		if not target.is_empty():
+			hint_label.text = "F — " + target.label + "   ·   Z/C/G/V — поставить предмет"
+		elif seated:
+			hint_label.text = "F — встать со стула"
 		if foraging.can_eat("berries"):
 			hint_label.text += " · K — съесть ягоды"
 	if mobile_mode:
@@ -1533,11 +1544,13 @@ func _update_hud() -> void:
 			info_label.text = info_label.text.replace("ЗРИТЕЛЬ    ·    ", "").replace("УДЕРЖИВАЙ T", "УДЕРЖИВАЙ ТРОС")
 		if toast_time > 0:
 			info_label.text += "\n" + toast_label.text
-		elif not in_car and foraging.nearest() >= 0:
-			info_label.text += "\nРядом грибы или ягоды — можно собрать."
+		elif not in_car and not interaction.current().is_empty():
+			info_label.text += "\nF — " + interaction.current().label
 	if mobile_mode and not in_car:
 		var bag = foraging.stock()
 		info_label.text += "\nГрибы %d · Ягоды %d" % [bag.mushrooms, bag.berries]
+	crosshair.visible = playing and not in_car and not paused and not dead and not finished and placement_kind == ""
+	crosshair.text = "+" if not interaction.current().is_empty() else "·"
 	minimap.queue_redraw()
 
 func _check_finish() -> void:
@@ -1674,3 +1687,19 @@ func knock_city(contact: Dictionary, velocity: Vector3) -> void:
 		lamp_requests[int(contact.id)] = velocity
 	else:
 		stage.city.knock_lamp(int(contact.id), velocity)
+
+func sit_down() -> void:
+	var owner = chair_owner()
+	if not personal_chairs.has(owner) or in_car or beers >= 30:
+		return
+	seat_exit = walker
+	var chair: Node3D = personal_chairs[owner]
+	walker = chair.position
+	view_yaw = chair.rotation.y
+	seated = true
+	toast("F — встать. Мышь — смотреть.")
+
+func stand_up() -> void:
+	seated = false
+	walker = seat_exit
+	walker.y = stage.ground(walker)

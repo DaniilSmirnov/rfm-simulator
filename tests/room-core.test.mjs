@@ -229,3 +229,13 @@ test('invalid foraging identifiers and arbitrary food kinds are discarded', () =
   assert.ok(reply.commands.every(c => Object.keys(c.placement).length === 0));
   assert.equal(reply.players.find(p => p.id === g.player).state.food_kind, 'meat');
 });
+
+test('seated posture is synchronized only for pedestrians and defaults off', () => {
+  const { r, h } = setup();
+  let reply = r.sync({ token: h.token, state: { ...state(), seated: true } }, 1100);
+  assert.equal(reply.players[0].state.seated, true);
+  reply = r.sync({ token: h.token, state: { ...state(), seated: true, in_car: true } }, 1200);
+  assert.equal(reply.players[0].state.seated, false);
+  reply = r.sync({ token: h.token, state: state() }, 1300);
+  assert.equal(reply.players[0].state.seated, false);
+});

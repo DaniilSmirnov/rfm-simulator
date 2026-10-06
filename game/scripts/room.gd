@@ -284,6 +284,12 @@ func _process(delta: float) -> void:
 		peer.avatar.position = avatar_pose.position
 		peer.avatar.rotation.y = avatar_pose.rotation.y
 		peer.avatar.visible = not peer.state.in_car
+		var sitting = bool(peer.state.get("seated", false)) and not peer.state.in_car
+		peer.avatar.position.y -= 0.2 if sitting else 0.0
+		for leg_name in ["LeftLeg", "RightLeg"]:
+			var leg = peer.avatar.get_node_or_null(leg_name)
+			if leg != null:
+				leg.rotation.x = PI / 2 if sitting else 0.0
 		var collapsed = int(peer.state.get("beers", 0)) >= 30
 		peer.avatar.rotation.z = lerp_angle(peer.avatar.rotation.z, PI / 2 if collapsed else 0.0, 1.0 - exp(-delta * 8))
 		if collapsed:
@@ -361,7 +367,7 @@ func lamp_requests() -> Array:
 	return result.slice(0, 8)
 
 func local_state() -> Dictionary:
-	return {"pos": a(game.player_position()), "car": a(game.car.position), "heading": game.heading, "tilt": a(game.car.rotation), "yaw": game.view_yaw, "pitch": game.view_pitch, "in_car": game.in_car, "tow": Input.is_action_pressed("tow") and not game.in_car and not game.paused and not game.dead and not game.finished and game.beers < 30 and game.drink_time < 0 and game.eat_time < 0, "push": a(game.walking_intent()), "speed": game.speed, "beers": game.beers, "trees": tree_requests(), "lamps": lamp_requests(), "beer": game.drink_time, "eat": game.eat_time, "food_kind": game.eat_kind}
+	return {"pos": a(game.player_position()), "car": a(game.car.position), "heading": game.heading, "tilt": a(game.car.rotation), "yaw": game.view_yaw, "pitch": game.view_pitch, "in_car": game.in_car, "tow": Input.is_action_pressed("tow") and not game.in_car and not game.paused and not game.dead and not game.finished and game.beers < 30 and game.drink_time < 0 and game.eat_time < 0, "push": a(game.walking_intent()), "speed": game.speed, "beers": game.beers, "trees": tree_requests(), "lamps": lamp_requests(), "beer": game.drink_time, "eat": game.eat_time, "food_kind": game.eat_kind, "seated": game.seated}
 
 func _update_peers(players: Array) -> void:
 	var present = {}
@@ -435,7 +441,7 @@ func _apply_command(c: Dictionary) -> void:
 		"chairs": game.place_chairs(spot, yaw, str(c.get("player", "guest")))
 		"grill": game.start_grill(spot, yaw)
 		"flag": game.place_flag(spot, yaw, str(c.get("player", "guest")))
-		"eat": game.commit_meat(game.food_source_group())
+		"eat": game.commit_meat(int(placement.get("source", -2)))
 		"collect": game.foraging.collect(int(placement.get("resource_id", -1)), str(c.get("player", "guest")))
 		"mount_mushroom": game.foraging.mount(int(placement.get("source", -2)), str(c.get("player", "guest")))
 		"eat_mushroom": game.foraging.consume("mushroom", str(c.get("player", "guest")), int(placement.get("source", -2)))
