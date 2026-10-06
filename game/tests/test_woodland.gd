@@ -12,9 +12,11 @@ func run() -> void:
 	root.add_child(stage)
 	stage.build()
 	check(stage.trees.size() > 5000, "forest has a dense canopy with more than 5000 trees")
-	check(stage.woodland_details.get("ForestGrass", 0) > 8000, "forest floor contains instanced grass")
+	check(stage.woodland_details.get("ForestGrass", 0) > 20000, "forest floor contains more than 20000 instanced grass tufts")
 	check(stage.woodland_details.get("MushroomCaps", 0) > 300 and stage.woodland_details.get("AntHills", 0) > 30, "mushroom clusters and ant hills populate the woods")
-	check(stage.woodland_details.get("ForestBoulders", 0) > 50 and stage.woodland_details.get("ForestPebbles", 0) > 200, "boulders and small stones populate the woods")
+	check(stage.woodland_details.get("ForestBoulders", 0) > 150 and stage.woodland_details.get("ForestPebbles", 0) > 1000, "boulders and small stones populate the woods")
+	check(stage.woodland_details.get("ForestBushes", 0) > 1000 and stage.woodland_details.get("ForestBerryBushes", 0) > 400, "ordinary and berry-bearing undergrowth populate the forest")
+	check(stage.woodland_details.get("ForestBerries", 0) > 1200, "berry bushes have visible fruit")
 	var boulders = 0
 	var reserved = true
 	for rock in stage.rocks:
@@ -22,7 +24,7 @@ func run() -> void:
 			boulders += 1
 			reserved = reserved and stage.woodland_spot(rock.pos, rock.radius)
 			check(not stage.rock_hit(rock.pos, rock.pos, 0.3, false).is_empty(), "forest boulder has collision")
-	check(boulders > 50 and reserved, "forest boulders preserve roads, clearings and footpaths")
+	check(boulders > 150 and reserved, "forest boulders preserve roads, clearings and footpaths")
 	var same = Stage.new()
 	for p in [Vector3(80, 0, -270), Vector3(-75, 0, -500)]:
 		check(stage.ground(p) == same.ground(p), "forest relief is deterministic for multiplayer")
@@ -38,6 +40,15 @@ func run() -> void:
 		for p in trail.points:
 			clear = clear and absf(stage.ground(p) - p.y) < 0.15
 	check(clear, "clearings and trail centers remain level and walkable")
+	var undergrowth_clear = true
+	var undergrowth_tiles = 0
+	for child in stage.get_children():
+		if str(child.name).begins_with("ForestBushes_Tile") or str(child.name).begins_with("ForestBerryBushes_Tile"):
+			undergrowth_tiles += 1
+			for i in range(child.multimesh.instance_count):
+				var spot: Vector3 = child.position + child.multimesh.get_instance_transform(i).origin
+				undergrowth_clear = undergrowth_clear and stage.woodland_spot(spot)
+	check(undergrowth_clear and undergrowth_tiles > 10, "spatially batched bushes leave picnic clearings and footpaths open")
 	var grass_tiles = 0
 	for child in stage.get_children():
 		if str(child.name).begins_with("GrassTile"):

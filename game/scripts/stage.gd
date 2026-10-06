@@ -511,7 +511,7 @@ func woodland_spot(pos: Vector3, padding: float = 0.0) -> bool:
 	return true
 
 func _detail_batch(name: String, mesh: Mesh, poses: Array, colors: Array) -> void:
-	if name == "ForestGrass":
+	if name in ["ForestGrass", "ForestBushes", "ForestBerryBushes", "ForestBerries", "ForestBushStems"]:
 		var cells = {}
 		for i in range(poses.size()):
 			var origin: Vector3 = poses[i].origin
@@ -521,7 +521,8 @@ func _detail_batch(name: String, mesh: Mesh, poses: Array, colors: Array) -> voi
 			cells[key].poses.append(poses[i])
 			cells[key].colors.append(colors[i])
 		for key in cells:
-			_detail_batch("GrassTile_%d_%d" % [key.x, key.y], mesh, cells[key].poses, cells[key].colors)
+			var prefix = "GrassTile" if name == "ForestGrass" else name + "_Tile"
+			_detail_batch(prefix + "_%d_%d" % [key.x, key.y], mesh, cells[key].poses, cells[key].colors)
 		woodland_details[name] = poses.size()
 		return
 	var mat = RallyProps.material(Color.WHITE)
@@ -534,7 +535,7 @@ func _detail_batch(name: String, mesh: Mesh, poses: Array, colors: Array) -> voi
 	mm.mesh = mesh
 	mm.instance_count = poses.size()
 	var center = Vector3.ZERO
-	if name.begins_with("GrassTile") and not poses.is_empty():
+	if (name.begins_with("GrassTile") or name.contains("_Tile_")) and not poses.is_empty():
 		center = poses[0].origin
 	for i in range(poses.size()):
 		var pose: Transform3D = poses[i]
@@ -544,7 +545,7 @@ func _detail_batch(name: String, mesh: Mesh, poses: Array, colors: Array) -> voi
 	var node = MultiMeshInstance3D.new()
 	node.name = name
 	node.position = center
-	if name.begins_with("GrassTile"):
+	if name.begins_with("GrassTile") or name.contains("_Tile_"):
 		node.visibility_range_end = 160
 		node.visibility_range_end_margin = 15
 	node.multimesh = mm
@@ -581,7 +582,7 @@ func _build_woodland_details() -> void:
 	var twig_colors: Array = []
 	var boulder_poses: Array = []
 	var boulder_colors: Array = []
-	for i in range(13000):
+	for i in range(30000):
 		var p = Vector3(detail_rng.randf_range(-145, 145), 0, detail_rng.randf_range(-LENGTH, 0))
 		if not woodland_spot(p):
 			continue
@@ -589,20 +590,20 @@ func _build_woodland_details() -> void:
 		var size = detail_rng.randf_range(0.25, 0.65)
 		grass_poses.append(Transform3D(Basis(Vector3.UP, detail_rng.randf() * TAU).scaled(Vector3(size * 1.8, size, size * 1.8)), p))
 		grass_colors.append(Color("4f6634").lerp(Color("91905a"), detail_rng.randf() * 0.7))
-	for i in range(1100):
+	for i in range(4000):
 		var along = detail_rng.randf_range(20, LENGTH - 20)
-		var p = at(along) + side(along) * detail_rng.randf_range(13, 80) * (-1 if i % 2 else 1)
+		var p = at(along) + side(along) * detail_rng.randf_range(13, 125) * (-1 if i % 2 else 1)
 		var radius = detail_rng.randf_range(0.8, 2.4)
-		if not woodland_spot(p, radius) or obstacle_hit(p, p, radius + 0.3) >= 0:
+		if not woodland_spot(p, radius) or obstacle_hit(p, p, radius + 0.3) >= 0 or not rock_hit(p, p, radius, false).is_empty():
 			continue
 		p.y = ground(p)
 		var height = detail_rng.randf_range(0.7, 2.5)
 		boulder_poses.append(Transform3D(Basis(Vector3.UP, detail_rng.randf() * TAU).scaled(Vector3(radius * 2, height, radius * 1.7)), p + Vector3(0, height * 0.35, 0)))
 		boulder_colors.append(Color("697064").lightened(detail_rng.randf_range(-0.12, 0.12)))
 		rocks.append({"pos": p, "radius": radius, "height": height * 0.9, "forest": true})
-		if boulder_poses.size() >= 110:
+		if boulder_poses.size() >= 240:
 			break
-	for i in range(500):
+	for i in range(1600):
 		var p = Vector3(detail_rng.randf_range(-135, 135), 0, detail_rng.randf_range(-LENGTH, 0))
 		if not woodland_spot(p):
 			continue
@@ -610,6 +611,59 @@ func _build_woodland_details() -> void:
 		var radius = detail_rng.randf_range(0.12, 0.35)
 		stone_poses.append(Transform3D(Basis(Vector3.UP, detail_rng.randf() * TAU).scaled(Vector3(radius * 2, radius, radius * 1.7)), p))
 		stone_colors.append(Color("7e806e").lightened(detail_rng.randf_range(-0.1, 0.12)))
+	# Clumped undergrowth rather than an even carpet; berry bushes use the
+	# same seeded generator on every client. Keep picnic spaces and paths open.
+	var bush_poses: Array = []
+	var bush_colors: Array = []
+	var berry_bush_poses: Array = []
+	var berry_bush_colors: Array = []
+	var berry_poses: Array = []
+	var berry_colors: Array = []
+	var bush_stem_poses: Array = []
+	var bush_stem_colors: Array = []
+	for i in range(2000):
+		var p = Vector3(detail_rng.randf_range(-140, 140), 0, detail_rng.randf_range(-LENGTH, 0))
+		var patch = sin(p.x * 0.075 + p.z * 0.027) * sin(p.z * 0.054)
+		if patch < -0.35 or not woodland_spot(p, 1.4) or not rock_hit(p, p, 1.1, false).is_empty():
+			continue
+		p.y = ground(p) - 0.22
+		var height = detail_rng.randf_range(0.55, 1.35)
+		var bearing = detail_rng.randf() * TAU
+		var berry_bush = i % 3 == 0
+		bush_stem_poses.append(Transform3D(Basis.from_scale(Vector3(0.06, height * 0.7, 0.06)), p + Vector3(0, height * 0.35, 0)))
+		bush_stem_colors.append(Color("635039"))
+		for branch in range(3):
+			var angle = bearing + branch * TAU / 3
+			var center = p + Vector3(cos(angle) * height * 0.3, height * (0.55 + branch * 0.08), sin(angle) * height * 0.3)
+			var pose = Transform3D(Basis(Vector3.UP, angle).scaled(Vector3(height * 0.95, height * 0.7, height * 0.85)), center)
+			var color = Color("3c5830").lerp(Color("6c8040"), detail_rng.randf())
+			if berry_bush:
+				berry_bush_poses.append(pose)
+				berry_bush_colors.append(color.darkened(0.08))
+				for fruit in range(3):
+					var fruit_angle = angle + fruit * 1.8
+					var fruit_pos = center + Vector3(cos(fruit_angle) * height * 0.38, height * 0.18, sin(fruit_angle) * height * 0.34)
+					berry_poses.append(Transform3D(Basis.from_scale(Vector3.ONE * 0.09), fruit_pos))
+					berry_colors.append(Color("c34237") if i % 2 == 0 else Color("383353"))
+			else:
+				bush_poses.append(pose)
+				bush_colors.append(color)
+	var leaves = SphereMesh.new()
+	leaves.radial_segments = 6
+	leaves.rings = 2
+	_detail_batch("ForestBushes", leaves, bush_poses, bush_colors)
+	_detail_batch("ForestBerryBushes", leaves, berry_bush_poses, berry_bush_colors)
+	var berry_mesh = SphereMesh.new()
+	berry_mesh.radial_segments = 5
+	berry_mesh.rings = 2
+	_detail_batch("ForestBerries", berry_mesh, berry_poses, berry_colors)
+	var bush_stem_mesh = CylinderMesh.new()
+	bush_stem_mesh.height = 1
+	bush_stem_mesh.bottom_radius = 1
+	bush_stem_mesh.top_radius = 0.5
+	bush_stem_mesh.radial_segments = 4
+	bush_stem_mesh.rings = 1
+	_detail_batch("ForestBushStems", bush_stem_mesh, bush_stem_poses, bush_stem_colors)
 	for i in range(300):
 		var along = detail_rng.randf_range(20, LENGTH - 20)
 		var p = at(along) + side(along) * detail_rng.randf_range(10, 38) * (-1 if i % 2 else 1)
