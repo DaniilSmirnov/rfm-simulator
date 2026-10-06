@@ -53,6 +53,15 @@ func run() -> void:
 	var placed_flag = host.personal_flags["host"][0]
 	var flag_cloth = placed_flag.get_child(1)
 	check(placed_flag.get_parent() == host and flag_cloth.is_visible_in_tree(), "placed flag and cloth are visible in the game scene")
+	var wordmarks = placed_flag.find_children("*", "Label3D", true, false)
+	var rally_labels = 0
+	var maps_labels = 0
+	var visible_wordmarks = wordmarks.size() == 4
+	for label in wordmarks:
+		rally_labels += int(label.text == "RALLY")
+		maps_labels += int(label.text == "FAN MAPS")
+		visible_wordmarks = visible_wordmarks and label.is_visible_in_tree() and not label.double_sided
+	check(visible_wordmarks and rally_labels == 2 and maps_labels == 2, "Rally Fan Maps wordmark is rendered as visible 3D text on both faces")
 	check(flag_cloth.material_override.albedo_texture != null, "flag cloth uses an export-safe Rally Fan Maps texture")
 	check(flag_cloth.material_override.transparency == BaseMaterial3D.TRANSPARENCY_ALPHA and flag_cloth.material_override.cull_mode == BaseMaterial3D.CULL_DISABLED, "flag cloth renders transparent and double-sided in Web builds")
 	check(host.flag_count() == 1, "flag count is tracked per player")

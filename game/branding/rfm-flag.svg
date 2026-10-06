@@ -10,6 +10,4 @@
   <circle cx="286" cy="310" r="110" fill="#fff4e6"/>
   <circle cx="286" cy="310" r="58" fill="#f05217"/>
   <path d="M220 270 L352 350 M352 270 L220 350" stroke="#fff4e6" stroke-width="22" stroke-linecap="round"/>
-  <text x="256" y="514" text-anchor="middle" font-family="Arial, sans-serif" font-size="48" font-weight="700" fill="#fff4e6">RALLY</text>
-  <text x="256" y="572" text-anchor="middle" font-family="Arial, sans-serif" font-size="38" font-weight="700" fill="#fff4e6">FAN MAPS</text>
 </svg>

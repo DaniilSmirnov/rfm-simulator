@@ -542,6 +542,14 @@ static func rally_fan_flag(parent: Node3D, pos: Vector3, yaw: float, index: int 
 	cloth.material_override = cloth_material
 	root.add_child(cloth)
 	cloth.position = Vector3(0.72, 1.65, 0)
+	# Godot's SVG importer does not render SVG text. Use actual 3D glyphs
+	# on each face, so the wordmark survives both native and Web exports.
+	for face in [-1, 1]:
+		var text_yaw = PI if face < 0 else 0.0
+		var top = label_3d(root, Vector3(0.72, 1.46, face * 0.018), "RALLY", 48, 0.006, Color("fff4e6"), text_yaw)
+		var bottom = label_3d(root, Vector3(0.72, 1.28, face * 0.018), "FAN MAPS", 38, 0.006, Color("fff4e6"), text_yaw)
+		for label in [top, bottom]:
+			label.double_sided = false
 	return root
 
 static func label_3d(parent: Node3D, pos: Vector3, text: String, size: int, pixel_size: float, color: Color, yaw: float = 0.0) -> Label3D:
