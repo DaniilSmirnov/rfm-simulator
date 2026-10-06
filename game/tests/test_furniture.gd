@@ -46,6 +46,8 @@ func run() -> void:
 	check(not host.valid_furniture_spot(host.stage.at(140), "table"), "furniture cannot be placed on rally road")
 	host.walker = origin + Vector3(0, 0, 6)
 	check(host.place_flag(host.walker + Vector3(2, 0, 0), 0.0), "first personal Rally Fan Maps flag can be placed")
+	var flag_cloth = host.personal_flags["host"][0].get_child(1)
+	check(flag_cloth.material_override.albedo_texture != null, "flag cloth uses the Rally Fan Maps texture")
 	check(host.flag_count() == 1, "flag count is tracked per player")
 	check(host.place_flag(host.walker + Vector3(3, 0, 0), 0.4), "second personal flag can be placed")
 	check(host.place_flag(host.walker + Vector3(4, 0, 0), 0.8), "third personal flag can be placed")

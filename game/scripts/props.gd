@@ -393,18 +393,19 @@ static func rally_fan_flag(parent: Node3D, pos: Vector3, yaw: float, index: int 
 	root.rotation.y = yaw
 	root.set_meta("rally_fan_maps_flag", true)
 	root.set_meta("flag_index", index)
-	# Decorative prop only: the pole and cloth have no physics body.
+	# Feather-shaped textured cloth. It is double-sided so it stays visible from either side.
 	cylinder(root, Vector3(0, 1.55, 0), 0.055, 0.045, 3.1, Color("263238"), 7)
-	box(root, Vector3(0.72, 2.65, 0), Vector3(1.44, 0.84, 0.045), Color("f05217"))
-	# White route-wheel mark and compact lettering are duplicated on both faces.
-	for face in [-1.0, 1.0]:
-		var disc = cylinder(root, Vector3(0.76, 2.67, face * 0.035), 0.235, 0.235, 0.025, Color("fff4e6"), 12)
-		disc.rotation.x = PI / 2
-		var hub = cylinder(root, Vector3(0.76, 2.67, face * 0.052), 0.09, 0.09, 0.026, Color("f05217"), 10)
-		hub.rotation.x = PI / 2
-		label_3d(root, Vector3(0.76, 2.31, face * 0.055), "RALLY FAN MAPS", 16, 0.0025, Color("fff4e6"), PI if face < 0 else 0.0)
-	# A small white hoist stripe makes the flag readable at a distance.
-	box(root, Vector3(0.15, 2.65, 0.03), Vector3(0.12, 0.72, 0.012), Color("fff4e6"))
+	var cloth = MeshInstance3D.new()
+	var quad = QuadMesh.new()
+	quad.size = Vector2(1.44, 2.65)
+	cloth.mesh = quad
+	var cloth_material = StandardMaterial3D.new()
+	cloth_material.albedo_texture = load("res://branding/rfm-flag.svg")
+	cloth_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	cloth_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	cloth.material_override = cloth_material
+	root.add_child(cloth)
+	cloth.position = Vector3(0.72, 1.65, 0)
 	return root
 
 static func label_3d(parent: Node3D, pos: Vector3, text: String, size: int, pixel_size: float, color: Color, yaw: float = 0.0) -> Label3D:
