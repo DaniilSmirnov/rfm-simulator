@@ -141,6 +141,7 @@ var drink_time = -1.0
 var drink_committed = false
 var can_opened = false
 var beer_audio: AudioStreamPlayer
+const RALLY_CREW_LIMIT = 10
 var rally_spawn_count = 0
 var racing = false
 var race_clock = 0.0
@@ -626,10 +627,11 @@ func _process(delta: float) -> void:
 	toast_label.visible = toast_time > 0 and not mobile_mode
 	if racing and (not room.connected or room.is_host):
 		race_clock += delta
-		spawn_clock -= delta
-		if spawn_clock <= 0:
-			spawn_racer()
-			spawn_clock = rng.randf_range(17, 23)
+		if rally_spawn_count < RALLY_CREW_LIMIT:
+			spawn_clock -= delta
+			if spawn_clock <= 0:
+				spawn_racer()
+				spawn_clock = rng.randf_range(17, 23)
 	_update_hud()
 	engine_audio.pitch_scale = 0.75 + absf(speed) / 18.0
 	engine_audio.volume_db = -21 if in_car else -35
@@ -1080,6 +1082,8 @@ func start_rally() -> bool:
 	return true
 
 func spawn_racer(forced: String = "") -> void:
+	if rally_spawn_count >= RALLY_CREW_LIMIT or dead or finished:
+		return
 	if not racing:
 		if in_car:
 			return
@@ -1140,8 +1144,7 @@ func _update_racers(delta: float) -> void:
 				racer.target.y = stage.ground(racer.target)
 				toast("ВЫЛЕТ! Отойди с траектории!" if racer.kind == "crash" else "Экипаж застрял. Нужен трос — T рядом с машиной.")
 			elif s > racer.focus + 45 and not racer.counted:
-				racer.counted = true
-				passed += 1
+				count_racer(racer)
 			if s >= Stage.LENGTH - 1 or s > racer.focus + 150:
 				to_remove.append(racer)
 		elif racer.state == "offroad":
@@ -1152,9 +1155,7 @@ func _update_racers(delta: float) -> void:
 			if t >= 1:
 				racer.state = "stranded"
 				racer.age = 0
-				if not racer.counted:
-					racer.counted = true
-					passed += 1
+				count_racer(racer)
 		elif racer.state == "rock_bounce":
 			var steps = maxi(1, int(ceil(delta / (1.0 / 120.0))))
 			var dt = delta / steps
@@ -1183,9 +1184,7 @@ func _update_racers(delta: float) -> void:
 				racer.motion.rock_impulse(contact.normal, node.rotation.y)
 				racer.state = "rock_bounce"
 				racer.age = 0.0
-				if not racer.counted:
-					racer.counted = true
-					passed += 1
+				count_racer(racer)
 		if racer.state in ["racing", "offroad", "rock_bounce"]:
 			var tree_hit = stage.obstacle_hit(racer.previous, node.position, 0.95)
 			if tree_hit >= 0:
@@ -1212,6 +1211,8 @@ func _update_racers(delta: float) -> void:
 					racer.age = 0
 					toast("Столкновение машин! Экипаж остановился.")
 					break
+		if racer.state in ["stranded", "stopped"]:
+			count_racer(racer)
 		var d = node.position.distance_to(player_position())
 		if d < nearest_d and racer.state in ["racing", "offroad"]:
 			nearest = node
@@ -1316,8 +1317,8 @@ func toast(message: String) -> void:
 
 func _update_hud() -> void:
 	var distance = int(player_position().distance_to(stage.clearings[target_clearing]))
-	quest_label.text = "%s Найти место  ·  %d м\n%s Разложить стол\n%s Поставить стулья\n%s Пожарить и съесть шашлык\n%s Посмотреть 6 экипажей" % ["[x]" if camp != null else "[ ]", distance, "[x]" if camp != null else "[ ]", "[x]" if has_chairs else "[ ]", "[x]" if eaten else "[ ]", "[x]" if passed >= 6 else "[ ]"]
-	status_label.text = "ЭКИПАЖИ %d/6   ·   ПОМОЩЬ %d\nПИВО %d   ·   ВЫЕЗД %02d:%02d" % [passed, helped, beers, int(elapsed) / 60, int(elapsed) % 60]
+	quest_label.text = "%s Найти место  ·  %d м\n%s Разложить стол\n%s Поставить стулья\n%s Пожарить и съесть шашлык\n%s Посмотреть %d экипажей" % ["[x]" if camp != null else "[ ]", distance, "[x]" if camp != null else "[ ]", "[x]" if has_chairs else "[ ]", "[x]" if eaten else "[ ]", "[x]" if passed >= RALLY_CREW_LIMIT else "[ ]", RALLY_CREW_LIMIT]
+	status_label.text = "ЭКИПАЖИ %d/%d   ·   ПОМОЩЬ %d\nПИВО %d   ·   ВЫЕЗД %02d:%02d" % [passed, RALLY_CREW_LIMIT, helped, beers, int(elapsed) / 60, int(elapsed) % 60]
 	if in_car:
 		info_label.text = "%02d КМ/Ч    ·    ЛЕГКОВУШКА %d%%    ·    %s" % [int(absf(speed) * 3.6), int(condition), "ОБОЧИНА" if stage.road_distance(car.position) > 4 else "ГРАВИЙ / КОЛЕЯ"]
 		hint_label.text = "WASD / стрелки — газ и руль   ·   Space — тормоз   ·   E — выйти   ·   Q — случайная поляна   ·   Home — вернуть на СУ"
@@ -1349,7 +1350,7 @@ func _update_hud() -> void:
 func _check_finish() -> void:
 	if dead:
 		return
-	if camp != null and has_chairs and eaten and eat_time < 0 and passed >= 6:
+	if camp != null and has_chairs and eaten and eat_time < 0 and passed >= RALLY_CREW_LIMIT:
 		finished = true
 		_show_result("Идеальный раллийный овощ", "Шашлык съеден. Ралли посмотрено. Ты выжил.\n\nЭкипажи: %d  ·  Помощь тросом: %d\nПиво: %d  ·  Машина: %d%%\n\nДень в лесу удался." % [passed, helped, beers, condition])
 
@@ -1456,6 +1457,12 @@ func recover_racer(racer: Dictionary) -> void:
 	racer.slide_speed = 0.0
 	racer.state = "racing"
 	racer.kind = "pass"
-	racer.counted = true
+	count_racer(racer)
 	racer.age = 0.0
 	helped += 1
+
+func count_racer(racer: Dictionary) -> void:
+	if racer.get("counted", false):
+		return
+	racer.counted = true
+	passed = mini(RALLY_CREW_LIMIT, passed + 1)

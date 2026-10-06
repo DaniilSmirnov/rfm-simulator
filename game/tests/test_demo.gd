@@ -123,9 +123,9 @@ func run() -> void:
 	check(scene.dead, "moving rally car collision kills spectator")
 	# Victory is separate from death and includes complete picnic.
 	scene.dead = false
-	scene.passed = 6
+	scene.passed = scene.RALLY_CREW_LIMIT
 	scene._check_finish()
-	check(scene.finished, "full picnic and six crews complete demo")
+	check(scene.finished, "full picnic and ten crews complete demo")
 	print("RESULT: %d checks, %d failures" % [checks, failures])
 	await scene._shutdown_audio()
 	scene.queue_free()
