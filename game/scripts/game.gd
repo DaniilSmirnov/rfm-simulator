@@ -1177,7 +1177,7 @@ func commit_meat(source_group: int = -2) -> bool:
 	if source == -2:
 		source = eat_source_group if eat_source_group != -2 else food_source_group()
 	if source == -1:
-		if grill == null or player_position().distance_to(grill.position) > 4 or cook_time < 35 or grill_servings <= 0:
+		if grill == null or (not near_camp() and player_position().distance_to(grill.position) > 4) or cook_time < 35 or grill_servings <= 0:
 			return false
 		grill_servings -= 1
 		Props.set_grill_servings(grill, grill_servings)
