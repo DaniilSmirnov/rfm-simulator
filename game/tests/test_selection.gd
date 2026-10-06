@@ -35,6 +35,7 @@ func run() -> void:
 	check(host.car_choice.item_count == 9 and host.stage_choice.item_count == 3, "menu offers eight cars and three stages")
 	host.car_choice.cycle(-1)
 	check(host.selected_car == 8 and host.car.get_meta("model") == "ВАЗ-2112 Лодка", "previous arrow wraps through all selectable car models")
+	check(host.car.get_node_or_null("BodyShell2112") != null and host.car.get_node_or_null("Roof2112") != null, "2112 has dedicated body, short roof and sloped-glasshouse geometry")
 	host.car_choice.cycle(1)
 	check(host.selected_car == 0, "next arrow returns to first car")
 	host.car_choice.item_selected.emit(5)

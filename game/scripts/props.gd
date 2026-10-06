@@ -241,6 +241,25 @@ static func car_beam(parent: Node3D, a: Vector3, b: Vector3, width: float, color
 	var beam = box(parent, (a + b) / 2, Vector3(width, a.distance_to(b), width), color)
 	beam.quaternion = Quaternion(Vector3.UP, (b - a).normalized())
 
+static func quad_panel(parent: Node3D, points: PackedVector3Array, color: Color) -> MeshInstance3D:
+	var vertices = PackedVector3Array([points[0], points[1], points[2], points[0], points[2], points[3]])
+	var normal = (vertices[1] - vertices[0]).cross(vertices[2] - vertices[0]).normalized()
+	var normals = PackedVector3Array()
+	for i in range(vertices.size()):
+		normals.append(normal)
+	var arrays = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	var mesh = ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	var panel = MeshInstance3D.new()
+	panel.mesh = mesh
+	panel.material_override = material(color)
+	panel.material_override.cull_mode = BaseMaterial3D.CULL_DISABLED
+	parent.add_child(panel)
+	return panel
+
 static func player_car_2112_boat() -> Node3D:
 	var root = Node3D.new()
 	root.name = "PlayerCar_8"
@@ -249,57 +268,92 @@ static func player_car_2112_boat() -> Node3D:
 	root.set_meta("roof_cargo", "inflatable_boat")
 	var paint = Color("283f87")
 	var trim = Color("202b31")
-	# Three-box silhouette from the reference: long bonnet, upright cabin and a separate boot.
+	var glass = Color("253d49")
+	# Low, long 2112 profile: flat bonnet, rising windscreen, short roof and sharply
+	# raked rear hatch glass. The cabin is deliberately not a tall box.
 	var body = car_shell(root, [
-		Vector4(-2.08, 0.73, 0.40, 0.82),
-		Vector4(-1.58, 0.84, 0.39, 0.98),
-		Vector4(-0.98, 0.84, 0.40, 1.03),
-		Vector4(0.45, 0.84, 0.40, 1.02),
-		Vector4(1.15, 0.82, 0.40, 0.90),
-		Vector4(2.08, 0.72, 0.40, 0.82)
+		Vector4(-2.08, 0.73, 0.40, 0.79),
+		Vector4(-1.68, 0.84, 0.39, 0.94),
+		Vector4(-1.02, 0.84, 0.39, 1.00),
+		Vector4(0.26, 0.84, 0.39, 1.00),
+		Vector4(1.30, 0.80, 0.39, 0.88),
+		Vector4(2.08, 0.70, 0.40, 0.80)
 	], paint)
 	body.name = "BodyShell2112"
-	var glass = car_shell(root, [
-		Vector4(-0.93, 0.68, 0.95, 1.38),
-		Vector4(-0.68, 0.69, 0.98, 1.48),
-		Vector4(0.48, 0.69, 0.98, 1.48),
-		Vector4(0.72, 0.67, 0.95, 1.32)
-	], Color("304a55"))
-	glass.name = "GlassCabin2112"
-	# Roof pillars, door belt and mirrors.
-	for side in [-1, 1]:
-		var x = side * 0.73
-		for z in [-0.83, -0.26, 0.48, 0.70]:
-			box(root, Vector3(x, 1.20, z), Vector3(0.065, 0.55, 0.075), paint)
-		box(root, Vector3(side * 0.86, 1.02, -0.05), Vector3(0.045, 0.08, 1.55), trim)
-		box(root, Vector3(side * 0.91, 1.10, -0.93), Vector3(0.22, 0.13, 0.18), trim)
+	# Roof cap and angular window belt, following the real sloped glasshouse.
+	var roof = car_shell(root, [
+		Vector4(-0.72, 0.67, 1.34, 1.47),
+		Vector4(-0.55, 0.69, 1.39, 1.49),
+		Vector4(0.24, 0.68, 1.39, 1.49),
+		Vector4(0.38, 0.65, 1.32, 1.44)
+	], paint)
+	roof.name = "Roof2112"
+	for side in [-1.0, 1.0]:
+		var x = side * 0.705
+		# Separate front/rear door glass and small rear quarter glass, with body-color pillars.
+		quad_panel(root, PackedVector3Array([
+			Vector3(x, 1.29, -0.60), Vector3(x, 1.29, -0.03),
+			Vector3(side * 0.67, 1.40, -0.14), Vector3(side * 0.67, 1.40, -0.47)
+		]), glass)
+		quad_panel(root, PackedVector3Array([
+			Vector3(x, 1.29, 0.06), Vector3(x, 1.28, 0.48),
+			Vector3(side * 0.66, 1.39, 0.30), Vector3(side * 0.67, 1.40, 0.06)
+		]), glass)
+		quad_panel(root, PackedVector3Array([
+			Vector3(x, 1.25, 0.54), Vector3(side * 0.62, 1.14, 0.99),
+			Vector3(side * 0.65, 1.33, 0.56), Vector3(side * 0.66, 1.38, 0.40)
+		]), glass)
+		# A-, B-, C-pillars trace the rising belt and the steep rear hatch rake.
+		car_beam(root, Vector3(side * 0.76, 1.00, -0.96), Vector3(side * 0.68, 1.43, -0.61), 0.075, paint)
+		car_beam(root, Vector3(side * 0.71, 1.28, -0.03), Vector3(side * 0.67, 1.42, -0.03), 0.055, paint)
+		car_beam(root, Vector3(side * 0.69, 1.40, 0.48), Vector3(side * 0.61, 1.18, 1.08), 0.08, paint)
+		car_beam(root, Vector3(side * 0.61, 1.18, 1.08), Vector3(side * 0.56, 0.91, 1.48), 0.08, paint)
+		box(root, Vector3(side * 0.86, 1.03, -0.08), Vector3(0.045, 0.07, 1.55), trim)
+		box(root, Vector3(side * 0.91, 1.10, -0.94), Vector3(0.22, 0.13, 0.18), trim)
+		box(root, Vector3(side * 0.86, 0.78, -0.92), Vector3(0.045, 0.035, 0.16), Color("aeb9ba"))
 		for z in [-1.33, 1.34]:
-			var wheel = cylinder(root, Vector3(side * 0.87, 0.39, z), 0.39, 0.39, 0.28, Color("202827"), 12)
+			var wheel = cylinder(root, Vector3(side * 0.87, 0.39, z), 0.39, 0.39, 0.28, Color("171c1e"), 12)
 			wheel.rotation.z = PI / 2
-			var hub = cylinder(root, Vector3(side * 1.03, 0.39, z), 0.22, 0.22, 0.035, Color("525b60"), 8)
+			var hub = cylinder(root, Vector3(side * 1.03, 0.39, z), 0.22, 0.22, 0.035, Color("323b40"), 8)
 			hub.rotation.z = PI / 2
-	# Front bumper, narrow grille and the reference's rectangular lamps.
+	# Large slanted windscreen; the rear glass is a long fastback panel into the hatch.
+	quad_panel(root, PackedVector3Array([
+		Vector3(-0.66, 1.40, -0.62), Vector3(0.66, 1.40, -0.62),
+		Vector3(0.77, 1.02, -1.00), Vector3(-0.77, 1.02, -1.00)
+	]), glass)
+	quad_panel(root, PackedVector3Array([
+		Vector3(-0.65, 1.40, 0.35), Vector3(0.65, 1.40, 0.35),
+		Vector3(0.68, 0.91, 1.52), Vector3(-0.68, 0.91, 1.52)
+	]), glass)
+	# Front fascia: broad trapezoid lamp housings, narrow grille and integrated bumper.
 	box(root, Vector3(0, 0.48, -2.10), Vector3(1.58, 0.16, 0.12), trim)
-	box(root, Vector3(0, 0.74, -2.115), Vector3(0.72, 0.18, 0.035), Color("17252b"))
-	for side in [-1, 1]:
-		var lamp = box(root, Vector3(side * 0.54, 0.80, -2.13), Vector3(0.47, 0.22, 0.05), Color("f0e8bd"))
-		lamp.rotation.z = side * 0.10
-		box(root, Vector3(side * 0.54, 0.79, -2.16), Vector3(0.34, 0.06, 0.012), Color("d6d8cf"))
-	# Wide horizontal tail lamps and a separate boot lid.
-	box(root, Vector3(0, 0.61, 2.11), Vector3(1.55, 0.23, 0.06), Color("202b31"))
-	for side in [-1, 1]:
-		box(root, Vector3(side * 0.53, 0.78, 2.14), Vector3(0.48, 0.24, 0.06), Color("a83a35"))
-	box(root, Vector3(0, 0.91, 1.35), Vector3(1.42, 0.05, 0.52), paint)
-	# Low spoiler and roof rack.
-	box(root, Vector3(0, 1.01, 1.35), Vector3(1.32, 0.08, 0.16), trim)
+	box(root, Vector3(0, 0.72, -2.115), Vector3(0.70, 0.16, 0.035), Color("17252b"))
+	for side in [-1.0, 1.0]:
+		quad_panel(root, PackedVector3Array([
+			Vector3(side * 0.31, 0.72, -2.135), Vector3(side * 0.78, 0.73, -2.135),
+			Vector3(side * 0.78, 0.91, -2.12), Vector3(side * 0.35, 0.88, -2.12)
+		]), Color("e8e5d2"))
+		box(root, Vector3(side * 0.53, 0.95, -1.89), Vector3(0.15, 0.035, 0.32), paint)
+	# Rear hatch has the characteristic broad red light panel, segmented at the centre.
+	box(root, Vector3(0, 0.62, 2.105), Vector3(1.48, 0.24, 0.055), Color("242b2e"))
+	for side in [-1.0, 1.0]:
+		box(root, Vector3(side * 0.50, 0.65, 2.14), Vector3(0.47, 0.17, 0.035), Color("ad3b37"))
+		box(root, Vector3(side * 0.50, 0.76, 2.14), Vector3(0.47, 0.035, 0.035), Color("d1d0bd"))
+	box(root, Vector3(0, 0.65, 2.14), Vector3(0.38, 0.14, 0.035), Color("353a3b"))
+	box(root, Vector3(0, 0.45, 2.10), Vector3(1.55, 0.15, 0.12), trim)
+	# Door seams and handles emphasize the five-door body rather than a generic shell.
+	for side in [-1.0, 1.0]:
+		for z in [-0.03, 0.53]:
+			box(root, Vector3(side * 0.847, 0.96, z), Vector3(0.018, 0.025, 0.13), Color("aeb9ba"))
+	# Roof rack, visible above the roofline and below the inflatable boat.
 	for z in [-0.62, 0.62]:
-		box(root, Vector3(0, 1.57, z), Vector3(1.32, 0.08, 0.12), trim)
-	# Inflatable boat: hull, dark inner well, yellow straps and tie-downs.
-	faceted(root, Vector3(0, 1.94, 0), Vector3(0.72, 0.30, 1.70), Color("747d7e"), 10, 5)
-	faceted(root, Vector3(0, 2.07, 0), Vector3(0.47, 0.12, 1.38), Color("354448"), 10, 4)
+		box(root, Vector3(0, 1.56, z), Vector3(1.32, 0.07, 0.12), trim)
+	# Inflatable boat hull, dark inner well and yellow tie-down straps.
+	faceted(root, Vector3(0, 1.93, 0), Vector3(0.72, 0.30, 1.70), Color("747d7e"), 10, 5)
+	faceted(root, Vector3(0, 2.06, 0), Vector3(0.47, 0.12, 1.38), Color("354448"), 10, 4)
 	for z in [-0.62, 0.62]:
-		box(root, Vector3(0, 1.92, z), Vector3(1.48, 0.045, 0.10), Color("e0b83f"))
-		box(root, Vector3(0, 1.84, z), Vector3(0.055, 0.38, 0.055), Color("202a2d"))
+		box(root, Vector3(0, 1.91, z), Vector3(1.48, 0.045, 0.10), Color("e0b83f"))
+		box(root, Vector3(0, 1.83, z), Vector3(0.055, 0.38, 0.055), Color("202a2d"))
 	return root
 
 static func player_car(variant: int = 0) -> Node3D:
