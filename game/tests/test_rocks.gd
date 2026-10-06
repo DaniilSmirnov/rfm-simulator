@@ -72,7 +72,7 @@ func run() -> void:
 	var snapshot = game.room.world_state()
 	check(snapshot.racers[0].state == "rock_bounce" and snapshot.racers[0].has("tilt"), "room shares rally rock rebound and suspension pose")
 	game._update_racers(0.9)
-	check(racer.state == "stopped", "rally rebound settles to a stopped car")
+	check(racer.state == "stranded", "crashed rally crew waits for towing after rock rebound")
 	var passed = game.passed
 	racer.state = "offroad"
 	racer.counted = false

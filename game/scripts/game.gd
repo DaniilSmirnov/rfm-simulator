@@ -1090,7 +1090,7 @@ func spawn_racer(forced: String = "") -> void:
 		kind = "crash" if roll < 0.25 else ("stuck" if roll < 0.45 else "pass")
 	# Keep at most one stranded car, so the stage cannot clog permanently.
 	for existing in racers:
-		if existing.kind == "stuck" and kind == "stuck":
+		if existing.state == "stranded" and kind in ["stuck", "crash"]:
 			kind = "pass"
 	var focus = clampf(stage.road_s(player_position()), 45, Stage.LENGTH - 80)
 	var variant = [5, 0, 1, 2, 3, 4][rally_spawn_count % Props.RALLY_MODELS.size()]
@@ -1150,7 +1150,7 @@ func _update_racers(delta: float) -> void:
 			node.rotation.y += delta * 0.6
 			node.rotation.z = sin(t * PI) * 0.2
 			if t >= 1:
-				racer.state = "stranded" if racer.kind == "stuck" else "stopped"
+				racer.state = "stranded"
 				racer.age = 0
 				if not racer.counted:
 					racer.counted = true
@@ -1168,11 +1168,11 @@ func _update_racers(delta: float) -> void:
 				racer.motion.velocity = racer.motion.velocity.move_toward(Vector3.ZERO, dt * 16.0)
 				racer.motion.suspension(node, stage, dt, node.rotation.y)
 			if racer.age >= 0.8:
-				racer.state = "stopped"
+				racer.state = "stranded" if racer.kind in ["stuck", "crash"] else "stopped"
 				racer.age = 0.0
 		elif racer.state in ["stopped", "stranded"]:
 			racer.motion.suspension(node, stage, delta, node.rotation.y)
-			if racer.state == "stopped" and racer.age > 18:
+			if racer.state == "stopped" and racer.age > 18 and racer.node != tow_target:
 				to_remove.append(racer)
 		if moving_before:
 			var contact = stage.rock_hit(racer.previous, node.position, 0.85)
@@ -1192,7 +1192,7 @@ func _update_racers(delta: float) -> void:
 				if not stage.fallen.has(tree_hit):
 					knock_tree(tree_hit, node.position - racer.previous)
 				else:
-					racer.state = "stopped"
+					racer.state = "stranded" if racer.kind in ["stuck", "crash"] else "stopped"
 					racer.age = 0
 			if Motion.swept_hit(racer.previous + Vector3(0, 0.7, 0), node.position + Vector3(0, 0.7, 0), player_position() + Vector3(0, 0.7, 0), 2.6 if in_car else 1.65):
 				die("Раллийная машина попала в тебя.\nНа этом выезд закончился.")
@@ -1208,7 +1208,7 @@ func _update_racers(delta: float) -> void:
 			for blocker in blockers:
 				if Motion.swept_hit(racer.previous + Vector3(0, 0.65, 0), node.position + Vector3(0, 0.65, 0), blocker + Vector3(0, 0.65, 0), 2.5):
 					node.position = racer.previous
-					racer.state = "stopped"
+					racer.state = "stranded" if racer.kind in ["stuck", "crash"] else "stopped"
 					racer.age = 0
 					toast("Столкновение машин! Экипаж остановился.")
 					break
@@ -1269,7 +1269,7 @@ func _update_stones(delta: float) -> void:
 func _update_tow(delta: float) -> void:
 	if tow_target == null and Input.is_action_pressed("tow"):
 		for racer in racers:
-			if racer.state == "stranded" and player_position().distance_to(racer.node.position) < 5:
+			if can_tow_racer(racer) and player_position().distance_to(racer.node.position) < 5:
 				if car.position.distance_to(racer.node.position) > 24:
 					toast("Подгони свою машину ближе: трос длиной 24 метра.")
 					return
@@ -1292,11 +1292,7 @@ func _update_tow(delta: float) -> void:
 		if tow_progress >= 1:
 			for racer in racers:
 				if racer.node == tow_target:
-					racer.state = "racing"
-					racer.kind = "pass"
-					racer.counted = true
-					racer.s += 10
-					helped += 1
+					recover_racer(racer)
 					break
 			_cancel_tow()
 			toast("Вытащили! Экипаж благодарит и продолжает СУ.")
@@ -1337,8 +1333,12 @@ func _update_hud() -> void:
 			info_label.text = "ТЫ ЛЕЖИШЬ · ХОДИТЬ БОЛЬШЕ НЕ ПОЛУЧИТСЯ"
 		if tow_target != null:
 			info_label.text = "ВЫТАСКИВАЕМ ЭКИПАЖ   ·   %d%%   ·   УДЕРЖИВАЙ T" % int(tow_progress * 100)
+	if tow_target != null:
+		info_label.text = "ВЫТАСКИВАЕМ ЭКИПАЖ   ·   %d%%   ·   УДЕРЖИВАЙ T" % int(tow_progress * 100)
+	elif nearby_tow_racer():
+		hint_label.text += "   ·   T — закрепить трос и вытянуть экипаж"
 	if mobile_mode:
-		if in_car:
+		if in_car and tow_target == null:
 			info_label.text = "%02d КМ/Ч · МАШИНА %d%% · %s %d м" % [int(absf(speed) * 3.6), int(condition), "ПАРКОВКА" if stage.urban else "ПОЛЯНА", distance]
 		else:
 			info_label.text = info_label.text.replace("ЗРИТЕЛЬ    ·    ", "").replace("УДЕРЖИВАЙ T", "УДЕРЖИВАЙ ТРОС")
@@ -1432,3 +1432,30 @@ func _advance_gravel(stone: Dictionary, delta: float) -> bool:
 			stone.velocity = Vector3(stone.velocity.x * 0.58, -stone.velocity.y * 0.4, stone.velocity.z * 0.58)
 	stone.node.position = next
 	return alive and int(stone.get("bounces", 0)) <= 2
+
+func can_tow_racer(racer: Dictionary) -> bool:
+	return racer.state in ["stranded", "stopped"] and is_instance_valid(racer.node)
+
+func nearby_tow_racer() -> bool:
+	for racer in racers:
+		if can_tow_racer(racer) and player_position().distance_to(racer.node.position) < 5:
+			return true
+	return false
+
+func recover_racer(racer: Dictionary) -> void:
+	# Restart ahead of the impact, with no old slide/impulse or swept crash path.
+	racer.s = clampf(stage.road_s(racer.node.position) + 12.0, 0, Stage.LENGTH - 2)
+	racer.node.position = stage.at(racer.s)
+	var direction = stage.direction(racer.s)
+	racer.node.rotation = Vector3(0, atan2(-direction.x, -direction.z), 0)
+	racer.previous = racer.node.position
+	racer.start = racer.node.position
+	racer.target = racer.node.position
+	racer.motion = Motion.new()
+	racer.slide = 0.0
+	racer.slide_speed = 0.0
+	racer.state = "racing"
+	racer.kind = "pass"
+	racer.counted = true
+	racer.age = 0.0
+	helped += 1

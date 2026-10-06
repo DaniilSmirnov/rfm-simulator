@@ -572,7 +572,7 @@ func update_tow(delta: float) -> void:
 			if not p.tow:
 				continue
 			for r in game.racers:
-				if r.state == "stranded" and v(p.pos).distance_to(r.node.position) < 5 and v(p.car).distance_to(r.node.position) <= 24:
+				if game.can_tow_racer(r) and v(p.pos).distance_to(r.node.position) < 5 and v(p.car).distance_to(r.node.position) <= 24:
 					game.tow_target = r.node
 					tow_owner = id
 					break
@@ -596,11 +596,7 @@ func update_tow(delta: float) -> void:
 		if game.tow_progress >= 1:
 			for r in game.racers:
 				if r.node == game.tow_target:
-					r.state = "racing"
-					r.kind = "pass"
-					r.counted = true
-					r.s += 10
-					game.helped += 1
+					game.recover_racer(r)
 			game._cancel_tow()
 
 func check_remote_collisions() -> void:

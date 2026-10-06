@@ -49,7 +49,7 @@ func _layout() -> void:
 		actions = [["Поставить", "placement_confirm", false], ["Повернуть", "placement_rotate", false], ["Отмена", "placement_cancel", false]]
 	elif game.in_car:
 		actions = [["Выйти", "interact", false], ["Вернуть", "recover", false], ["Поляна", "random_spot", false], ["Назад", "back", true], ["Тормоз", "brake", true], ["Газ", "forward", true]]
-		if game.tow_target != null:
+		if game.tow_target != null or game.nearby_tow_racer():
 			actions[1] = ["Трос", "tow", true]
 	else:
 		actions = [["Сесть", "interact", false], ["Поляна", "random_spot", false]]
@@ -63,10 +63,8 @@ func _layout() -> void:
 			actions.append(["Заезды", "rally", false])
 		if game.near_camp():
 			actions.append(["Пиво", "beer", false])
-		for racer in game.racers:
-			if racer.state == "stranded" and game.walker.distance_to(racer.node.position) < 6:
-				actions.append(["Трос", "tow", true])
-				break
+		if game.tow_target != null or game.nearby_tow_racer():
+			actions.append(["Трос", "tow", true])
 	var width = 100.0
 	var height = 84.0
 	var gap = 12.0
