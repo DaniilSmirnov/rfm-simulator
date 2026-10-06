@@ -1291,7 +1291,7 @@ func race_speed(progress: float) -> float:
 func _add_course_vehicle(node: Node3D, id: int, kind: String, variant: int, role: String = "racer", zero_index: int = 0) -> Dictionary:
 	var focus = clampf(race_station(player_position()), 45, Stage.LENGTH - 80)
 	add_child(node)
-	var s = 0.0 if stage.urban or role != "racer" else maxf(0, focus - 115)
+	var s = 0.0
 	node.position = race_at(s)
 	var direction = race_direction(s)
 	node.rotation.y = atan2(-direction.x, -direction.z)
@@ -1373,7 +1373,7 @@ func _update_racers(delta: float) -> void:
 				toast("ВЫЛЕТ! Отойди с траектории!" if racer.kind == "crash" else "Экипаж застрял. Нужен трос — T рядом с машиной.")
 			elif s > racer.focus + 45 and not racer.counted:
 				count_racer(racer)
-			if s >= Stage.LENGTH - 1 or (not stage.urban and not service and s > racer.focus + 150):
+			if s >= Stage.LENGTH - 1:
 				to_remove.append(racer)
 		elif racer.state == "offroad":
 			var t = minf(1, racer.age / (0.7 if racer.kind == "crash" else 1.1))

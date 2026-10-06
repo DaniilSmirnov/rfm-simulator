@@ -96,6 +96,8 @@ func run() -> void:
 	cars = pair(game)
 	lead = cars[0]
 	follower = cars[1]
+	follower.s = 160.0
+	follower.node.position = game.race_at(follower.s)
 	var plan = game.Traffic.plan(game, follower)
 	check(plan.avoiding, "reverse traffic recognizes a blocker ahead in travel direction")
 	safe = true
