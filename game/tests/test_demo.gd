@@ -87,7 +87,8 @@ func run() -> void:
 	check(scene.drink_beer(), "beer remains available after third can")
 	scene._cancel_drink()
 	scene.beers = 1
-	check(scene.start_rally(), "stage starts on foot")
+	check(not scene.start_rally(), "manual rally shortcut cannot skip the countdown")
+	scene.course.phase = "racing"
 	scene.spawn_racer("stuck")
 	var r = scene.racers[0]
 	for i in range(4):
@@ -125,7 +126,10 @@ func run() -> void:
 	scene.dead = false
 	scene.passed = scene.RALLY_CREW_LIMIT
 	scene._check_finish()
-	check(scene.finished, "full picnic and ten crews complete demo")
+	check(not scene.finished, "ten crews cannot finish before closing police")
+	scene.course.phase = "complete"
+	scene._check_finish()
+	check(scene.finished, "full picnic, ten crews and closing police complete demo")
 	print("RESULT: %d checks, %d failures" % [checks, failures])
 	await scene._shutdown_audio()
 	scene.queue_free()

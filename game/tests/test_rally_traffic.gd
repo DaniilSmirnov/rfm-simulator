@@ -16,6 +16,7 @@ func clear_cars(game) -> void:
 	game.car.position = Vector3(170, 2, 5)
 func pair(game, moving: bool = false) -> Array:
 	clear_cars(game)
+	game.course.phase = "racing"
 	game.spawn_racer("pass")
 	game.spawn_racer("pass")
 	var lead = game.racers[0]
@@ -44,6 +45,7 @@ func run() -> void:
 	game.start_game()
 	game.in_car = false
 	game.walker = Vector3(170, 2, 5)
+	game.course.phase = "racing"
 	var biases = []
 	for i in range(10):
 		game.spawn_racer("pass")

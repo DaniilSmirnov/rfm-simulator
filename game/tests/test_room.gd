@@ -42,6 +42,7 @@ func run() -> void:
 	guest.room.apply_world(host.room.world_state())
 	check(guest.has_chairs and guest.cooking and guest.cook_time == 19, "late world snapshot builds chairs and grill")
 	host.in_car = false
+	host.course.phase = "racing"
 	host.spawn_racer("stuck")
 	host.racers[0].state = "stranded"
 	host.racers[0].node.position = host.stage.clearings[0]

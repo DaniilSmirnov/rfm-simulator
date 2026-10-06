@@ -59,8 +59,6 @@ func _layout() -> void:
 			actions.append(["Мангал", "grill", false])
 		if game.cook_time >= 35:
 			actions.append(["Есть", "eat", false])
-		if not game.racing:
-			actions.append(["Заезды", "rally", false])
 		if game.near_camp():
 			actions.append(["Пиво", "beer", false])
 		if game.tow_target != null or game.nearby_tow_racer():

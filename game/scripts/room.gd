@@ -326,6 +326,7 @@ func _process(delta: float) -> void:
 				if distance < nearest_distance:
 					nearest = racer.node
 					nearest_distance = distance
+			Props.update_course_lights(racer.node, game.elapsed)
 			if racer_motion.has(racer.id):
 				var frozen = world_paused or game.dead or game.finished
 				var pose = racer_motion[racer.id].render(server_clock(), frozen)
@@ -445,8 +446,8 @@ func world_state() -> Dictionary:
 		chair_poses[owner] = {"pos": a(chair.position), "yaw": chair.rotation.y}
 	var racers = []
 	for r in game.racers:
-		racers.append({"id": r.id, "variant": r.variant, "pos": a(r.node.position), "yaw": r.node.rotation.y, "tilt": a(r.node.rotation), "state": r.state})
-	return {"city_lamps": game.stage.city.snapshot() if game.stage.urban else [], "chair_poses": chair_poses, "table_yaw": game.camp.rotation.y if game.camp != null else 0.0, "grill_pose": {"pos": a(game.grill.position), "yaw": game.grill.rotation.y} if game.grill != null else null, "fallen": game.stage.tree_snapshot(), "stones": stone_state(), "impacts": game.impact_serials, "camp": a(game.camp.position) if game.camp != null else null, "chairs": game.has_chairs, "cooking": game.cooking, "cook_time": game.cook_time, "eaten": game.eaten, "racing": game.racing, "passed": game.passed, "helped": game.helped, "elapsed": game.elapsed, "clearing": game.target_clearing, "paused": game.paused, "dead": game.dead, "finished": game.finished, "title": game.menu_title.text, "text": game.menu_text.text, "racers": racers, "tow": game.tow_target.get_meta("room_id") if game.tow_target != null else -1, "tow_progress": game.tow_progress, "tow_owner": tow_owner, "notice": game.toast_label.text, "notice_time": game.toast_time}
+		racers.append({"id": r.id, "role": r.get("role", "racer"), "zero_index": r.get("zero_index", 0), "variant": r.variant, "pos": a(r.node.position), "yaw": r.node.rotation.y, "tilt": a(r.node.rotation), "state": r.state})
+	return {"course": game.course.snapshot(), "city_lamps": game.stage.city.snapshot() if game.stage.urban else [], "chair_poses": chair_poses, "table_yaw": game.camp.rotation.y if game.camp != null else 0.0, "grill_pose": {"pos": a(game.grill.position), "yaw": game.grill.rotation.y} if game.grill != null else null, "fallen": game.stage.tree_snapshot(), "stones": stone_state(), "impacts": game.impact_serials, "camp": a(game.camp.position) if game.camp != null else null, "chairs": game.has_chairs, "cooking": game.cooking, "cook_time": game.cook_time, "eaten": game.eaten, "racing": game.racing, "passed": game.passed, "helped": game.helped, "elapsed": game.elapsed, "clearing": game.target_clearing, "paused": game.paused, "dead": game.dead, "finished": game.finished, "title": game.menu_title.text, "text": game.menu_text.text, "racers": racers, "tow": game.tow_target.get_meta("room_id") if game.tow_target != null else -1, "tow_progress": game.tow_progress, "tow_owner": tow_owner, "notice": game.toast_label.text, "notice_time": game.toast_time}
 
 func stone_state() -> Array:
 	var result = []
@@ -522,6 +523,7 @@ func apply_world(w: Dictionary, sample_time: float = -1.0) -> void:
 		game.start_grill(spot, yaw, true)
 	game.cook_time = w.cook_time
 	game.eaten = w.eaten
+	game.course.apply_snapshot(w.get("course", {}))
 	game.racing = w.racing
 	game.passed = w.passed
 	game.helped = w.helped
@@ -537,11 +539,12 @@ func apply_world(w: Dictionary, sample_time: float = -1.0) -> void:
 				exists = true
 				break
 		if not exists:
-			var node = Props.car(Color.WHITE, true, int(r.variant))
+			var role = str(r.get("role", "racer"))
+			var node = Props.car(Color.WHITE, true, int(r.variant)) if role == "racer" else Props.course_car(role, int(r.get("zero_index", 0)))
 			game.add_child(node)
 			node.position = v(r.pos)
 			node.set_meta("room_id", r.id)
-			game.racers.append({"id": r.id, "node": node, "state": r.state, "variant": r.variant})
+			game.racers.append({"id": r.id, "role": role, "zero_index": int(r.get("zero_index", 0)), "node": node, "state": r.state, "variant": r.variant})
 		if not racer_motion.has(r.id):
 			racer_motion[r.id] = SnapshotMotion.new()
 		var tilt = v(r.get("tilt", [0, r.yaw, 0]))

@@ -146,6 +146,8 @@ var can_opened = false
 var beer_audio: AudioStreamPlayer
 const RALLY_CREW_LIMIT = 10
 var rally_spawn_count = 0
+var course = preload("res://scripts/course_schedule.gd").new()
+var course_label: Label
 var racing = false
 var race_clock = 0.0
 var spawn_clock = 12.0
@@ -382,6 +384,8 @@ func _build_ui() -> void:
 	top.add_child(vb)
 	title_label = _label(vb, "СИМУЛЯТОР РАЛЛИЙНОГО ОВОЩА", 22)
 	stage_caption = _label(vb, Stage.STAGES[selected_stage] + "  /  ДЕМО " + str(ProjectSettings.get_setting("application/config/version")), 12, Color("b2bea1"))
+	course_label = _label(vb, "", 16, Color("ffe4a5"))
+	course_label.hide()
 	var sidebar = PanelContainer.new()
 	mobile_sidebar = sidebar
 	ui.add_child(sidebar)
@@ -442,7 +446,7 @@ func _build_ui() -> void:
 	menu.add_child(mv)
 	_label(mv, "ПЕРЕВАЛ. РАЛЛИ. ШАШЛЫК.", 14, Color("dfb270"))
 	menu_title = _label(mv, "Симулятор\nраллийного овоща", 42)
-	menu_text = _label(mv, "Выбери машину и спецучасток. Доедь до места,\nразложи лагерь, жарь шашлык и смотри ралли.", 19)
+	menu_text = _label(mv, "Выбери машину и спецучасток. Доедь до места,\nдо открытия СУ — 3 минуты. Успей разложить лагерь.", 19)
 	selection_controls = VBoxContainer.new()
 	selection_controls.add_theme_constant_override("separation", 8)
 	mv.add_child(selection_controls)
@@ -506,9 +510,15 @@ func _setup_audio() -> void:
 	add_child(beer_audio)
 
 func start_game() -> void:
+	if playing:
+		return
 	playing = true
+	course.apply_snapshot({})
+	racing = false
 	selection_controls.hide()
 	menu.hide()
+	course_label.show()
+	course_label.text = course.caption()
 	for panel in hud_panels:
 		panel.show()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if mobile_mode or (room.connected and OS.has_feature("web")) else Input.MOUSE_MODE_CAPTURED
@@ -605,6 +615,9 @@ func _process(delta: float) -> void:
 		return
 	if not room.connected or room.is_host:
 		elapsed += delta
+		course.update(self, delta)
+	elif course.phase == "countdown":
+		course.remaining = maxf(0, course.remaining - delta)
 	stage.update_fallen(delta)
 	_update_intoxication(delta)
 	if in_car:
@@ -629,13 +642,6 @@ func _process(delta: float) -> void:
 		beer_timer = maxf(0, beer_timer - delta)
 	toast_time = maxf(0, toast_time - delta)
 	toast_label.visible = toast_time > 0 and not mobile_mode
-	if racing and (not room.connected or room.is_host):
-		race_clock += delta
-		if rally_spawn_count < RALLY_CREW_LIMIT:
-			spawn_clock -= delta
-			if spawn_clock <= 0:
-				spawn_racer()
-				spawn_clock = rng.randf_range(17, 23)
 	_update_hud()
 	engine_audio.pitch_scale = 0.75 + absf(speed) / 18.0
 	engine_audio.volume_db = -21 if in_car else -35
@@ -925,7 +931,7 @@ func start_grill(spot: Vector3 = Vector3.INF, yaw: float = 0.0, replicated: bool
 	smoke.draw_pass_1 = mesh
 	fire_audio.position = grill.global_position
 	_play_audio(fire_audio)
-	toast("Угли разгорелись. Шашлык готовится 35 секунд. R — открыть СУ.")
+	toast("Угли разгорелись. Шашлык готовится 35 секунд. Следи за таймером СУ.")
 	return true
 
 func _update_cooking(delta: float) -> void:
@@ -998,7 +1004,7 @@ func _update_drinking(delta: float) -> void:
 		_play_audio(beer_audio)
 	if drink_time >= DRINK_DURATION:
 		_cancel_drink()
-		toast("За хороший выезд! X — готовый шашлык, R — заезды.")
+		toast("За хороший выезд! X — готовый шашлык. Заезды начнутся автоматически.")
 
 func _cancel_drink() -> void:
 	drink_time = -1.0
@@ -1089,22 +1095,36 @@ func _cancel_eat() -> void:
 	meat_prop = null
 
 func start_rally() -> bool:
-	if in_car:
-		toast("Припаркуйся и выйди из машины перед открытием СУ.")
-		return false
-	if not racing:
-		racing = true
-		spawn_clock = 5
-		toast("СУ открыт. Первый экипаж через несколько секунд!")
-	return true
+	# R is an information shortcut; it cannot bypass the safety convoy.
+	toast(course.caption())
+	return course.phase == "racing"
+
+func spawn_course_car(role: String, id: int, zero_index: int = 0) -> void:
+	if dead or finished or (room.connected and not room.is_host):
+		return
+	var node = Props.course_car(role, zero_index)
+	var racer = _add_course_vehicle(node, id, "pass", 0, role, zero_index)
+	racer.pace = 0.72
+	racer.drive_speed = stage.rally_speed(0) * racer.pace
+	racer.bias = 0.0
+	racer.phase = 0.0
+	toast(course.caption())
+
+func _add_course_vehicle(node: Node3D, id: int, kind: String, variant: int, role: String = "racer", zero_index: int = 0) -> Dictionary:
+	var focus = clampf(stage.road_s(player_position()), 45, Stage.LENGTH - 80)
+	add_child(node)
+	var s = 0.0 if stage.urban or role != "racer" else maxf(0, focus - 115)
+	node.position = stage.at(s)
+	node.set_meta("room_id", id)
+	var driver = Traffic.profile(id)
+	var racer = {"bias": driver.bias, "phase": driver.phase, "pace": driver.pace, "line": 0.0, "drive_speed": stage.rally_speed(s) * driver.pace, "avoiding": false, "avoid_line": 0.0, "role": role, "zero_index": zero_index, "id": id, "node": node, "s": s, "focus": focus, "kind": kind, "state": "racing", "offset": 0.0, "age": 0.0, "counted": false, "start": Vector3.ZERO, "target": Vector3.ZERO, "variant": variant, "motion": Motion.new(), "previous": node.position, "slide": 0.0, "slide_speed": 0.0}
+	racers.append(racer)
+	return racer
 
 func spawn_racer(forced: String = "") -> void:
-	if rally_spawn_count >= RALLY_CREW_LIMIT or dead or finished:
+	if course.phase != "racing" or rally_spawn_count >= RALLY_CREW_LIMIT or dead or finished or (room.connected and not room.is_host):
 		return
-	if not racing:
-		if in_car:
-			return
-		racing = true
+	racing = true
 	var kind = forced
 	if kind == "":
 		var roll = rng.randf()
@@ -1113,16 +1133,10 @@ func spawn_racer(forced: String = "") -> void:
 	for existing in racers:
 		if existing.state == "stranded" and kind in ["stuck", "crash"]:
 			kind = "pass"
-	var focus = clampf(stage.road_s(player_position()), 45, Stage.LENGTH - 80)
 	var variant = [5, 0, 1, 2, 3, 4][rally_spawn_count % Props.RALLY_MODELS.size()]
 	rally_spawn_count += 1
 	var node = Props.car(Color.WHITE, true, variant)
-	add_child(node)
-	var s = 0.0 if stage.urban else maxf(0, focus - 115)
-	node.position = stage.at(s)
-	node.set_meta("room_id", rally_spawn_count)
-	var driver = Traffic.profile(rally_spawn_count)
-	racers.append({"bias": driver.bias, "phase": driver.phase, "pace": driver.pace, "line": 0.0, "drive_speed": stage.rally_speed(s) * driver.pace, "avoiding": false, "avoid_line": 0.0, "id": rally_spawn_count, "node": node, "s": s, "focus": focus, "kind": kind, "state": "racing", "offset": 0.0, "age": 0.0, "counted": false, "start": Vector3.ZERO, "target": Vector3.ZERO, "variant": variant, "motion": Motion.new(), "previous": node.position, "slide": 0.0, "slide_speed": 0.0})
+	_add_course_vehicle(node, rally_spawn_count, kind, variant)
 	toast("Приближается %s, номер %d!" % [node.get_meta("model"), node.get_meta("number")])
 
 func _update_racers(delta: float) -> void:
@@ -1134,6 +1148,9 @@ func _update_racers(delta: float) -> void:
 		racer.previous = node.position
 		var moving_before = racer.state in ["racing", "offroad"]
 		racer.age += delta
+		var service = racer.get("role", "racer") != "racer"
+		if service:
+			Props.update_course_lights(node, elapsed)
 		if racer.state == "racing":
 			var traffic = Traffic.plan(self, racer)
 			racer.avoiding = traffic.avoiding
@@ -1155,7 +1172,7 @@ func _update_racers(delta: float) -> void:
 			var substeps = maxi(1, int(ceil(delta / (1.0 / 120.0))))
 			var dt = delta / substeps
 			for step in range(substeps):
-				racer.slide_speed += (bend * race_speed * race_speed - racer.slide * 14.0 - racer.slide_speed * stage.grip(node.position) * 5.0) * dt
+				racer.slide_speed += ((0.0 if service else bend * race_speed * race_speed) - racer.slide * 14.0 - racer.slide_speed * stage.grip(node.position) * 5.0) * dt
 				racer.slide = clampf(racer.slide + racer.slide_speed * dt, -2.6, 2.6)
 			var height = node.position.y
 			node.position = stage.at(s) + stage.side(s) * racer.line
@@ -1176,7 +1193,7 @@ func _update_racers(delta: float) -> void:
 				toast("ВЫЛЕТ! Отойди с траектории!" if racer.kind == "crash" else "Экипаж застрял. Нужен трос — T рядом с машиной.")
 			elif s > racer.focus + 45 and not racer.counted:
 				count_racer(racer)
-			if s >= Stage.LENGTH - 1 or (not stage.urban and s > racer.focus + 150):
+			if s >= Stage.LENGTH - 1 or (not stage.urban and not service and s > racer.focus + 150):
 				to_remove.append(racer)
 		elif racer.state == "offroad":
 			var t = minf(1, racer.age / (0.7 if racer.kind == "crash" else 1.1))
@@ -1204,7 +1221,7 @@ func _update_racers(delta: float) -> void:
 				racer.age = 0.0
 		elif racer.state in ["stopped", "stranded"]:
 			racer.motion.suspension(node, stage, delta, node.rotation.y)
-			if racer.state == "stopped" and racer.age > 18 and racer.node != tow_target:
+			if racer.state == "stopped" and not service and racer.age > 18 and racer.node != tow_target:
 				to_remove.append(racer)
 		if moving_before:
 			var contact = stage.rock_hit(racer.previous, node.position, 0.85)
@@ -1263,6 +1280,8 @@ func _update_racers(delta: float) -> void:
 	for racer in to_remove:
 		racer.node.queue_free()
 		racers.erase(racer)
+		if racer.get("role", "racer") != "racer":
+			course.vehicle_finished(self, racer.id)
 	if nearest != null:
 		rally_audio.position = nearest.position
 		rally_audio.pitch_scale = 1.8
@@ -1361,6 +1380,7 @@ func toast(message: String) -> void:
 		toast_time = 5
 
 func _update_hud() -> void:
+	course_label.text = course.caption()
 	var distance = int(player_position().distance_to(stage.clearings[target_clearing]))
 	quest_label.text = "%s Найти место  ·  %d м\n%s Разложить стол\n%s Поставить стулья\n%s Пожарить и съесть шашлык\n%s Посмотреть %d экипажей" % ["[x]" if camp != null else "[ ]", distance, "[x]" if camp != null else "[ ]", "[x]" if has_chairs else "[ ]", "[x]" if eaten else "[ ]", "[x]" if passed >= RALLY_CREW_LIMIT else "[ ]", RALLY_CREW_LIMIT]
 	status_label.text = "ЭКИПАЖИ %d/%d   ·   ПОМОЩЬ %d\nПИВО %d   ·   ВЫЕЗД %02d:%02d" % [passed, RALLY_CREW_LIMIT, helped, beers, int(elapsed) / 60, int(elapsed) % 60]
@@ -1369,8 +1389,8 @@ func _update_hud() -> void:
 		hint_label.text = "WASD / стрелки — газ и руль   ·   Space — тормоз   ·   E — выйти   ·   Q — случайная поляна   ·   Home — вернуть на СУ"
 	else:
 		var cook_status = "ШАШЛЫК ГОТОВ" if cook_time >= 35 else ("ШАШЛЫК %d%%" % int(cook_time / 35 * 100) if cooking else "МАНГАЛ НЕ РАЗОЖЖЁН")
-		info_label.text = "ЗРИТЕЛЬ    ·    %s    ·    %s" % [cook_status, "СУ ОТКРЫТ" if racing else "ДО СТАРТА"]
-		hint_label.text = "WASD — идти   ·   мышь — смотреть   ·   E — сесть   ·   F — стол   ·   C — стулья   ·   G — мангал   ·   B — пиво   ·   X — есть   ·   R — заезды"
+		info_label.text = "ЗРИТЕЛЬ    ·    %s    ·    %s" % [cook_status, course.caption()]
+		hint_label.text = "WASD — идти   ·   мышь — смотреть   ·   E — сесть   ·   F — стол   ·   C — стулья   ·   G — мангал   ·   B — пиво   ·   X — есть   ·   R — статус СУ"
 		if drink_time >= 0:
 			info_label.text = "ОТКРЫВАЕМ БАНКУ" if drink_time < 1.25 else "ЗА ХОРОШИЙ ВЫЕЗД!"
 		if eat_time >= 0:
@@ -1395,9 +1415,9 @@ func _update_hud() -> void:
 func _check_finish() -> void:
 	if dead:
 		return
-	if camp != null and has_chairs and eaten and eat_time < 0 and passed >= RALLY_CREW_LIMIT:
+	if camp != null and has_chairs and eaten and eat_time < 0 and passed >= RALLY_CREW_LIMIT and course.phase == "complete":
 		finished = true
-		_show_result("Идеальный раллийный овощ", "Шашлык съеден. Ралли посмотрено. Ты выжил.\n\nЭкипажи: %d  ·  Помощь тросом: %d\nПиво: %d  ·  Машина: %d%%\n\nДень в лесу удался." % [passed, helped, beers, condition])
+		_show_result("Идеальный раллийный овощ", "Шашлык съеден. Ралли посмотрено. Ты выжил.\n\nЭкипажи: %d  ·  Помощь тросом: %d\nПиво: %d  ·  Машина: %d%%\n\nРаллийный выезд удался." % [passed, helped, beers, condition])
 
 func die(reason: String) -> void:
 	dead = true
@@ -1429,6 +1449,7 @@ func _prepare_capture() -> void:
 	place_table()
 	place_chairs()
 	start_grill()
+	course.phase = "racing" # Explicit visual capture fixture, outside normal gameplay.
 	start_rally()
 	spawn_racer("pass")
 	var racer = racers[0]
@@ -1511,7 +1532,7 @@ func recover_racer(racer: Dictionary) -> void:
 	helped += 1
 
 func count_racer(racer: Dictionary) -> void:
-	if racer.get("counted", false):
+	if racer.get("role", "racer") != "racer" or racer.get("counted", false):
 		return
 	racer.counted = true
 	passed = mini(RALLY_CREW_LIMIT, passed + 1)

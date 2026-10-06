@@ -60,6 +60,7 @@ func run() -> void:
 	check(absf(game.walker.x - previous.x) < 0.01, "walking cannot cross a solid rock")
 	check(not game.valid_furniture_spot(origin, "table"), "furniture cannot be placed inside rocks")
 	game.walker = origin + Vector3(0, 0, 12)
+	game.course.phase = "racing"
 	game.spawn_racer("crash")
 	var racer = game.racers[0]
 	racer.state = "offroad"

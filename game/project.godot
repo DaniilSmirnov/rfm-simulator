@@ -3,7 +3,7 @@ config_version=5
 
 [application]
 config/name="Симулятор раллийного овоща"
-config/version="0.8.0"
+config/version="0.9.0"
 config/icon="res://branding/rfm-icon.svg"
 boot_splash/image="res://branding/rfm-icon.svg"
 boot_splash/show_image=true

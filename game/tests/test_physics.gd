@@ -60,6 +60,7 @@ func run() -> void:
 	scene.in_car = false
 	scene.walker = scene.stage.clearings[0]
 	scene.racing = true
+	scene.course.phase = "racing"
 	scene.spawn_racer("pass")
 	scene._update_stones(0.1)
 	check(scene.stones.size() > 0 and scene.stones.size() <= 48, "moving crews throw bounded gravel particles")

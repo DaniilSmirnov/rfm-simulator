@@ -399,9 +399,13 @@ static func label_3d(parent: Node3D, pos: Vector3, text: String, size: int, pixe
 	label.rotation.y = yaw
 	return label
 
-static func rally_car(variant: int) -> Node3D:
+static func rally_car(variant: int, number_override: int = -1, sponsor_override: String = "") -> Node3D:
 	variant = posmod(variant, RALLY_MODELS.size())
-	var profile: Dictionary = RALLY_MODELS[variant]
+	var profile: Dictionary = RALLY_MODELS[variant].duplicate()
+	if number_override >= 0:
+		profile.number = number_override
+	if sponsor_override != "":
+		profile.sponsor = sponsor_override
 	var root = Node3D.new()
 	root.name = "Rally_%d" % variant
 	root.set_meta("model", profile.name)
@@ -515,6 +519,39 @@ static func rally_car(variant: int) -> Node3D:
 					if (row + col) % 2 == 0:
 						box(taxi, Vector3(-0.245 + col * 0.07, -0.04 + row * 0.07, face * 0.12), Vector3(0.06, 0.06, 0.01), Color("242a25"))
 	return root
+
+static func course_car(role: String, zero_index: int = 0) -> Node3D:
+	if role == "zero":
+		var node = rally_car([0, 2, 4][clampi(zero_index - 1, 0, 2)], 0, "БЕЗОПАСНОСТЬ")
+		node.name = "ZeroCrew_%d" % zero_index
+		node.set_meta("model", "Нулевой экипаж %d" % zero_index)
+		node.set_meta("role", role)
+		return node
+	var node = car(Color("f0f2ee"))
+	node.name = "Police"
+	node.set_meta("model", "Замыкающая полиция" if role == "closing_police" else "Полиция открытия СУ")
+	node.set_meta("number", 0)
+	node.set_meta("role", role)
+	for side in [-1, 1]:
+		box(node, Vector3(side * 0.936, 0.86, 0), Vector3(0.025, 0.21, 3.45), Color("2458aa"))
+		label_3d(node, Vector3(side * 0.96, 0.86, 0.1), "ПОЛИЦИЯ", 64, 0.0020, Color.WHITE, side * PI / 2)
+	box(node, Vector3(0, 1.66, 0.2), Vector3(1.25, 0.09, 0.29), Color("27323c"))
+	var blue = box(node, Vector3(-0.38, 1.78, 0.2), Vector3(0.43, 0.17, 0.25), Color("247fff"))
+	blue.name = "BeaconBlue"
+	var red = box(node, Vector3(0.38, 1.78, 0.2), Vector3(0.43, 0.17, 0.25), Color("ff4038"))
+	red.name = "BeaconRed"
+	for light in [blue, red]:
+		light.material_override.emission_enabled = true
+		light.material_override.emission = light.material_override.albedo_color
+		light.material_override.emission_energy_multiplier = 2.5
+	return node
+
+static func update_course_lights(node: Node3D, clock: float) -> void:
+	var blue = node.get_node_or_null("BeaconBlue")
+	if blue == null:
+		return
+	blue.visible = posmod(int(clock * 5), 2) == 0
+	node.get_node("BeaconRed").visible = not blue.visible
 
 static func beer_hand(variant: int = 0) -> Node3D:
 	var profile = spectator_profile(variant)

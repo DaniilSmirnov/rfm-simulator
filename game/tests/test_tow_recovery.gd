@@ -18,6 +18,7 @@ func run() -> void:
 	game.stage.rocks.clear()
 	game.in_car = false
 	game.walker = game.stage.at(300) + game.stage.side(300) * 9
+	game.course.phase = "racing"
 	game.spawn_racer("crash")
 	var racer = game.racers[0]
 	racer.state = "rock_bounce"

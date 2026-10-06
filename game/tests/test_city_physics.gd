@@ -81,6 +81,7 @@ func run() -> void:
 	# chooses the first parking spot, rather than despawning before the square.
 	game.in_car = false
 	game.walker = stage.clearings[0]
+	game.course.phase = "racing"
 	game.spawn_racer("pass")
 	var racer = game.racers[0]
 	racer.s = 310

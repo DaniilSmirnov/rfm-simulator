@@ -16,6 +16,7 @@ func run() -> void:
 	game.in_car = false
 	game.walker = game.stage.clearings[0]
 	for i in range(15):
+		game.course.phase = "racing"
 		game.spawn_racer("pass")
 	check(game.rally_spawn_count == 10 and game.racers.size() == 10, "rally spawns exactly ten crews even with repeated manual requests")
 	var racer = game.racers[0]
@@ -40,7 +41,10 @@ func run() -> void:
 	check(not game.finished, "picnic with nine crews does not finish the demo")
 	game.passed = 10
 	game._check_finish()
-	check(game.finished, "picnic with ten crews finishes the demo")
+	check(not game.finished, "picnic with ten crews waits for closing police")
+	game.course.phase = "complete"
+	game._check_finish()
+	check(game.finished, "picnic with ten crews and closing police finishes the demo")
 	await game._shutdown_audio()
 	game.queue_free()
 	await process_frame
