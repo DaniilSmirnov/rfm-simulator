@@ -241,8 +241,71 @@ static func car_beam(parent: Node3D, a: Vector3, b: Vector3, width: float, color
 	var beam = box(parent, (a + b) / 2, Vector3(width, a.distance_to(b), width), color)
 	beam.quaternion = Quaternion(Vector3.UP, (b - a).normalized())
 
+static func player_car_2112_boat() -> Node3D:
+	var root = Node3D.new()
+	root.name = "PlayerCar_8"
+	root.set_meta("model", "ВАЗ-2112 Лодка")
+	root.set_meta("variant", 8)
+	root.set_meta("roof_cargo", "inflatable_boat")
+	var paint = Color("283f87")
+	var trim = Color("202b31")
+	# Three-box silhouette from the reference: long bonnet, upright cabin and a separate boot.
+	var body = car_shell(root, [
+		Vector4(-2.08, 0.73, 0.40, 0.82),
+		Vector4(-1.58, 0.84, 0.39, 0.98),
+		Vector4(-0.98, 0.84, 0.40, 1.03),
+		Vector4(0.45, 0.84, 0.40, 1.02),
+		Vector4(1.15, 0.82, 0.40, 0.90),
+		Vector4(2.08, 0.72, 0.40, 0.82)
+	], paint)
+	body.name = "BodyShell2112"
+	var glass = car_shell(root, [
+		Vector4(-0.93, 0.68, 0.95, 1.38),
+		Vector4(-0.68, 0.69, 0.98, 1.48),
+		Vector4(0.48, 0.69, 0.98, 1.48),
+		Vector4(0.72, 0.67, 0.95, 1.32)
+	], Color("304a55"))
+	glass.name = "GlassCabin2112"
+	# Roof pillars, door belt and mirrors.
+	for side in [-1, 1]:
+		var x = side * 0.73
+		for z in [-0.83, -0.26, 0.48, 0.70]:
+			box(root, Vector3(x, 1.20, z), Vector3(0.065, 0.55, 0.075), paint)
+		box(root, Vector3(side * 0.86, 1.02, -0.05), Vector3(0.045, 0.08, 1.55), trim)
+		box(root, Vector3(side * 0.91, 1.10, -0.93), Vector3(0.22, 0.13, 0.18), trim)
+		for z in [-1.33, 1.34]:
+			var wheel = cylinder(root, Vector3(side * 0.87, 0.39, z), 0.39, 0.39, 0.28, Color("202827"), 12)
+			wheel.rotation.z = PI / 2
+			var hub = cylinder(root, Vector3(side * 1.03, 0.39, z), 0.22, 0.22, 0.035, Color("525b60"), 8)
+			hub.rotation.z = PI / 2
+	# Front bumper, narrow grille and the reference's rectangular lamps.
+	box(root, Vector3(0, 0.48, -2.10), Vector3(1.58, 0.16, 0.12), trim)
+	box(root, Vector3(0, 0.74, -2.115), Vector3(0.72, 0.18, 0.035), Color("17252b"))
+	for side in [-1, 1]:
+		var lamp = box(root, Vector3(side * 0.54, 0.80, -2.13), Vector3(0.47, 0.22, 0.05), Color("f0e8bd"))
+		lamp.rotation.z = side * 0.10
+		box(root, Vector3(side * 0.54, 0.79, -2.16), Vector3(0.34, 0.06, 0.012), Color("d6d8cf"))
+	# Wide horizontal tail lamps and a separate boot lid.
+	box(root, Vector3(0, 0.61, 2.11), Vector3(1.55, 0.23, 0.06), Color("202b31"))
+	for side in [-1, 1]:
+		box(root, Vector3(side * 0.53, 0.78, 2.14), Vector3(0.48, 0.24, 0.06), Color("a83a35"))
+	box(root, Vector3(0, 0.91, 1.35), Vector3(1.42, 0.05, 0.52), paint)
+	# Low spoiler and roof rack.
+	box(root, Vector3(0, 1.01, 1.35), Vector3(1.32, 0.08, 0.16), trim)
+	for z in [-0.62, 0.62]:
+		box(root, Vector3(0, 1.57, z), Vector3(1.32, 0.08, 0.12), trim)
+	# Inflatable boat: hull, dark inner well, yellow straps and tie-downs.
+	faceted(root, Vector3(0, 1.94, 0), Vector3(0.72, 0.30, 1.70), Color("747d7e"), 10, 5)
+	faceted(root, Vector3(0, 2.07, 0), Vector3(0.47, 0.12, 1.38), Color("354448"), 10, 4)
+	for z in [-0.62, 0.62]:
+		box(root, Vector3(0, 1.92, z), Vector3(1.48, 0.045, 0.10), Color("e0b83f"))
+		box(root, Vector3(0, 1.84, z), Vector3(0.055, 0.38, 0.055), Color("202a2d"))
+	return root
+
 static func player_car(variant: int = 0) -> Node3D:
 	variant = posmod(variant, PLAYER_MODELS.size())
+	if variant == 8:
+		return player_car_2112_boat()
 	var p: Dictionary = PLAYER_MODELS[variant]
 	var shapes = [
 		[-0.87, -0.40, 0.57, 1.07, 0.72, 0.77], # Granta: compact cabin, high boot.
