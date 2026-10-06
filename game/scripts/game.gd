@@ -1,5 +1,6 @@
 extends Node3D
 
+var cargo = preload("res://scripts/car_cargo.gd").new()
 var packing = preload("res://scripts/camp_packing.gd").new()
 var interaction = preload("res://scripts/interaction.gd").new()
 var seated = false
@@ -113,6 +114,8 @@ func begin_placement(kind: String) -> void:
 	if in_car or beers >= 30:
 		toast("Для размещения выйди из машины и встань на ноги.")
 		return
+	if kind in cargo.KINDS and not cargo.take(kind):
+		return
 	cancel_placement()
 	if kind == "flag" and flag_count() >= FLAGS_PER_PLAYER:
 		toast("Можно поставить только три флага.")
@@ -161,9 +164,7 @@ func confirm_placement() -> void:
 		room.submit(kind, {"pos": room.a(spot), "yaw": yaw})
 	else:
 		match kind:
-			"table": place_table(spot, yaw)
-			"chairs": place_chairs(spot, yaw)
-			"grill": start_grill(spot, yaw)
+			"table", "chairs", "grill": cargo.deploy(kind, spot, yaw)
 			"flag": place_flag(spot, yaw)
 	cancel_placement()
 
@@ -298,6 +299,7 @@ func _ready() -> void:
 	foraging.game = self
 	interaction.game = self
 	packing.game = self
+	cargo.game = self
 	rng.randomize()
 	_setup_input()
 	stage = Stage.new()
@@ -643,7 +645,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		eat_foraged("berries")
 		return
 	for shared_action in room.SHARED_ACTIONS:
-		if shared_action not in ["eat", "pack"] and event.is_action_pressed(shared_action) and room.submit(shared_action):
+		if shared_action not in ["eat", "pack", "trunk", "take_gear", "return_gear"] and event.is_action_pressed(shared_action) and room.submit(shared_action):
 			return
 	if event.is_action_pressed("interact"):
 		_toggle_car()
@@ -699,6 +701,7 @@ func _process(delta: float) -> void:
 	_update_eating(delta)
 	_update_camera(delta)
 	_update_placement()
+	cargo.update(delta)
 	spectators.update(elapsed, delta, room.connected and not room.is_host)
 	stage.officials.update(self, delta, room.connected and not room.is_host)
 	foraging.update_visuals()
@@ -904,6 +907,9 @@ func _update_camera(delta: float) -> void:
 	camera.position += Vector3(sin(elapsed * 91), cos(elapsed * 73), 0) * impact_shake * 0.12
 
 func _toggle_car() -> void:
+	if not in_car and cargo.held.has(chair_owner()):
+		toast("Сначала поставь предмет или верни коробку в багажник.")
+		return
 	if jump_height > 0.01 or jump_velocity > 0:
 		return
 	if beers >= 30:
@@ -958,6 +964,7 @@ func place_table(spot: Vector3 = Vector3.INF, yaw: float = 0.0) -> bool:
 		return false
 	if camp == null:
 		camp = Node3D.new()
+		camp.set_meta("gear_owner", cargo.actor())
 		add_child(camp)
 		Props.table(camp)
 	camp.position = spot
@@ -1025,6 +1032,7 @@ func start_grill(spot: Vector3 = Vector3.INF, yaw: float = 0.0, replicated: bool
 		fire_audio.position = grill.position
 		return true
 	grill = Props.grill(self)
+	grill.set_meta("gear_owner", cargo.actor())
 	grill_servings = 16
 	grill.position = spot
 	grill.position.y = stage.ground(spot)
@@ -1065,6 +1073,8 @@ func _update_cooking(delta: float) -> void:
 			toast("Шашлык готов! Подойди к лагерю и нажми X.")
 
 func drink_beer() -> bool:
+	if cargo.held.has(chair_owner()):
+		return false
 	if not playing or paused or dead or finished:
 		return false
 	if in_car or not nearby_drink_source():
@@ -1177,6 +1187,8 @@ func select_stage(variant: int) -> void:
 	camera.look_at(stage.at(70))
 
 func eat_meat(source_group: int = -2) -> bool:
+	if cargo.held.has(chair_owner()):
+		return false
 	if not playing or paused or dead or finished or eat_time >= 0 or drink_time >= 0:
 		return false
 	eat_source_group = food_source_group() if source_group == -2 else source_group
@@ -1193,6 +1205,8 @@ func eat_meat(source_group: int = -2) -> bool:
 	return true
 
 func eat_foraged(kind: String, source: int = -2) -> bool:
+	if cargo.held.has(chair_owner()):
+		return false
 	if source == -2 and not foraging.can_eat(kind):
 		return false
 	eat_kind = kind
@@ -1565,7 +1579,7 @@ func _update_hud() -> void:
 	var distance = int(player_position().distance_to(stage.clearings[target_clearing]))
 	quest_label.text = "%s Найти место  ·  %d м\n%s Разложить стол\n%s Поставить стулья\n%s Пожарить и съесть шашлык\n%s Посмотреть %d экипажей" % ["[x]" if camp != null else "[ ]", distance, "[x]" if camp != null else "[ ]", "[x]" if has_chairs else "[ ]", "[x]" if eaten else "[ ]", "[x]" if passed >= RALLY_CREW_LIMIT else "[ ]", RALLY_CREW_LIMIT]
 	if packing.active():
-		quest_label.text = "Оба прохода завершены\nСобрать лагерь: осталось %d предметов\nF — собрать предмет, глядя на него\nЗатем все возвращаются в свои машины" % packing.remaining()
+		quest_label.text = "Оба прохода завершены\nВернуть вещи в багажники: осталось %d\nF — взять предмет / открыть багажник / вернуть\nЗатем все возвращаются в свои машины" % packing.remaining()
 	status_label.text = "ПРОХОД %d/2 · ЭКИПАЖИ %d/%d · ПОМОЩЬ %d\nПИВО %d · ВЫЕЗД %02d:%02d" % [course.pass_index, passed, RALLY_CREW_LIMIT, helped, beers, int(elapsed) / 60, int(elapsed) % 60]
 	if in_car:
 		info_label.text = "%02d КМ/Ч    ·    ЛЕГКОВУШКА %d%%    ·    %s" % [int(absf(speed) * 3.6), int(condition), "ОБОЧИНА" if stage.road_distance(car.position) > 4 else "ГРАВИЙ / КОЛЕЯ"]

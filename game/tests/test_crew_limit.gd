@@ -50,6 +50,9 @@ func run() -> void:
 	check(not game.finished, "second closing police waits for packing")
 	game.walker = game.camp.position
 	game.packing.pack(game.camp.position)
+	game.cargo.opened[game.chair_owner()] = true
+	game.walker = game.cargo.point(game.cargo.poses()[game.chair_owner()])
+	game.cargo.return_item(game.walker)
 	game.in_car = true
 	game._check_finish()
 	check(game.finished, "two passes, packed equipment and returning to car finish the outing")

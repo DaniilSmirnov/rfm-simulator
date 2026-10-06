@@ -1,5 +1,5 @@
 export const MAX_PLAYERS = 8;
-const COMMANDS = new Set(['table', 'chairs', 'grill', 'flag', 'eat', 'rally', 'random_spot', 'collect', 'mount_mushroom', 'eat_mushroom', 'eat_berries', 'pack']);
+const COMMANDS = new Set(['table', 'chairs', 'grill', 'flag', 'eat', 'rally', 'random_spot', 'collect', 'mount_mushroom', 'eat_mushroom', 'eat_berries', 'pack', 'trunk', 'take_gear', 'return_gear']);
 const vec = value => Array.isArray(value) && value.length === 3 && value.every(n => Number.isFinite(n) && Math.abs(n) < 3000);
 const number = n => Number.isFinite(n) && Math.abs(n) < 100000;
 export class RoomError extends Error {

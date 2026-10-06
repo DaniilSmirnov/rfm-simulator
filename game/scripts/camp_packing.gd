@@ -19,7 +19,7 @@ func items() -> Array:
 	return result
 
 func remaining() -> int:
-	return items().size()
+	return items().size() + game.cargo.pending_returns()
 
 func remove(item: Dictionary) -> void:
 	match item.kind:
@@ -53,8 +53,10 @@ func pack(spot: Vector3, remote: bool = false) -> bool:
 			continue
 		if game.room.submit("pack", {"pos": spot_array(spot), "yaw": 0.0}):
 			return true
+		if item.kind != "flag" and not game.cargo.pick_up(item):
+			return false
 		remove(item)
-		game.toast("Предмет убран в машину. Осталось: %d." % remaining())
+		game.toast("Флаг собран." if item.kind == "flag" else "Предмет в руках. Верни его в открытый багажник через F.")
 		return true
 	return false
 

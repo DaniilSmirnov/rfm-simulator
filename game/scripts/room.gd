@@ -9,7 +9,7 @@ var request_sent_at = 0.0
 var last_world_time = -1.0
 var racer_motion: Dictionary = {}
 const Props = preload("res://scripts/props.gd")
-const SHARED_ACTIONS = ["table", "chairs", "grill", "flag", "eat", "rally", "random_spot", "collect", "mount_mushroom", "eat_mushroom", "eat_berries", "pack"]
+const SHARED_ACTIONS = ["table", "chairs", "grill", "flag", "eat", "rally", "random_spot", "collect", "mount_mushroom", "eat_mushroom", "eat_berries", "pack", "take_gear", "return_gear", "trunk"]
 var game: Node3D
 var http: HTTPRequest
 var server = "http://127.0.0.1:8787"
@@ -284,6 +284,16 @@ func _process(delta: float) -> void:
 		peer.avatar.position = avatar_pose.position
 		peer.avatar.rotation.y = avatar_pose.rotation.y
 		peer.avatar.visible = not peer.state.in_car
+		if is_host and peer.state.in_car:
+			game.cargo.opened[peer.id] = false
+		Props.update_player_trunk(peer.car, bool(game.cargo.opened.get(peer.id, false)), game.cargo.boxes(peer.id), delta)
+		var carry = game.cargo.held.get(peer.id, {})
+		var kind = str(carry.get("kind", ""))
+		if kind != "" and kind != peer.held_kind:
+			peer.held_box.queue_free()
+			peer.held_box = Props.gear_box(peer.avatar, kind, Vector3(0, 1.0, -0.5))
+			peer.held_kind = kind
+		peer.held_box.visible = kind != "" and not peer.state.in_car
 		var sitting = bool(peer.state.get("seated", false)) and not peer.state.in_car
 		peer.avatar.position.y -= 0.2 if sitting else 0.0
 		for leg_name in ["LeftLeg", "RightLeg"]:
@@ -320,6 +330,11 @@ func _process(delta: float) -> void:
 			var lift = smoothstep(0.8, 1.25, peer.drink_time) * (1.0 - smoothstep(2.5, 3.3, peer.drink_time))
 			peer.arm.rotation.x = lerpf(0.5, 1.6, lift)
 			peer.can.rotation.x = 0.35 * lift
+		if peer.held_box.visible and not peer.can.visible and not peer.skewer.visible:
+			peer.arm.rotation.x = -0.9
+			peer.avatar.get_node("LeftArm").rotation.x = -0.9
+		else:
+			peer.avatar.get_node("LeftArm").rotation.x = 0.0
 		peer.label.position = peer.car.position + Vector3(0, 2.8, 0) if peer.state.in_car else peer.avatar.position + Vector3(0, 2.3, 0)
 	if not is_host:
 		if not world_paused and not game.paused and not game.dead and not game.finished:
@@ -382,12 +397,15 @@ func _update_peers(players: Array) -> void:
 			game.add_child(car)
 			var avatar = Props.player_avatar(int(p.get("slot", 0)))
 			game.add_child(avatar)
+			var carried_box = Props.gear_box(avatar, "table", Vector3(0, 1.0, -0.5))
+			carried_box.name = "CarriedBox"
+			carried_box.hide()
 			var arm = avatar.get_node("RightArm")
 			var can = arm.get_node("BeerCan")
 			var skewer = arm.get_node("Skewer")
 			var label = Props.label_3d(game, Vector3.ZERO, p.name, 26, 0.012, Color("fff1cb"))
 			label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-			peers[p.id] = {"id": p.id, "car": car, "avatar": avatar, "arm": arm, "can": can, "skewer": skewer, "eat_time": -1.0, "eat_sample": -1.0, "drink_time": -1.0, "drink_sample": -1.0, "label": label, "last_car": null, "state": null, "car_motion": SnapshotMotion.new(), "avatar_motion": SnapshotMotion.new()}
+			peers[p.id] = {"id": p.id, "car": car, "avatar": avatar, "arm": arm, "held_box": carried_box, "held_kind": "table", "can": can, "skewer": skewer, "eat_time": -1.0, "eat_sample": -1.0, "drink_time": -1.0, "drink_sample": -1.0, "label": label, "last_car": null, "state": null, "car_motion": SnapshotMotion.new(), "avatar_motion": SnapshotMotion.new()}
 			if p.state != null:
 				car.position = v(p.state.car)
 				avatar.position = v(p.state.pos)
@@ -438,19 +456,26 @@ func _apply_command(c: Dictionary) -> void:
 		game.view_yaw = old.yaw
 		game.beers = old.beers
 		return
+	var actor = str(c.get("player", "guest"))
+	var variant = int(peers[actor].car.get_meta("variant", 0)) if peers.has(actor) and peers[actor].has("car") else 0
+	game.cargo.context = {"owner": actor, "car": v(c.state.car), "heading": float(c.state.get("heading", 0.0)), "variant": variant, "host_car": old.car}
 	match c.action:
+		"trunk":
+			if spot != Vector3.INF:
+				game.cargo.toggle(spot)
+		"take_gear":
+			var index = int(placement.get("resource_id", -1))
+			if index >= 0 and index < 3:
+				game.cargo.take(game.cargo.KINDS[index])
+		"return_gear":
+			if spot != Vector3.INF:
+				game.cargo.return_item(spot)
 		"pack":
 			if spot != Vector3.INF:
 				game.packing.pack(spot, true)
-		"table":
-			if not game.packing.active():
-				game.place_table(spot, yaw)
-		"chairs":
-			if not game.packing.active():
-				game.place_chairs(spot, yaw, str(c.get("player", "guest")))
-		"grill":
-			if not game.packing.active():
-				game.start_grill(spot, yaw)
+		"table", "chairs", "grill":
+			if spot != Vector3.INF:
+				game.cargo.deploy(str(c.action), spot, yaw)
 		"flag":
 			if not game.packing.active():
 				game.place_flag(spot, yaw, str(c.get("player", "guest")))
@@ -463,6 +488,7 @@ func _apply_command(c: Dictionary) -> void:
 		"random_spot":
 			game.target_clearing = game.rng.randi_range(0, game.stage.clearings.size() - 1)
 			game.toast("Выбрана поляна %d." % (game.target_clearing + 1))
+	game.cargo.context = {}
 	game.in_car = old.in_car
 	game.walker = old.walker
 	game.car.position = old.car
@@ -482,7 +508,7 @@ func world_state() -> Dictionary:
 	var racers = []
 	for r in game.racers:
 		racers.append({"id": r.id, "role": r.get("role", "racer"), "zero_index": r.get("zero_index", 0), "variant": r.variant, "pos": a(r.node.position), "yaw": r.node.rotation.y, "tilt": a(r.node.rotation), "state": r.state, "recovery_progress": r.get("recovery_progress", 0), "recovery_helpers": r.get("recovery_helpers", 0)})
-	return {"foraging": game.foraging.snapshot(), "course": game.course.snapshot(), "city_lamps": game.stage.city.snapshot() if game.stage.urban else [], "chair_poses": chair_poses, "flag_poses": flag_poses, "table_yaw": game.camp.rotation.y if game.camp != null else 0.0, "grill_pose": {"pos": a(game.grill.position), "yaw": game.grill.rotation.y} if game.grill != null else null, "fallen": game.stage.tree_snapshot(), "stones": stone_state(), "impacts": game.impact_serials, "camp": a(game.camp.position) if game.camp != null else null, "chairs": game.has_chairs, "cooking": game.cooking, "cook_time": game.cook_time, "grill_servings": game.grill_servings, "npc_servings": game.spectators.snapshot(), "npc_people": game.spectators.actor_snapshot(), "marshals": game.stage.officials.snapshot(), "eaten": game.eaten, "racing": game.racing, "passed": game.passed, "helped": game.helped, "elapsed": game.elapsed, "clearing": game.target_clearing, "paused": game.paused, "dead": game.dead, "finished": game.finished, "title": game.menu_title.text, "text": game.menu_text.text, "racers": racers, "tow": game.tow_target.get_meta("room_id") if game.tow_target != null else -1, "tow_progress": game.tow_progress, "tow_owner": tow_owner, "recovery_links": game.recovery_links, "recovery_helpers": game.recovery_helpers, "notice": game.toast_label.text, "notice_time": game.toast_time}
+	return {"cargo": game.cargo.snapshot(), "foraging": game.foraging.snapshot(), "course": game.course.snapshot(), "city_lamps": game.stage.city.snapshot() if game.stage.urban else [], "chair_poses": chair_poses, "flag_poses": flag_poses, "table_yaw": game.camp.rotation.y if game.camp != null else 0.0, "grill_pose": {"pos": a(game.grill.position), "yaw": game.grill.rotation.y} if game.grill != null else null, "fallen": game.stage.tree_snapshot(), "stones": stone_state(), "impacts": game.impact_serials, "camp": a(game.camp.position) if game.camp != null else null, "chairs": game.has_chairs, "cooking": game.cooking, "cook_time": game.cook_time, "grill_servings": game.grill_servings, "npc_servings": game.spectators.snapshot(), "npc_people": game.spectators.actor_snapshot(), "marshals": game.stage.officials.snapshot(), "eaten": game.eaten, "racing": game.racing, "passed": game.passed, "helped": game.helped, "elapsed": game.elapsed, "clearing": game.target_clearing, "paused": game.paused, "dead": game.dead, "finished": game.finished, "title": game.menu_title.text, "text": game.menu_text.text, "racers": racers, "tow": game.tow_target.get_meta("room_id") if game.tow_target != null else -1, "tow_progress": game.tow_progress, "tow_owner": tow_owner, "recovery_links": game.recovery_links, "recovery_helpers": game.recovery_helpers, "notice": game.toast_label.text, "notice_time": game.toast_time}
 
 func stone_state() -> Array:
 	var result = []
@@ -596,6 +622,7 @@ func apply_world(w: Dictionary, sample_time: float = -1.0) -> void:
 	game.foraging.apply_snapshot(w.get("foraging", {}))
 	game.eaten = w.eaten
 	game.course.apply_snapshot(w.get("course", {}))
+	game.cargo.apply_snapshot(w.get("cargo", {}))
 	game.racing = w.racing
 	game.passed = w.passed
 	game.helped = w.helped

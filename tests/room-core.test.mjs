@@ -277,3 +277,18 @@ test('packing commands preserve target position and retries cannot duplicate cle
   assert.deepEqual(reply.commands[0].placement, placement);
   assert.equal(reply.commands[0].player, g.player);
 });
+
+test('cargo actions are authenticated, bounded and idempotent', () => {
+  const { r, h, g } = setup();
+  const commands = [
+    { seq: 1, action: 'trunk', placement: { pos: [1, 1, 2], yaw: 0 } },
+    { seq: 2, action: 'take_gear', placement: { resource_id: 1 }, player: h.player },
+    { seq: 3, action: 'return_gear', placement: { pos: [1, 1, 2], yaw: 0 } },
+  ];
+  const body = { token: g.token, state: state(), commands };
+  r.sync(body, 1100); r.sync(body, 1200);
+  const reply = r.sync({ token: h.token, state: state() }, 1300);
+  assert.equal(reply.commands.length, 3);
+  assert.ok(reply.commands.every(c => c.player === g.player));
+  assert.deepEqual(reply.commands.map(c => c.action), ['trunk', 'take_gear', 'return_gear']);
+});

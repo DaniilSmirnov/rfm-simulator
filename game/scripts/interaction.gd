@@ -23,9 +23,14 @@ func current() -> Dictionary:
 		return {"action": "stand", "label": "Встать со стула"}
 	var items: Array = []
 	offer(items, game.car.position + Vector3(0, 0.9, 0), 1.4, 4, "car", "Сесть в машину")
+	game.cargo.offers(items, self)
 	if game.packing.active():
 		for item in game.packing.items():
+			if item.kind != "flag" and game.cargo.held.has(game.chair_owner()):
+				continue
 			offer(items, item.node.position + Vector3(0, item.height, 0), item.radius, 3.5, "pack", item.label, item.node.position)
+		return select_target(items)
+	if game.cargo.held.has(game.chair_owner()):
 		return select_target(items)
 	var owner = game.chair_owner()
 	if game.personal_chairs.has(owner):
@@ -82,6 +87,9 @@ func activate() -> void:
 	if target.is_empty():
 		return
 	match target.action:
+		"trunk": game.cargo.toggle(target.value)
+		"return_gear": game.cargo.return_item(target.value)
+		"take_gear": game.begin_placement(str(target.value))
 		"pack": game.packing.pack(target.value)
 		"car": game._toggle_car()
 		"sit": game.sit_down()

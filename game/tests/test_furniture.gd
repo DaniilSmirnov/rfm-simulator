@@ -31,6 +31,7 @@ func run() -> void:
 	check(host.place_chairs(chair_pos, 0.8), "host places one personal chair")
 	check(host.place_chairs(chair_pos + Vector3(0, 0, 2), 1.2) and host.personal_chairs.size() == 1, "repositioning never duplicates a personal chair")
 	var command = {"player": "guest", "action": "chairs", "state": {"in_car": false, "pos": host.room.a(origin), "car": host.room.a(host.car.position), "yaw": 0}, "placement": {"pos": host.room.a(origin + Vector3(-3, 0, 0)), "yaw": -0.7}}
+	host.cargo.held["guest"] = {"kind": "chairs", "owner": "guest", "returning": false}
 	host.room._apply_command(command)
 	check(host.personal_chairs.has("guest") and host.personal_chairs.size() == 2, "guest chair has a separate authenticated owner")
 	check(host.start_grill(origin + Vector3(0, 0, -3), 0.9), "grill has an independent position")

@@ -357,7 +357,7 @@ static func player_car_2112_boat() -> Node3D:
 	for z in [-0.62, 0.62]:
 		box(root, Vector3(0, 1.91, z), Vector3(1.48, 0.045, 0.10), Color("e0b83f"))
 		box(root, Vector3(0, 1.83, z), Vector3(0.055, 0.38, 0.055), Color("202a2d"))
-	return root
+	return add_player_trunk(root, 8)
 
 
 static func player_car_m3_f80() -> Node3D:
@@ -471,7 +471,7 @@ static func player_car_m3_f80() -> Node3D:
 			var opening = cylinder(root, Vector3(side * (0.52 + tip * 0.16), 0.36, 2.515), 0.047, 0.047, 0.012, black, 10)
 			opening.rotation.x = PI / 2
 	box(root, Vector3(0, 0.71, 2.385), Vector3(0.43, 0.13, 0.025), Color("e4e4dd"))
-	return root
+	return add_player_trunk(root, 9)
 
 static func player_car(variant: int = 0) -> Node3D:
 	variant = posmod(variant, PLAYER_MODELS.size())
@@ -583,7 +583,7 @@ static func player_car(variant: int = 0) -> Node3D:
 			box(root, Vector3(0, p.height + 0.46, z), Vector3(1.48, 0.045, 0.10), Color("e0b83f"))
 			box(root, Vector3(0, p.height + 0.36, z), Vector3(0.055, 0.36, 0.055), Color("202a2d"))
 		root.set_meta("roof_cargo", "inflatable_boat")
-	return root
+	return add_player_trunk(root, variant)
 
 static func skewer() -> Node3D:
 	var root = Node3D.new()
@@ -1013,3 +1013,123 @@ static func judges_car() -> Node3D:
 	beacon.material_override.emission = Color("ffaf26")
 	beacon.material_override.emission_energy_multiplier = 0.6
 	return car
+
+# Opening bodywork is cut from the existing model, keeping its original shape.
+static func clip_panel(poly: Array, normal: Vector3, limit: float, inside: bool) -> Array:
+	var result: Array = []
+	if poly.is_empty():
+		return result
+	var previous: Vector3 = poly[-1]
+	var previous_distance = previous.dot(normal) - limit
+	for current in poly:
+		var distance: float = current.dot(normal) - limit
+		var a = previous_distance <= 0 if inside else previous_distance >= 0
+		var b = distance <= 0 if inside else distance >= 0
+		if a != b:
+			result.append(previous.lerp(current, previous_distance / (previous_distance - distance)))
+		if b:
+			result.append(current)
+		previous = current
+		previous_distance = distance
+	return result
+
+static func panel_triangles(target: PackedVector3Array, polygon: Array) -> PackedVector3Array:
+	for i in range(1, polygon.size() - 1):
+		target.append_array(PackedVector3Array([polygon[0], polygon[i], polygon[i + 1]]))
+	return target
+
+static func panel_mesh(vertices: PackedVector3Array) -> ArrayMesh:
+	var mesh = ArrayMesh.new()
+	if vertices.is_empty():
+		return mesh
+	var normals = PackedVector3Array()
+	for i in range(0, vertices.size(), 3):
+		var normal = (vertices[i + 1] - vertices[i]).cross(vertices[i + 2] - vertices[i]).normalized()
+		normals.append_array(PackedVector3Array([normal, normal, normal]))
+	var arrays = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	return mesh
+
+static func trunk_profile(variant: int) -> Dictionary:
+	var p = PLAYER_MODELS[posmod(variant, PLAYER_MODELS.size())]
+	var hatch = variant in [2, 7, 8]
+	var rear: float = p.length / 2
+	return {"rear": rear, "half": p.width * 0.37, "hinge": (0.35 if variant == 8 else (1.26 if hatch else rear - 0.80)), "floor": 0.70 if hatch else 0.56, "top": p.height - 0.02 if hatch else (0.99 if variant in [3, 6, 9] else 0.94), "hatch": hatch}
+
+static func gear_box(parent: Node3D, kind: String, point: Vector3 = Vector3.ZERO) -> Node3D:
+	var root = Node3D.new()
+	root.name = "Box_" + kind
+	parent.add_child(root)
+	root.position = point
+	var colors = {"table": "caa571", "chairs": "7fa78a", "grill": "a0a8b3"}
+	box(root, Vector3.ZERO, Vector3(0.34, 0.30, 0.48), Color(colors.get(kind, "caa571")))
+	box(root, Vector3(0, 0.157, 0), Vector3(0.05, 0.014, 0.49), Color("ead9b6"))
+	var titles = {"table": "СТОЛ", "chairs": "СТУЛ", "grill": "МАНГАЛ"}
+	label_3d(root, Vector3(0, 0.02, 0.246), titles.get(kind, kind), 36, 0.0018, Color("18292e"), 0)
+	return root
+
+static func add_player_trunk(root: Node3D, variant: int) -> Node3D:
+	var p = trunk_profile(variant)
+	var hinge = Node3D.new()
+	hinge.name = "TrunkHinge"
+	root.add_child(hinge)
+	hinge.position = Vector3(0, p.top, p.hinge)
+	var planes = [Vector4(1, 0, 0, p.half), Vector4(-1, 0, 0, p.half), Vector4(0, 0, -1, -p.hinge), Vector4(0, -1, 0, -p.floor - 0.10), Vector4(0, 1, 0, p.top + 0.07)]
+	var bodywork: Array = root.get_children().duplicate()
+	for child in bodywork:
+		if not child is MeshInstance3D:
+			continue
+		var arrays = child.mesh.surface_get_arrays(0)
+		var source: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX] if arrays[Mesh.ARRAY_INDEX] != null else PackedInt32Array()
+		var fixed = PackedVector3Array()
+		var moving = PackedVector3Array()
+		var size = indices.size() if not indices.is_empty() else source.size()
+		for i in range(0, size, 3):
+			var poly: Array = []
+			for j in range(3):
+				var index = indices[i + j] if not indices.is_empty() else i + j
+				poly.append(child.transform * source[index])
+			for plane in planes:
+				var normal = Vector3(plane.x, plane.y, plane.z)
+				fixed = panel_triangles(fixed, clip_panel(poly, normal, plane.w, false))
+				poly = clip_panel(poly, normal, plane.w, true)
+				if poly.is_empty():
+					break
+			moving = panel_triangles(moving, poly)
+		if moving.is_empty():
+			continue
+		var lid = MeshInstance3D.new()
+		lid.name = child.name + "_Lid"
+		hinge.add_child(lid)
+		lid.position = -hinge.position
+		lid.mesh = panel_mesh(moving)
+		lid.material_override = child.material_override
+		# Preserve the existing named nodes for model details and tests.
+		child.transform = Transform3D.IDENTITY
+		if fixed.is_empty():
+			child.hide()
+		else:
+			child.mesh = panel_mesh(fixed)
+	box(root, Vector3(0, p.floor, (p.hinge + p.rear) / 2), Vector3(p.half * 2, 0.06, p.rear - p.hinge), Color("172027")).name = "TrunkWell"
+	var boxes = Node3D.new()
+	boxes.name = "TrunkBoxes"
+	root.add_child(boxes)
+	for i in range(3):
+		gear_box(boxes, ["table", "chairs", "grill"][i], Vector3((i - 1) * 0.39, p.floor + 0.18, p.rear - 0.30))
+	boxes.hide()
+	root.set_meta("trunk_profile", p)
+	return root
+
+static func update_player_trunk(root: Node3D, opened: bool, stored: Array, delta: float) -> void:
+	var hinge = root.get_node_or_null("TrunkHinge")
+	if hinge == null:
+		return
+	hinge.rotation.x = move_toward(hinge.rotation.x, -1.18 if opened else 0.0, delta * 1.75)
+	var boxes = root.get_node("TrunkBoxes")
+	boxes.visible = absf(hinge.rotation.x) > 0.12
+	for i in range(3):
+		boxes.get_child(i).visible = bool(stored[i])

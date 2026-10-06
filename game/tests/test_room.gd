@@ -30,13 +30,19 @@ func run() -> void:
 	check(not guest.room.submit("beer"), "beer animation remains local")
 	var cmd = {"id": "guest:1", "action": "table", "state": {"in_car": false, "pos": host.room.a(host.stage.clearings[0]), "car": host.room.a(guest.car.position), "yaw": 0.0}}
 	var car_before = host.car.position
+	cmd.placement = {"pos": host.room.a(host.stage.clearings[0] + Vector3(0, 0, -2.5)), "yaw": 0}
+	host.cargo.held["guest"] = {"kind": "table", "owner": "guest", "returning": false}
 	host.room._apply_command(cmd)
 	check(host.camp != null and host.car.position == car_before and host.in_car, "host executes guest placement and restores its player")
 	guest.room.apply_world(host.room.world_state())
 	check(guest.camp != null and guest.camp.position.distance_to(host.camp.position) < 0.02, "shared table has identical position")
 	cmd.action = "chairs"
+	cmd.placement.pos = host.room.a(host.camp.position + Vector3(-1.6, 0, 0.7))
+	host.cargo.held["guest"] = {"kind": "chairs", "owner": "guest", "returning": false}
 	host.room._apply_command(cmd)
 	cmd.action = "grill"
+	cmd.placement.pos = host.room.a(host.camp.position + Vector3(0.3, 0, -2.4))
+	host.cargo.held["guest"] = {"kind": "grill", "owner": "guest", "returning": false}
 	host.room._apply_command(cmd)
 	host.cook_time = 19
 	guest.room.apply_world(host.room.world_state())

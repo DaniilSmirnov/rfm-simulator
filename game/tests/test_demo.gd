@@ -142,6 +142,10 @@ func run() -> void:
 	for item in scene.packing.items():
 		scene.walker = item.node.position
 		scene.packing.pack(item.node.position)
+		if item.kind != "flag":
+			scene.cargo.opened[scene.chair_owner()] = true
+			scene.walker = scene.cargo.point(scene.cargo.poses()[scene.chair_owner()])
+			scene.cargo.return_item(scene.walker)
 	scene.in_car = true
 	scene._check_finish()
 	check(scene.finished, "two passes and packed camp complete the outing")

@@ -16,6 +16,11 @@ func button(c: Control, action: String) -> Vector2:
 		if b.action == action:
 			return b.rect.get_center()
 	return Vector2(-1000, -1000)
+func prepare_trunk(game) -> void:
+	game.car.position = game.walker - Vector3(0, 0, 3)
+	game.heading = 0
+	game.cargo.opened[game.chair_owner()] = true
+
 func run() -> void:
 	var game = load("res://main.tscn").instantiate()
 	root.add_child(game)
@@ -59,6 +64,7 @@ func run() -> void:
 	check(not Input.is_action_pressed("right"), "focus loss releases movement")
 	game.walker = game.stage.clearings[0]
 	game.view_yaw = 0
+	prepare_trunk(game)
 	c.touch_begin(1, button(c, "table"))
 	check(game.camp == null and game.placement_kind == "table", "touch placement starts with preview")
 	c.touch_begin(1, button(c, "placement_rotate"))
@@ -66,16 +72,22 @@ func run() -> void:
 	c.touch_begin(1, button(c, "placement_confirm"))
 	check(game.camp != null and button(c, "chairs").x > 0, "camp button advances from table to chairs")
 	game.walker = game.stage.clearings[0] + Vector3(-3, 0, 0)
+	prepare_trunk(game)
 	c.touch_begin(1, button(c, "chairs"))
 	c.touch_begin(1, button(c, "placement_confirm"))
 	check(game.has_chairs and button(c, "grill").x > 0, "camp button advances from chairs to grill")
 	game.walker = game.stage.clearings[0] + Vector3(0, 0, -2)
+	prepare_trunk(game)
 	c.touch_begin(1, button(c, "grill"))
 	c.touch_begin(1, button(c, "placement_confirm"))
 	check(game.cooking and not c.buttons.any(func(b): return b.action in ["beer", "eat", "collect", "mount_mushroom", "eat_mushroom"]), "object interactions use a single contextual touch action")
+	prepare_trunk(game)
 	c.touch_begin(1, button(c, "table"))
 	c.touch_begin(1, button(c, "placement_cancel"))
 	check(game.placement_kind == "", "touch can cancel furniture placement")
+	game.walker = game.cargo.point(game.cargo.poses()[game.chair_owner()])
+	game.cargo.return_item(game.walker)
+	game.car.position = game.stage.at(12)
 	game.walker = game.camp.position + Vector3(0, 0, 2)
 	game.walker.y = game.stage.ground(game.walker)
 	game._update_camera(1)

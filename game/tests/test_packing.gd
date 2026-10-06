@@ -58,10 +58,20 @@ func run() -> void:
 	command.state.pos = guest.room.a(guest.walker)
 	host.room._apply_command(command)
 	host.room._apply_command(command)
-	check(host.camp == null and host.packing.remaining() == 3, "authorized guest packing is idempotent")
+	check(host.camp == null and host.packing.remaining() == 4 and host.cargo.held.has("guest"), "authorized pickup is idempotent and remains pending until returned")
+	host.cargo.opened["host"] = true
+	command.action = "return_gear"
+	var trunk_spot = host.cargo.point(host.cargo.poses()["host"])
+	command.state.pos = host.room.a(trunk_spot)
+	command.placement = {"pos": host.room.a(trunk_spot), "yaw": 0}
+	host.room._apply_command(command)
+	check(not host.cargo.held.has("guest"), "friend returns shared equipment to owner's open trunk")
 	for item in host.packing.items():
 		host.walker = item.node.position
 		check(host.packing.pack(item.node.position), "every kind of camp equipment can be packed")
+		if item.kind != "flag":
+			host.walker = trunk_spot
+			check(host.cargo.return_item(trunk_spot), "collected equipment returns to an open trunk")
 	guest.room.apply_world(host.room.world_state())
 	guest.room.apply_world(host.room.world_state())
 	check(guest.packing.remaining() == 0 and not guest.cooking and guest.smoke == null and guest.foraging.skewers.get("-1", []).is_empty(), "repeated snapshots remove table, chair, grill, smoke and all flags")
