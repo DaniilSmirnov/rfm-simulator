@@ -42,6 +42,7 @@ var placement_kind = ""
 var placement_preview: Node3D
 var placement_yaw = 0.0
 var placement_valid = false
+var placement_material: StandardMaterial3D
 
 func chair_owner() -> String:
 	return room.player_id if room != null and room.connected else "local"
@@ -78,6 +79,10 @@ func begin_placement(kind: String) -> void:
 		"table": Props.table(placement_preview)
 		"chairs": Props.chair(placement_preview, Vector3.ZERO)
 		"grill": Props.grill(placement_preview)
+	placement_material = Props.material(Color("82c991"))
+	for child in placement_preview.find_children("*", "MeshInstance3D", true, false):
+		child.material_override = placement_material
+		child.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_update_placement()
 	toast("Выбери место: WASD и обзор. Q — повернуть, E — поставить, Esc — отменить.")
 
@@ -89,9 +94,7 @@ func _update_placement() -> void:
 	placement_preview.position = spot
 	placement_preview.rotation.y = placement_yaw
 	placement_valid = spot.distance_to(walker) <= 5.0 and valid_furniture_spot(spot, placement_kind)
-	for child in placement_preview.find_children("*", "MeshInstance3D", true, false):
-		child.material_override = Props.material(Color("82c991") if placement_valid else Color("d75e53"))
-		child.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	placement_material.albedo_color = Color("82c991") if placement_valid else Color("d75e53")
 
 func cancel_placement() -> void:
 	if is_instance_valid(placement_preview):
