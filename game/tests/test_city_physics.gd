@@ -47,8 +47,21 @@ func run() -> void:
 	await physics_frame
 	check(lamp.body.freeze, "paused game freezes lamp physics")
 	game.paused = false
+	# Guest may already have bounced and report zero speed when the host polls.
+	# The queued impact velocity must still be sufficient to release the lamp.
+	game.room.player_id = "host"
+	var remote = game.room.local_state()
+	remote.car = game.room.a(stage.city.lamps[1].body.position + Vector3(0, -2.25, 1))
+	remote.pos = remote.car
+	remote.in_car = true
+	remote.speed = 0
+	remote.lamps = [{"id": 1, "dir": [12, 0, 0]}]
+	game.room._update_peers([{"id": "guest", "name": "Test", "slot": 1, "car_model": 1, "state": remote}])
+	game.room.check_remote_collisions()
+	check(stage.city.lamps[1].fallen, "queued guest impact survives speed loss after bouncing")
+	game.room._update_peers([])
 	var snapshot = game.room.world_state()
-	check(snapshot.city_lamps.size() == 1, "room snapshot contains fallen lamp transform")
+	check(snapshot.city_lamps.size() == 2, "room snapshot contains fallen lamp transform")
 	var other = Stage.new(2)
 	root.add_child(other)
 	other.build()

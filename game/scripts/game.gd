@@ -1500,6 +1500,6 @@ func knock_city(contact: Dictionary, velocity: Vector3) -> void:
 	if contact.get("kind", "") != "lamp" or velocity.length() <= 5:
 		return
 	if room.connected and not room.is_host:
-		lamp_requests[int(contact.id)] = velocity.normalized()
+		lamp_requests[int(contact.id)] = velocity
 	else:
 		stage.city.knock_lamp(int(contact.id), velocity)

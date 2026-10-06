@@ -20,6 +20,17 @@ func rebuild() -> void:
 		outward.y = 0
 		outward = outward.normalized()
 		var center = clearing + (stage.direction(s) * 7.0 if stage.urban else outward * 6.0)
+		if stage.urban:
+			# Keep a whole picnic group clear of both sides of every junction.
+			for offset in [7.0, -7.0, 14.0, -14.0, 21.0, -21.0, 0.0]:
+				var candidate = clearing + stage.direction(s) * offset
+				var available = true
+				for along in [-2.4, 0.0, 3.2]:
+					var spot = grounded(candidate + stage.direction(s) * along)
+					available = available and stage.road_distance(spot) > 6.0 and stage.city.hit(spot, spot, 1.2, false).is_empty()
+				if available:
+					center = candidate
+					break
 		_add_group(center, s, i, 2)
 	# The shoulder is already free of trees; leave the driving lane unobstructed.
 	for i in range(4):

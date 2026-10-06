@@ -4,6 +4,7 @@ const CROSS_Z = [-50.0, -100.0, -150.0, -200.0, -250.0, -280.0]
 var stage: Node3D
 var obstacles: Array[Dictionary] = []
 var lamps: Array[Dictionary] = []
+var lamp_targets: Dictionary = {}
 var batches: Dictionary = {}
 var meshes: Dictionary = {}
 
@@ -348,13 +349,20 @@ func knock_lamp(index: int, direction: Vector3) -> bool:
 	body.apply_impulse(dir * 160 + Vector3(0, 25, 0), Vector3(0, 1.8, 0))
 	return true
 
-func _physics_process(_delta: float) -> void:
+func _physics_process(delta: float) -> void:
 	var game = stage.get_parent()
 	var simulate = true
 	if game != null and game.has_method("player_position"):
 		simulate = game.playing and not game.paused and not game.dead and not game.finished and (not game.room.connected or game.room.is_host)
-	for lamp in lamps:
+	for i in range(lamps.size()):
+		var lamp = lamps[i]
 		lamp.body.freeze = not (simulate and lamp.fallen)
+		if not simulate and lamp_targets.has(i):
+			var target = lamp_targets[i]
+			var weight = 1.0 - exp(-delta * 16.0)
+			lamp.body.position = lamp.body.position.lerp(target.pos, weight)
+			for axis in range(3):
+				lamp.body.rotation[axis] = lerp_angle(lamp.body.rotation[axis], target.rot[axis], weight)
 
 func snapshot() -> Array:
 	var result = []
@@ -370,11 +378,15 @@ func apply_snapshot(data: Array) -> void:
 		var i = int(item.id)
 		if i < 0 or i >= lamps.size():
 			continue
+		var first = not lamps[i].fallen
 		lamps[i].fallen = true
 		var body = lamps[i].body
 		body.freeze = true
-		body.position = Vector3(item.pos[0], item.pos[1], item.pos[2])
-		body.rotation = Vector3(item.rot[0], item.rot[1], item.rot[2])
+		var target = {"pos": Vector3(item.pos[0], item.pos[1], item.pos[2]), "rot": Vector3(item.rot[0], item.rot[1], item.rot[2])}
+		lamp_targets[i] = target
+		if first:
+			body.position = target.pos
+			body.rotation = target.rot
 
 func _batch(parent: Node3D, pose: Transform3D) -> void:
 	for child in parent.get_children():

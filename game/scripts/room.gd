@@ -622,7 +622,7 @@ func check_remote_collisions() -> void:
 		if game.stage.urban:
 			for request in peer.state.get("lamps", []):
 				var index = int(request.id)
-				if index >= 0 and index < game.stage.city.lamps.size() and current.distance_to(game.stage.city.lamps[index].body.position) < 5 and absf(float(peer.state.get("speed", 0))) > 5:
+				if index >= 0 and index < game.stage.city.lamps.size() and current.distance_to(game.stage.city.lamps[index].body.position) < 5 and peer.state.in_car and v(request.dir).length() > 5:
 					game.stage.city.knock_lamp(index, v(request.dir))
 		for request in peer.state.get("trees", []):
 			var index = int(request.id)
