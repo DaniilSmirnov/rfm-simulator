@@ -4,9 +4,9 @@ const ROPE_RANGE = 6.0
 const PUSH_RANGE = 2.6
 
 static func road_direction(game, racer: Dictionary) -> Vector3:
-	var direction: Vector3 = game.stage.at(game.stage.road_s(racer.node.position)) - racer.node.position
+	var direction: Vector3 = racer.recovery_goal - racer.recovery_start if racer.has("recovery_start") else game.stage.at(game.stage.road_s(racer.node.position)) - racer.node.position
 	direction.y = 0
-	if direction.length() < 0.5:
+	if direction.length() < 0.01:
 		direction = game.stage.direction(game.stage.road_s(racer.node.position))
 	return direction.normalized()
 
