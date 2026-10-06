@@ -239,6 +239,7 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch and event.pressed and not mobile_mode:
 		enable_mobile()
 
+const Traffic = preload("res://scripts/rally_traffic.gd")
 const Motion = preload("res://scripts/vehicle_motion.gd")
 var vehicle_motion = Motion.new()
 var stones: Array[Dictionary] = []
@@ -1120,7 +1121,8 @@ func spawn_racer(forced: String = "") -> void:
 	var s = 0.0 if stage.urban else maxf(0, focus - 115)
 	node.position = stage.at(s)
 	node.set_meta("room_id", rally_spawn_count)
-	racers.append({"id": rally_spawn_count, "node": node, "s": s, "focus": focus, "kind": kind, "state": "racing", "offset": 0.0, "age": 0.0, "counted": false, "start": Vector3.ZERO, "target": Vector3.ZERO, "variant": variant, "motion": Motion.new(), "previous": node.position, "slide": 0.0, "slide_speed": 0.0})
+	var driver = Traffic.profile(rally_spawn_count)
+	racers.append({"bias": driver.bias, "phase": driver.phase, "pace": driver.pace, "line": 0.0, "drive_speed": stage.rally_speed(s) * driver.pace, "avoiding": false, "avoid_line": 0.0, "id": rally_spawn_count, "node": node, "s": s, "focus": focus, "kind": kind, "state": "racing", "offset": 0.0, "age": 0.0, "counted": false, "start": Vector3.ZERO, "target": Vector3.ZERO, "variant": variant, "motion": Motion.new(), "previous": node.position, "slide": 0.0, "slide_speed": 0.0})
 	toast("Приближается %s, номер %d!" % [node.get_meta("model"), node.get_meta("number")])
 
 func _update_racers(delta: float) -> void:
@@ -1133,8 +1135,18 @@ func _update_racers(delta: float) -> void:
 		var moving_before = racer.state in ["racing", "offroad"]
 		racer.age += delta
 		if racer.state == "racing":
-			var race_speed = stage.rally_speed(racer.s)
-			racer.s += delta * race_speed
+			var traffic = Traffic.plan(self, racer)
+			racer.avoiding = traffic.avoiding
+			racer.avoid_line = traffic.line
+			var actual_speed = move_toward(float(racer.get("drive_speed", stage.rally_speed(racer.s))), float(traffic.speed), delta * (Traffic.BRAKE if traffic.speed < racer.get("drive_speed", 0) else 8.0))
+			# The braking envelope is also a hard speed cap for long frame gaps.
+			actual_speed = minf(actual_speed, float(traffic.speed)) if traffic.speed < actual_speed else actual_speed
+			actual_speed = minf(actual_speed, float(traffic.get("advance", INF)) / maxf(delta, 0.001))
+			racer.drive_speed = actual_speed
+			var race_speed = maxf(actual_speed, 0.1)
+			racer.s += delta * actual_speed
+			racer.line = move_toward(float(racer.get("line", 0.0)), float(traffic.line), delta * minf(2.8, actual_speed * 0.14))
+
 			var s: float = racer.s
 			var road_yaw = atan2(-stage.direction(s).x, -stage.direction(s).z)
 			var ahead = stage.direction(s + 7)
@@ -1146,10 +1158,12 @@ func _update_racers(delta: float) -> void:
 				racer.slide_speed += (bend * race_speed * race_speed - racer.slide * 14.0 - racer.slide_speed * stage.grip(node.position) * 5.0) * dt
 				racer.slide = clampf(racer.slide + racer.slide_speed * dt, -2.6, 2.6)
 			var height = node.position.y
-			node.position = stage.at(s) + stage.side(s) * racer.slide
+			node.position = stage.at(s) + stage.side(s) * racer.line
 			node.position.y = height
 			var countersteer = clampf(racer.slide_speed / race_speed + racer.slide * 0.035, -0.32, 0.32)
-			racer.motion.suspension(node, stage, delta, road_yaw + countersteer, bend * race_speed * race_speed)
+			var movement = node.position - racer.previous
+			var path_yaw = atan2(-movement.x, -movement.z) if Vector2(movement.x, movement.z).length() > 0.02 else road_yaw
+			racer.motion.suspension(node, stage, delta, path_yaw + countersteer, bend * race_speed * race_speed)
 			if s >= racer.focus and racer.kind != "pass":
 				racer.state = "offroad"
 				racer.age = 0
@@ -1270,7 +1284,7 @@ func _update_stones(delta: float) -> void:
 	if stone_clock <= 0:
 		stone_clock = 0.09
 		for racer in racers:
-			if racer.state != "racing" or not racer.motion.grounded or stones.size() >= 48:
+			if racer.state != "racing" or racer.get("drive_speed", 27.0) < 4 or not racer.motion.grounded or stones.size() >= 48:
 				continue
 			if stage.urban and stage.road_distance(racer.node.position) < Stage.WIDTH * 0.7:
 				continue # Clean asphalt does not throw a constant stream of gravel.
@@ -1486,6 +1500,10 @@ func recover_racer(racer: Dictionary) -> void:
 	racer.motion = Motion.new()
 	racer.slide = 0.0
 	racer.slide_speed = 0.0
+	racer.line = 0.0
+	racer.avoiding = false
+	racer.avoid_line = 0.0
+	racer.drive_speed = stage.rally_speed(racer.s) * racer.get("pace", 1.0)
 	racer.state = "racing"
 	racer.kind = "pass"
 	count_racer(racer)
