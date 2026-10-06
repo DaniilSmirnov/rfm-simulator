@@ -11,8 +11,6 @@ func trunk(game) -> Vector3:
 	return game.cargo.point(game.cargo.poses()[game.chair_owner()])
 func return_box(game) -> void:
 	game.walker = trunk(game)
-	if not game.cargo.opened.get(game.chair_owner(), false):
-		game.cargo.toggle(trunk(game))
 	check(game.cargo.return_item(trunk(game)), "carried item returns at an open trunk")
 func run() -> void:
 	for variant in range(10):
@@ -45,12 +43,37 @@ func run() -> void:
 	host.heading = 0
 	host.begin_placement("table")
 	check(host.placement_preview == null and host.cargo.boxes("local") == [true, true, true], "cannot place furniture remotely from a closed trunk")
-	host.walker = trunk(host)
-	host.camera.position = host.walker + Vector3(0, 0.8, 0.9)
-	host.camera.look_at(trunk(host))
-	check(host.interaction.current().get("action", "") == "trunk", "F selects trunk handle at the back of the car")
-	host.interaction.activate()
-	check(host.cargo.opened.get("local", false), "F opens the selected trunk")
+	for variant in range(Props.PLAYER_MODELS.size()):
+		host.select_player_car(variant)
+		host.car.position = origin + Vector3(0, 0, 8)
+		host.heading = PI / 2 if variant % 2 else 0.0
+		host.walker = trunk(host)
+		host.camera.position = host.walker + Vector3(0, 1, 0)
+		host.camera.look_at(host.camera.position + Vector3(0, 0, 1))
+		host.cargo.update(1)
+		check(host.cargo.opened.get("local", false) and host.car.get_node("TrunkHinge").rotation.x < -1.0 and host.car.get_node("TrunkBoxes").visible, "model %d opens automatically without aiming or F" % variant)
+		var offers: Array = []
+		host.cargo.offers(offers, host.interaction)
+		check(not offers.any(func(item): return item.action == "trunk"), "model %d has no manual lid action" % variant)
+		check(host.cargo.take("chairs"), "model %d allows taking cargo immediately after approaching" % variant)
+		check(host.cargo.return_item(trunk(host)), "model %d allows returning cargo without manual opening" % variant)
+		host.walker = trunk(host) + Vector3(3.6, 0, 0)
+		host.cargo.update(0)
+		check(host.cargo.opened.get("local", false), "model %d keeps lid open at the distance boundary" % variant)
+		host.walker = trunk(host) + Vector3(4.3, 0, 0)
+		host.cargo.update(1)
+		check(not host.cargo.opened.get("local", false) and absf(host.car.get_node("TrunkHinge").rotation.x) < 0.01, "model %d closes automatically when everyone leaves" % variant)
+		host.walker = host.car.position + Vector3(0, 0, -3).rotated(Vector3.UP, host.heading)
+		host.cargo.update(0)
+		check(not host.cargo.opened.get("local", false), "model %d does not open when approaching the front" % variant)
+		host.walker = trunk(host)
+		host.speed = 3
+		host.cargo.update(0)
+		check(not host.cargo.opened.get("local", false), "model %d stays closed while moving" % variant)
+		host.speed = 0
+	host.select_player_car(0)
+	host.car.position = origin + Vector3(0, 0, 8)
+	host.heading = 0
 	for kind in ["table", "chairs", "grill"]:
 		host.walker = trunk(host)
 		host.begin_placement(kind)
@@ -69,8 +92,8 @@ func run() -> void:
 		check(host.packing.pack(item.node.position), "pick up %s for packing" % item.kind)
 		check(host.cargo.pending_returns() == 1, "picked-up item remains pending until deposited")
 		host.cargo.opened["local"] = false
-		host.walker = trunk(host)
-		check(not host.cargo.return_item(trunk(host)), "a closed trunk rejects depositing equipment")
+		host.walker = trunk(host) + Vector3(5, 0, 0)
+		check(not host.cargo.return_item(trunk(host)), "remote equipment cannot be deposited before approaching")
 		return_box(host)
 	check(host.packing.remaining() == 0 and host.cargo.boxes("local") == [true, true, true], "all three boxes reappear after the camp is loaded")
 	host.room.connected = true
@@ -81,15 +104,26 @@ func run() -> void:
 	guest.room.player_id = "guest"
 	host.course.apply_snapshot({})
 	guest.course.apply_snapshot({})
-	host.car.position = origin + Vector3(0, 0, 12)
+	host.car.position = origin + Vector3(0, 0, 20)
 	guest.car.position = origin + Vector3(0, 0, 8)
 	guest.heading = 0
 	guest.walker = trunk(guest)
 	host.room._update_peers([{"id": "guest", "name": "Друг", "state": guest.room.local_state(), "car_model": 0}])
 	var point = trunk(guest)
 	var command = {"player": "guest", "action": "trunk", "state": guest.room.local_state(), "placement": {"pos": guest.room.a(point), "yaw": 0}}
-	host.room._apply_command(command)
-	check(host.cargo.opened.get("guest", false), "guest can open their own trunk through the authenticated command")
+	host.cargo.update(1)
+	check(host.cargo.opened.get("guest", false), "guest approach opens their own trunk without a command")
+	host.walker = host.cargo.point(host.cargo.poses()["host"])
+	host.in_car = true
+	guest.walker = host.cargo.point(host.cargo.poses()["host"])
+	host.room.peers["guest"].state = guest.room.local_state()
+	host.cargo.update(1)
+	check(host.cargo.opened.get("host", false), "friend opens a parked owner car by approaching its rear")
+	guest.walker = trunk(guest)
+	host.room.peers["guest"].state = guest.room.local_state()
+	host.cargo.update(1)
+	check(not host.cargo.opened.get("host", false), "friend leaving closes owner car even while owner is seated")
+	host.in_car = false
 	command.action = "take_gear"
 	command.placement = {"resource_id": 1}
 	host.room._apply_command(command)
@@ -100,7 +134,7 @@ func run() -> void:
 	host.room._apply_command(command)
 	check(host.personal_chairs.has("guest") and host.cargo.boxes("guest") == [true, false, true], "guest placement consumes only their chair box")
 	guest.room.apply_world(host.room.world_state())
-	check(guest.cargo.opened.get("guest", false) and guest.cargo.boxes("guest") == [true, false, true], "late world snapshot restores open trunk and correct cargo")
+	check(guest.cargo.opened.get("guest", false) == host.cargo.opened.get("guest", false) and guest.cargo.boxes("guest") == [true, false, true], "late world snapshot restores automatic trunk state and correct cargo")
 	guest.cargo.update(1)
 	check(guest.car.get_node("TrunkBoxes").visible and not guest.car.get_node("TrunkBoxes").get_child(1).visible, "guest cargo geometry reflects authoritative inventory")
 	command.action = "grill"

@@ -1581,7 +1581,7 @@ func _update_hud() -> void:
 	var distance = int(player_position().distance_to(stage.clearings[target_clearing]))
 	quest_label.text = "%s Найти место  ·  %d м\n%s Разложить стол\n%s Поставить стулья\n%s Пожарить и съесть шашлык\n%s Посмотреть %d экипажей" % ["[x]" if camp != null else "[ ]", distance, "[x]" if camp != null else "[ ]", "[x]" if has_chairs else "[ ]", "[x]" if eaten else "[ ]", "[x]" if passed >= RALLY_CREW_LIMIT else "[ ]", RALLY_CREW_LIMIT]
 	if packing.active():
-		quest_label.text = "Оба прохода завершены\nВернуть вещи в багажники: осталось %d\nF — взять предмет / открыть багажник / вернуть\nЗатем все возвращаются в свои машины" % packing.remaining()
+		quest_label.text = "Оба прохода завершены\nВернуть вещи в багажники: осталось %d\nБагажник открывается при подходе\nF — взять предмет / вернуть коробку\nЗатем все возвращаются в свои машины" % packing.remaining()
 	status_label.text = "ПРОХОД %d/2 · ЭКИПАЖИ %d/%d · ПОМОЩЬ %d\nПИВО %d · ВЫЕЗД %02d:%02d" % [course.pass_index, passed, RALLY_CREW_LIMIT, helped, beers, int(elapsed) / 60, int(elapsed) % 60]
 	if in_car:
 		info_label.text = "%02d КМ/Ч    ·    ЛЕГКОВУШКА %d%%    ·    %s" % [int(absf(speed) * 3.6), int(condition), "ОБОЧИНА" if stage.road_distance(car.position) > 4 else "ГРАВИЙ / КОЛЕЯ"]

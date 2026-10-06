@@ -274,6 +274,7 @@ func _process(delta: float) -> void:
 			body.world = world_state()
 			body.ack = acknowledgements
 		_request("sync", body)
+	game.cargo.refresh_opened()
 	for peer in peers.values():
 		if peer.state == null:
 			continue
@@ -284,8 +285,6 @@ func _process(delta: float) -> void:
 		peer.avatar.position = avatar_pose.position
 		peer.avatar.rotation.y = avatar_pose.rotation.y
 		peer.avatar.visible = not peer.state.in_car
-		if is_host and peer.state.in_car:
-			game.cargo.opened[peer.id] = false
 		Props.update_player_trunk(peer.car, bool(game.cargo.opened.get(peer.id, false)), game.cargo.boxes(peer.id), delta)
 		var carry = game.cargo.held.get(peer.id, {})
 		var kind = str(carry.get("kind", ""))
@@ -458,7 +457,7 @@ func _apply_command(c: Dictionary) -> void:
 		return
 	var actor = str(c.get("player", "guest"))
 	var variant = int(peers[actor].car.get_meta("variant", 0)) if peers.has(actor) and peers[actor].has("car") else 0
-	game.cargo.context = {"owner": actor, "car": v(c.state.car), "heading": float(c.state.get("heading", 0.0)), "variant": variant, "host_car": old.car}
+	game.cargo.context = {"owner": actor, "car": v(c.state.car), "heading": float(c.state.get("heading", 0.0)), "variant": variant, "host_car": old.car, "speed": float(c.state.get("speed", 0))}
 	match c.action:
 		"trunk":
 			if spot != Vector3.INF:

@@ -55,19 +55,46 @@ func target_owner(spot: Vector3) -> String:
 			return str(owner)
 	return ""
 
+# Derive lid state from people near the rear, independently of gaze and car model.
+# A wider closing radius prevents repeated opening/closing at the edge.
+func refresh_opened() -> void:
+	var cars = poses()
+	var visitors: Array = []
+	if game.playing and not game.dead and not game.finished:
+		if not game.in_car and game.beers < 30:
+			visitors.append(game.walker)
+		for id in game.room.peers:
+			if not context.is_empty() and id == actor():
+				continue
+			var peer = game.room.peers[id]
+			if peer.state != null and peer.state.has("pos") and not peer.state.in_car and int(peer.state.get("beers", 0)) < 30:
+				visitors.append(game.room.v(peer.state.pos))
+	for owner in opened.keys():
+		if not cars.has(owner):
+			opened.erase(owner)
+	for owner in cars:
+		var moving = absf(game.speed) > 1.0 if owner == game.chair_owner() else false
+		if game.room.peers.has(owner) and game.room.peers[owner].state != null:
+			moving = absf(float(game.room.peers[owner].state.get("speed", 0))) > 1.0
+		if not context.is_empty() and owner == actor():
+			moving = absf(float(context.get("speed", 0))) > 1.0
+		var radius = 4.1 if opened.get(owner, false) else 3.3
+		var present = false
+		if not moving:
+			for visitor in visitors:
+				if visitor.distance_to(point(cars[owner])) < radius:
+					present = true
+					break
+		opened[owner] = present
+
+# Compatibility with queued commands from older clients; proximity owns the lid.
 func toggle(spot: Vector3) -> bool:
-	if not available():
-		return false
+	refresh_opened()
 	var owner = target_owner(spot)
-	if owner == "" or not near(owner):
-		return false
-	if game.room.submit("trunk", {"pos": game.room.a(spot), "yaw": 0.0}):
-		return true
-	opened[owner] = not opened.get(owner, false)
-	game.toast("Багажник открыт. Выбери коробку через F или Z/C/G." if opened[owner] else "Багажник закрыт.")
-	return true
+	return available() and owner != "" and near(owner) and opened.get(owner, false)
 
 func take(kind: String) -> bool:
+	refresh_opened()
 	if kind not in KINDS or not available() or game.packing.active():
 		return false
 	var owner = actor()
@@ -81,7 +108,7 @@ func take(kind: String) -> bool:
 			held[owner] = {"kind": kind, "owner": owner, "returning": false}
 			return true
 	if not opened.get(owner, false) or not near(owner) or not stored(kind, owner):
-		game.toast("Подойди к своему багажнику и открой его через F.")
+		game.toast("Подойди к задней части своей машины — багажник откроется сам.")
 		return false
 	if (kind == "table" and game.camp != null) or (kind == "grill" and game.grill != null):
 		game.toast("Общий предмет уже установлен. Возьми свой стул.")
@@ -119,6 +146,7 @@ func pick_up(item: Dictionary) -> bool:
 	return true
 
 func return_item(spot: Vector3) -> bool:
+	refresh_opened()
 	if not available() or not held.has(actor()):
 		return false
 	var owner = target_owner(spot)
@@ -126,7 +154,7 @@ func return_item(spot: Vector3) -> bool:
 	# If the owner left the room, another car can take abandoned equipment home.
 	var destination = carry.owner if poses().has(carry.owner) else actor()
 	if owner != destination or not opened.get(owner, false) or not near(owner):
-		game.toast("Открой багажник машины владельца и верни коробку через F.")
+		game.toast("Подойди к багажнику машины владельца и верни коробку через F.")
 		return false
 	if game.room.submit("return_gear", {"pos": game.room.a(spot), "yaw": 0.0}):
 		return true
@@ -141,6 +169,7 @@ func pending_returns() -> int:
 	return count
 
 func offers(items: Array, interaction) -> void:
+	refresh_opened()
 	var cars = poses()
 	for owner in cars:
 		var spot = point(cars[owner])
@@ -148,8 +177,6 @@ func offers(items: Array, interaction) -> void:
 		var destination = str(holding.get("owner", "")) if cars.has(str(holding.get("owner", ""))) else game.chair_owner()
 		if not holding.is_empty() and destination == owner and opened.get(owner, false):
 			interaction.offer(items, spot, 0.55, 3.3, "return_gear", "Вернуть коробку в багажник", spot)
-		else:
-			interaction.offer(items, spot, 0.36, 3.3, "trunk", "Закрыть багажник" if opened.get(owner, false) else "Открыть багажник", spot)
 		if owner != game.chair_owner() or not opened.get(owner, false) or not holding.is_empty() or game.packing.active():
 			continue
 		var p = Props.trunk_profile(int(cars[owner].variant))
@@ -160,9 +187,8 @@ func offers(items: Array, interaction) -> void:
 			interaction.offer(items, box_point, 0.19, 3.3, "take_gear", "Взять " + ["стол", "стул", "мангал"][i], KINDS[i])
 
 func update(delta: float) -> void:
+	refresh_opened()
 	var owner = game.chair_owner()
-	if game.in_car and context.is_empty():
-		opened[owner] = false
 	if game.room.connected and game.room.is_host:
 		for departed in held.keys():
 			if departed != owner and not game.room.peers.has(departed):
@@ -181,6 +207,7 @@ func update(delta: float) -> void:
 		hand_box.visible = not game.in_car and game.placement_preview == null and not game.dead and not game.finished
 
 func snapshot() -> Dictionary:
+	refresh_opened()
 	return {"opened": opened.duplicate(), "held": held.duplicate(true), "table_owner": str(game.camp.get_meta("gear_owner", game.chair_owner())) if game.camp != null else "", "grill_owner": str(game.grill.get_meta("gear_owner", game.chair_owner())) if game.grill != null else ""}
 
 func apply_snapshot(data: Dictionary) -> void:
