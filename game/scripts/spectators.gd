@@ -267,7 +267,7 @@ func nearby_stranded(person: Dictionary) -> Dictionary:
 	for racer in game.racers:
 		if not game.can_tow_racer(racer):
 			continue
-		var distance: float = person.home.distance_to(racer.node.position)
+		var distance: float = minf(person.home.distance_to(racer.node.position), person.avatar.position.distance_to(racer.node.position))
 		if distance < nearest:
 			nearest = distance
 			found = racer

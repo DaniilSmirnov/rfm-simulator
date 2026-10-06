@@ -113,6 +113,7 @@ func run() -> void:
 	check(person.helper == -1 and crowd.push_helpers().is_empty(), "NPC stops pushing recovered car")
 	racer.state = "stranded"
 	person.home = game.stage.at(700)
+	person.avatar.position = person.home
 	crowd.update(85, 0, false)
 	check(person.helper == -1, "distant NPC never joins recovery")
 	check(game.room.world_state().has("npc_people"), "world snapshots carry NPC poses and actions")
