@@ -1,6 +1,8 @@
 extends RefCounted
 class_name RallyProps
 
+const RFM_FLAG_TEXTURE = preload("res://branding/rfm-flag.svg")
+
 static func material(color: Color) -> StandardMaterial3D:
 	var m = StandardMaterial3D.new()
 	m.albedo_color = color
@@ -531,7 +533,9 @@ static func rally_fan_flag(parent: Node3D, pos: Vector3, yaw: float, index: int 
 	quad.size = Vector2(1.44, 2.65)
 	cloth.mesh = quad
 	var cloth_material = StandardMaterial3D.new()
-	cloth_material.albedo_texture = load("res://branding/rfm-flag.svg")
+	cloth_material.albedo_texture = RFM_FLAG_TEXTURE
+	cloth_material.albedo_color = Color.WHITE
+	cloth_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	cloth_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	cloth_material.cull_mode = BaseMaterial3D.CULL_DISABLED
 	cloth.material_override = cloth_material
