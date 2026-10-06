@@ -27,21 +27,36 @@ func run() -> void:
 	game.place_table()
 	game.place_chairs()
 	game.start_grill()
-	game.beers = 2
+	game.beers = 1
+	game.drink_beer()
+	game._update_drinking(1.9)
+	game._cancel_drink()
+	check(game.drunk_strength == 0, "first two beers do not sway the camera")
+	game.beer_timer = 0
+	game.drink_beer()
+	game._update_drinking(1.9)
+	game._cancel_drink()
 	game._process(0.1)
-	check(game.drunk_phase == 0, "first two beers do not spin the camera")
-	game.beers = 3
-	game._process(0.1)
-	var mild = game.drunk_phase
-	check(mild > 0 and not is_zero_approx(game.camera.rotation.z), "third beer starts screen rotation")
-	game.beers = 20
-	game.drunk_phase = 0
-	game._process(0.1)
-	check(game.drunk_phase > mild * 5, "rotation increases with beer count")
+	check(game.drunk_strength > 0 and absf(game.camera.rotation.z) < deg_to_rad(3.0), "third sip starts bounded gentle sway")
+	var mild = game.drunk_strength
+	game._update_intoxication(10)
+	check(game.drunk_strength < mild, "beer sway gradually fades without further sips")
+	game.drunk_strength = 1.0
+	var sway_bounded = true
+	for frame in range(240):
+		game._update_intoxication(1.0 / 24.0)
+		game._update_camera(1.0 / 24.0)
+		sway_bounded = sway_bounded and absf(game.camera.rotation.z) <= deg_to_rad(3.01)
+	check(sway_bounded, "sway never rotates the screen fully")
+	game._update_intoxication(60)
+	game._update_camera(0.1)
+	check(game.drunk_strength == 0 and is_zero_approx(game.camera.rotation.z), "beer sway ends completely after a minute")
+	game.drunk_strength = 0.5
 	game.paused = true
 	var phase = game.drunk_phase
+	var strength = game.drunk_strength
 	game._process(0.5)
-	check(game.drunk_phase == phase, "pause freezes intoxication")
+	check(game.drunk_phase == phase and game.drunk_strength == strength, "pause freezes intoxication")
 	game.paused = false
 	game.beers = 29
 	game.beer_timer = 0

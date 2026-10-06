@@ -41,6 +41,8 @@ var cooking = false
 var cook_time = 0.0
 var eaten = false
 var drunk_phase = 0.0
+var drunk_strength = 0.0
+const DRUNK_FADE_SECONDS = 60.0
 var collapse_time = 0.0
 var tree_requests: Dictionary = {}
 var beers = 0
@@ -489,8 +491,7 @@ func _process(delta: float) -> void:
 	if not room.connected or room.is_host:
 		elapsed += delta
 	stage.update_fallen(delta)
-	if beers >= 3:
-		drunk_phase = fposmod(drunk_phase + delta * (minf(4.0, 0.12 + (beers - 3) * 0.075)), TAU)
+	_update_intoxication(delta)
 	if in_car:
 		_drive(delta)
 	else:
@@ -528,6 +529,13 @@ func _process(delta: float) -> void:
 		get_viewport().get_texture().get_image().save_png("res://../preview.png")
 		await _shutdown_audio()
 		get_tree().quit()
+
+func _update_intoxication(delta: float) -> void:
+	drunk_strength = maxf(0.0, drunk_strength - delta / DRUNK_FADE_SECONDS)
+	if drunk_strength > 0:
+		drunk_phase = fposmod(drunk_phase + delta * 1.25, TAU)
+	else:
+		drunk_phase = 0.0
 
 func player_position() -> Vector3:
 	return car.position if in_car else walker
@@ -643,11 +651,12 @@ func _update_camera(delta: float) -> void:
 	else:
 		camera.position = walker + Vector3(0, lerpf(1.72, 0.36, collapse) + sin(elapsed * 12) * 0.015, 0)
 		var sip = sin(clampf((drink_time - 1.3) / 1.2, 0, 1) * PI) if drink_time >= 0 else 0.0
-		camera.rotation = Vector3(view_pitch + sip * 0.035, view_yaw, sin(elapsed * 1.7) * 0.012 if beer_timer > 0 else 0)
+		camera.rotation = Vector3(view_pitch + sip * 0.035, view_yaw, 0.0)
 		camera.fov = 68 - sip * 2.0
 
-	if beers >= 3:
-		camera.rotation.z += drunk_phase + (PI / 2 * collapse)
+	# Bounded gentle sway, with an envelope that fades between sips.
+	camera.rotation.z += sin(drunk_phase) * deg_to_rad(3.0) * drunk_strength + PI / 2 * collapse
+	camera.rotation.x += sin(drunk_phase * 2.0) * deg_to_rad(0.6) * drunk_strength
 	camera.position += Vector3(sin(elapsed * 91), cos(elapsed * 73), 0) * impact_shake * 0.12
 
 func _toggle_car() -> void:
@@ -801,6 +810,8 @@ func _update_drinking(delta: float) -> void:
 	if not drink_committed and drink_time >= 1.8:
 		drink_committed = true
 		beers += 1
+		if beers >= 3:
+			drunk_strength = minf(1.0, drunk_strength + 0.45)
 		beer_timer = 1.0
 		if beers >= 30:
 			if in_car:
