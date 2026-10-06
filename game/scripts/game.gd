@@ -1510,11 +1510,11 @@ func _update_hud() -> void:
 	status_label.text = "ЭКИПАЖИ %d/%d   ·   ПОМОЩЬ %d\nПИВО %d   ·   ВЫЕЗД %02d:%02d" % [passed, RALLY_CREW_LIMIT, helped, beers, int(elapsed) / 60, int(elapsed) % 60]
 	if in_car:
 		info_label.text = "%02d КМ/Ч    ·    ЛЕГКОВУШКА %d%%    ·    %s" % [int(absf(speed) * 3.6), int(condition), "ОБОЧИНА" if stage.road_distance(car.position) > 4 else "ГРАВИЙ / КОЛЕЯ"]
-		hint_label.text = "WASD / стрелки — газ и руль   ·   Space — тормоз   ·   E — выйти   ·   Q — случайная поляна   ·   Home — вернуть на СУ"
+		hint_label.text = "WASD / стрелки — газ и руль   ·   Space — тормоз   ·   F — выйти   ·   Q — случайная поляна   ·   Home — вернуть на СУ"
 	else:
 		var cook_status = "ШАШЛЫК ГОТОВ" if cook_time >= 35 else ("ШАШЛЫК %d%%" % int(cook_time / 35 * 100) if cooking else "МАНГАЛ НЕ РАЗОЖЖЁН")
 		info_label.text = "ЗРИТЕЛЬ    ·    %s · ШАМПУРЫ %d/16    ·    %s" % [cook_status, grill_servings, course.caption()]
-		hint_label.text = "WASD — идти   ·   мышь — смотреть   ·   E — сесть   ·   F — стол   ·   C — стулья   ·   G — мангал   ·   R — статус СУ"
+		hint_label.text = "WASD — идти   ·   мышь — смотреть   ·   F — действие   ·   Z — стол   ·   C — стулья   ·   G — мангал   ·   R — статус СУ"
 		if drink_time >= 0:
 			info_label.text = "ОТКРЫВАЕМ БАНКУ" if drink_time < 1.25 else "ЗА ХОРОШИЙ ВЫЕЗД!"
 		if eat_time >= 0:
