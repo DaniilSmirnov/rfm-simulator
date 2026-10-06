@@ -12,6 +12,7 @@ var urban = false
 var points: PackedVector3Array = []
 var clearings: Array[Vector3] = []
 var trails: Array[Dictionary] = []
+var woodland_details: Dictionary = {}
 var rocks: Array[Dictionary] = []
 var trees: Array[Vector3] = []
 var forest_data: Array[Dictionary] = []
@@ -95,6 +96,8 @@ func ground(pos: Vector3) -> float:
 	var distance = road_distance(pos)
 	var slope = maxf(0, distance - 10.0)
 	var height = p.y + roughness(s) * (1.0 - smoothstep(3.7, 8.0, distance)) + sin(pos.x * 0.07 + s * 0.013) * slope * 0.08 + slope * (0.08 if urban else 0.20)
+	if variant == 0:
+		height += forest_relief(pos, distance)
 	if urban:
 		height = p.y + sin(pos.x * 0.12 + s * 0.04) * 0.025 + slope * 0.08
 	if winter:
@@ -140,7 +143,7 @@ func build() -> void:
 	_build_terrain()
 	_build_road()
 	var forest: Array[Dictionary] = []
-	for i in range(100 if urban else (520 if winter else 2200)):
+	for i in range(100 if urban else (520 if winter else 7600)):
 		var p = Vector3(rng.randf_range(-150, 150), 0, rng.randf_range(-LENGTH - 65, 50))
 		if urban:
 			continue
@@ -156,7 +159,7 @@ func build() -> void:
 			continue
 		p.y = ground(p)
 		trees.append(p)
-		forest.append({"position": p, "height": rng.randf_range(6, 13), "shade": rng.randf_range(-0.025, 0.045)})
+		forest.append({"position": p, "height": rng.randf_range(6, 13 if winter else 17), "shade": rng.randf_range(-0.025, 0.045)})
 	forest_data = forest
 	_rebuild_tree_index()
 	_build_forest(forest)
@@ -170,6 +173,8 @@ func build() -> void:
 		var rock = RallyProps.cylinder(self, p + Vector3(0, 0.2, 0), radius, 0.18, 0.65, Color("7d8070"), 5)
 		rocks.append({"pos": p, "radius": radius, "height": 0.75})
 		rock.rotation.z = rng.randf_range(-0.3, 0.3)
+	if variant == 0:
+		_build_woodland_details()
 	if urban:
 		_build_city()
 	for i in range(clearings.size()):
@@ -305,14 +310,24 @@ func _build_terrain() -> void:
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	for z in range(-920, 81, 4):
 		for x in range(-204, 204, 4):
-			var a = Vector3(x, 0, z)
-			var b = Vector3(x + 4, 0, z)
-			var c = Vector3(x, 0, z + 4)
-			var d = Vector3(x + 4, 0, z + 4)
-			for v in [a, b, c, b, d, c]:
-				v.y = ground(v) - 0.25
-				st.set_color((Color("b6c9d3") if winter else Color(0.32, 0.38, 0.25)).lightened(rng.randf_range(-0.07, 0.07)))
-				st.add_vertex(v)
+			# Resolve narrow roadside ditches without subdividing the whole map.
+			var step = 2 if variant == 0 and road_distance(Vector3(x + 2, 0, z + 2)) < 12 else 4
+			for dz in range(0, 4, step):
+				for dx in range(0, 4, step):
+					var a = Vector3(x + dx, 0, z + dz)
+					var b = a + Vector3(step, 0, 0)
+					var c = a + Vector3(0, 0, step)
+					var d = a + Vector3(step, 0, step)
+					for v in [a, b, c, b, d, c]:
+						v.y = ground(v) - 0.25
+						var color = Color("b6c9d3") if winter else Color(0.32, 0.38, 0.25)
+						if variant == 0:
+							var patch = (sin(v.x * 0.065) * sin(v.z * 0.041) + 1.0) * 0.5
+							color = Color("514a32").lerp(Color("485c36"), patch)
+							if road_distance(v) > 4.5 and road_distance(v) < 8:
+								color = color.darkened(0.16)
+						st.set_color(color.lightened(rng.randf_range(-0.07, 0.07)))
+						st.add_vertex(v)
 	st.generate_normals()
 	var n = MeshInstance3D.new()
 	n.mesh = st.commit()
@@ -372,6 +387,7 @@ func _build_forest(forest: Array[Dictionary]) -> void:
 		mesh.top_radius = 0.65 if layer == 0 else 0.0
 		mesh.height = 1.0
 		mesh.radial_segments = 5 if layer == 0 else 6
+		mesh.rings = 1
 		var mat = RallyProps.material(Color.WHITE)
 		mat.vertex_color_use_as_albedo = true
 		mat.vertex_color_is_srgb = true
@@ -545,3 +561,179 @@ func rock_hit(start: Vector3, end: Vector3, radius: float, allow_escape: bool = 
 		earliest = t
 		best = {"position": position, "normal": Vector3(normal.x, 0, normal.y), "time": t}
 	return best
+
+func forest_relief(pos: Vector3, distance: float) -> float:
+	var hills = (sin(pos.x * 0.043 + pos.z * 0.017) * 1.5 + sin(pos.z * 0.063 - pos.x * 0.031) * 0.85 + sin(pos.x * 0.115) * sin(pos.z * 0.087) * 0.55) * smoothstep(10.0, 24.0, distance)
+	var ditch = (1.0 - smoothstep(0.45, 1.9, absf(distance - 6.4))) * 0.85
+	ditch *= smoothstep(2.2, 4.0, trail_distance(pos))
+	return hills - ditch
+
+func woodland_spot(pos: Vector3, padding: float = 0.0) -> bool:
+	if road_distance(pos) < 9.0 + padding or trail_distance(pos) < 3.2 + padding:
+		return false
+	for clearing in clearings:
+		if flat(pos).distance_to(flat(clearing)) < 8.5 + padding:
+			return false
+	return true
+
+func _detail_batch(name: String, mesh: Mesh, poses: Array, colors: Array) -> void:
+	if name == "ForestGrass":
+		var cells = {}
+		for i in range(poses.size()):
+			var origin: Vector3 = poses[i].origin
+			var key = Vector2i(floori(origin.x / 64), floori(origin.z / 64))
+			if not cells.has(key):
+				cells[key] = {"poses": [], "colors": []}
+			cells[key].poses.append(poses[i])
+			cells[key].colors.append(colors[i])
+		for key in cells:
+			_detail_batch("GrassTile_%d_%d" % [key.x, key.y], mesh, cells[key].poses, cells[key].colors)
+		woodland_details[name] = poses.size()
+		return
+	var mat = RallyProps.material(Color.WHITE)
+	mat.vertex_color_use_as_albedo = true
+	mat.vertex_color_is_srgb = true
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var mm = MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = true
+	mm.mesh = mesh
+	mm.instance_count = poses.size()
+	var center = Vector3.ZERO
+	if name.begins_with("GrassTile") and not poses.is_empty():
+		center = poses[0].origin
+	for i in range(poses.size()):
+		var pose: Transform3D = poses[i]
+		pose.origin -= center
+		mm.set_instance_transform(i, pose)
+		mm.set_instance_color(i, colors[i])
+	var node = MultiMeshInstance3D.new()
+	node.name = name
+	node.position = center
+	if name.begins_with("GrassTile"):
+		node.visibility_range_end = 160
+		node.visibility_range_end_margin = 15
+	node.multimesh = mm
+	node.material_override = mat
+	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(node)
+	woodland_details[name] = poses.size()
+
+func _grass_mesh() -> ArrayMesh:
+	var st = SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for i in range(5):
+		var yaw = i * TAU / 5
+		var base = Vector3(0.10, 0, 0).rotated(Vector3.UP, yaw)
+		for v in [base + Vector3(-0.09, 0, 0).rotated(Vector3.UP, yaw), base + Vector3(0.09, 0, 0).rotated(Vector3.UP, yaw), base + Vector3(0.12, 0.75 + (i % 2) * 0.25, 0).rotated(Vector3.UP, yaw)]:
+			st.add_vertex(v)
+	st.generate_normals()
+	return st.commit()
+
+func _build_woodland_details() -> void:
+	var detail_rng = RandomNumberGenerator.new()
+	detail_rng.seed = 6022026
+	var grass_poses: Array = []
+	var grass_colors: Array = []
+	var stone_poses: Array = []
+	var stone_colors: Array = []
+	var cap_poses: Array = []
+	var cap_colors: Array = []
+	var stem_poses: Array = []
+	var stem_colors: Array = []
+	var mound_poses: Array = []
+	var mound_colors: Array = []
+	var twig_poses: Array = []
+	var twig_colors: Array = []
+	var boulder_poses: Array = []
+	var boulder_colors: Array = []
+	for i in range(13000):
+		var p = Vector3(detail_rng.randf_range(-145, 145), 0, detail_rng.randf_range(-LENGTH, 0))
+		if not woodland_spot(p):
+			continue
+		p.y = ground(p) - 0.20
+		var size = detail_rng.randf_range(0.25, 0.65)
+		grass_poses.append(Transform3D(Basis(Vector3.UP, detail_rng.randf() * TAU).scaled(Vector3(size * 1.8, size, size * 1.8)), p))
+		grass_colors.append(Color("4f6634").lerp(Color("91905a"), detail_rng.randf() * 0.7))
+	for i in range(1100):
+		var along = detail_rng.randf_range(20, LENGTH - 20)
+		var p = at(along) + side(along) * detail_rng.randf_range(13, 80) * (-1 if i % 2 else 1)
+		var radius = detail_rng.randf_range(0.8, 2.4)
+		if not woodland_spot(p, radius) or obstacle_hit(p, p, radius + 0.3) >= 0:
+			continue
+		p.y = ground(p)
+		var height = detail_rng.randf_range(0.7, 2.5)
+		boulder_poses.append(Transform3D(Basis(Vector3.UP, detail_rng.randf() * TAU).scaled(Vector3(radius * 2, height, radius * 1.7)), p + Vector3(0, height * 0.35, 0)))
+		boulder_colors.append(Color("697064").lightened(detail_rng.randf_range(-0.12, 0.12)))
+		rocks.append({"pos": p, "radius": radius, "height": height * 0.9, "forest": true})
+		if boulder_poses.size() >= 110:
+			break
+	for i in range(500):
+		var p = Vector3(detail_rng.randf_range(-135, 135), 0, detail_rng.randf_range(-LENGTH, 0))
+		if not woodland_spot(p):
+			continue
+		p.y = ground(p) - 0.18
+		var radius = detail_rng.randf_range(0.12, 0.35)
+		stone_poses.append(Transform3D(Basis(Vector3.UP, detail_rng.randf() * TAU).scaled(Vector3(radius * 2, radius, radius * 1.7)), p))
+		stone_colors.append(Color("7e806e").lightened(detail_rng.randf_range(-0.1, 0.12)))
+	for i in range(300):
+		var along = detail_rng.randf_range(20, LENGTH - 20)
+		var p = at(along) + side(along) * detail_rng.randf_range(10, 38) * (-1 if i % 2 else 1)
+		if not woodland_spot(p) or not rock_hit(p, p, 0.5, false).is_empty():
+			continue
+		for j in range(3):
+			var at = p + Vector3(detail_rng.randf_range(-0.45, 0.45), 0, detail_rng.randf_range(-0.45, 0.45))
+			at.y = ground(at) - 0.24
+			var size = detail_rng.randf_range(0.10, 0.22)
+			stem_poses.append(Transform3D(Basis.from_scale(Vector3(size * 0.20, size, size * 0.20)), at + Vector3(0, size * 0.5, 0)))
+			stem_colors.append(Color("c5baa1"))
+			cap_poses.append(Transform3D(Basis.from_scale(Vector3(size, size * 0.45, size)), at + Vector3(0, size, 0)))
+			cap_colors.append(Color("b87743") if i % 4 else Color("ad4530"))
+	for i in range(110):
+		var along = detail_rng.randf_range(20, LENGTH - 20)
+		var p = at(along) + side(along) * detail_rng.randf_range(12, 45) * (-1 if i % 2 else 1)
+		if not woodland_spot(p, 0.8) or not rock_hit(p, p, 0.8, false).is_empty():
+			continue
+		p.y = ground(p) - 0.23
+		var radius = detail_rng.randf_range(0.45, 0.9)
+		var height = detail_rng.randf_range(0.35, 0.75)
+		mound_poses.append(Transform3D(Basis.from_scale(Vector3(radius, height, radius)), p + Vector3(0, height * 0.5, 0)))
+		mound_colors.append(Color("66513a").lightened(detail_rng.randf_range(-0.06, 0.06)))
+		for j in range(4):
+			var twig = p + Vector3(detail_rng.randf_range(-0.25, 0.25), height * 0.55, detail_rng.randf_range(-0.25, 0.25))
+			twig_poses.append(Transform3D(Basis.from_euler(Vector3(0.9, detail_rng.randf() * TAU, 0.7)).scaled(Vector3(0.02, radius * 0.65, 0.02)), twig))
+			twig_colors.append(Color("493c2b"))
+	var boulder = SphereMesh.new()
+	boulder.radial_segments = 7
+	boulder.rings = 3
+	_detail_batch("ForestBoulders", boulder, boulder_poses, boulder_colors)
+	var stones_mesh = SphereMesh.new()
+	stones_mesh.radial_segments = 5
+	stones_mesh.rings = 2
+	_detail_batch("ForestPebbles", stones_mesh, stone_poses, stone_colors)
+	_detail_batch("ForestGrass", _grass_mesh(), grass_poses, grass_colors)
+	var stem = CylinderMesh.new()
+	stem.height = 1
+	stem.bottom_radius = 1
+	stem.top_radius = 0.7
+	stem.radial_segments = 5
+	stem.rings = 1
+	_detail_batch("MushroomStems", stem, stem_poses, stem_colors)
+	var cap = SphereMesh.new()
+	cap.radial_segments = 7
+	cap.rings = 2
+	_detail_batch("MushroomCaps", cap, cap_poses, cap_colors)
+	var mound = CylinderMesh.new()
+	mound.height = 1
+	mound.bottom_radius = 1
+	mound.top_radius = 0.12
+	mound.radial_segments = 9
+	mound.rings = 1
+	_detail_batch("AntHills", mound, mound_poses, mound_colors)
+	var twig = CylinderMesh.new()
+	twig.height = 1
+	twig.bottom_radius = 1
+	twig.top_radius = 0.4
+	twig.radial_segments = 4
+	twig.rings = 1
+	_detail_batch("AntHillTwigs", twig, twig_poses, twig_colors)

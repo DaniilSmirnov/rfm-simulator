@@ -26,3 +26,5 @@ run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_spect
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_rocks.gd']);
 
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_tow_recovery.gd']);
+
+run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_woodland.gd']);
