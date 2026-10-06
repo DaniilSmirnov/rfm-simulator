@@ -69,7 +69,7 @@ func run() -> void:
 	c.touch_begin(1, button(c, "chairs"))
 	c.touch_begin(1, button(c, "placement_confirm"))
 	check(game.has_chairs and button(c, "grill").x > 0, "camp button advances from chairs to grill")
-	game.walker = game.stage.clearings[0] + Vector3(-4, 0, 0)
+	game.walker = game.stage.clearings[0] + Vector3(0, 0, -2)
 	c.touch_begin(1, button(c, "grill"))
 	c.touch_begin(1, button(c, "placement_confirm"))
 	check(game.cooking and button(c, "beer").x > 0, "grill and beer accessible by touch")
