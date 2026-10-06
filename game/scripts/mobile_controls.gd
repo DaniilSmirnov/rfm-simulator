@@ -45,19 +45,19 @@ func _layout() -> void:
 	var actions: Array[Array] = []
 	if world_blocked():
 		actions = []
+	elif game.placement_kind != "":
+		actions = [["Поставить", "placement_confirm", false], ["Повернуть", "placement_rotate", false], ["Отмена", "placement_cancel", false]]
 	elif game.in_car:
 		actions = [["Выйти", "interact", false], ["Вернуть", "recover", false], ["Поляна", "random_spot", false], ["Назад", "back", true], ["Тормоз", "brake", true], ["Газ", "forward", true]]
 		if game.tow_target != null:
 			actions[1] = ["Трос", "tow", true]
 	else:
 		actions = [["Сесть", "interact", false], ["Поляна", "random_spot", false]]
-		if game.camp == null:
-			actions.append(["Стол", "table", false])
-		elif not game.has_chairs:
-			actions.append(["Стулья", "chairs", false])
-		elif not game.cooking:
+		actions.append(["Стол", "table", false])
+		actions.append(["Стул", "chairs", false])
+		if game.camp != null and game.has_chairs:
 			actions.append(["Мангал", "grill", false])
-		elif game.cook_time >= 35:
+		if game.cook_time >= 35:
 			actions.append(["Есть", "eat", false])
 		if not game.racing:
 			actions.append(["Заезды", "rally", false])

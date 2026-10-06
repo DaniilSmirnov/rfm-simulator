@@ -154,3 +154,24 @@ test('beer count, vehicle speed and bounded tree requests survive room sync', ()
   assert.equal(reply.players[0].state.speed, 12);
   assert.deepEqual(reply.players[0].state.trees, [{ id: 7, dir: [1, 0, 0] }]);
 });
+
+test('furniture placement keeps coordinates and authenticated chair owner', () => {
+  const { r, h, g } = setup();
+  const placement = { pos: [2, 1, 2], yaw: 1.25 };
+  r.sync({ token: g.token, state: state(), commands: [{ seq: 1, action: 'chairs', placement, player: h.player }] }, 1100);
+  const reply = r.sync({ token: h.token, state: state() }, 1200);
+  assert.equal(reply.commands[0].player, g.player);
+  assert.deepEqual(reply.commands[0].placement, placement);
+  const restored = new RoomState(structuredClone(r.data));
+  assert.deepEqual(restored.sync({ token: h.token, state: state() }, 1300).commands[0].placement, placement);
+});
+
+test('furniture commands never forward remote or nonfinite coordinates', () => {
+  const { r, h, g } = setup();
+  r.sync({ token: g.token, state: state(), commands: [
+    { seq: 1, action: 'table', placement: { pos: [100, 1, 2], yaw: 0 } },
+    { seq: 2, action: 'grill', placement: { pos: [2, 1, 2], yaw: Infinity } }
+  ] }, 1100);
+  const reply = r.sync({ token: h.token, state: state() }, 1200);
+  assert.deepEqual(reply.commands.map(c => c.placement), [{}, {}]);
+});

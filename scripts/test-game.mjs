@@ -18,3 +18,5 @@ run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_food_
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_party.gd']);
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_selection.gd']);
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_network_motion.gd']);
+
+run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_furniture.gd']);

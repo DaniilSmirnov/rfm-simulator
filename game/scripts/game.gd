@@ -37,6 +37,85 @@ var dead = false
 var finished = false
 var paused = false
 var has_chairs = false
+var personal_chairs: Dictionary = {}
+var placement_kind = ""
+var placement_preview: Node3D
+var placement_yaw = 0.0
+var placement_valid = false
+
+func chair_owner() -> String:
+	return room.player_id if room != null and room.connected else "local"
+
+func has_personal_chair() -> bool:
+	return personal_chairs.has(chair_owner())
+
+func valid_furniture_spot(spot: Vector3, kind: String, ignored_owner: String = "") -> bool:
+	if stage.road_distance(spot) < 6.0:
+		return false
+	if stage.obstacle_hit(spot, spot, 0.8) >= 0:
+		return false
+	if kind != "table" and camp != null and spot.distance_to(camp.position) < 1.5:
+		return false
+	if kind != "grill" and grill != null and spot.distance_to(grill.position) < 1.4:
+		return false
+	for owner in personal_chairs:
+		if kind == "chairs" and owner == (chair_owner() if ignored_owner == "" else ignored_owner):
+			continue
+		if spot.distance_to(personal_chairs[owner].position) < 1.1:
+			return false
+	return true
+
+func begin_placement(kind: String) -> void:
+	if in_car or beers >= 30:
+		toast("Для размещения выйди из машины и встань на ноги.")
+		return
+	cancel_placement()
+	placement_kind = kind
+	placement_yaw = view_yaw
+	placement_preview = Node3D.new()
+	add_child(placement_preview)
+	match kind:
+		"table": Props.table(placement_preview)
+		"chairs": Props.chair(placement_preview, Vector3.ZERO)
+		"grill": Props.grill(placement_preview)
+	_update_placement()
+	toast("Выбери место: WASD и обзор. Q — повернуть, E — поставить, Esc — отменить.")
+
+func _update_placement() -> void:
+	if placement_preview == null:
+		return
+	var spot = walker + Vector3(-sin(view_yaw), 0, -cos(view_yaw)) * 2.5
+	spot.y = stage.ground(spot)
+	placement_preview.position = spot
+	placement_preview.rotation.y = placement_yaw
+	placement_valid = spot.distance_to(walker) <= 5.0 and valid_furniture_spot(spot, placement_kind)
+	for child in placement_preview.find_children("*", "MeshInstance3D", true, false):
+		child.material_override = Props.material(Color("82c991") if placement_valid else Color("d75e53"))
+		child.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+func cancel_placement() -> void:
+	if is_instance_valid(placement_preview):
+		placement_preview.queue_free()
+	placement_preview = null
+	placement_kind = ""
+
+func confirm_placement() -> void:
+	_update_placement()
+	if placement_preview == null or not placement_valid:
+		toast("Здесь поставить нельзя. Отойди от трассы, деревьев и мебели.")
+		return
+	var kind = placement_kind
+	var spot = placement_preview.position
+	var yaw = placement_yaw
+	if room.connected and not room.is_host:
+		room.submit(kind, {"pos": room.a(spot), "yaw": yaw})
+	else:
+		match kind:
+			"table": place_table(spot, yaw)
+			"chairs": place_chairs(spot, yaw)
+			"grill": start_grill(spot, yaw)
+	cancel_placement()
+
 var cooking = false
 var cook_time = 0.0
 var eaten = false
@@ -431,6 +510,19 @@ func _menu_action() -> void:
 		start_game()
 
 func _unhandled_input(event: InputEvent) -> void:
+	if placement_kind != "":
+		if event.is_action_pressed("pause_demo") or event.is_action_pressed("placement_cancel"):
+			cancel_placement()
+			return
+		if not paused and not dead and not finished and not (room.connected and not room.is_host and room.world_paused):
+			if event.is_action_pressed("interact") or event.is_action_pressed("placement_confirm") or event.is_action_pressed(placement_kind):
+				confirm_placement()
+				return
+			if event.is_action_pressed("random_spot") or event.is_action_pressed("placement_rotate"):
+				placement_yaw += PI / 8
+				return
+		else:
+			return
 	if event.is_action_pressed("pause_demo") and playing and not dead and not finished:
 		paused = not paused
 		menu.visible = paused
@@ -448,6 +540,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		view_pitch = clampf(view_pitch - event.relative.y * 0.0025, -1.15, 1.1)
 	if drink_time >= 0 or eat_time >= 0 or (room.connected and not room.is_host and room.world_paused):
 		return
+	for furniture_action in ["table", "chairs", "grill"]:
+		if event.is_action_pressed(furniture_action):
+			begin_placement(furniture_action)
+			return
 	for shared_action in room.SHARED_ACTIONS:
 		if shared_action != "eat" and event.is_action_pressed(shared_action) and room.submit(shared_action):
 			return
@@ -499,6 +595,7 @@ func _process(delta: float) -> void:
 	_update_drinking(delta)
 	_update_eating(delta)
 	_update_camera(delta)
+	_update_placement()
 	if not room.connected or room.is_host:
 		_update_racers(delta)
 		_update_stones(delta)
@@ -686,46 +783,73 @@ func _toggle_car() -> void:
 func near_camp() -> bool:
 	return camp != null and player_position().distance_to(camp.position) < 7
 
-func place_table() -> bool:
+func place_table(spot: Vector3 = Vector3.INF, yaw: float = 0.0) -> bool:
 	if in_car:
-		toast("Сначала выйди из машины: E.")
 		return false
-	if camp != null:
-		toast("Стол уже стоит. C — стулья, G — мангал.")
+	var moving = spot != Vector3.INF
+	if camp != null and not moving:
 		return false
-	var spot = walker + Vector3(-sin(view_yaw), 0, -cos(view_yaw)) * 2.5
-	if stage.road_distance(walker) < 6 or stage.road_distance(spot) < 6:
-		toast("На самой дороге стол не поставить. Отойди на обочину.")
+	if not moving:
+		spot = walker + Vector3(-sin(view_yaw), 0, -cos(view_yaw)) * 2.5
+	if not valid_furniture_spot(spot, "table"):
 		return false
-	camp = Node3D.new()
-	add_child(camp)
+	if camp == null:
+		camp = Node3D.new()
+		add_child(camp)
+		Props.table(camp)
 	camp.position = spot
-	camp.position.y = stage.ground(camp.position)
-	Props.table(camp)
-	toast("Стол установлен. Можно раскладываться!")
+	camp.position.y = stage.ground(spot)
+	camp.rotation.y = yaw
+	toast("Стол установлен.")
 	return true
 
-func place_chairs() -> bool:
-	if in_car or not near_camp():
-		toast("Подойди к столу пешком.")
+func place_chairs(spot: Vector3 = Vector3.INF, yaw: float = 0.0, owner: String = "") -> bool:
+	if in_car:
 		return false
-	if has_chairs:
+	if owner == "":
+		owner = chair_owner()
+	if spot == Vector3.INF:
+		if personal_chairs.has(owner) or not near_camp():
+			return false
+		spot = camp.position + Vector3(-1.6, 0, 0.7)
+	if not valid_furniture_spot(spot, "chairs", owner):
 		return false
-	Props.chair(camp, Vector3(-1.6, 0, 0.7))
-	Props.chair(camp, Vector3(1.6, 0, 0.7))
-	has_chairs = true
-	toast("Два стула готовы. G — разжечь мангал.")
+	apply_chair(owner, spot, yaw)
+	toast("Твой стул установлен.")
 	return true
 
-func start_grill() -> bool:
-	if in_car or not near_camp() or not has_chairs:
-		toast("Нужны стол и стулья. Подойди к лагерю пешком.")
+func apply_chair(owner: String, spot: Vector3, yaw: float) -> void:
+	if not personal_chairs.has(owner):
+		var chair = Node3D.new()
+		add_child(chair)
+		Props.chair(chair, Vector3.ZERO)
+		personal_chairs[owner] = chair
+	personal_chairs[owner].position = spot
+	personal_chairs[owner].position.y = stage.ground(spot)
+	personal_chairs[owner].rotation.y = yaw
+	has_chairs = not personal_chairs.is_empty()
+
+func start_grill(spot: Vector3 = Vector3.INF, yaw: float = 0.0, replicated: bool = false) -> bool:
+	var moving = spot != Vector3.INF
+	if not replicated and (in_car or camp == null or not has_chairs):
+		toast("Сначала поставь стол и стул.")
 		return false
-	if cooking:
-		toast("Шашлык уже на углях: осталось %d секунд." % maxi(0, int(35 - cook_time)))
+	if cooking and not moving:
 		return false
-	grill = Props.grill(camp)
-	grill.position = Vector3(0.3, 0, -2.4)
+	if not moving:
+		spot = camp.position + Vector3(0.3, 0, -2.4)
+	if not replicated and not valid_furniture_spot(spot, "grill"):
+		return false
+	if grill != null:
+		grill.position = spot
+		grill.position.y = stage.ground(spot)
+		grill.rotation.y = yaw
+		fire_audio.position = grill.position
+		return true
+	grill = Props.grill(self)
+	grill.position = spot
+	grill.position.y = stage.ground(spot)
+	grill.rotation.y = yaw
 	cooking = true
 	smoke = GPUParticles3D.new()
 	grill.add_child(smoke)
@@ -1173,6 +1297,7 @@ func die(reason: String) -> void:
 	_show_result("Выезд окончен", reason + "\n\nЭкипажи: %d  ·  Помощь тросом: %d\nШашлык: %s" % [passed, helped, "съеден" if eaten else "не съеден"])
 
 func _show_result(title: String, body: String) -> void:
+	cancel_placement()
 	_cancel_drink()
 	_cancel_eat()
 	menu.show()

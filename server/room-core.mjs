@@ -51,7 +51,7 @@ export class RoomState {
       for (const c of (Array.isArray(body.commands) ? body.commands.slice(0, 8) : [])) {
         if (!Number.isSafeInteger(c.seq) || c.seq <= p.seq || !COMMANDS.has(c.action)) continue;
         if (this.data.commands.length >= 64) throw new RoomError(429, 'Подожди выполнения предыдущих действий.');
-        this.data.commands.push({ id: `${p.id}:${c.seq}`, player: p.id, action: c.action, state: p.state });
+        this.data.commands.push({ id: `${p.id}:${c.seq}`, player: p.id, action: c.action, state: p.state, placement: c.placement && vec(c.placement.pos) && number(c.placement.yaw) && Math.hypot(...c.placement.pos.map((v, i) => v - p.state.pos[i])) <= 5 ? { pos: c.placement.pos, yaw: c.placement.yaw } : {} });
         p.seq = c.seq;
       }
     }
