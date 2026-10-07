@@ -1,6 +1,7 @@
 import { cp, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { root, run } from './godot.mjs';
+import { persistBuildSecrets } from './deploy-cloudflare.mjs';
 
 // Both platform shells keep their own adapter and use the same room API.
 run(process.execPath, ['scripts/build-web.mjs', '--target=standalone']);
@@ -10,3 +11,4 @@ const headers = await readFile(join(root, 'dist/_headers'), 'utf8');
 const vkHeaders = (await readFile(join(root, 'dist-vk/_headers'), 'utf8')).replace(/^\//gm, '/vk/');
 await writeFile(join(root, 'dist/_headers'), headers.trimEnd() + '\n\n' + vkHeaders);
 console.log('Combined Worker artifact ready: / standalone, /vk/ VK, shared /api/rooms.');
+await persistBuildSecrets(process.env);

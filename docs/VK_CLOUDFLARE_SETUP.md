@@ -30,7 +30,7 @@
 | Build command | `npm ci && npm run build` |
 | Deploy command | `npm run deploy` |
 
-В Cloudflare Workers Builds команда `npm run deploy` использует `scripts/deploy-cloudflare.mjs`. Скрипт берёт только VK-секреты из **Build variables and secrets**, создаёт временный JSON-файл с правами `0600`, вызывает `wrangler deploy --secrets-file <temp>` и удаляет файл в `finally`. Значения секретов не выводятся в лог и не попадают в `dist`/Git/artifacts.
+Cloudflare Workers Builds разделяет build и deploy. Во время `npm run build` скрипт берёт только VK-секреты из **Build variables and secrets** и сохраняет их во временный `.cache/deploy-secrets.json` с правами `0600`. Затем **Deploy command должен быть именно `npm run deploy`**, а не дефолтный `npx wrangler deploy`: наш deploy-скрипт вызывает `wrangler deploy --secrets-file .cache/deploy-secrets.json` и удаляет файл в `finally`. Значения секретов не выводятся в лог и не попадают в `dist`, Git или GitHub artifacts.
 
 До слияния для тестового деплоя можно выбрать ветку `feature/vk-platform-prototype`. Для preview используйте `npx wrangler preview`; preview-секреты настраиваются отдельно, не считайте production-секреты автоматически доступными в preview.
 
