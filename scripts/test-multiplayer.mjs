@@ -101,6 +101,7 @@ try {
   await new Promise(resolve=>proxy.listen(0,'127.0.0.1',resolve));
   const origin=`http://127.0.0.1:${proxy.address().port}`;
   const godot=await getGodot();
+  if(!web)run(godot,["--headless","--editor","--path",join(root,"game"),"--import","--quit"]);
   if(web) {
     const project=join(root,'.cache/export-project');
     const raw=join(root,'.cache/network-raw');
@@ -144,8 +145,14 @@ try {
   command('guest','recover');await until(()=>latest('guest').ack>seq && latest('guest').pending===0,'recovery acknowledged');
   command('guest','exit');await until(()=>!latest('guest').in_car,'exit car');
   command('guest','enter');await until(()=>latest('guest').in_car,'enter car');
+  const previousPlayer=latest('guest').player;
+  command('guest','rejoin');
+  await until(()=>latest('guest')?.player!==previousPlayer && latest('guest')?.active,'fresh session after leave and rejoin');
+  command('guest','pause');
+  await until(()=>latest('guest').pending===0 && !Object.hasOwn(latest('host').driving,previousPlayer),'departed solver removed and fresh input queue acknowledged');
+  assert.equal(latest('guest').condition,100);
   assert.equal(errors.length,0);
-  console.log(`PASS: ${web?'two Chromium clients (mobile guest)':'two Godot clients'}: delayed HTTP, 2 lost responses, prediction, braking, convergence, pause/resume, recovery, exit/re-entry`);
+  console.log(`PASS: ${web?'two Chromium clients (mobile guest)':'two Godot clients'}: delayed HTTP, 2 lost responses, prediction, braking, convergence, pause/resume, recovery, exit/re-entry, leave/rejoin`);
 } catch (error) {
   console.error(logs.filter(x => !x.includes('NETWORK_SAMPLE ')).slice(-100).join('\n'));
   throw error;

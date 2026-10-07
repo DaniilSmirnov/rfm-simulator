@@ -2,7 +2,7 @@ name: Game and Web
 
 on:
   push:
-    branches: [main, feature/host-drive-prediction]
+    branches: [main]
   pull_request:
   workflow_dispatch:
 

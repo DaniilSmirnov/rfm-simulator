@@ -11,6 +11,7 @@ func _ready() -> void:
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--network-role="): role = arg.trim_prefix("--network-role=")
 		if arg.begins_with("--network-room="): join_id = arg.trim_prefix("--network-room=")
+	last_command = int(ProjectSettings.get_setting("network_test/last_" + role, -1))
 	game = load("res://main.tscn").instantiate()
 	add_child(game)
 	control = HTTPRequest.new()
@@ -27,7 +28,7 @@ func _process(delta: float) -> void:
 	if report_clock >= 0.2:
 		report_clock = 0
 		var p = game.room.prediction
-		var sample = {"role": role, "connected": game.room.connected, "room": game.room.room_id, "enabled": game.room.prediction_enabled, "active": p.active, "ack": p.ack, "seq": p.seq, "pending": p.pending.size(), "pos": game.room.a(game.car.position), "speed": game.speed, "condition": game.condition, "dead": game.dead, "paused": game.paused, "world_paused": game.room.world_paused, "in_car": game.in_car, "driving": {}}
+		var sample = {"role": role, "connected": game.room.connected, "room": game.room.room_id, "player": game.room.player_id, "enabled": game.room.prediction_enabled, "active": p.active, "ack": p.ack, "seq": p.seq, "pending": p.pending.size(), "pos": game.room.a(game.car.position), "speed": game.speed, "condition": game.condition, "dead": game.dead, "paused": game.paused, "world_paused": game.room.world_paused, "in_car": game.in_car, "driving": {}}
 		for id in game.room.host_drives:
 			sample.driving[id] = game.room.host_drives[id].snapshot()
 		print("NETWORK_SAMPLE ", JSON.stringify(sample))
@@ -36,6 +37,7 @@ func on_control(_result: int, code: int, _headers: PackedStringArray, body: Pack
 	var command = JSON.parse_string(body.get_string_from_utf8())
 	if not command is Dictionary or int(command.id) == last_command: return
 	last_command = int(command.id)
+	ProjectSettings.set_setting("network_test/last_" + role, last_command)
 	for action in ["forward", "left", "right", "brake", "back"]:
 		Input.action_release(action)
 	match command.action:
@@ -47,3 +49,4 @@ func on_control(_result: int, code: int, _headers: PackedStringArray, body: Pack
 		"resume": game.paused = false
 		"recover": game.room.recover_drive()
 		"exit", "enter": game._toggle_car()
+		"rejoin": game.room.leave()
