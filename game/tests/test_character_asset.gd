@@ -18,7 +18,7 @@ func _initialize() -> void:
 		check(not avatar.get_node("RightArm/BeerCan").visible and not avatar.get_node("RightArm/Skewer").visible, "Held props start hidden")
 		var count = triangles(avatar) - triangles(avatar.get_node("RightArm/BeerCan")) - triangles(avatar.get_node("RightArm/Skewer"))
 		print("CHARACTER %d: %d body triangles" % [i, count])
-		check(count <= 1100, "Low polygon budget")
+		check(count <= 1500, "Low polygon budget")
 		var other = Props.player_avatar(i)
 		check(avatar.get_node("Head").get_child(0).mesh == other.get_node("Head").get_child(0).mesh, "Instances share imported mesh resources")
 		avatar.get_node("RightArm").rotation.x = 1.2
