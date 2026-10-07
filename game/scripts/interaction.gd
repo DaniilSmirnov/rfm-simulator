@@ -44,7 +44,7 @@ func current() -> Dictionary:
 			continue
 		var item = game.stage.collectibles[id]
 		var mushroom = item.kind == "mushrooms"
-		offer(items, item.pos + Vector3(0, 0.15 if mushroom else 0.6, 0), 0.28 if mushroom else 0.7, 1.8 if mushroom else 2.1, "collect", "Собрать гриб" if mushroom else "Собрать ягоды", id)
+		offer(items, item.pos + Vector3(0, 0.15 if mushroom else 0.6, 0), 0.28 if mushroom else 0.7, 1.8 if mushroom else 2.1, "collect", "Собрать гриб" if mushroom else ("Собрать виноград" if item.get("name", "") == "виноград" else "Собрать ягоды"), id)
 	var sources: Array = [-1]
 	if game.spectators != null:
 		for i in range(game.spectators.groups.size()):

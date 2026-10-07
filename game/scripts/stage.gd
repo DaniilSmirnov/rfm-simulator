@@ -4,13 +4,13 @@ class_name RallyStage
 var officials: Node3D
 const Officials = preload("res://scripts/course_officials.gd")
 
-const City = preload("res://scripts/city.gd")
+const City = preload("res://scripts/vineyard.gd")
 var city: Node3D
 const LENGTH = 840.0
 const STEP = 4.0
 const WIDTH = 7.4
 const TREE_CELL_SIZE = 16.0
-const STAGES = ["Лесной перевал · гравий", "Зимний Турини · снег и лёд", "Европейский город · супер СУ"]
+const STAGES = ["Лесной перевал · гравий", "Зимний Турини · снег и лёд", "Виноградники · европейская деревня"]
 var variant = 0
 var winter = false
 var urban = false
@@ -78,32 +78,21 @@ func side(s: float) -> Vector3:
 	return direction(s).cross(Vector3.UP).normalized()
 
 func road_s(pos: Vector3) -> float:
-	if urban:
-		return urban_nearest(pos).s
 	return clampf(-pos.z, 0, LENGTH)
 
 func road_distance(pos: Vector3) -> float:
-	if urban:
-		var distance: float = urban_nearest(pos).distance
-		if pos.z <= 0 and pos.z >= -300:
-			for x in [-24.0, 24.0, 120.0]:
-				distance = minf(distance, absf(pos.x - x))
-		if pos.x >= -86 and pos.x <= 134:
-			for z in City.CROSS_Z:
-				distance = minf(distance, absf(pos.z - z))
-		return distance
 	var p = at(road_s(pos))
 	return Vector2(pos.x - p.x, pos.z - p.z).length()
 
 func roughness(s: float) -> float:
 	if urban:
-		return 0.0
+		return sin(s * 3.4) * 0.014 if village(s) else sin(s * 0.8) * 0.018
 	# Broad crests plus broken ruts; deterministic across all room members.
 	return sin(s * 0.46) * 0.075 + sin(s * 1.13) * 0.035 + pow(maxf(0, cos((s - 32.0) * TAU / 46.0)), 10) * 0.55
 
 func grip(pos: Vector3) -> float:
 	if urban:
-		return 1.05 if road_distance(pos) < WIDTH * 0.7 else 0.58
+		return (0.86 if village(road_s(pos)) else 1.02) if road_distance(pos) < WIDTH * 0.55 else 0.58
 	if winter:
 		if road_distance(pos) > WIDTH * 0.55:
 			return 0.32
@@ -114,7 +103,17 @@ func grip(pos: Vector3) -> float:
 
 func ground(pos: Vector3) -> float:
 	if urban:
-		return 2.0
+		var s = road_s(pos)
+		var p = at(s)
+		var distance = road_distance(pos)
+		if village(s):
+			return 2.18 if distance > 3.72 and distance < 6.4 else 2.0
+		var hillside = maxf(distance - 6.0, 0) * 0.12
+		var height = p.y + hillside + sin(pos.x * 0.075 + s * 0.025) * minf(hillside * 0.2, 1.5)
+		for parking in clearings:
+			var d = flat(pos).distance_to(flat(parking))
+			height = lerpf(parking.y, height, smoothstep(5.0, 11.0, d))
+		return height + roughness(s) * (1.0 - smoothstep(3.5, 8.0, distance))
 	var s = road_s(pos)
 	var p = at(s)
 	var distance = road_distance(pos)
@@ -292,7 +291,7 @@ func _build_road() -> void:
 		var c = at(s + 1) + side(s + 1) * WIDTH / 2
 		var d = at(s + 1) - side(s + 1) * WIDTH / 2
 		for v in [a, b, c, b, d, c]:
-			st.set_color((Color("708a9c") if winter else (Color("484e50") if urban else Color("9d896b"))).lightened(rng.randf_range(-0.065, 0.045)))
+			st.set_color((Color("708a9c") if winter else ((Color("969180") if village(s) else Color("525757")) if urban else Color("9d896b"))).lightened(rng.randf_range(-0.065, 0.045)))
 			v.y = ground(v) + 0.04
 			st.add_vertex(v)
 		# Broken muddy wheel tracks, shallow puddles.
@@ -522,7 +521,7 @@ func woodland_spot(pos: Vector3, padding: float = 0.0) -> bool:
 	return true
 
 func _detail_batch(name: String, mesh: Mesh, poses: Array, colors: Array, indices: Array = []) -> void:
-	if name in ["ForestGrass", "ForestBushes", "ForestBerryBushes", "ForestBerries", "ForestBushStems"]:
+	if name in ["ForestGrass", "ForestBushes", "ForestBerryBushes", "ForestBerries", "ForestBushStems", "VineyardGrapes", "VineyardLeaves"]:
 		var cells = {}
 		for i in range(poses.size()):
 			var origin: Vector3 = poses[i].origin
@@ -555,7 +554,7 @@ func _detail_batch(name: String, mesh: Mesh, poses: Array, colors: Array, indice
 		mm.set_instance_transform(i, pose)
 		mm.set_instance_color(i, colors[i])
 		var source = name.get_slice("_Tile", 0)
-		if source in ["ForestBerries", "MushroomCaps", "MushroomStems"]:
+		if source in ["ForestBerries", "MushroomCaps", "MushroomStems", "VineyardGrapes"]:
 			if not collectible_parts.has(source):
 				collectible_parts[source] = {}
 			collectible_parts[source][i if indices.is_empty() else indices[i]] = {"mesh": mm, "instance": i, "pose": pose, "hidden": false}
@@ -563,7 +562,7 @@ func _detail_batch(name: String, mesh: Mesh, poses: Array, colors: Array, indice
 	node.name = name
 	node.position = center
 	if name.begins_with("GrassTile") or name.contains("_Tile_"):
-		node.visibility_range_end = 160
+		node.visibility_range_end = 70 if name.begins_with("VineyardGrapes") else 160
 		node.visibility_range_end_margin = 15
 	node.multimesh = mm
 	node.material_override = mat
@@ -750,29 +749,15 @@ func _build_woodland_details() -> void:
 	twig.rings = 1
 	_detail_batch("AntHillTwigs", twig, twig_poses, twig_colors)
 
+func village(s: float) -> bool:
+	return urban and s >= 300.0 and s <= 570.0
+
 func urban_at(s: float) -> Vector3:
-	if s <= 320:
-		return Vector3(-24, 2, -s)
-	s -= 320
-	if s <= PI * 24:
-		var angle = PI + s / 24
-		return Vector3(cos(angle) * 24, 2, -320 + sin(angle) * 24)
-	s -= PI * 24
-	if s <= 204:
-		return Vector3(24, 2, -320 + s)
-	s -= 204
-	if s <= PI * 8:
-		var angle = PI - s / 16
-		return Vector3(40 + cos(angle) * 16, 2, -116 + sin(angle) * 16)
-	s -= PI * 8
-	if s <= 64:
-		return Vector3(40 + s, 2, -100)
-	s -= 64
-	if s <= PI * 8:
-		var angle = PI / 2 - s / 16
-		return Vector3(104 + cos(angle) * 16, 2, -116 + sin(angle) * 16)
-	s -= PI * 8
-	return Vector3(120, 2, -116 - s)
+	var village_blend = smoothstep(260.0, 300.0, s) * (1.0 - smoothstep(570.0, 610.0, s))
+	var country_x = sin(s / 85.0) * 34.0 + sin(s / 43.0) * 10.0
+	var village_x = sin((s - 300.0) / 100.0) * 14.0
+	var height = 2.0 + (1.0 - village_blend) * (7.0 + sin(s / 95.0) * 3.0 + s * 0.004)
+	return Vector3(lerpf(country_x, village_x, village_blend), height, -s)
 
 func urban_nearest(pos: Vector3) -> Dictionary:
 	var best = INF
@@ -791,7 +776,7 @@ func urban_nearest(pos: Vector3) -> Dictionary:
 func rally_speed(s: float) -> float:
 	if not urban:
 		return 27.0
-	return 10.0 if s > 304 and s < 320 + PI * 24 + 16 else (14.0 if s > 584 and s < 732 else 24.0)
+	return 15.0 if village(s) else 27.0
 
 # Collectible identifiers follow deterministic generation order and are shared by
 # every room member. Harvesting hides the existing instances without new nodes.

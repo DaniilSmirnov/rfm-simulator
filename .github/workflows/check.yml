@@ -71,14 +71,14 @@ jobs:
           path: mobile-*.png
           if-no-files-found: error
 
-      - name: Render city reference views
+      - name: Render vineyard and village reference views
         env:
           LIBGL_ALWAYS_SOFTWARE: "true"
         run: xvfb-run -a .cache/godot/Godot_v4.4.1-stable_linux.x86_64 --path game --rendering-method gl_compatibility --script res://tests/city_preview.gd
       - uses: actions/upload-artifact@v4
         with:
-          name: city-preview
-          path: city-*.png
+          name: vineyard-preview
+          path: vineyard-*.png
           if-no-files-found: error
 
       - name: Detect physical Web template

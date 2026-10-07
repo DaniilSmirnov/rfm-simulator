@@ -1698,7 +1698,7 @@ func _update_hud() -> void:
 		hint_label.text += "   ·   Иди в машину, чтобы толкать · T — тяни пешком со стороны дороги"
 	if not in_car:
 		var bag = foraging.stock()
-		status_label.text += "\nГРИБЫ %d · ЯГОДЫ %d" % [bag.mushrooms, bag.berries]
+		status_label.text += ("\nГРИБЫ %d · ВИНОГРАД %d" if stage.urban else "\nГРИБЫ %d · ЯГОДЫ %d") % [bag.mushrooms, bag.berries]
 		var target = interaction.current()
 		if not target.is_empty():
 			hint_label.text = "F — " + target.label + ("" if packing.active() else "   ·   Z/C/G/V — поставить предмет")

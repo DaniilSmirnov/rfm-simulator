@@ -16,10 +16,8 @@ func run() -> void:
 	game.select_stage(2)
 	game.start_game()
 	var stage = game.stage
-	var entry = stage.direction(310)
-	var exit = stage.direction(405)
-	check(entry.dot(exit) < -0.95, "roundabout reverses rally heading by 180 degrees")
-	check(stage.at(350).z < -330 and stage.at(390).x > 20, "route runs around the monument instead of through it")
+	check(stage.at(0).z > stage.at(840).z + 800, "vineyard stage runs from start to finish without a city loop")
+	check(stage.village(435) and not stage.village(140), "village sits in the middle of the country stage")
 	var open_route = true
 	for s in range(0, 840, 4):
 		open_route = open_route and stage.city.hit(stage.at(s), stage.at(s + 4), 0.85).is_empty()
@@ -28,7 +26,7 @@ func run() -> void:
 	for s in [30.0, 340.0, 410.0, 650.0, 790.0]:
 		nearest_ok = nearest_ok and absf(stage.road_s(stage.at(s)) - s) < 1
 	check(nearest_ok, "route station remains correct through reversed and perpendicular streets")
-	check(stage.road_distance(Vector3(80, 2, -150)) < 0.1, "cross streets are driveable asphalt")
+	check(stage.grip(stage.at(435)) < stage.grip(stage.at(140)), "cobblestones have less grip than country asphalt")
 	var obstacle = stage.city.obstacles[0]
 	var pose = stage.city._relative_pose(obstacle.body)
 	var center = pose.origin
@@ -88,7 +86,7 @@ func run() -> void:
 	racer.focus = 140
 	racer.node.position = stage.at(310)
 	game._update_racers(0.1)
-	check(game.racers.size() == 1 and racer.s > 310 and racer.s < 312, "city crew survives past viewer and slows for the roundabout")
+	check(game.racers.size() == 1 and racer.s > 310 and racer.s < 313, "crew survives past viewer and slows through the village")
 	await game._shutdown_audio()
 	game.queue_free()
 	await process_frame

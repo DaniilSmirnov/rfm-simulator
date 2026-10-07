@@ -3,7 +3,7 @@ config_version=5
 
 [application]
 config/name="Rally Fans Simulator"
-config/version="0.10.26"
+config/version="0.10.27"
 config/icon="res://branding/rfm-icon.svg"
 boot_splash/image="res://branding/rfm-splash.png"
 boot_splash/show_image=true

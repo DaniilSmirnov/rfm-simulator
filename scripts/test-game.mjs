@@ -15,6 +15,7 @@ run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_crowd
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_run_jump_npc.gd']);
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_course_officials.gd']);
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_city_physics.gd']);
+run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_vineyard.gd']);
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_rally_traffic.gd']);
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_demo.gd']);
 
