@@ -44,7 +44,8 @@ test('sessions reject missing, tampered, expired and other-app tokens',async()=>
   }
 });
 test('missing config and malformed input fail closed',async()=>{
-  await assert.rejects(authenticateLaunch(launch(),{},now,network),error=>error.status===503);
+  await assert.rejects(authenticateLaunch(launch(),{},now,network),error=>error.status===503 && /VK_APP_ID/.test(error.message));
+  await assert.rejects(authenticateLaunch(launch(),{VK_APP_ID:'123'},now,network),error=>error.status===503 && /VK_APP_SECRET/.test(error.message));
   for(const raw of [null,{},'x'.repeat(8193)]) await assert.rejects(authenticateLaunch(raw,env,now,network),error=>error.status===400);
 });
 test('VK profile lookup is cosmetic and valid signed launch falls back to technical ID',async()=>{
@@ -64,6 +65,13 @@ test('signed launch does not require a service token and still produces a verifi
   const data=await authenticateLaunch(launch(),withoutService,now,async()=>{throw Error('must not call network');});
   assert.equal(data.profile.nickname,'vk42');
   assert.equal((await authenticateSession(request(data.session.token),withoutService,now)).user,'42');
+});
+
+test('VK session secret is optional and falls back to the app secret',async()=>{
+  const withoutSessionSecret={...env};
+  delete withoutSessionSecret.VK_SESSION_SECRET;
+  const data=await authenticateLaunch(launch(),withoutSessionSecret,now,network);
+  assert.equal((await authenticateSession(request(data.session.token),withoutSessionSecret,now)).user,'42');
 });
 
 test('Worker gates VK room routes and overwrites client nickname, standalone stays anonymous',async()=>{

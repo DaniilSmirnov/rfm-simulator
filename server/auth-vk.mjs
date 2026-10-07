@@ -13,10 +13,14 @@ async function verify(value, signature, secret) {
   return crypto.subtle.verify('HMAC', await key(secret), bytes, encoder.encode(value));
 }
 function configured(env) {
-  if (!/^[1-9]\d*$/.test(env.VK_APP_ID || '') || !env.VK_APP_SECRET || !env.VK_SESSION_SECRET) {
-    throw new AuthError(503, 'Авторизация VK не настроена.');
+  if (!/^[1-9]\d*$/.test(env.VK_APP_ID || '')) {
+    throw new AuthError(503, 'Авторизация VK не настроена: отсутствует VK_APP_ID.');
+  }
+  if (!env.VK_APP_SECRET) {
+    throw new AuthError(503, 'Авторизация VK не настроена: отсутствует VK_APP_SECRET.');
   }
 }
+const sessionSecret = env => env.VK_SESSION_SECRET || env.VK_APP_SECRET;
 async function resolveNickname(user, env, network) {
   if (env.VK_SERVICE_TOKEN) {
     try {
@@ -56,7 +60,7 @@ export async function authenticateLaunch(raw, env, now = Date.now(), network = f
   const nickname = await resolveNickname(user, env, network);
   const expires = seconds + 3600;
   const payload = encode(encoder.encode(JSON.stringify({ app: env.VK_APP_ID, user, nickname, expires })));
-  const token = `${payload}.${await sign(payload, env.VK_SESSION_SECRET)}`;
+  const token = `${payload}.${await sign(payload, sessionSecret(env))}`;
   return { profile: { platform: 'vk', platform_user_id: user, nickname, verified: true }, session: { token, expires_at: expires }, entitlements: { mode: 'unrestricted', skus: [] } };
 }
 export async function authenticateSession(request, env, now = Date.now()) {
@@ -64,7 +68,7 @@ export async function authenticateSession(request, env, now = Date.now()) {
   const token = request.headers.get('Authorization')?.match(/^Bearer ([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)$/)?.[1];
   if (!token || token.length > 2048) throw new AuthError(401, 'Откройте игру заново через VK.');
   const [payload, signature] = token.split('.');
-  if (!await verify(payload, signature, env.VK_SESSION_SECRET)) throw new AuthError(401, 'Неверная сессия VK.');
+  if (!await verify(payload, signature, sessionSecret(env))) throw new AuthError(401, 'Неверная сессия VK.');
   let session;
   try { session = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/'))); } catch { throw new AuthError(401, 'Неверная сессия VK.'); }
   if (session.app !== env.VK_APP_ID || !Number.isSafeInteger(session.expires) || session.expires <= Math.floor(now / 1000) || !/^[1-9]\d*$/.test(session.user || '') || typeof session.nickname !== 'string') throw new AuthError(401, 'Сессия VK истекла. Откройте игру заново.');
