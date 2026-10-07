@@ -106,9 +106,9 @@ try {
     await page.evaluate(() => loadingProgress(37, 100));
     if (await page.locator('#status-progress').getAttribute('aria-valuenow') !== '37') throw new Error('Loading progress is not determinate');
     if (!(await page.locator('#status-label').textContent()).includes('37%')) throw new Error('Loading percentage label is missing');
-    await page.screenshot({ path: join(root, '.cache/branding-loading.png') });
+    await page.screenshot({ path: join(root, 'branding-loading.png') });
     await page.setViewportSize({width:844,height:390});
-    await page.screenshot({path:join(root,'.cache/branding-loading-mobile.png')});
+    await page.screenshot({path:join(root,'branding-loading-mobile.png')});
     const overflow = await page.evaluate(() => {
       const card = document.querySelector('.loading-card').getBoundingClientRect();
       return card.left < 0 || card.right > innerWidth || card.top < 0 || card.bottom > innerHeight;
