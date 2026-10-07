@@ -1,5 +1,7 @@
 extends SceneTree
 const Handling = preload("res://scripts/rally_handling.gd")
+const Stage = preload("res://scripts/stage.gd")
+const Traffic = preload("res://scripts/rally_traffic.gd")
 const Motion = preload("res://scripts/vehicle_motion.gd")
 class Surface:
 	extends RefCounted
@@ -35,6 +37,34 @@ func coast(grip: float, speed: float, fps: int = 60) -> float:
 	var distance = -r.node.position.z
 	r.node.free()
 	return distance
+func tour() -> void:
+	for variant in range(3):
+		for reverse in [false, true]:
+			var stage = Stage.new(variant)
+			var node = Node3D.new()
+			var r = {"node": node, "motion": Motion.new(), "slide": 0.0, "slide_speed": 0.0}
+			var progress = 10.0
+			var max_slide = 0.0
+			for frame in range(2400):
+				var speed = Traffic.recovery_speed(Traffic.competition_target(stage, progress, 1.04, reverse), r)
+				progress += speed / 24.0
+				var station = Stage.LENGTH - progress if reverse else progress
+				var direction = stage.direction(station) * (-1 if reverse else 1)
+				var ahead = stage.direction(station + (-7 if reverse else 7)) * (-1 if reverse else 1)
+				var yaw = atan2(-direction.x, -direction.z)
+				var bend = wrapf(atan2(-ahead.x, -ahead.z) - yaw, -PI, PI) / 7.0
+				Handling.slide(r, bend, speed, stage.grip(node.position), 1.0 / 24.0)
+				var height = node.position.y
+				node.position = stage.at(station) + direction.cross(Vector3.UP).normalized() * r.slide
+				node.position.y = height
+				r.motion.suspension(node, stage, 1.0 / 24.0, yaw)
+				max_slide = maxf(max_slide, absf(r.slide))
+				if max_slide > 3.4 or progress > 835:
+					break
+			check(progress > 830 and max_slide < 3.4, "driver catches slides across stage %d, reverse=%s (maximum %.2f m)" % [variant, reverse, max_slide])
+			node.free()
+			stage.free()
+
 func _initialize() -> void:
 	var gravel = corner(0.78, 60)
 	var ice = corner(0.22, 60)
@@ -74,5 +104,7 @@ func _initialize() -> void:
 	check(coast(0.22, 24) > coast(0.78, 24) * 1.6, "ice has a longer stopping distance than gravel")
 	check(coast(0.78, 30) > coast(0.78, 15) * 3.5, "exit distance grows with kinetic energy rather than a fixed endpoint")
 	check(absf(coast(0.78, 24, 24) - coast(0.78, 24, 144)) < 0.15, "free departures agree at 24 and 144 FPS")
+	check(Traffic.recovery_speed(30.0, {"slide": 1.5, "slide_speed": 2.0}) < 20.0 and Traffic.recovery_speed(30.0, {"slide": 0.0, "slide_speed": 0.0}) == 30.0, "driver lifts off during a slide and restores pace after recovery")
+	tour()
 	print("RALLY HANDLING RESULT: %d failures" % failures)
 	quit(1 if failures else 0)

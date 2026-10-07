@@ -31,8 +31,14 @@ static func competition_target(stage: Node3D, progress: float, pace: float = 1.0
 static func speed_limit(game: Node3D, racer: Dictionary, s: float) -> float:
 	var role = str(racer.get("role", "racer"))
 	if role in ["racer", "zero"]:
-		return competition_target(game.stage, s, racer.get("pace", 1.0), game.course.pass_index == 2)
+		var target = competition_target(game.stage, s, racer.get("pace", 1.0), game.course.pass_index == 2)
+		return recovery_speed(target, racer) if role == "racer" else target
 	return maxf(0.0, game.race_speed(s) * racer.get("pace", 1.0))
+
+static func recovery_speed(target: float, racer: Dictionary) -> float:
+	# Lift off progressively when the rear steps out, then regain pace as it settles.
+	var loss = absf(float(racer.get("slide", 0.0))) * 0.22 + absf(float(racer.get("slide_speed", 0.0))) * 0.12
+	return target * clampf(1.0 - loss, 0.5, 1.0)
 
 static func plan(game: Node3D, racer: Dictionary) -> Dictionary:
 	var stage = game.stage
