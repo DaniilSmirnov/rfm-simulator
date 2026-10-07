@@ -166,11 +166,13 @@ func return_item(spot: Vector3) -> bool:
 	refresh_opened()
 	if not available() or not held.has(actor()):
 		return false
-	var owner = target_owner(spot)
 	var carry = held[actor()]
 	# If the owner left the room, another car can take abandoned equipment home.
-	var destination = carry.owner if poses().has(carry.owner) else actor()
-	if owner != destination or not opened.get(owner, false) or not near(owner):
+	var cars = poses()
+	var owner = str(carry.owner) if cars.has(carry.owner) else actor()
+	# Validate the carried item's destination directly. Nearby trunks can overlap;
+	# selecting the first car at this point may select the carrier's car instead.
+	if not cars.has(owner) or point(cars[owner]).distance_to(spot) >= 0.6 or not opened.get(owner, false) or not near(owner):
 		game.toast("Подойди к багажнику машины владельца и верни коробку через F.")
 		return false
 	if game.room.submit("return_gear", {"pos": game.room.a(spot), "yaw": 0.0}):
@@ -193,7 +195,8 @@ func offers(items: Array, interaction) -> void:
 		var holding = held.get(game.chair_owner(), {})
 		var destination = str(holding.get("owner", "")) if cars.has(str(holding.get("owner", ""))) else game.chair_owner()
 		if not holding.is_empty() and destination == owner and opened.get(owner, false):
-			interaction.offer(items, spot, 0.55, 3.3, "return_gear", "Вернуть коробку в багажник", spot)
+			var profile = Props.trunk_profile(int(cars[owner].variant))
+			interaction.offer(items, spot, maxf(0.9, profile.half), 3.3, "return_gear", "Вернуть коробку в багажник владельца", spot)
 		if owner != game.chair_owner() or not opened.get(owner, false) or not holding.is_empty() or game.packing.active():
 			continue
 		var p = Props.trunk_profile(int(cars[owner].variant))
