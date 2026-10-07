@@ -17,6 +17,16 @@ func run() -> void:
 	game.in_car = false
 	var stage = game.stage
 	check(stage.city.vine_count > 2000 and stage.get_node_or_null("VillageChurch") != null, "vineyard stage includes vines and church")
+	check(stage.city.church_square_cobblestones >= 180 and stage.get_node_or_null("VillageChurch/VillageChurchSquare") != null, "church forecourt is fully paved with cobblestones")
+	check(not stage.city.village_detail_allowed(stage.city.church_square_center), "church cobblestone square rejects grass and loose stones")
+	check(stage.get_node_or_null("VillageCemetery") != null and stage.city.cemetery_grave_count == 28, "forest behind church contains an open cemetery with ordered graves")
+	var church_center = stage.at(435.0) + stage.side(435.0) * 43.0
+	check(stage.road_distance(stage.city.cemetery_center) > stage.road_distance(church_center) + 20.0, "cemetery sits deeper in the forest behind the church")
+	check(not stage.city._forest_spot_allowed(stage.city.cemetery_center), "mixed forest generation preserves the cemetery clearing")
+	check(stage.city.side_lane_house_count >= 12, "both secondary village streets have additional houses")
+	check(stage.city.village_sign_count == 2, "village has name signs at both entrance and exit")
+	var village_name_labels = stage.find_children("*", "Label3D", true, false).filter(func(label): return str(label.text) == "Ля Газ в Польен")
+	check(village_name_labels.size() == 4, "both village signs show Ля Газ в Польен on both faces")
 	check(stage.city.thuja_count > 300, "dense thuja forest surrounds the village")
 	check(stage.woodland_details.get("VillageThujaLower", 0) == stage.city.thuja_count and stage.woodland_details.get("VillageThujaCrown", 0) == stage.city.thuja_count, "thuja forest is rendered through instanced layers")
 	check(stage.city.mixed_tree_count > 500 and stage.city.mixed_conifer_count > 200 and stage.city.mixed_broadleaf_count > 120, "village is surrounded by a varied mixed forest beyond the thuja belt")
