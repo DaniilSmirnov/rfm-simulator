@@ -12,7 +12,7 @@ const server=createServer(async(req,res)=>{
  if(path==='/__rally_platform'){platformNetworkRequests++;res.writeHead(500).end();return;}
  try {
   let body=await readFile(join(root,target,path==='/'?'index.html':path.slice(1)));
-  if(path==='/')body=Buffer.from(body.toString().replace('RallyDevice.configure(GODOT_CONFIG);','GODOT_CONFIG.args.unshift("res://tests/platform_probe.tscn"); RallyDevice.configure(GODOT_CONFIG);'));
+  if(path==='/')body=Buffer.from(body.toString().replace('RallyDevice.configure(GODOT_CONFIG);','GODOT_CONFIG.args.unshift("res://scripts/platform_probe.tscn"); RallyDevice.configure(GODOT_CONFIG);'));
   res.writeHead(200,{'Content-Type':path.endsWith('.js')?'application/javascript':path==='/'?'text/html':path.endsWith('.svg')?'image/svg+xml':'application/octet-stream'}).end(body);
  } catch {res.writeHead(404).end();}
 });
@@ -22,7 +22,7 @@ try {
  for(const mobile of [false,true]){
   const context=await browser.newContext(mobile?{viewport:{width:844,height:390},isMobile:true,hasTouch:true}:{viewport:{width:1280,height:720}});
   const page=await context.newPage();let profile;let failure;const logs=[];
-  page.on('console',m=>{const t=m.text();logs.push(t);console.log('[platform]',t);if(t.includes('[RFM Platform] profile '))profile=JSON.parse(t.split('[RFM Platform] profile ')[1]);if(/SCRIPT ERROR|FATAL:|RuntimeError:/.test(t))failure=t;});
+  page.on('console',m=>{const t=m.text();logs.push(t);console.log('[platform]',t);if(t.includes('[RFM Platform] profile '))profile=JSON.parse(t.split('[RFM Platform] profile ')[1]);if(/SCRIPT ERROR|FATAL:|RuntimeError:|ERROR: Cannot open file|ERROR: Failed loading scene/.test(t))failure=t;});
   page.on('pageerror',e=>failure=String(e));
   page.on('crash',()=>failure='Browser renderer crashed');
   await page.goto('http://127.0.0.1:'+server.address().port);

@@ -3,6 +3,8 @@ import {readFile,readdir} from 'node:fs/promises';
 for(const [directory,adapter] of [['dist','standalone'],['dist-vk','vk'],['dist-vk-prototype','vk-prototype']]){
  const files=await readdir(directory,{recursive:true});
  const html=await readFile(directory+'/index.html','utf8');
+ const pack=await readFile(directory+'/index.pck');
+ assert.ok(pack.includes(Buffer.from('platform_probe')),directory+' is missing the exported platform probe scene');
  assert.deepEqual(files.filter(name=>name.startsWith('platform/')).sort(),['platform/'+adapter+'.js','platform/transport.js'].sort());
  assert.equal(files.includes('vk-bridge.js'),adapter==='vk');
  assert.ok(html.includes('src="platform/'+adapter+'.js"'));

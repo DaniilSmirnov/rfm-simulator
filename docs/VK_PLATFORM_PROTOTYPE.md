@@ -24,7 +24,7 @@ VK bootstrap finishes before the engine starts; errors appear through existing b
 
 - `npm run test:platform`: adapter and transport unit tests.
 - `node scripts/test-platform-build.mjs`: checks artifact isolation and includes.
-- After building the prototype, `node scripts/test-platform-web.mjs`: executes the exported minimal WASM engine with the small `platform_probe.tscn` scene in Chromium desktop/mobile contexts; confirms that Godot receives the mock profile and that the virtual endpoint never reaches the HTTP server.
+- After building the prototype, `node scripts/test-platform-web.mjs`: executes the exported minimal WASM engine with the small `scripts/platform_probe.tscn` scene in Chromium desktop/mobile contexts; confirms that Godot receives the mock profile and that the virtual endpoint never reaches the HTTP server.
 - After building standalone, `node scripts/test-platform-web.mjs dist`: same probe with the standalone profile.
 - Browser checks use the same Playwright dependency/install procedure as the existing Web tests (`playwright@1.63.0`, Chromium).
 
