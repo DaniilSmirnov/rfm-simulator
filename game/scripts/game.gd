@@ -178,6 +178,7 @@ func confirm_placement() -> void:
 		match kind:
 			"table", "chairs", "grill", "firewood", "cauldron": cargo.deploy(kind, spot, yaw)
 			"flag": place_flag(spot, yaw)
+	soundscape.placement()
 	cancel_placement()
 
 var cooking = false
@@ -237,6 +238,7 @@ var engine_audio: AudioStreamPlayer
 var rally_audio: AudioStreamPlayer3D
 var wind_audio: AudioStreamPlayer
 var fire_audio: AudioStreamPlayer3D
+var soundscape: Node
 var capture_mode = false
 var hud_panels: Array[Control] = []
 var room: Node
@@ -630,11 +632,15 @@ func _setup_audio() -> void:
 	beer_audio = AudioStreamPlayer.new()
 	beer_audio.volume_db = -10
 	add_child(beer_audio)
+	soundscape = preload("res://scripts/soundscape.gd").new()
+	soundscape.game = self
+	add_child(soundscape)
 
 func start_game() -> void:
 	if playing:
 		return
 	playing = true
+	soundscape.repair()
 	course.apply_snapshot({})
 	racing = false
 	selection_controls.hide()
@@ -749,6 +755,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			spawn_racer("crash")
 
 func _process(delta: float) -> void:
+	if soundscape != null:
+		soundscape.update(delta)
 	if not playing or paused or dead or finished or (room.connected and not room.is_host and room.world_paused):
 		return
 	if not room.connected or room.is_host:
@@ -1812,6 +1820,10 @@ func _capture_menu() -> void:
 	get_tree().quit()
 
 func _shutdown_audio() -> void:
+	if soundscape != null:
+		soundscape.shutting_down = true
+		for player in [soundscape.birds, soundscape.effects, soundscape.steps]:
+			player.stop()
 	for audio in [engine_audio, rally_audio, wind_audio, fire_audio, beer_audio]:
 		audio.stop()
 	await get_tree().create_timer(0.15).timeout
