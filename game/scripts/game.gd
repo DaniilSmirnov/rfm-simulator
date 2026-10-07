@@ -252,6 +252,7 @@ func enable_mobile() -> void:
 	mobile_mode = true
 	get_window().content_scale_size = Vector2i(960, 540)
 	get_window().content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
+	print("[RFM] Мобильный интерфейс: масштаб окна готов")
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	title_label.text = "Rally Fans Simulator"
 	title_label.hide()
@@ -295,12 +296,14 @@ func enable_mobile() -> void:
 	menu_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	menu_text.text = "Доедь до поляны, разложи лагерь и посмотри ралли. Жарь шашлык, помогай экипажам и береги себя."
 	menu_help.text = "Стик — движение и руль. Газ — справа.\nОбзор пешком — свайп по свободной части экрана."
+	print("[RFM] Мобильный интерфейс: панели готовы")
 	var layer = CanvasLayer.new()
 	layer.layer = 10
 	add_child(layer)
 	mobile_controls = preload("res://scripts/mobile_controls.gd").new()
 	mobile_controls.game = self
 	layer.add_child(mobile_controls)
+	print("[RFM] Мобильный интерфейс: контроллы готовы")
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch and event.pressed and not mobile_mode:
@@ -349,9 +352,11 @@ func _ready() -> void:
 	_build_ui()
 	print("[RFM] Интерфейс готов; подготовка звука")
 	_setup_audio()
+	print("[RFM] Звук подготовлен; создание интерфейса комнаты")
 	room = preload("res://scripts/room.gd").new()
 	room.game = self
 	add_child(room)
+	print("[RFM] Интерфейс комнаты готов")
 	if OS.has_feature("mobile") or "--mobile-controls" in OS.get_cmdline_user_args():
 		enable_mobile()
 	if "--capture" in OS.get_cmdline_user_args():
@@ -1892,4 +1897,3 @@ func stand_up() -> void:
 	seated = false
 	walker = seat_exit
 	walker.y = stage.ground(walker)
-
