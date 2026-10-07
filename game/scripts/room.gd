@@ -896,10 +896,17 @@ func apply_drive_events(solver, authoritative: bool) -> void:
 		game.die("Легковушка участника разбита. Совместный выезд окончен.")
 
 func recover_drive() -> bool:
-	if is_host or not prediction_enabled or not prediction.active:
+	if is_host or not prediction_enabled:
 		return false
+	if not prediction.active:
+		game.toast("Дождись синхронизации машины с хозяином.")
+		return true
+	if prediction.pending.size() >= Prediction.LIMIT:
+		game.toast("Дождись восстановления связи, затем верни машину на СУ.")
+		return true
 	prediction.context = drive_context(player_id)
 	prediction.predict(1, 0, 0, false, game.stage, game.selected_car, true)
+	game.toast("Машина возвращена на СУ.")
 	return true
 
 func smooth_car_visuals() -> void:

@@ -744,7 +744,6 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("recover"):
 		if not racing:
 			if room.connected and room.recover_drive():
-				toast("Машина возвращена на СУ.")
 				return
 			car.position = stage.at(stage.road_s(car.position))
 			heading = atan2(-stage.direction(stage.road_s(car.position)).x, -stage.direction(stage.road_s(car.position)).z)

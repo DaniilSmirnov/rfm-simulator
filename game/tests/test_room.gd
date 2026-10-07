@@ -130,6 +130,14 @@ func run() -> void:
 	guest.room.prediction.visual_offset = Vector3.ZERO
 	guest.room.smooth_car_visuals()
 	check(visual.transform.is_equal_approx(original_visual), "settled correction restores original model transform")
+	guest.room.prediction.active = false
+	check(guest.room.recover_drive() and guest.car.transform == original_car, "recovery waits for authority instead of taking the legacy teleport path during handshake")
+	guest.room.prediction.active = true
+	for i in range(guest.room.Prediction.LIMIT):
+		guest.room.prediction.pending.append({"seq": i + 1})
+	var queue_size = guest.room.prediction.pending.size()
+	check(guest.room.recover_drive() and guest.room.prediction.pending.size() == queue_size and guest.car.transform == original_car, "full input queue defers recovery without a local teleport or a success notice")
+	guest.room.prediction.pending.clear()
 	host.dead = true
 	host.menu_title.text = "Общий выезд окончен"
 	guest.room.apply_world(host.room.world_state())
