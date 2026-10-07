@@ -1374,8 +1374,8 @@ func spawn_course_car(role: String, id: int, zero_index: int = 0) -> void:
 		return
 	var node = Props.course_car(role, zero_index)
 	var racer = _add_course_vehicle(node, id, "pass", 0, role, zero_index)
-	racer.pace = 0.72
-	racer.drive_speed = race_speed(0) * racer.pace
+	racer.pace = 1.0 if role == "zero" else 0.72
+	racer.drive_speed = Traffic.speed_limit(self, racer, 0.0)
 	racer.bias = 0.0
 	racer.phase = 0.0
 	toast(course.caption())
@@ -1426,7 +1426,8 @@ func spawn_racer(forced: String = "") -> void:
 	var variant = [5, 0, 1, 2, 3, 4][rally_spawn_count % Props.RALLY_MODELS.size()]
 	rally_spawn_count += 1
 	var node = Props.car(Color.WHITE, true, variant)
-	_add_course_vehicle(node, rally_spawn_count + (course.pass_index - 1) * 200, kind, variant)
+	var racer = _add_course_vehicle(node, rally_spawn_count + (course.pass_index - 1) * 200, kind, variant)
+	racer.drive_speed = Traffic.speed_limit(self, racer, 0.0)
 	toast("Приближается %s, номер %d!" % [node.get_meta("model"), node.get_meta("number")])
 
 func _update_racers(delta: float) -> void:
@@ -1859,7 +1860,7 @@ func recover_racer(racer: Dictionary) -> void:
 	racer.line = 0.0
 	racer.avoiding = false
 	racer.avoid_line = 0.0
-	racer.drive_speed = race_speed(racer.s) * racer.get("pace", 1.0)
+	racer.drive_speed = Traffic.speed_limit(self, racer, racer.s)
 	racer.state = "racing"
 	racer.kind = "pass"
 	count_racer(racer)
