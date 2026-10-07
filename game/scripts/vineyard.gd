@@ -107,14 +107,17 @@ func _side_lane_houses() -> void:
 	for lane_s in [370.0, 500.0]:
 		var lane_direction = stage.side(lane_s).normalized()
 		var lane_normal = stage.direction(lane_s).normalized()
-		for along in [-32.0, -20.0, 20.0, 32.0]:
+		# Keep the junction open and place homes deeper along each secondary street.
+		# A small collision padding protects existing yards without incorrectly
+		# rejecting neighbouring houses whose gardens merely approach each other.
+		for along in [-40.0, -28.0, 28.0, 40.0]:
 			for side_value in [-1.0, 1.0]:
-				var p = stage.at(lane_s) + lane_direction * along + lane_normal * side_value * 10.5
+				var p = stage.at(lane_s) + lane_direction * along + lane_normal * side_value * 12.5
 				p.y = stage.ground(p)
 				var blocked = false
 				for spot in stage.clearings:
-					blocked = blocked or stage.flat(p).distance_to(stage.flat(spot)) < 10.0
-				if blocked or not _point_clear_of_obstacles(p, 5.5):
+					blocked = blocked or stage.flat(p).distance_to(stage.flat(spot)) < 9.0
+				if blocked or not _point_clear_of_obstacles(p, 1.75):
 					continue
 				var facing = -lane_normal * side_value
 				var yaw = atan2(-facing.x, -facing.z)
@@ -452,9 +455,9 @@ func _thuja_forest() -> void:
 	var middle_colors: Array = []
 	var crown_poses: Array = []
 	var crown_colors: Array = []
-	for s in range(int(VILLAGE_START) - 34, int(VILLAGE_END) + 35, 5):
+	for s in range(int(VILLAGE_START) - 34, int(VILLAGE_END) + 35, 4):
 		for side_value in [-1.0, 1.0]:
-			for row in range(3):
+			for row in range(4):
 				var lateral = 27.0 + row * 9.0 + tree_rng.randf_range(-2.0, 2.0)
 				var p = stage.at(clampf(float(s), 0.0, stage.LENGTH - 0.01)) + stage.side(clampf(float(s), 0.0, stage.LENGTH - 0.01)) * side_value * lateral
 				p += stage.direction(clampf(float(s), 0.0, stage.LENGTH - 0.01)) * tree_rng.randf_range(-2.0, 2.0)
