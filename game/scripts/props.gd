@@ -584,12 +584,12 @@ static func pose_skewer(node: Node3D, time: float) -> void:
 
 # Five classic rear-wheel-drive silhouettes; fictional club liveries.
 const RALLY_MODELS = [
-	{"name": "Ралли-классика 1", "body": "d84b33", "accent": "f3e7ca", "length": 3.9, "roof_end": 0.95, "lights": "round", "number": 17, "sponsor": "Rally Fans Maps", "trim": "c4c6b9"},
-	{"name": "Ралли-универсал", "body": "e4c452", "accent": "314b39", "length": 4.15, "roof_end": 1.65, "lights": "round", "number": 24, "sponsor": "Rally Fans Maps", "trim": "c4c6b9"},
-	{"name": "Ралли-классика 2", "body": "ece6d1", "accent": "b43e34", "length": 4.08, "roof_end": 1.05, "lights": "twin", "number": 33, "sponsor": "Rally Fans Maps", "trim": "d3d7ca"},
-	{"name": "Ралли-классика 3", "body": "53868e", "accent": "f0d66a", "length": 4.0, "roof_end": 1.03, "lights": "square", "number": 51, "sponsor": "Rally Fans Maps", "trim": "242d2c"},
-	{"name": "Ралли-классика 4", "body": "314c80", "accent": "ede9d5", "length": 4.12, "roof_end": 1.02, "lights": "square", "number": 77, "sponsor": "Rally Fans Maps", "trim": "cdd0c2"},
-	{"name": "Ралли-такси 65", "body": "727c83", "accent": "e5e7d8", "length": 4.12, "roof_end": 1.02, "lights": "square", "number": 65, "sponsor": "Rally Fans Maps", "trim": "bcc4c2"},
+	{"name": "Ралли-классика 1", "body": "d84b33", "accent": "f3e7ca", "length": 3.9, "roof_end": 0.95, "lights": "round", "number": 17, "sponsor": "Rally Fans Map", "trim": "c4c6b9"},
+	{"name": "Ралли-универсал", "body": "e4c452", "accent": "314b39", "length": 4.15, "roof_end": 1.65, "lights": "round", "number": 24, "sponsor": "Rally Fans Map", "trim": "c4c6b9"},
+	{"name": "Ралли-классика 2", "body": "ece6d1", "accent": "b43e34", "length": 4.08, "roof_end": 1.05, "lights": "twin", "number": 33, "sponsor": "Rally Fans Map", "trim": "d3d7ca"},
+	{"name": "Ралли-классика 3", "body": "53868e", "accent": "f0d66a", "length": 4.0, "roof_end": 1.03, "lights": "square", "number": 51, "sponsor": "Rally Fans Map", "trim": "242d2c"},
+	{"name": "Ралли-классика 4", "body": "314c80", "accent": "ede9d5", "length": 4.12, "roof_end": 1.02, "lights": "square", "number": 77, "sponsor": "Rally Fans Map", "trim": "cdd0c2"},
+	{"name": "Ралли-такси 65", "body": "727c83", "accent": "e5e7d8", "length": 4.12, "roof_end": 1.02, "lights": "square", "number": 65, "sponsor": "Rally Fans Map", "trim": "bcc4c2"},
 ]
 
 # Compact block lettering uses only triangles, including on minimal Web templates.
@@ -657,7 +657,7 @@ static func rally_fans_map_flag(parent: Node3D, pos: Vector3, yaw: float, index:
 		for line in range(2):
 			var text = MeshInstance3D.new()
 			text.name = "Wordmark_%s_%d" % ["Front" if face > 0 else "Back", line]
-			var title = "RALLY" if line == 0 else "FANS MAPS"
+			var title = "RALLY" if line == 0 else "FANS MAP"
 			text.set_meta("wordmark", title)
 			text.mesh = flag_wordmark(title, 0.035 if line == 0 else 0.021)
 			var ink = material(Color("fff4e6"))
@@ -790,7 +790,7 @@ static func rally_car(variant: int, number_override: int = -1, sponsor_override:
 			box(root, Vector3(side * 0.94, 0.48, 0.35), Vector3(0.025, 0.15, 2.35), Color("625c46"))
 		box(root, Vector3(0, 1.46, -0.85), Vector3(1.46, 0.15, 0.027), Color("23a887"))
 		box(root, Vector3(0, 1.46, -0.87), Vector3(0.94, 0.15, 0.028), Color("f0efe1"))
-		label_3d(root, Vector3(0, 1.46, -0.90), "Rally Fans Maps", 32, 0.0019, Color("299a78"), PI)
+		label_3d(root, Vector3(0, 1.46, -0.90), "Rally Fans Map", 32, 0.0019, Color("299a78"), PI)
 		box(root, Vector3(0, 1.01, -1.35), Vector3(0.55, 0.025, 0.42), Color("299e86"))
 		box(root, Vector3(0, 0.39, front - 0.15), Vector3(1.95, 0.22, 0.15), Color("d3d7d0"))
 		# Must sit on the trunk, behind the rear window, rather than on the roof.

@@ -113,7 +113,7 @@ func run() -> void:
 	check(host.finished and host.packing.remaining() == 0, "finish succeeds after packing all abandoned gear")
 	host.room.peers.clear()
 	for arch in host.stage.officials.arches:
-		check(arch.get_meta("caption") == "Rally Fans Maps", "both arches display only Rally Fans Maps")
+		check(arch.get_meta("caption") == "Rally Fans Map", "both arches display only Rally Fans Map")
 	for game in [host, guest]:
 		await game._shutdown_audio()
 		game.queue_free()
