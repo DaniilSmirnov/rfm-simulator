@@ -17,10 +17,11 @@ static func slide(racer: Dictionary, bend: float, speed: float, grip: float, del
 	racer.drift_yaw = lerpf(float(racer.get("drift_yaw", 0.0)), target, 1.0 - exp(-delta * 5.0))
 	return demand
 
-static func departure(racer: Dictionary, direction: Vector3, side: Vector3, bend: float) -> void:
+static func departure(racer: Dictionary, velocity: Vector3, side: Vector3, bend: float) -> void:
 	# Keep forward and lateral momentum: never aim an accident at the spectator.
-	racer.motion.velocity = direction * racer.drive_speed + side * racer.slide_speed
-	var outward = signf(racer.slide_speed) if absf(racer.slide_speed) > 0.5 else signf(bend)
+	racer.motion.velocity = Vector3(velocity.x, 0.0, velocity.z)
+	var lateral = racer.motion.velocity.dot(side)
+	var outward = signf(lateral) if absf(lateral) > 0.5 else signf(bend)
 	if outward == 0.0:
 		outward = 1.0 if int(racer.id) % 2 else -1.0
 	racer.exit_side = outward

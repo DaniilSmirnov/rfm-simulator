@@ -127,6 +127,9 @@ func run() -> void:
 	drifting.slide = 3.6
 	game._update_racers(1.0 / 60.0)
 	check(drifting.state == "offroad" and drifting.motion.velocity.length() > 5, "excessive slide releases the vehicle from the road with momentum")
+	var carried: Vector3 = (drifting.node.position - drifting.previous) * 60.0
+	carried.y = 0.0
+	check(drifting.motion.velocity.distance_to(carried) < 0.001, "departure carries actual trajectory velocity, including lane changes")
 	game.recover_racer(drifting)
 	check(drifting.slide == 0 and drifting.slide_speed == 0 and drifting.drift_yaw == 0 and drifting.yaw_rate == 0 and drifting.motion.velocity == Vector3.ZERO, "towing resets lateral inertia and accident rotation")
 	clear_cars(game)

@@ -1503,7 +1503,7 @@ func _update_racers(delta: float) -> void:
 				racer.age = 0
 				if racer.kind == "pass":
 					racer.kind = "crash"
-				RallyHandling.departure(racer, race_direction(s), race_side(s), bend)
+				RallyHandling.departure(racer, movement / maxf(delta, 0.001), race_side(s), bend)
 				toast("ВЫЛЕТ! Отойди с траектории!")
 			elif s > racer.focus + 45 and not racer.counted:
 				count_racer(racer)

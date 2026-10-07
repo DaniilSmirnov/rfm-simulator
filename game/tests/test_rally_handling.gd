@@ -51,7 +51,7 @@ func _initialize() -> void:
 		Handling.slide(r, 0.0, 18.0, 0.78, Handling.STEP)
 	check(absf(r.slide) < 0.05 and absf(r.slide_speed) < 0.1, "tyres progressively catch the slide on a straight")
 	r.slide_speed = 3.0
-	Handling.departure(r, Vector3.FORWARD, Vector3.RIGHT, 0.01)
+	Handling.departure(r, Vector3(3, -1, -24), Vector3.RIGHT, 0.01)
 	check(r.motion.velocity == Vector3(3, 0, -24), "departure preserves forward and sideways momentum")
 	var surface = Surface.new()
 	var previous: Vector3 = r.node.position
