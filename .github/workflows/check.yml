@@ -1,16 +1,65 @@
 name: Game and Web
+
 on:
   push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
+
 permissions:
   contents: read
+
 concurrency:
-  group: game-web-${{ github.workflow }}-${{ github.ref }}
+  group: game-web-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
+
 jobs:
-  check:
-    if: github.head_ref != 'feature/vk-platform-prototype' && github.ref_name != 'feature/vk-platform-prototype'
+  tests-and-visuals:
+    name: Tests and visuals
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      WRANGLER_SEND_METRICS: "false"
+      LIBGL_ALWAYS_SOFTWARE: "true"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+      - name: Render text flag faces
+        run: xvfb-run -a .cache/godot/Godot_v4.4.1-stable_linux.x86_64 --path game --rendering-method gl_compatibility --script res://tests/flag_preview.gd
+      - name: Render imported reference-style characters
+        run: xvfb-run -a .cache/godot/Godot_v4.4.1-stable_linux.x86_64 --path game --rendering-method gl_compatibility --script res://tests/character_preview.gd
+      - name: Render cooking stages
+        run: xvfb-run -a .cache/godot/Godot_v4.4.1-stable_linux.x86_64 --path game --rendering-method gl_compatibility --script res://tests/cooking_preview.gd
+      - name: Render landscape mobile controls
+        run: xvfb-run -a .cache/godot/Godot_v4.4.1-stable_linux.x86_64 --path game --rendering-method gl_compatibility --script res://tests/mobile_preview.gd
+      - name: Render vineyard and village reference views
+        run: xvfb-run -a .cache/godot/Godot_v4.4.1-stable_linux.x86_64 --path game --rendering-method gl_compatibility --script res://tests/city_preview.gd
+      - name: Render mushroom textures and verify color inversion
+        run: xvfb-run -a .cache/godot/Godot_v4.4.1-stable_linux.x86_64 --path game --rendering-method gl_compatibility --script res://tests/mushroom_preview.gd
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: visual-previews
+          path: |
+            flag-*.png
+            character-preview.png
+            cooking-*.png
+            mobile-*.png
+            vineyard-*.png
+            preview-artifacts/mushrooms-*.png
+          if-no-files-found: warn
+
+  production-web:
+    name: Production web
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
@@ -24,66 +73,54 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm test
       - run: npm run build
-      - run: npm run test:server
-      - run: npx wrangler deploy --dry-run --outdir .cache/worker
 
-      - name: Render and verify text flag faces
-        env:
-          LIBGL_ALWAYS_SOFTWARE: "true"
-        run: xvfb-run -a .cache/godot/Godot_v4.4.1-stable_linux.x86_64 --path game --rendering-method gl_compatibility --script res://tests/flag_preview.gd
+      - name: Verify production artifacts
+        run: |
+          node scripts/test-platform-build.mjs dist
+          node scripts/test-platform-build.mjs dist/vk
+          npm run test:server
+
+      - name: Validate Worker deploy configuration
+        run: |
+          mkdir -p .cache
+          printf '%s' '{"VK_APP_SECRET":"ci-dry-run-only"}' > .cache/ci-secrets.json
+          chmod 600 .cache/ci-secrets.json
+          npx wrangler deploy --dry-run --outdir .cache/worker --secrets-file .cache/ci-secrets.json
+          rm -f .cache/ci-secrets.json
+
+      - name: Install browser test runtime
+        run: |
+          npm install --no-save --package-lock=false playwright@1.63.0
+          npx playwright install --with-deps chromium
+
+      - name: Verify standalone and VK browser roundtrips
+        run: |
+          node scripts/test-platform-web.mjs dist
+          node scripts/test-platform-web.mjs dist/vk
+
+      - name: Detect physical Web template
+        id: physics
+        run: node -e 'const fs = require("node:fs"); fs.appendFileSync(process.env.GITHUB_OUTPUT, "enabled=" + Boolean(JSON.parse(fs.readFileSync("engine/manifest.json")).physics_3d) + "\n");'
+
+      - name: Verify exported physics in Chromium
+        if: steps.physics.outputs.enabled == 'true'
+        run: |
+          node scripts/test-web-startup.mjs
+          node scripts/test-web-physics.mjs
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: flag-preview
-          path: flag-*.png
+          name: web-production
+          path: |
+            dist/
+            branding-loading*.png
+            web-startup-*.png
           if-no-files-found: warn
 
-      - name: Render imported reference-style characters
-        env:
-          LIBGL_ALWAYS_SOFTWARE: "true"
-        run: xvfb-run -a .cache/godot/Godot_v4.4.1-stable_linux.x86_64 --path game --rendering-method gl_compatibility --script res://tests/character_preview.gd
-      - uses: actions/upload-artifact@v4
-        with:
-          name: character-preview
-          path: character-preview.png
-          if-no-files-found: error
-
-      - name: Render cooking stages
-        env:
-          LIBGL_ALWAYS_SOFTWARE: "true"
-        run: xvfb-run -a .cache/godot/Godot_v4.4.1-stable_linux.x86_64 --path game --rendering-method gl_compatibility --script res://tests/cooking_preview.gd
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: cooking-preview
-          path: cooking-*.png
-          if-no-files-found: error
-
-      - name: Render landscape mobile controls
-        env:
-          LIBGL_ALWAYS_SOFTWARE: "true"
-        run: xvfb-run -a .cache/godot/Godot_v4.4.1-stable_linux.x86_64 --path game --rendering-method gl_compatibility --script res://tests/mobile_preview.gd
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: mobile-preview
-          path: mobile-*.png
-          if-no-files-found: error
-
-      - name: Render vineyard and village reference views
-        env:
-          LIBGL_ALWAYS_SOFTWARE: "true"
-        run: xvfb-run -a .cache/godot/Godot_v4.4.1-stable_linux.x86_64 --path game --rendering-method gl_compatibility --script res://tests/city_preview.gd
-      - uses: actions/upload-artifact@v4
-        with:
-          name: vineyard-preview
-          path: vineyard-*.png
-          if-no-files-found: error
-
-  web-browser:
-    if: github.head_ref != 'feature/vk-platform-prototype' && github.ref_name != 'feature/vk-platform-prototype'
+  vk-prototype:
+    name: VK prototype
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
@@ -97,43 +134,19 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run build
-      - name: Detect physical Web template
-        id: physics
-        run: node -e 'const fs = require("node:fs"); fs.appendFileSync(process.env.GITHUB_OUTPUT, "enabled=" + Boolean(JSON.parse(fs.readFileSync("engine/manifest.json")).physics_3d) + "\n");'
-      - name: Verify exported physics in Chromium
-        if: steps.physics.outputs.enabled == 'true'
+      - run: npm run build:vk:prototype
+      - run: node scripts/test-platform-build.mjs dist-vk-prototype
+
+      - name: Install browser test runtime
         run: |
           npm install --no-save --package-lock=false playwright@1.63.0
           npx playwright install --with-deps chromium
-          node scripts/test-web-startup.mjs
-          node scripts/test-web-physics.mjs
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: branding-loading
-          path: |
-            branding-loading*.png
-            web-startup-*.png
-          if-no-files-found: warn
 
-  mushroom-visuals:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    env:
-      LIBGL_ALWAYS_SOFTWARE: "true"
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Import game resources
-        run: node --input-type=module -e "import {getGodot,run} from './scripts/godot.mjs'; const godot=await getGodot(); run(godot,['--headless','--editor','--path','game','--import']);"
-      - name: Render mushroom textures and verify color inversion
-        run: xvfb-run -a .cache/godot/Godot_v4.4.1-stable_linux.x86_64 --path game --rendering-method gl_compatibility --script res://tests/mushroom_preview.gd
+      - name: Verify prototype browser roundtrip
+        run: node scripts/test-platform-web.mjs dist-vk-prototype
+
       - uses: actions/upload-artifact@v4
-        if: always()
         with:
-          name: mushroom-preview
-          path: preview-artifacts/mushrooms-*.png
+          name: web-vk-prototype
+          path: dist-vk-prototype/
           if-no-files-found: error
