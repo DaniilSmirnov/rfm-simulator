@@ -3,6 +3,10 @@ extends RefCounted
 const CLEARANCE = 2.85
 const MAX_LINE = 3.05
 const BRAKE = 18.0
+const MAX_COMPETITION_SPEED = 140.0 / 3.6
+const MIN_CORNER_TARGET = 16.0
+const CORNER_FULL_EFFECT = 0.35
+const SPEED_LOOKAHEAD = [0.0, 16.0, 32.0, 48.0]
 
 static func profile(id: int) -> Dictionary:
 	return {"bias": sin(id * 1.91) * 0.55, "phase": fmod(id * 2.37, TAU), "pace": 0.96 + fmod(id * 0.618, 1.0) * 0.08}
@@ -10,12 +14,25 @@ static func profile(id: int) -> Dictionary:
 static func nominal(racer: Dictionary, s: float) -> float:
 	return racer.get("bias", 0.0) + sin(s / 34.0 + racer.get("phase", 0.0)) * 0.24 + sin(s / 71.0 + racer.get("phase", 0.0) * 1.7) * 0.12
 
+static func competition_target(stage: Node3D, progress: float, pace: float = 1.0, reverse: bool = false) -> float:
+	var station = stage.LENGTH - progress if reverse else progress
+	var travel_sign = -1.0 if reverse else 1.0
+	var worst_corner = 0.0
+	for ahead in SPEED_LOOKAHEAD:
+		var center = clampf(station + travel_sign * ahead, 0.0, stage.LENGTH - 0.01)
+		var before = stage.direction(maxf(0.0, center - 6.0))
+		var after = stage.direction(minf(stage.LENGTH - 0.01, center + 6.0))
+		var angle = acos(clampf(before.dot(after), -1.0, 1.0))
+		worst_corner = maxf(worst_corner, angle)
+	var corner_factor = clampf(worst_corner / CORNER_FULL_EFFECT, 0.0, 1.0)
+	var geometry_target = lerpf(MAX_COMPETITION_SPEED, MIN_CORNER_TARGET, pow(corner_factor, 0.75))
+	return clampf(geometry_target * pace, 0.0, MAX_COMPETITION_SPEED)
+
 static func speed_limit(game: Node3D, racer: Dictionary, s: float) -> float:
-	var stage = game.stage
-	var station = stage.road_s(game.race_at(s))
 	var role = str(racer.get("role", "racer"))
-	var unrestricted_village_run = stage.village(station) and role in ["racer", "zero"]
-	return (27.0 if unrestricted_village_run else game.race_speed(s)) * racer.get("pace", 1.0)
+	if role in ["racer", "zero"]:
+		return competition_target(game.stage, s, racer.get("pace", 1.0), game.course.pass_index == 2)
+	return maxf(0.0, game.race_speed(s) * racer.get("pace", 1.0))
 
 static func plan(game: Node3D, racer: Dictionary) -> Dictionary:
 	var stage = game.stage
