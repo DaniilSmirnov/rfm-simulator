@@ -259,9 +259,10 @@ func enable_mobile() -> void:
 	mobile_bottom.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
 	mobile_bottom.offset_left = 36
 	mobile_bottom.offset_right = -270
-	mobile_bottom.offset_top = 110
-	mobile_bottom.offset_bottom = 164
-	info_label.add_theme_font_size_override("font_size", 18)
+	mobile_bottom.offset_top = 92
+	mobile_bottom.offset_bottom = 148
+	info_label.add_theme_font_size_override("font_size", 16)
+	info_label.max_lines_visible = 2
 	info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hint_label.hide()
 	quest_label.hide()
@@ -1705,17 +1706,23 @@ func _update_hud() -> void:
 	if packing.active() and packing.remaining() == 0:
 		hint_label.text = "Лагерь собран. Садитесь в свои машины через F; ждём всех друзей." if in_car else "Лагерь собран. Подойди к своей машине и нажми F."
 	if mobile_mode:
+		course_label.text = course.caption().replace("ПРОХОД ", "СУ ").replace(" · ПРЯМО", "").replace(" · ОБРАТНО", "").replace("ДО ОТКРЫТИЯ СУ", "СТАРТ ЧЕРЕЗ")
 		if in_car and tow_target == null:
 			info_label.text = "%02d КМ/Ч · МАШИНА %d%% · %s %d м" % [int(absf(speed) * 3.6), int(condition), "ПАРКОВКА" if stage.urban else "ПОЛЯНА", distance]
+		elif not in_car and drink_time < 0 and eat_time < 0 and beers < 30 and tow_target == null:
+			if packing.active():
+				info_label.text = "ВЕРНУТЬ ВЕЩИ В БАГАЖНИК · ОСТАЛОСЬ %d" % packing.remaining()
+			else:
+				var cook_status = "ГОТОВ" if cook_time >= 35 else ("%d%%" % int(cook_time / 35 * 100) if cooking else "НЕТ ОГНЯ")
+				info_label.text = "ШАШЛЫК %s · %d/10 · ПИВО %d" % [cook_status, grill_servings, beers]
+				if camp_cooking.pot != null:
+					info_label.text += " · ПЛОВ %d/10" % camp_cooking.servings if camp_cooking.phase == "ready" else (" · ПЛОВ %d%%" % int(camp_cooking.cook_time / 45 * 100) if camp_cooking.phase == "cooking" else " · КАЗАН ПУСТ")
 		else:
-			info_label.text = info_label.text.replace("ЗРИТЕЛЬ    ·    ", "").replace("УДЕРЖИВАЙ T", "УДЕРЖИВАЙ ТРОС")
+			info_label.text = info_label.text.replace("УДЕРЖИВАЙ T", "УДЕРЖИВАЙ ТРОС")
 		if toast_time > 0:
 			info_label.text += "\n" + toast_label.text
 		elif not in_car and not interaction.current().is_empty():
-			info_label.text += "\nF — " + interaction.current().label
-	if mobile_mode and not in_car:
-		var bag = foraging.stock()
-		info_label.text += "\nГрибы %d · Ягоды %d" % [bag.mushrooms, bag.berries]
+			info_label.text += "\n" + interaction.current().label
 	crosshair.visible = playing and not in_car and not paused and not dead and not finished and placement_kind == ""
 	crosshair.text = "+" if not interaction.current().is_empty() else "·"
 	minimap.queue_redraw()

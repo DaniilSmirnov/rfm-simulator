@@ -38,7 +38,7 @@ const RallyDevice = {
     prompt.setAttribute('role', 'dialog');
     prompt.setAttribute('aria-label', 'Горизонтальная ориентация');
     prompt.innerHTML = '<span class="rotate-icon" aria-hidden="true">↻ ▭</span><p>Поверните устройство горизонтально</p><p>Движение — слева, обзор камеры — справа.</p><button type="button">На весь экран</button>';
-    prompt.querySelector('button').addEventListener('click', () => this.requestLandscape());
+    prompt.querySelector('button').addEventListener('click', () => { this.landscapeRequest = this.requestLandscape(); });
     document.body.appendChild(prompt);
     // Rotation and browser focus changes must cancel every Godot touch owner.
     const cancel = () => document.getElementById('canvas')?.dispatchEvent(new Event('blur'));

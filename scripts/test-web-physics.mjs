@@ -45,10 +45,12 @@ try {
   if (!mobileArgs.includes('--mobile-controls')) throw new Error('Mobile browser failed to enable controls');
   if (await mobilePage.locator('#rally-rotate').count() !== 1) throw new Error('Orientation prompt duplicated');
   await mobilePage.locator('#rally-rotate').waitFor({ state: 'visible' });
-  await mobilePage.locator('#rally-rotate button').click();
-  await mobilePage.evaluate(() => document.fullscreenElement ? document.exitFullscreen() : undefined);
   await mobilePage.setViewportSize({ width: 844, height: 390 });
   await mobilePage.locator('#rally-rotate').waitFor({ state: 'hidden' });
+  await mobilePage.setViewportSize({ width: 390, height: 844 });
+  await mobilePage.locator('#rally-rotate').waitFor({ state: 'visible' });
+  await mobilePage.locator('#rally-rotate button').click();
+  await mobilePage.evaluate(() => RallyDevice.landscapeRequest);
   console.log('Mobile portrait prompt, fullscreen fallback and landscape transition verified.');
   await mobileContext.close();
   const page = await browser.newPage();
