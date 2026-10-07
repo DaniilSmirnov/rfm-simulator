@@ -32,13 +32,16 @@ jobs:
       matrix:
         include:
           - target: standalone
-            command: build
+            command: build:standalone
             directory: dist
             config: wrangler.jsonc
           - target: vk
             command: build:vk
             directory: dist-vk
-            config: wrangler.vk.jsonc
+          - target: combined
+            command: build
+            directory: dist
+            config: wrangler.jsonc
           - target: vk-prototype
             command: build:vk:prototype
             directory: dist-vk-prototype
@@ -62,6 +65,14 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Verify exported platform roundtrip (VK uses synthetic launch and API fixture)
         run: node scripts/test-platform-web.mjs ${{ matrix.directory }}
+      - name: Check real shared Worker API and asset routing
+        if: matrix.target == 'combined'
+        run: npm run test:server
+      - name: Verify nested VK artifact in combined Worker
+        if: matrix.target == 'combined'
+        run: |
+          node scripts/test-platform-build.mjs dist/vk
+          node scripts/test-platform-web.mjs dist/vk
       - uses: actions/upload-artifact@v4
         with:
           name: web-${{ matrix.target }}

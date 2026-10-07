@@ -2,13 +2,13 @@
   "name": "rfm-simulator",
   "version": "0.10.29",
   "private": true,
-  "description": "\u0421\u0438\u043c\u0443\u043b\u044f\u0442\u043e\u0440 \u0440\u0430\u043b\u043b\u0438\u0439\u043d\u043e\u0433\u043e \u043e\u0432\u043e\u0449\u0430 \u2014 Godot mini web demo",
+  "description": "Симулятор раллийного овоща — Godot mini web demo",
   "type": "module",
   "engines": {
     "node": ">=22"
   },
   "scripts": {
-    "build": "node scripts/build-web.mjs",
+    "build": "node scripts/build-all.mjs",
     "test": "node scripts/test-game.mjs",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
@@ -17,9 +17,10 @@
     "build:vk": "node scripts/build-web.mjs --target=vk",
     "build:vk:prototype": "node scripts/build-web.mjs --target=vk-prototype",
     "test:platform": "node --test tests/platform.test.mjs",
-    "dev:vk": "wrangler dev --config wrangler.vk.jsonc",
-    "deploy:vk": "wrangler deploy --config wrangler.vk.jsonc",
-    "test:vk": "node --test tests/platform.test.mjs tests/auth-vk.test.mjs tests/room-session.test.mjs"
+    "dev:vk": "wrangler dev",
+    "deploy:vk": "wrangler deploy",
+    "test:vk": "node --test tests/platform.test.mjs tests/auth-vk.test.mjs tests/room-session.test.mjs",
+    "build:standalone": "node scripts/build-web.mjs --target=standalone"
   },
   "devDependencies": {
     "wrangler": "4.147.0"

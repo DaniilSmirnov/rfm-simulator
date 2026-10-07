@@ -2,9 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
 import { authenticateLaunch, authenticateSession } from '../server/auth-vk.mjs';
+import {RoomState} from '../server/room-core.mjs';
 import worker from '../server/worker.mjs';
 const now = 1780000000000;
-const env = { PLATFORM:'vk', VK_APP_ID:'123', VK_APP_SECRET:'test-launch-secret', VK_SERVICE_TOKEN:'test-service-token', VK_SESSION_SECRET:'different-session-secret' };
+const env = { VK_APP_ID:'123', VK_APP_SECRET:'test-launch-secret', VK_SERVICE_TOKEN:'test-service-token', VK_SESSION_SECRET:'different-session-secret' };
 function launch(changes = {}) {
   const params = { vk_user_id:'42', vk_app_id:'123', vk_ts:String(now/1000), vk_language:'ru', vk_access_token_settings:'friends,status', vk_ref:'space + unicode Ё', ...changes };
   const canonical = Object.keys(params).sort().map(name => `${name}=${encodeURIComponent(params[name])}`).join('&');
@@ -55,8 +56,9 @@ test('VK failures and mismatched profile are rejected; missing shortname uses te
   assert.equal(data.profile.nickname,'vk42');
 });
 test('Worker gates VK room routes and overwrites client nickname, standalone stays anonymous',async()=>{
-  assert.equal((await worker.fetch(request(),env)).status,401);
-  assert.equal((await worker.fetch(new Request('https://game.test/api/vk/session',{method:'POST',body:'{}'}),{PLATFORM:'standalone'})).status,404);
+  assert.equal((await worker.fetch(new Request(request(),{headers:{'X-Rally-Platform':'vk'}}),env)).status,401);
+  assert.equal((await worker.fetch(new Request(request(),{headers:{Authorization:'Bearer invalid'}}),env)).status,401);
+  assert.equal((await worker.fetch(new Request('https://game.test/api/vk/session',{method:'POST',body:'{}'}),{})).status,503);
   assert.equal((await worker.fetch(new Request('https://game.test/api/vk/session',{method:'POST',body:'bad'}),env)).status,400);
   const realNow=Date.now();
   const currentLaunch=launch({vk_ts:String(Math.floor(realNow/1000))});
@@ -69,4 +71,38 @@ test('Worker gates VK room routes and overwrites client nickname, standalone sta
   assert.equal(body.stage,1);
   assert.equal((await worker.fetch(new Request('https://game.test/api/rooms/ABCDEF/join',{method:'POST',body:'{"name":"Guest"}'}),{ROOMS:rooms})).status,200);
   assert.equal(body.name,'Guest');
+});
+
+test('VK and anonymous players join the very same Durable Object room', async () => {
+  const rooms = new Map();
+  const ids = [];
+  const namespace = {
+    idFromName: id => {ids.push(id);return id;},
+    get: id => {
+      if (!rooms.has(id)) {
+        const state = new RoomState();
+        rooms.set(id, {fetch:async request=>{
+          const body=await request.json();
+          const result=state.add(body.name,Date.now(),new URL(request.url).pathname==='/create',body);
+          return Response.json({...result,players:Object.values(state.data.players).map(p=>({name:p.name}))});
+        }});
+      }
+      return rooms.get(id);
+    },
+  };
+  const host=await worker.fetch(new Request('https://game.test/api/rooms',{method:'POST',body:'{"name":"Anonymous"}'}),{ROOMS:namespace});
+  const data=await host.json();
+  const time=Date.now();
+  const session=await authenticateLaunch(launch({vk_ts:String(Math.floor(time/1000))}),env,time,network);
+  const joined=await worker.fetch(new Request(`https://game.test/api/rooms/${data.room}/join`,{method:'POST',headers:{Authorization:`Bearer ${session.session.token}`},body:'{"name":"spoof"}'}),{...env,ROOMS:namespace});
+  assert.equal(joined.status,200);
+  assert.deepEqual((await joined.json()).players.map(p=>p.name),['Anonymous','rally.fan']);
+  assert.equal(ids[0],ids[1]);
+  assert.equal(rooms.size,1);
+});
+
+test('/vk redirects to the folder URL and preserves signed launch query',async()=>{
+ const response=await worker.fetch(new Request('https://game.test/vk?vk_user_id=42&sign=example'),{});
+ assert.equal(response.status,308);
+ assert.equal(response.headers.get('Location'),'https://game.test/vk/?vk_user_id=42&sign=example');
 });

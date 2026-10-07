@@ -27,6 +27,7 @@
       if (Date.now() >= session.expires_at * 1000) throw new Error('Сессия VK истекла. Откройте игру заново через VK.');
       const headers = new Headers(request.headers);
       headers.set('Authorization', 'Bearer ' + session.token);
+      headers.set('X-Rally-Platform', 'vk');
       return new Request(request, {headers});
     },
     getProfile:async () => {await ready;return profile;},

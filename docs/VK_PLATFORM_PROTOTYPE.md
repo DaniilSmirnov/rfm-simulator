@@ -4,7 +4,7 @@ This is a technical prototype, not a completed VK integration. Minimal server-ve
 
 ## Build targets
 
-- `npm run build`: standalone `dist/`; no VK Bridge or VK adapters.
+- `npm run build`: combined `dist/` with standalone at `/` and VK at `/vk/`. `npm run build:standalone` exports only the standalone shell. Bridge is absent from the root shell.
 - `npm run build:vk:prototype`: `dist-vk-prototype/`; explicit mock profile `vk_prototype`, `verified: false`. No VK Bridge, real accounts or purchases. Never use this artifact as the production VK application.
 - `npm run build:vk`: `dist-vk/`; pinned VK Bridge 3.0.2, real `VKWebAppInit`, then `/api/vk/session`. The endpoint validates signed launch parameters and resolves the shortname through VK API; configure the VK Worker secrets before use. This build never falls back to the mock adapter.
 
@@ -37,3 +37,5 @@ Configure the Worker and test `dist-vk/` inside an actual VK test application; a
 ## Verified transport and remaining limitations
 
 The original standalone/prototype WASM transport passed Chromium desktop/mobile CI on 2026-10-07. The VK build test now exercises a synthetic signed launch against the real auth module, a fixture VK API response, a stub Bridge initialization and an authorized room request. This does not prove production VK credentials or native VK container behavior. Actual VK Android/iOS and desktop launches remain deployment acceptance checks.
+
+Both real platforms share `/api/rooms` and the same Durable Object namespace. Production configuration: `wrangler.jsonc`; see the Cloudflare setup guide.

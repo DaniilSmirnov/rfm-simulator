@@ -1,121 +1,94 @@
-# VK Bridge, авторизация и отдельный Cloudflare Worker
+# Одна публикация: обычная игра и VK
 
-## Что реализовано
+## Адреса и сборка
 
-VK Bridge 3.0.2 включён только в VK-артефакт. Инициализация: `VKWebAppInit` → `POST /api/vk/session` → проверка HMAC-SHA256 подписи, App ID и `vk_ts` → серверный `users.get(fields=screen_name)` → запуск Godot с подтверждённым ником. Имена и фамилии из профиля не используются. Если shortname отсутствует, ник `vk<id>`.
+Один Worker `rfm-simulator` публикует обе версии:
 
-Допустимая давность запуска — 1 час, допустимое опережение времени — 60 секунд. Сессия подписана отдельным секретом и действует 1 час. Браузер хранит токен в памяти и добавляет Authorization только к запросам комнат того же origin, включая heartbeat и выход. VK Worker проверяет сессию и задаёт ник при создании/присоединении к комнате. При истечении сессии нужно закрыть и снова открыть приложение через VK; автоматического обновления пока нет.
-
-Платежи, покупки, постоянные аккаунты и достижения в этот этап не входят. Всё существующее содержимое временно доступно (`mode: unrestricted`); это не реализация платных entitlements.
-
-## Две независимые сборки
-
-| Параметр | Обычная игра | VK Mini App |
-|---|---|---|
-| Worker | `rfm-simulator` | `rfm-simulator-vk` |
-| Конфигурация | `wrangler.jsonc` | `wrangler.vk.jsonc` |
-| Сборка | `npm run build` | `npm run build:vk` |
-| Артефакт | `dist/` | `dist-vk/` |
-| Деплой | `npm run deploy` | `npm run deploy:vk` |
-| Авторизация | Анонимная | Подписанный запуск VK |
-| Комнаты | Namespace обычного Worker | Отдельный namespace VK Worker |
-
-Worker одновременно раздаёт файлы через Workers Static Assets и обслуживает `/api/*`. Это конфигурация Workers, а не отдельный Pages-проект. Godot экспортируется существующим минимальным шаблоном, без его замены.
-
-`npm run build:vk:prototype` создаёт только тестовый `dist-vk-prototype/`: он не предназначен для публикации как настоящее VK-приложение.
-
-## 1. Подготовить VK-приложение
-
-В кабинете разработчика VK создайте/выберите тестовое Mini App. Получите:
-
-- числовой ID приложения;
-- защищённый ключ приложения для проверки подписи запуска;
-- сервисный ключ доступа того же приложения для серверного `users.get`.
-
-В `wrangler.vk.jsonc` уже задан `vars.VK_APP_ID: "54809523"`. ID приложения не секрет. При смене приложения замените его на новый числовой ID. Оставьте `PLATFORM: "vk"`. Если меняете название Worker, используйте то же название при создании проекта в Cloudflare.
-
-## 2. Создать отдельный Worker в Cloudflare
-
-В **Workers & Pages** создайте Worker, подключите GitHub-репозиторий `DaniilSmirnov/rfm-simulator`. Настройте Workers Builds:
-
-| Поле | Обычная игра | VK |
-|---|---|---|
-| Название Worker | `rfm-simulator` | `rfm-simulator-vk` |
-| Root directory | корень репозитория | корень репозитория |
-| Production branch | `main` | `main` после слияния PR |
-| Build command | `npm ci && npm run build` | `npm ci && npm run build:vk` |
-| Deploy command | `npm run deploy` | `npm run deploy:vk` |
-| Node version | 22 | 22 |
-
-При необходимости задайте `NODE_VERSION=22` в настройках сборки. Для проверки до слияния можно временно выбрать ветку `feature/vk-platform-prototype`, затем переключить обратно на `main`.
-
-Для VK preview/non-production deploy command укажите `npx wrangler preview --config wrangler.vk.jsonc`, если используете preview-сборки. Настройте их секреты отдельно согласно выбранным preview settings; production-секреты не следует считать автоматически доступными в preview. Для первого запуска проще использовать один тестовый VK Worker и production URL.
-
-Имя в Cloudflare должно совпадать с `name` выбранного Wrangler-файла. Каталог ассетов отдельно в панели не нужен: он задан в конфигурации. Binding `ASSETS`, класс `RallyRoom`, binding `ROOMS` и миграция SQLite Durable Objects уже описаны. Wrangler создаёт namespace при первом деплое. D1, KV и R2 для этого этапа не нужны.
-
-## 3. Задать runtime-секреты
-
-После создания Worker откройте **Settings → Variables and Secrets** и добавьте типом **Secret**:
-
-| Имя | Значение |
+| Адрес | Назначение |
 |---|---|
-| `VK_APP_SECRET` | Защищённый ключ приложения VK |
-| `VK_SERVICE_TOKEN` | Сервисный ключ доступа VK |
+| `/` | Обычная игра, анонимный ник |
+| `/vk/` | VK Bridge 3.0.2, авторизация и ник из `screen_name` |
+| `/api/vk/session` | Проверка подписанных параметров запуска VK |
+| `/api/rooms` и `/api/rooms/<id>/*` | Общие комнаты для обеих версий |
+
+`npm run build` экспортирует оба варианта и складывает VK-сборку в `dist/vk/`. `npm run deploy` публикует весь `dist/` и общий API по `wrangler.jsonc`. `/vk` перенаправляется на `/vk/` с сохранением параметров запуска. Root shell не загружает VK Bridge; VK shell загружает свои относительные JS/WASM/PCK файлы из `/vk/`. Правила `_headers` применены к обоим наборам файлов.
+
+Отдельные технические рельсы сохранены: `npm run build:standalone` → `dist/`, `npm run build:vk` → `dist-vk/`, `npm run build:vk:prototype` → `dist-vk-prototype/`. Они полезны для тестов; перед публикацией вызывайте `npm run build`, иначе `/vk/` не окажется в общем артефакте. `deploy:vk` и `dev:vk` теперь используют тот же Worker; отдельного `wrangler.vk.jsonc` больше нет. Mock-прототип не публикуется.
+
+## Cloudflare
+
+Используйте существующий Worker **rfm-simulator**, отдельный VK Worker создавать не нужно.
+
+В Workers & Pages → существующий Worker → настройки Builds:
+
+| Поле | Значение |
+|---|---|
+| Repository | `DaniilSmirnov/rfm-simulator` |
+| Root directory | корень репозитория |
+| Production branch | `main` после слияния PR |
+| Node version | 22, при необходимости build variable `NODE_VERSION=22` |
+| Build command | `npm ci && npm run build` |
+| Deploy command | `npm run deploy` |
+
+До слияния для тестового деплоя можно выбрать ветку `feature/vk-platform-prototype`. Для preview используйте `npx wrangler preview`; preview-секреты настраиваются отдельно, не считайте production-секреты автоматически доступными в preview.
+
+`VK_APP_ID: "54809523"` уже задан в `wrangler.jsonc`. Имя Worker, binding `ASSETS`, существующие `ROOMS` и миграция SQLite Durable Objects сохраняются. Комнаты не разделены по платформам: человек с обычной версии и человек из VK могут входить по одному ID. Изменять namespace или создавать D1/KV/R2 не нужно.
+
+В **Settings → Variables and Secrets** именно этого Worker добавьте **Secret**:
+
+| Runtime secret | Значение |
+|---|---|
+| `VK_APP_SECRET` | Защищённый ключ приложения 54809523 |
+| `VK_SERVICE_TOKEN` | Сервисный ключ доступа того же приложения |
 | `VK_SESSION_SECRET` | Независимая случайная строка, минимум 32 случайных байта |
 
-Пример генерации последнего секрета локально: `openssl rand -hex 32`.
+Для генерации последнего секрета: `openssl rand -hex 32`. Если ключи были добавлены в отдельный `rfm-simulator-vk`, добавьте их заново в основной `rfm-simulator`: секреты разных Worker не общие. Секреты сборки не заменяют runtime secrets. Не помещайте ключи в JS, исходники или URL.
 
-Это секреты исполняющегося Worker, а не Build variables/secrets. ID приложения задавайте в `wrangler.vk.jsonc`: Wrangler-конфигурация остаётся источником обычных vars при последующих деплоях. Не добавляйте секреты в исходники, JS, URL приложения или логи. Если первый деплой произошёл без секретов, приложение покажет ошибку авторизации — добавьте секреты и повторите запуск.
-
-Альтернатива через CLI (каждая команда интерактивно попросит значение):
+CLI-альтернатива:
 
 ```bash
 npm ci
 npx wrangler login
-npx wrangler secret put VK_APP_SECRET --config wrangler.vk.jsonc
-npx wrangler secret put VK_SERVICE_TOKEN --config wrangler.vk.jsonc
-npx wrangler secret put VK_SESSION_SECRET --config wrangler.vk.jsonc
-npm run build:vk
-npm run deploy:vk
+npx wrangler secret put VK_APP_SECRET
+npx wrangler secret put VK_SERVICE_TOKEN
+npx wrangler secret put VK_SESSION_SECRET
+npm run build
+npm run deploy
 ```
 
-Если Worker ещё не создан, первый `npm run deploy:vk` после сборки создаст его; затем добавьте секреты и повторите деплой. Ничего из этих команд автоматически в вашем аккаунте не выполнялось.
+Каждая команда `secret put` интерактивно попросит значение. Эти команды автоматически в вашем Cloudflare-аккаунте не выполнялись.
 
-## 4. Указать адрес в VK
+## Настройки VK
 
-После деплоя получите HTTPS URL вида `https://rfm-simulator-vk.<your-subdomain>.workers.dev/` или назначьте custom domain. Укажите этот адрес в настройках URL Mini App для поддерживаемых платформ. Статические файлы и `/api/vk/session` должны находиться на одном origin.
+В URL приложения 54809523 для поддерживаемых платформ укажите:
 
-Открывайте приложение через ссылку `https://vk.com/app54809523` под аккаунтом с доступом к тестовому приложению. VK добавляет подписанные параметры запуска; вручную придумывать `vk_user_id` и `sign` нельзя. Прямая ссылка на Worker без параметров не авторизует пользователя.
+```text
+https://<ваш-домен-существующего-Worker>/vk/
+```
 
-Не включайте для VK страницы `X-Frame-Options: DENY/SAMEORIGIN` или CSP `frame-ancestors 'self'`: это блокирует встраивание. Текущий шаблон однопоточный и не требует добавлять COOP/COEP для SharedArrayBuffer.
+Например, для workers.dev: `https://rfm-simulator.<your-subdomain>.workers.dev/vk/`.
 
-## 5. Проверить первый запуск
+Открывайте приложение через [vk.com/app54809523](https://vk.com/app54809523). VK добавит подписанные параметры запуска. Прямая ссылка без параметров или вручную придуманные ID/подпись не авторизуют пользователя. Статика и `/api/vk/session` находятся на одном origin. Не добавляйте `X-Frame-Options: DENY/SAMEORIGIN` и CSP `frame-ancestors 'self'`: это мешает встраиванию.
 
-1. В desktop VK, VK Android и VK iOS откройте приложение через VK.
-2. Дождитесь запуска игры; поле ника должно показывать shortname и не редактироваться.
-3. Создайте комнату и подключитесь другим аккаунтом; видимые ники должны соответствовать аккаунтам VK.
-4. На телефоне уйдите в фон и вернитесь; проверьте сохранение комнаты через heartbeat.
-5. Проверьте, что обычный Worker продолжает работать анонимно и не загружает `vk-bridge.js`.
+## Поведение авторизации и общих комнат
 
-Если запуск не удался, смотрите статус запроса `/api/vk/session`:
+Порядок: `VKWebAppInit` → подписанный query на сервер → HMAC-SHA256, App ID и `vk_ts` → серверный `users.get(fields=screen_name)` → подписанная часовая сессия → запуск Godot. Имена и фамилии не используются, при отсутствии shortname берётся `vk<id>`. Давность запуска ограничена часом, опережение — 60 секундами.
 
-- `503`: не настроен App ID/один из трёх секретов или временная серверная ошибка;
-- `401`: неверная подпись, другой App ID, устаревшие/некорректные параметры — откройте заново через VK;
-- `502`: VK API недоступен, токен не подходит или не вернул нужный профиль;
-- `400`: неправильный формат запроса.
+Сессия хранится только в памяти браузера. VK adapter добавляет `Authorization: Bearer ...` и `X-Rally-Platform: vk` только к запросам общего room API того же origin. Это относится к созданию, входу, sync, heartbeat и выходу. Сервер проверяет предъявленную сессию, а при создании/входе задаёт подтверждённый ник. Неверная/истёкшая сессия или VK-маркер без токена дают `401`, без автоматического перехода на анонимный профиль.
 
-Не пересылайте полный query запуска или session token в отчёте. Ник и ID пользователя попадают в текущую диагностику профиля игры; защищённые ключи и токены в неё не выводятся.
+Запросы без сессии и VK-маркера допускаются как анонимные — это намеренное поведение общей платформы. Маркер сам по себе не доказательство личности. Публичный room API и анонимные участники общих комнат сохраняются; анонимный ник не является подтверждённым VK-аккаунтом. Доступ к существующей комнате по-прежнему определяется приватным room token, не платформой.
 
-## CI и пределы проверки
+Через час нужно закрыть и повторно открыть приложение через VK. Платежи, постоянные аккаунты, достижения и платные entitlements пока не реализованы; текущий контент временно unrestricted.
 
-Workflow `Platform builds` имеет отдельную проверку авторизации и три параллельные сборочные джобы: standalone, vk, vk-prototype. Каждая проверяет изоляцию артефакта и desktop/mobile обмен в экспортированном WASM. Для standalone/VK дополнительно выполняется `wrangler deploy --dry-run`. Артефакты: `web-standalone`, `web-vk`, `web-vk-prototype`. Деплой делает Cloudflare Builds; GitHub workflow ничего не публикует и не требует production-секретов.
+## Проверка и диагностика
 
-VK browser-тест использует синтетическую подписанную строку, fixture ответа VK API и stub `VKWebAppInit` — при этом проверяются настоящий серверный модуль авторизации, bearer и Godot WASM. Он не заменяет запуск с реальными ключами внутри VK. Остальные игровые/визуальные тесты продолжают пропускаться в этой ветке; вне её действуют прежние правила общего workflow.
+1. Откройте `/`: обычная версия запускается без VK и без ключей.
+2. Откройте приложение через VK: загрузится `/vk/`, ник берётся из shortname и не редактируется.
+3. Создайте комнату обычным клиентом и войдите из VK по тому же ID; повторите с VK-хозяином и обычным гостем.
+4. Проверьте возврат из фона на VK Android/iOS и heartbeat.
 
-Официальные источники:
+Статусы `/api/vk/session`: `503` — конфигурация не готова/временная ошибка; `401` — подпись, App ID или срок запуска; `502` — проблема VK API/сервисного ключа/профиля; `400` — формат запроса. Не пересылайте полный query запуска или session token. Ник и ID присутствуют в диагностике профиля, защищённые ключи и токены не выводятся.
 
-- [VK: пример проверки подписи запуска](https://github.com/VKCOM/vk-apps-launch-params/blob/master/examples/node.js)
-- [VK: схема users.get](https://github.com/VKCOM/vk-api-schema/blob/master/users/methods.json)
-- [Cloudflare: Workers Builds](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/)
-- [Cloudflare: runtime secrets](https://developers.cloudflare.com/workers/configuration/secrets/)
-- [Cloudflare: Static Assets binding](https://developers.cloudflare.com/workers/static-assets/binding/)
+CI `Platform builds` проверяет auth, отдельные артефакты и объединённый артефакт. Для него проверяются root и вложенный `/vk/` в desktop/mobile Chromium с настоящим Godot WASM. VK-тест использует синтетическую подпись, fixture VK API и stub Bridge; production-ключи и настоящий VK-контейнер проверяются после деплоя. GitHub CI ничего не публикует. Остальные игровые проверки по-прежнему пропускаются в текущей ветке.
+
+Источники: [Workers Builds](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/), [runtime secrets](https://developers.cloudflare.com/workers/configuration/secrets/), [Static Assets](https://developers.cloudflare.com/workers/static-assets/binding/), [VK launch signature](https://github.com/VKCOM/vk-apps-launch-params/blob/master/examples/node.js).
