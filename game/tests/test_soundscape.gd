@@ -13,6 +13,8 @@ func run() -> void:
 	game.room.set_process(false)
 	var audio = game.soundscape
 	check(audio.birds.stream.loop_mode == AudioStreamWAV.LOOP_FORWARD, "bird ambience loops")
+	check(is_equal_approx(audio.birds.volume_db, -37.0), "bird ambience intensity is reduced by 80 percent")
+	check(is_equal_approx(game.fire_audio.volume_db, -26.0), "cooking fire intensity is reduced by 80 percent")
 	check(audio.clips.step.loop_mode == AudioStreamWAV.LOOP_DISABLED, "footsteps remain one shots")
 	check(audio.clips.step.data.size() > 1000, "footstep PCM exists")
 	game.start_game()

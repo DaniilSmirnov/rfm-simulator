@@ -1,5 +1,7 @@
 extends Node
 # Short deterministic PCM effects are shared by all players; no per-frame synthesis.
+# Background birds and cooking fire run at 20% of their previous linear gain.
+const BIRDS_VOLUME_DB = -37.0
 var game: Node
 var shutting_down = false
 var birds: AudioStreamPlayer
@@ -47,7 +49,7 @@ func _ready() -> void:
 	clips.eat = tone("eat", 0.22)
 	birds = AudioStreamPlayer.new()
 	birds.stream = tone("birds", 8.0)
-	birds.volume_db = -23
+	birds.volume_db = BIRDS_VOLUME_DB
 	add_child(birds)
 	effects = AudioStreamPlayer.new()
 	effects.stream = clips.place

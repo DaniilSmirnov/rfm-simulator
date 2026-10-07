@@ -630,7 +630,8 @@ func _setup_audio() -> void:
 	fire_audio = AudioStreamPlayer3D.new()
 	fire_audio.stream = load("res://audio/fire.wav")
 	fire_audio.max_distance = 24
-	fire_audio.volume_db = -12
+	# 20% of the previous cooking/fire linear gain (about -14 dB).
+	fire_audio.volume_db = -26
 	add_child(fire_audio)
 	beer_audio = AudioStreamPlayer.new()
 	beer_audio.volume_db = -10
