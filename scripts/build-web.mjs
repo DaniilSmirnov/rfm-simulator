@@ -47,7 +47,7 @@ if (!html.includes('const engine = new Engine(GODOT_CONFIG);')) throw new Error(
 await cp(join(root, 'game/branding/rfm-icon.svg'), join(output, 'favicon.svg'));
 const brandedHtml = html.replaceAll('$RFM_VERSION', version).replace(/<link\b[^>]*\brel=["'](?:shortcut )?icon["'][^>]*>/gi, '')
   .replace('</head>', '<link rel="icon" type="image/svg+xml" href="favicon.svg">\n</head>');
-await writeFile(htmlPath, brandedHtml.replace('<script src="index.js"></script>', '<script src="boot-diagnostics.js"></script>\n<script src="mini-loader.js"></script>\n<script src="mobile-device.js"></script>\n<script src="room-session.js"></script>\n<script src="index.js"></script>').replace('const engine = new Engine(GODOT_CONFIG);', 'RallyDevice.configure(GODOT_CONFIG);\nconst engine = new Engine(GODOT_CONFIG);'));
+await writeFile(htmlPath, brandedHtml.replace('<script src="index.js"></script>', '<script src="boot-diagnostics.js"></script>\n<script src="mini-loader.js"></script>\n<script src="audio-recovery.js"></script>\n<script src="mobile-device.js"></script>\n<script src="room-session.js"></script>\n<script src="index.js"></script>').replace('const engine = new Engine(GODOT_CONFIG);', 'RallyDevice.configure(GODOT_CONFIG);\nconst engine = new Engine(GODOT_CONFIG);'));
 await cp(join(root, 'web'), output, { recursive: true });
 await mkdir(join(output, 'licenses'), { recursive: true });
 for (const name of ['GODOT_LICENSE.txt', 'GODOT_COPYRIGHT.txt']) {
