@@ -250,7 +250,8 @@ func enable_mobile() -> void:
 	get_window().content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	title_label.text = "РАЛЛИЙНЫЙ ОВОЩ"
-	title_label.add_theme_font_size_override("font_size", 18)
+	title_label.hide()
+	course_label.max_lines_visible = 2
 	course_label.add_theme_font_size_override("font_size", 14)
 	course_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	mobile_top.get_child(0).get_child(1).hide()
