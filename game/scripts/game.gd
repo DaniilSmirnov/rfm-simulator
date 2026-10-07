@@ -256,7 +256,8 @@ func enable_mobile() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	title_label.text = "Rally Fans Simulator"
 	title_label.hide()
-	course_label.max_lines_visible = 2
+	# These HUD labels start empty. Let wrapping calculate their lines on draw
+	# rather than recalculating visible lines before the Web text server shapes them.
 	course_label.add_theme_font_size_override("font_size", 14)
 	course_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	mobile_top.get_child(0).get_child(1).hide()
@@ -268,7 +269,6 @@ func enable_mobile() -> void:
 	mobile_bottom.offset_top = 92
 	mobile_bottom.offset_bottom = 148
 	info_label.add_theme_font_size_override("font_size", 16)
-	info_label.max_lines_visible = 2
 	info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hint_label.hide()
 	quest_label.hide()
