@@ -10,6 +10,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   check:
+    if: github.head_ref != 'feature/vk-platform-prototype' && github.ref_name != 'feature/vk-platform-prototype'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
@@ -84,6 +85,21 @@ jobs:
           path: vineyard-*.png
           if-no-files-found: error
 
+  web-browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      WRANGLER_SEND_METRICS: "false"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
       - name: Detect physical Web template
         id: physics
         run: node -e 'const fs = require("node:fs"); fs.appendFileSync(process.env.GITHUB_OUTPUT, "enabled=" + Boolean(JSON.parse(fs.readFileSync("engine/manifest.json")).physics_3d) + "\n");'
@@ -104,3 +120,25 @@ jobs:
             branding-loading*.png
             web-startup-*.png
           if-no-files-found: warn
+
+  vk-transport-hypothesis:
+    if: github.head_ref == 'feature/vk-platform-prototype' || github.ref_name == 'feature/vk-platform-prototype'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build minimal-engine prototype artifact
+        run: npm run build:vk:prototype
+      - name: Install pinned browser test runtime
+        run: |
+          npm install --no-save --package-lock=false playwright@1.63.0
+          npx playwright install --with-deps chromium
+      - name: Verify Godot to browser to Godot profile roundtrip
+        run: node scripts/test-platform-web.mjs

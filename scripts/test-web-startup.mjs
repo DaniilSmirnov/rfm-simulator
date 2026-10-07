@@ -25,7 +25,9 @@ try {
   const until=Date.now()+90000;
   while(!ready&&!failure&&Date.now()<until)await page.waitForTimeout(250);
   if(failure||!ready)throw new Error(failure||'Full game startup timed out\n'+logs.slice(-30).join('\n'));
-  await page.locator('#status').waitFor({state:'detached',timeout:10000});
+  // The full forest renders through software WebGL on CI; its first frame can
+  // hold the browser thread well beyond ten seconds after Godot reports ready.
+  await page.locator('#status').waitFor({state:'detached',timeout:60000});
   // Full-scene initialization runs here; Web rendering and physics have their own test.
   await page.waitForTimeout(1500);
   if(failure)throw new Error(failure);
