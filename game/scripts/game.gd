@@ -757,6 +757,8 @@ func _process(delta: float) -> void:
 	_update_drinking(delta)
 	_update_eating(delta)
 	_update_camera(delta)
+	if room.connected and room.prediction_enabled:
+		camera.position += room.prediction.visual_offset
 	_update_placement()
 	cargo.update(delta)
 	camp_cooking.update(delta, room.connected and not room.is_host)
@@ -817,6 +819,8 @@ func player_position() -> Vector3:
 	return car.position if in_car else walker
 
 func _drive(delta: float) -> void:
+	if room.connected and room.predict_drive(delta):
+		return
 	# Carry fractional ticks across render frames; cap long stalls at one second.
 	vehicle_motion.drive_clock += clampf(delta, 0, 1.0)
 	var dt: float = vehicle_motion.handling.STEP
