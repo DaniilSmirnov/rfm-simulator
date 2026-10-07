@@ -1447,7 +1447,12 @@ func _update_racers(delta: float) -> void:
 			racer.drive_speed = actual_speed
 			var race_speed = maxf(actual_speed, 0.1)
 			racer.s += delta * actual_speed
-			racer.line = move_toward(float(racer.get("line", 0.0)), float(traffic.line), delta * minf(2.8, actual_speed * 0.14))
+			# A crew braking just short of lateral clearance must finish its slow
+			# manoeuvre; tying all steering motion to zero forward speed deadlocks it.
+			var lateral_rate = minf(2.8, actual_speed * 0.14)
+			if traffic.get("can_pass", false):
+				lateral_rate = maxf(lateral_rate, 0.6)
+			racer.line = move_toward(float(racer.get("line", 0.0)), float(traffic.line), delta * lateral_rate)
 
 			var s: float = racer.s
 			var road_yaw = atan2(-race_direction(s).x, -race_direction(s).z)

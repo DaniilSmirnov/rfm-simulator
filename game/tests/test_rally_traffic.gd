@@ -103,7 +103,12 @@ func run() -> void:
 	safe = true
 	for i in range(160):
 		game._update_racers(1.0 / 24)
-		safe = safe and follower.state == "racing" and follower.node.position.distance_to(lead.node.position) > 2.5
+		var frame_safe = follower.state == "racing" and follower.node.position.distance_to(lead.node.position) > 2.5
+		if safe and not frame_safe:
+			print("REVERSE COLLISION: frame=%d s=%.2f state=%s line=%.2f lead_line=%.2f gap=%.2f" % [i, follower.s, follower.state, follower.line, lead.line, follower.node.position.distance_to(lead.node.position)])
+		safe = safe and frame_safe
+	if not (safe and follower.s > lead.s + 12):
+		print("REVERSE RESULT: s=%.2f target=%.2f speed=%.2f state=%s line=%.2f" % [follower.s, lead.s + 12, follower.drive_speed, follower.state, follower.line])
 	check(safe and follower.s > lead.s + 12, "reverse crew safely overtakes stranded car")
 	game.recover_racer(lead)
 	check(lead.state == "racing" and lead.node.position.distance_to(game.race_at(lead.s)) < 0.01 and (-lead.node.basis.z).dot(game.race_direction(lead.s)) > 0.99, "recovery rejoins road in reverse travel direction")

@@ -78,7 +78,7 @@ static func plan(game: Node3D, racer: Dictionary) -> Dictionary:
 			advance = minf(advance, maxf(0, blocker.gap - 7))
 	if best == INF:
 		chosen = current
-	return {"line": chosen, "speed": speed, "avoiding": true, "advance": advance}
+	return {"line": chosen, "speed": speed, "avoiding": true, "advance": advance, "can_pass": best != INF}
 
 static func _clear_path(game, racer: Dictionary, target: float, distance: float) -> bool:
 	var stage = game.stage
