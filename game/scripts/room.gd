@@ -5,6 +5,10 @@ const SYNC_INTERVAL = 0.1
 var server_offset = 0.0
 var clock_initialized = false
 var best_round_trip = INF
+var round_trip_ms = 0.0
+var network_jitter_ms = 0.0
+var previous_round_trip = -1.0
+var diagnostic_clock = 0.0
 var request_sent_at = 0.0
 var last_world_time = -1.0
 var racer_motion: Dictionary = {}
@@ -230,6 +234,10 @@ func _response(result: int, code: int, _headers: PackedStringArray, bytes: Packe
 func update_server_clock(server_msec: float) -> void:
 	var now = Time.get_ticks_usec() / 1000000.0
 	var round_trip = clampf(now - request_sent_at, 0, 2.0)
+	round_trip_ms = round_trip * 1000.0
+	if previous_round_trip >= 0:
+		network_jitter_ms = lerpf(network_jitter_ms, absf(round_trip - previous_round_trip) * 1000.0, 0.2)
+	previous_round_trip = round_trip
 	var estimate = server_msec / 1000.0 - now + round_trip * 0.5
 	best_round_trip = minf(best_round_trip, round_trip)
 	if not clock_initialized:
@@ -274,14 +282,19 @@ func _process(delta: float) -> void:
 			body.world = world_state()
 			body.ack = acknowledgements
 		_request("sync", body)
+	diagnostic_clock += delta
+	if diagnostic_clock >= 5.0:
+		diagnostic_clock = 0.0
+		print("[RFM network] RTT=%.0fms jitter=%.0fms peers=%d" % [round_trip_ms, network_jitter_ms, peers.size()])
 	game.cargo.refresh_opened()
 	for peer in peers.values():
 		if peer.state == null:
 			continue
-		var car_pose = peer.car_motion.render(server_clock())
+		var frozen = world_paused or game.paused or game.dead or game.finished
+		var car_pose = peer.car_motion.render(server_clock(), frozen)
 		peer.car.position = car_pose.position
 		peer.car.rotation = car_pose.rotation
-		var avatar_pose = peer.avatar_motion.render(server_clock())
+		var avatar_pose = peer.avatar_motion.render(server_clock(), frozen)
 		peer.avatar.position = avatar_pose.position
 		peer.avatar.rotation.y = avatar_pose.rotation.y
 		peer.avatar.visible = not peer.state.in_car
@@ -411,8 +424,10 @@ func _update_peers(players: Array) -> void:
 				avatar.position = v(p.state.pos)
 		if p.state != null:
 			var peer = peers[p.id]
-			var switched = peer.state != null and peer.state.in_car != p.state.in_car
 			var sample_time = float(p.state_time) / 1000.0 if p.has("state_time") else server_clock()
+			if peer.has("last_state_time") and sample_time <= peer.last_state_time:
+				continue
+			var switched = peer.state != null and peer.state.in_car != p.state.in_car
 			var tilt = v(p.state.get("tilt", [0, p.state.heading, 0]))
 			tilt.y = p.state.heading
 			peer.car_motion.push(sample_time, v(p.state.car), tilt)
