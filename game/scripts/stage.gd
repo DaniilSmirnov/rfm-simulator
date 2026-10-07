@@ -203,18 +203,19 @@ func build() -> void:
 	for i in range(clearings.size()):
 		var c = clearings[i]
 		if urban:
-			_build_parking(c, i)
-		else:
-			RallyProps.cylinder(self, c + Vector3(0, 1.2, 0), 0.07, 0.07, 2.4, Color("d5bc8e"), 5)
-			var sign = RallyProps.box(self, c + Vector3(0, 2.15, 0), Vector3(2, 0.65, 0.12), Color("e5d9b9"))
-			var label = Label3D.new()
-			sign.add_child(label)
-			label.position = Vector3(0, 0, 0.075)
-			label.text = "ПОЛЯНА %d" % (i + 1)
-			label.font_size = 42
-			label.pixel_size = 0.005
-			label.modulate = Color("344537")
-			label.outline_size = 0
+			# Vineyard spectator spots are ordinary roadside/courtyard places.
+			# Keep the gameplay positions, but do not build a separate parking entity.
+			continue
+		RallyProps.cylinder(self, c + Vector3(0, 1.2, 0), 0.07, 0.07, 2.4, Color("d5bc8e"), 5)
+		var sign = RallyProps.box(self, c + Vector3(0, 2.15, 0), Vector3(2, 0.65, 0.12), Color("e5d9b9"))
+		var label = Label3D.new()
+		sign.add_child(label)
+		label.position = Vector3(0, 0, 0.075)
+		label.text = "ПОЛЯНА %d" % (i + 1)
+		label.font_size = 42
+		label.pixel_size = 0.005
+		label.modulate = Color("344537")
+		label.outline_size = 0
 	# Distant angular ridges, original meshes.
 	for i in range(0 if urban else 18):
 		var p = Vector3((-1 if i % 2 == 0 else 1) * rng.randf_range(220, 340), 30, -i * 65.0)
@@ -230,24 +231,6 @@ func _build_city() -> void:
 	city.stage = self
 	add_child(city)
 	city.build()
-
-func _build_parking(pos: Vector3, index: int) -> void:
-	var yaw = atan2(-direction(road_s(pos)).x, -direction(road_s(pos)).z)
-	var asphalt = RallyProps.box(self, pos + Vector3(0, 0.025, 0), Vector3(4.8, 0.05, 7.4), Color("464c4d"))
-	asphalt.rotation.y = yaw
-	for side_offset in [-2.0, 2.0]:
-		var line = RallyProps.box(self, pos + Vector3(0, 0.06, 0), Vector3(0.08, 0.015, 6.3), Color("e6d8ad"))
-		line.position += Vector3(side_offset * cos(yaw), 0, side_offset * sin(yaw))
-		line.rotation.y = yaw
-	var sign = RallyProps.box(self, pos + Vector3(0, 1.65, 0), Vector3(1.7, 0.55, 0.08), Color("e8dfc4"))
-	sign.rotation.y = yaw
-	var label = Label3D.new()
-	sign.add_child(label)
-	label.position = Vector3(0, 0, 0.06)
-	label.text = "P %d" % (index + 1)
-	label.font_size = 38
-	label.pixel_size = 0.005
-	label.modulate = Color("344537")
 
 func _build_terrain() -> void:
 	var st = SurfaceTool.new()
