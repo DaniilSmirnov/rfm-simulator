@@ -1,4 +1,5 @@
 extends SceneTree
+const Traffic = preload("res://scripts/rally_traffic.gd")
 var failures = 0
 func check(ok: bool, title: String) -> void:
 	print(("PASS: " if ok else "FAIL: ") + title)
@@ -49,6 +50,7 @@ func run() -> void:
 			check(game.course.phase == "zero" and game.course.zero_index == index and game.racers.size() == 1, "zero crew %d follows previous vehicle" % index)
 			var zero = game.racers[-1]
 			check(zero.role == "zero" and zero.node.get_meta("number") == 0, "each safety crew visibly carries number zero")
+			check(absf(float(zero.pace) - 1.0) < 0.001 and zero.drive_speed <= Traffic.MAX_COMPETITION_SPEED + 0.001, "zero crew uses full competition pace with 140 km/h cap")
 			game.count_racer(zero)
 			check(game.passed == 0 and game.rally_spawn_count == 0, "zero crew does not increment rally counters")
 			finish_vehicle(game)
