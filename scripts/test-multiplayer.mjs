@@ -9,10 +9,12 @@ import { getGodot, root, run } from './godot.mjs';
 const web = process.argv.includes('--web');
 const workerPort = 8793;
 const processes = [];
-let browser;
+let browserFactory;
+const browsers = [];
 let relay;
 let errors = [];
 const samples = {};
+const tokenRoles = new Map();
 const controls = { host: {id:0,action:'pause'}, guest: {id:0,action:'pause'} };
 const latest = role => samples[role]?.at(-1);
 const logs = [];
@@ -20,7 +22,7 @@ function observe(role, line) {
   if (line.includes('NETWORK_SAMPLE ')) {
     const sample = JSON.parse(line.slice(line.indexOf('NETWORK_SAMPLE ') + 15));
     (samples[role] ??= []).push(sample);
-  } else if (/SCRIPT ERROR|Parse Error|RuntimeError|unreachable|NETWORK_FAIL/.test(line)) errors.push(line);
+  } else if (/SCRIPT ERROR|Parse Error|RuntimeError|unreachable|NETWORK_FAIL|ERROR:/.test(line)) errors.push(line);
   logs.push(`[${role}] ${line}`);
   if (!line.includes('NETWORK_SAMPLE ') && role !== 'worker') console.log(`[${role}] ${line}`);
 }
@@ -48,11 +50,12 @@ const output = join(root,'.cache/network-web');
 const proxy = createServer(async(req,res)=> {
   try {
     const url = new URL(req.url,'http://localhost');
-    const role = url.pathname.startsWith('/guest/') ? 'guest' : 'host';
+    let role = url.searchParams.get("role") ?? (url.pathname.startsWith("/guest/") ? "guest" : "host");
     const path = url.pathname.replace(/^\/(host|guest)/,'');
     if(path==='/test/control') {res.setHeader('Content-Type','application/json'); res.end(JSON.stringify(controls[role]));return;}
     if(path.startsWith('/api/')) {
       let body='';for await(const chunk of req)body+=chunk;
+      role = tokenRoles.get(JSON.parse(body).token) ?? role;
       const slow = role==='guest' && path.endsWith('/sync');
       if(slow) {
         syncs++;
@@ -61,6 +64,7 @@ const proxy = createServer(async(req,res)=> {
       }
       const response = await fetch(`http://127.0.0.1:${workerPort}${path}`,{method:req.method,headers:{'Content-Type':'application/json'},body});
       const payload=await response.text();
+      if(response.ok && (path === "/api/rooms" || path.endsWith("/join")))tokenRoles.set(JSON.parse(payload).token,path === "/api/rooms" ? "host" : "guest");
       if(slow)await wait(150);
       res.writeHead(response.status,{'Content-Type':'application/json'});res.end(payload);return;
     }
@@ -68,7 +72,7 @@ const proxy = createServer(async(req,res)=> {
     const name=url.pathname==='/' ? 'index.html' : url.pathname.slice(1);
     let bytes=await readFile(join(output,name));
     if(name==='index.html') {
-      const args=['--','--smoke-test',`--network-role=${url.searchParams.get('role')??'host'}`,`--room-server=http://127.0.0.1:${proxy.address().port}/${url.searchParams.get('role')??'host'}`];
+      const args=['--','--smoke-test',`--network-role=${url.searchParams.get('role')??'host'}`,`--room-server=http://127.0.0.1:${proxy.address().port}`];
       if(url.searchParams.has('room'))args.push(`--network-room=${url.searchParams.get('room')}`);
       bytes=Buffer.from(bytes.toString().replace('RallyDevice.configure(GODOT_CONFIG);',`RallyDevice.configure(GODOT_CONFIG); GODOT_CONFIG.args = ${JSON.stringify(args)}.concat(RallyDevice.isMobile() ? ["--mobile-controls"] : []);`));
     }
@@ -114,19 +118,20 @@ try {
     const {stat}=await import('node:fs/promises');const size=(await stat(join(output,'index.pck'))).size;
     const html=join(output,'index.html');await writeFile(html,(await readFile(html,'utf8')).replace(/"index\.pck":\s*\d+/g,`"index.pck":${size}`));
     const {chromium}=await import('playwright');
-    browser=await chromium.launch({headless:true,executablePath:process.env.CHROMIUM_EXECUTABLE,args:['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
+    browserFactory=()=>chromium.launch({headless:true,executablePath:process.env.CHROMIUM_EXECUTABLE,args:['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
   }
   async function client(role,room='') {
     if(web) {
+      const browser=await browserFactory();browsers.push(browser);
       const context=await browser.newContext({viewport:{width:844,height:390},...(role==='guest'?{isMobile:true,hasTouch:true}: {})});
-      const page=await context.newPage();page.on('console',m=>observe(role,m.text()));page.on('pageerror',e=>errors.push(String(e)));
+      const page=await context.newPage();page.on('console',m=>observe(role,m.text()));page.on('pageerror',e=>errors.push(String(e)));page.on('crash',()=>errors.push(role+' renderer crashed'));
       await page.goto(`${origin}/?role=${role}${room?'&room='+room:''}`,{waitUntil:'domcontentloaded'});
       return page;
     }
     launch([godot,'--headless','--path','game','--max-fps','60','res://tests/network_client.tscn','--','--smoke-test',`--network-role=${role}`,`--room-server=${origin}/${role}`, ...(room?[`--network-room=${room}`]:[])],role);
   }
-  await client('host');await until(()=>latest('host')?.connected,'host connects');
-  await client('guest',latest('host').room);await until(()=>latest('guest')?.active,'prediction handshake');
+  await client('host');await until(()=>latest('host')?.connected,'host connects',web?120000:60000);
+  await client('guest',latest('host').room);await until(()=>latest('guest')?.active,'prediction handshake',web?120000:60000);
   command('host','resume');command('guest','forward');
   const start=latest('guest').pos;
   await until(()=>latest('guest').speed>1 && latest('guest').pending>0,'responsive prediction before acknowledgement',15000);
@@ -147,7 +152,7 @@ try {
   command('guest','enter');await until(()=>latest('guest').in_car,'enter car');
   const previousPlayer=latest('guest').player;
   command('guest','rejoin');
-  await until(()=>latest('guest')?.player!==previousPlayer && latest('guest')?.active,'fresh session after leave and rejoin');
+  await until(()=>latest('guest')?.player!==previousPlayer && latest('guest')?.active,'fresh session after leave and rejoin',web?120000:60000);
   command('guest','pause');
   await until(()=>latest('guest').pending===0 && !Object.hasOwn(latest('host').driving,previousPlayer),'departed solver removed and fresh input queue acknowledged');
   assert.equal(latest('guest').condition,100);
@@ -158,7 +163,7 @@ try {
   throw error;
 } finally {
   await writeFile(join(root,'network-test.log'),logs.join('\n'));
-  await browser?.close();
+  await Promise.allSettled(browsers.map(browser=>browser.close()));
   for(const child of processes)child.kill('SIGTERM');
   await new Promise(resolve=>proxy.close(resolve));
   if(relay)await new Promise(resolve=>relay.close(resolve));

@@ -8,6 +8,9 @@ var last_command = -1
 var poll_clock = 0.0
 var report_clock = 0.0
 func _ready() -> void:
+	# Browser transport tests keep real physics, without two software-rendered forests.
+	if OS.has_feature("web"):
+		RenderingServer.render_loop_enabled = false
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--network-role="): role = arg.trim_prefix("--network-role=")
 		if arg.begins_with("--network-room="): join_id = arg.trim_prefix("--network-room=")
@@ -24,7 +27,7 @@ func _process(delta: float) -> void:
 	report_clock += delta
 	if poll_clock >= 0.2 and control.get_http_client_status() == HTTPClient.STATUS_DISCONNECTED:
 		poll_clock = 0
-		control.request(game.room.server + "/test/control")
+		control.request(game.room.server + "/test/control?role=" + role)
 	if report_clock >= 0.2:
 		report_clock = 0
 		var p = game.room.prediction

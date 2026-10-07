@@ -116,6 +116,20 @@ func run() -> void:
 	check(host.room.peers.driver.last_state_time == 10.0, "authoritative rendering does not refresh stale player activity")
 	host.room._update_peers([])
 	check(host.room.host_drives.is_empty(), "departed driver removes authoritative physics and budget")
+	guest.room.prediction_enabled = true
+	guest.room.prediction.reset(guest.car.position, guest.heading)
+	var visual = guest.car.get_children().filter(func(child): return child is MeshInstance3D)[0]
+	var original_visual = visual.transform
+	var original_car = guest.car.transform
+	guest.room.prediction.visual_offset = Vector3(0.5, 0.1, 0.4)
+	guest.room.smooth_car_visuals()
+	var once_visual = visual.transform
+	guest.room.smooth_car_visuals()
+	check(guest.car.transform == original_car and visual.transform.is_equal_approx(once_visual), "visual correction keeps physics root fixed and never accumulates between frames")
+	check(visual.position.distance_to(original_visual.origin + guest.car.basis.inverse() * guest.room.prediction.visual_offset) < 0.00001, "car mesh receives the same world correction as the camera")
+	guest.room.prediction.visual_offset = Vector3.ZERO
+	guest.room.smooth_car_visuals()
+	check(visual.transform.is_equal_approx(original_visual), "settled correction restores original model transform")
 	host.dead = true
 	host.menu_title.text = "Общий выезд окончен"
 	guest.room.apply_world(host.room.world_state())
