@@ -36,7 +36,7 @@ func collect(id: int = -1, owner: String = "") -> bool:
 		return false
 	var bag = stock(owner)
 	bag[item.kind] = int(bag[item.kind]) + int(item.quantity)
-	game.toast("Собрано: " + ("гриб" if item.kind == "mushrooms" else "ягоды"))
+	game.toast("Собрано: " + item.get("name", "гриб" if item.kind == "mushrooms" else "ягоды"))
 	return true
 
 func grill_node(source: int) -> Node3D:
