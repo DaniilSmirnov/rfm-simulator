@@ -62,11 +62,11 @@ func run() -> void:
 	host.cooking = true
 	host.cook_time = 35
 	host.walker = host.grill.position
-	check(not host.foraging.can_mount() and not host.foraging.mount(), "full sixteen-skewer grill refuses mushrooms")
+	check(not host.foraging.can_mount() and not host.foraging.mount(), "full ten-skewer grill refuses mushrooms")
 	check(host.commit_meat(-1), "eating meat releases a skewer")
 	check(host.foraging.can_mount() and host.foraging.mount(), "nearby player mounts a mushroom on the free skewer")
 	check(host.foraging.stock().mushrooms == 0 and host.foraging.free_skewers(-1) == 0, "mounting consumes inventory and occupies exactly one skewer")
-	check(host.grill.get_node("FoodSkewer_15/MushroomFood").visible, "mounted mushroom is visible on the grill")
+	check(host.grill.get_node("FoodSkewer_09/MushroomFood").visible, "mounted mushroom is visible on the grill")
 	check(not host.foraging.can_eat("mushroom"), "freshly mounted mushroom must cook first")
 	host.elapsed += 10
 	check(host.eat_foraged("mushroom"), "cooked mushroom starts its eating animation")

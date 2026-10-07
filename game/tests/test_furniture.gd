@@ -35,7 +35,7 @@ func run() -> void:
 	host.room._apply_command(command)
 	check(host.personal_chairs.has("guest") and host.personal_chairs.size() == 2, "guest chair has a separate authenticated owner")
 	check(host.start_grill(origin + Vector3(0, 0, -3), 0.9), "grill has an independent position")
-	check(host.grill.get_child_count() >= 17 and int(host.grill.get_meta("servings")) == 16, "new grill starts with sixteen visible skewers")
+	check(host.grill.get_child_count() >= 11 and int(host.grill.get_meta("servings")) == 10, "new grill starts with ten visible skewers")
 	host.cook_time = 12
 	check(host.start_grill(origin + Vector3(0, 0, -4), 1.4) and host.cook_time == 12, "moving grill preserves cooking progress")
 	host.place_table(origin + Vector3(0, 0, 1), 1.0)

@@ -1,6 +1,7 @@
 extends Node3D
 
 var cargo = preload("res://scripts/car_cargo.gd").new()
+var camp_cooking = preload("res://scripts/camp_cooking.gd").new()
 var packing = preload("res://scripts/camp_packing.gd").new()
 var interaction = preload("res://scripts/interaction.gd").new()
 var seated = false
@@ -94,6 +95,8 @@ func valid_furniture_spot(spot: Vector3, kind: String, ignored_owner: String = "
 		return false
 	if kind != "grill" and grill != null and spot.distance_to(grill.position) < 1.4:
 		return false
+	if kind != "firewood" and camp_cooking.fire != null and spot.distance_to(camp_cooking.fire.position) < 1.5:
+		return false
 	for owner in personal_chairs:
 		if kind == "chairs" and owner == (chair_owner() if ignored_owner == "" else ignored_owner):
 			continue
@@ -117,6 +120,9 @@ func begin_placement(kind: String) -> void:
 	if kind in cargo.KINDS and not cargo.take(kind):
 		return
 	cancel_placement()
+	if kind == "cauldron":
+		toast("Казан в руках. Подойди к костру и нажми F.")
+		return
 	if kind == "flag" and flag_count() >= FLAGS_PER_PLAYER:
 		toast("Можно поставить только три флага.")
 		return
@@ -128,6 +134,7 @@ func begin_placement(kind: String) -> void:
 		"table": Props.table(placement_preview)
 		"chairs": Props.chair(placement_preview, Vector3.ZERO)
 		"grill": Props.grill(placement_preview)
+		"firewood": Props.campfire(placement_preview)
 		"flag": Props.rally_fan_flag(placement_preview, Vector3.ZERO, 0.0, flag_count())
 	placement_material = Props.material(Color("82c991"))
 	for child in placement_preview.find_children("*", "MeshInstance3D", true, false):
@@ -164,13 +171,13 @@ func confirm_placement() -> void:
 		room.submit(kind, {"pos": room.a(spot), "yaw": yaw})
 	else:
 		match kind:
-			"table", "chairs", "grill": cargo.deploy(kind, spot, yaw)
+			"table", "chairs", "grill", "firewood": cargo.deploy(kind, spot, yaw)
 			"flag": place_flag(spot, yaw)
 	cancel_placement()
 
 var cooking = false
 var cook_time = 0.0
-var grill_servings = 16
+var grill_servings = Props.FOOD_PORTIONS
 var eat_source_group = -2
 var eat_kind = "meat"
 var forage_source = -2
@@ -305,6 +312,7 @@ func _ready() -> void:
 	interaction.game = self
 	packing.game = self
 	cargo.game = self
+	camp_cooking.game = self
 	rng.randomize()
 	_setup_input()
 	stage = Stage.new()
@@ -344,7 +352,7 @@ func _ready() -> void:
 		start_game()
 
 func _setup_input() -> void:
-	var bindings = {"forward": [KEY_W, KEY_UP], "back": [KEY_S, KEY_DOWN], "left": [KEY_A, KEY_LEFT], "right": [KEY_D, KEY_RIGHT], "brake": [KEY_SPACE], "jump": [KEY_SPACE], "sprint": [KEY_SHIFT], "interact": [KEY_F], "table": [KEY_Z], "flag": [KEY_V], "chairs": [KEY_C], "grill": [KEY_G], "beer": [KEY_B], "eat": [], "collect": [], "mount_mushroom": [], "eat_mushroom": [], "eat_berries": [KEY_K], "rally": [KEY_R], "tow": [KEY_T], "random_spot": [KEY_Q], "map": [KEY_M], "recover": [KEY_HOME], "pause_demo": [KEY_ESCAPE], "placement_confirm": [KEY_ENTER], "placement_rotate": [], "placement_cancel": []}
+	var bindings = {"forward": [KEY_W, KEY_UP], "back": [KEY_S, KEY_DOWN], "left": [KEY_A, KEY_LEFT], "right": [KEY_D, KEY_RIGHT], "brake": [KEY_SPACE], "jump": [KEY_SPACE], "sprint": [KEY_SHIFT], "interact": [KEY_F], "table": [KEY_Z], "flag": [KEY_V], "chairs": [KEY_C], "grill": [KEY_G], "firewood": [KEY_J], "cauldron": [KEY_H], "beer": [KEY_B], "eat": [], "collect": [], "mount_mushroom": [], "eat_mushroom": [], "eat_berries": [KEY_K], "rally": [KEY_R], "tow": [KEY_T], "random_spot": [KEY_Q], "map": [KEY_M], "recover": [KEY_HOME], "pause_demo": [KEY_ESCAPE], "placement_confirm": [KEY_ENTER], "placement_rotate": [], "placement_cancel": []}
 	for action in bindings:
 		if not InputMap.has_action(action):
 			InputMap.add_action(action)
@@ -663,7 +671,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("jump") and not in_car:
 		jump()
 		return
-	for furniture_action in ["table", "chairs", "grill", "flag"]:
+	for furniture_action in ["table", "chairs", "grill", "flag", "firewood", "cauldron"]:
 		if event.is_action_pressed(furniture_action):
 			begin_placement(furniture_action)
 			return
@@ -674,7 +682,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		eat_foraged("berries")
 		return
 	for shared_action in room.SHARED_ACTIONS:
-		if shared_action not in ["eat", "pack", "trunk", "take_gear", "return_gear"] and event.is_action_pressed(shared_action) and room.submit(shared_action):
+		if shared_action not in ["eat", "eat_plov", "plov_cook", "pack", "trunk", "take_gear", "return_gear"] and event.is_action_pressed(shared_action) and room.submit(shared_action):
 			return
 	if event.is_action_pressed("interact"):
 		_toggle_car()
@@ -732,6 +740,7 @@ func _process(delta: float) -> void:
 	_update_camera(delta)
 	_update_placement()
 	cargo.update(delta)
+	camp_cooking.update(delta, room.connected and not room.is_host)
 	spectators.update(elapsed, delta, room.connected and not room.is_host)
 	stage.officials.update(self, delta, room.connected and not room.is_host)
 	foraging.update_visuals()
@@ -1083,7 +1092,7 @@ func start_grill(spot: Vector3 = Vector3.INF, yaw: float = 0.0, replicated: bool
 		return true
 	grill = Props.grill(self)
 	grill.set_meta("gear_owner", cargo.actor())
-	grill_servings = 16
+	grill_servings = Props.FOOD_PORTIONS
 	grill.position = spot
 	grill.position.y = stage.ground(spot)
 	grill.rotation.y = yaw
@@ -1264,6 +1273,18 @@ func eat_meat(source_group: int = -2) -> bool:
 	toast("Шампур горячий. Приятного аппетита!")
 	return true
 
+func eat_plov() -> bool:
+	if cargo.held.has(chair_owner()) or not camp_cooking.can_eat() or eat_time >= 0 or drink_time >= 0:
+		return false
+	eat_kind = "plov"
+	eat_time = 0
+	eat_committed = false
+	meat_prop = Props.meat_hand(avatar_variant, "plov")
+	camera.add_child(meat_prop)
+	_update_eating(0)
+	toast("Едим плов из миски. Приятного аппетита!")
+	return true
+
 func eat_foraged(kind: String, source: int = -2) -> bool:
 	if cargo.held.has(chair_owner()):
 		return false
@@ -1312,6 +1333,8 @@ func _update_eating(delta: float) -> void:
 		if not room.connected or room.is_host:
 			if eat_kind == "meat":
 				commit_meat()
+			elif eat_kind == "plov":
+				camp_cooking.consume()
 			else:
 				foraging.consume(eat_kind, "", forage_source)
 		else:
@@ -1651,12 +1674,12 @@ func _update_hud() -> void:
 		hint_label.text = "WASD / стрелки — газ и руль   ·   Space — тормоз   ·   F — выйти   ·   Q — случайная поляна   ·   Home — вернуть на СУ"
 	else:
 		var cook_status = "ШАШЛЫК ГОТОВ" if cook_time >= 35 else ("ШАШЛЫК %d%%" % int(cook_time / 35 * 100) if cooking else "МАНГАЛ НЕ РАЗОЖЖЁН")
-		info_label.text = "ЗРИТЕЛЬ    ·    %s · ШАМПУРЫ %d/16    ·    %s" % [cook_status, grill_servings, course.caption()]
+		info_label.text = "ЗРИТЕЛЬ    ·    %s · ШАМПУРЫ %d/10    ·    %s" % [cook_status, grill_servings, course.caption()]
 		hint_label.text = "WASD — идти   ·   Shift — бег   ·   Space — прыжок   ·   мышь — смотреть   ·   F — действие   ·   Z — стол   ·   C — стулья   ·   G — мангал   ·   R — статус СУ"
 		if drink_time >= 0:
 			info_label.text = "ОТКРЫВАЕМ БАНКУ" if drink_time < 1.25 else "ЗА ХОРОШИЙ ВЫЕЗД!"
 		if eat_time >= 0:
-			info_label.text = "ЕДИМ ЯГОДЫ" if eat_kind == "berries" else ("ЕДИМ ГРИБЫ" if eat_kind == "mushroom" else "ЕДИМ ШАШЛЫК")
+			info_label.text = "ЕДИМ ПЛОВ" if eat_kind == "plov" else ("ЕДИМ ЯГОДЫ" if eat_kind == "berries" else ("ЕДИМ ГРИБЫ" if eat_kind == "mushroom" else "ЕДИМ ШАШЛЫК"))
 		if beers >= 30:
 			info_label.text = "ТЫ ЛЕЖИШЬ · ОТДОХНИ ДО ВОССТАНОВЛЕНИЯ"
 		if tow_target != null:
@@ -1675,6 +1698,8 @@ func _update_hud() -> void:
 			hint_label.text = "F — встать со стула"
 		if foraging.can_eat("berries"):
 			hint_label.text += " · K — съесть ягоды"
+	if camp_cooking.pot != null:
+		status_label.text += "\nПЛОВ %s · %d/10" % [("ГОТОВ" if camp_cooking.phase == "ready" else ("ГОТОВИМ %d%%" % int(camp_cooking.cook_time / camp_cooking.COOK_SECONDS * 100) if camp_cooking.phase == "cooking" else "КАЗАН ПУСТ")), camp_cooking.servings]
 	if packing.active() and packing.remaining() == 0:
 		hint_label.text = "Лагерь собран. Садитесь в свои машины через F; ждём всех друзей." if in_car else "Лагерь собран. Подойди к своей машине и нажми F."
 	if mobile_mode:

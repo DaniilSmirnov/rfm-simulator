@@ -64,7 +64,7 @@ func _add_group(center: Vector3, s: float, id: int, count: int) -> void:
 	var grill = Props.grill(self)
 	grill.position = grounded(center - forward * 2.4)
 	grill.rotation.y = yaw
-	groups.append({"car": car, "table": table, "grill": grill, "servings": 16, "last_eat_cycle": {}})
+	groups.append({"car": car, "table": table, "grill": grill, "servings": Props.FOOD_PORTIONS, "last_eat_cycle": {}})
 	var group_index = groups.size() - 1
 	for j in range(count):
 		var variant = (id + j + game.stage.variant) % Props.SPECTATOR_MODELS.size()
@@ -213,7 +213,7 @@ func snapshot() -> Array:
 
 func apply_snapshot(remaining: Array) -> void:
 	for i in range(mini(groups.size(), remaining.size())):
-		var count = clampi(int(remaining[i]), 0, 16)
+		var count = clampi(int(remaining[i]), 0, Props.FOOD_PORTIONS)
 		groups[i].servings = count
 		Props.set_grill_servings(groups[i].grill, count)
 

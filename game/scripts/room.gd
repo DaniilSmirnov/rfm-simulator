@@ -9,7 +9,7 @@ var request_sent_at = 0.0
 var last_world_time = -1.0
 var racer_motion: Dictionary = {}
 const Props = preload("res://scripts/props.gd")
-const SHARED_ACTIONS = ["table", "chairs", "grill", "flag", "eat", "rally", "random_spot", "collect", "mount_mushroom", "eat_mushroom", "eat_berries", "pack", "take_gear", "return_gear", "trunk"]
+const SHARED_ACTIONS = ["table", "chairs", "grill", "flag", "eat", "rally", "random_spot", "collect", "mount_mushroom", "eat_mushroom", "eat_berries", "pack", "take_gear", "return_gear", "trunk", "firewood", "cauldron", "plov_cook", "eat_plov"]
 var game: Node3D
 var http: HTTPRequest
 var server = "http://127.0.0.1:8787"
@@ -465,7 +465,7 @@ func _apply_command(c: Dictionary) -> void:
 				game.cargo.toggle(spot)
 		"take_gear":
 			var index = int(placement.get("resource_id", -1))
-			if index >= 0 and index < 3:
+			if index >= 0 and index < game.cargo.KINDS.size():
 				game.cargo.take(game.cargo.KINDS[index])
 		"return_gear":
 			if spot != Vector3.INF:
@@ -473,12 +473,14 @@ func _apply_command(c: Dictionary) -> void:
 		"pack":
 			if spot != Vector3.INF:
 				game.packing.pack(spot, true)
-		"table", "chairs", "grill":
+		"table", "chairs", "grill", "firewood", "cauldron":
 			if spot != Vector3.INF:
 				game.cargo.deploy(str(c.action), spot, yaw)
 		"flag":
 			if not game.packing.active():
 				game.place_flag(spot, yaw, str(c.get("player", "guest")))
+		"plov_cook": game.camp_cooking.start()
+		"eat_plov": game.camp_cooking.consume()
 		"eat": game.commit_meat(int(placement.get("source", -2)))
 		"collect": game.foraging.collect(int(placement.get("resource_id", -1)), str(c.get("player", "guest")))
 		"mount_mushroom": game.foraging.mount(int(placement.get("source", -2)), str(c.get("player", "guest")))
@@ -508,7 +510,7 @@ func world_state() -> Dictionary:
 	var racers = []
 	for r in game.racers:
 		racers.append({"id": r.id, "role": r.get("role", "racer"), "zero_index": r.get("zero_index", 0), "variant": r.variant, "pos": a(r.node.position), "yaw": r.node.rotation.y, "tilt": a(r.node.rotation), "state": r.state, "recovery_progress": r.get("recovery_progress", 0), "recovery_helpers": r.get("recovery_helpers", 0)})
-	return {"cargo": game.cargo.snapshot(), "foraging": game.foraging.snapshot(), "course": game.course.snapshot(), "city_lamps": game.stage.city.snapshot() if game.stage.urban else [], "chair_poses": chair_poses, "flag_poses": flag_poses, "table_yaw": game.camp.rotation.y if game.camp != null else 0.0, "grill_pose": {"pos": a(game.grill.position), "yaw": game.grill.rotation.y} if game.grill != null else null, "fallen": game.stage.tree_snapshot(), "stones": stone_state(), "impacts": game.impact_serials, "camp": a(game.camp.position) if game.camp != null else null, "chairs": game.has_chairs, "cooking": game.cooking, "cook_time": game.cook_time, "grill_servings": game.grill_servings, "npc_servings": game.spectators.snapshot(), "npc_people": game.spectators.actor_snapshot(), "marshals": game.stage.officials.snapshot(), "eaten": game.eaten, "racing": game.racing, "passed": game.passed, "helped": game.helped, "elapsed": game.elapsed, "clearing": game.target_clearing, "paused": game.paused, "dead": game.dead, "finished": game.finished, "title": game.menu_title.text, "text": game.menu_text.text, "racers": racers, "tow": game.tow_target.get_meta("room_id") if game.tow_target != null else -1, "tow_progress": game.tow_progress, "tow_owner": tow_owner, "recovery_links": game.recovery_links, "recovery_helpers": game.recovery_helpers, "notice": game.toast_label.text, "notice_time": game.toast_time}
+	return {"camp_cooking": game.camp_cooking.snapshot(), "cargo": game.cargo.snapshot(), "foraging": game.foraging.snapshot(), "course": game.course.snapshot(), "city_lamps": game.stage.city.snapshot() if game.stage.urban else [], "chair_poses": chair_poses, "flag_poses": flag_poses, "table_yaw": game.camp.rotation.y if game.camp != null else 0.0, "grill_pose": {"pos": a(game.grill.position), "yaw": game.grill.rotation.y} if game.grill != null else null, "fallen": game.stage.tree_snapshot(), "stones": stone_state(), "impacts": game.impact_serials, "camp": a(game.camp.position) if game.camp != null else null, "chairs": game.has_chairs, "cooking": game.cooking, "cook_time": game.cook_time, "grill_servings": game.grill_servings, "npc_servings": game.spectators.snapshot(), "npc_people": game.spectators.actor_snapshot(), "marshals": game.stage.officials.snapshot(), "eaten": game.eaten, "racing": game.racing, "passed": game.passed, "helped": game.helped, "elapsed": game.elapsed, "clearing": game.target_clearing, "paused": game.paused, "dead": game.dead, "finished": game.finished, "title": game.menu_title.text, "text": game.menu_text.text, "racers": racers, "tow": game.tow_target.get_meta("room_id") if game.tow_target != null else -1, "tow_progress": game.tow_progress, "tow_owner": tow_owner, "recovery_links": game.recovery_links, "recovery_helpers": game.recovery_helpers, "notice": game.toast_label.text, "notice_time": game.toast_time}
 
 func stone_state() -> Array:
 	var result = []
@@ -613,7 +615,7 @@ func apply_world(w: Dictionary, sample_time: float = -1.0) -> void:
 		var yaw = float(grill_pose.yaw) if grill_pose != null else 0.0
 		game.start_grill(spot, yaw, true)
 	game.cook_time = w.cook_time
-	game.grill_servings = int(w.get("grill_servings", 16))
+	game.grill_servings = int(w.get("grill_servings", Props.FOOD_PORTIONS))
 	if game.grill != null:
 		Props.set_grill_servings(game.grill, game.grill_servings)
 	game.spectators.apply_snapshot(w.get("npc_servings", []))
@@ -627,6 +629,7 @@ func apply_world(w: Dictionary, sample_time: float = -1.0) -> void:
 	game.passed = w.passed
 	game.helped = w.helped
 	game.elapsed = w.elapsed
+	game.camp_cooking.apply_snapshot(w.get("camp_cooking", {}))
 	game.target_clearing = w.clearing
 	var present = {}
 	for r in w.racers:

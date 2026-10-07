@@ -24,11 +24,14 @@ func current() -> Dictionary:
 	var items: Array = []
 	offer(items, game.car.position + Vector3(0, 0.9, 0), 1.4, 4, "car", "Сесть в машину")
 	game.cargo.offers(items, self)
+	game.camp_cooking.offers(items, self)
 	if game.packing.active():
 		for item in game.packing.items():
+			if item.kind == "firewood" and game.camp_cooking.pot != null:
+				continue
 			if item.kind != "flag" and game.cargo.held.has(game.chair_owner()):
 				continue
-			offer(items, item.node.position + Vector3(0, item.height, 0), item.radius, 3.5, "pack", item.label, item.node.position)
+			offer(items, item.node.global_position + Vector3(0, item.height, 0), item.radius, 3.5, "pack", item.label, item.node.global_position)
 		return select_target(items)
 	if game.cargo.held.has(game.chair_owner()):
 		return select_target(items)
@@ -87,6 +90,9 @@ func activate() -> void:
 	if target.is_empty():
 		return
 	match target.action:
+		"mount_cauldron": game.camp_cooking.mount()
+		"plov_cook": game.camp_cooking.start()
+		"plov": game.eat_plov()
 		"trunk": game.cargo.toggle(target.value)
 		"return_gear": game.cargo.return_item(target.value)
 		"take_gear": game.begin_placement(str(target.value))

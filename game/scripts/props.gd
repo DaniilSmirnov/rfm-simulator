@@ -1,5 +1,7 @@
 extends RefCounted
 class_name RallyProps
+const FOOD_PORTIONS = 10
+const CARGO_KINDS = ["table", "chairs", "grill", "firewood", "cauldron"]
 
 static func material(color: Color) -> StandardMaterial3D:
 	var m = StandardMaterial3D.new()
@@ -603,6 +605,18 @@ static func skewer() -> Node3D:
 		var berry = faceted(root, Vector3((i - 1) * 0.055, 0.06 + i * 0.025, -0.03), Vector3.ONE * 0.09, Color("b83d39"), 6, 3)
 		berry.name = "Berry%d" % i
 		berry.hide()
+	var bowl = Node3D.new()
+	bowl.name = "PlovBowl"
+	root.add_child(bowl)
+	cylinder(bowl, Vector3(0, 0.02, 0), 0.14, 0.10, 0.07, Color("c9d3ca"), 10)
+	for i in range(3):
+		faceted(bowl, Vector3((i - 1) * 0.045, 0.07, 0), Vector3(0.08, 0.045, 0.08), Color("e5c16b"), 6, 3).name = "RicePiece%d" % i
+	var spoon = Node3D.new()
+	spoon.name = "Spoon"
+	bowl.add_child(spoon)
+	box(spoon, Vector3(0.07, 0.12, 0), Vector3(0.014, 0.20, 0.014), Color("bcc5c8"))
+	faceted(spoon, Vector3(0.07, 0.23, 0), Vector3(0.05, 0.075, 0.022), Color("cbd4d6"), 6, 3)
+	bowl.hide()
 	return root
 
 static func meat_hand(variant: int = 0, kind: String = "meat") -> Node3D:
@@ -621,13 +635,16 @@ static func meat_hand(variant: int = 0, kind: String = "meat") -> Node3D:
 
 static func pose_food(node: Node3D, time: float, kind: String = "meat") -> void:
 	node.set_meta("food_kind", kind)
-	node.get_node("SkewerStick").visible = kind != "berries"
+	node.get_node("PlovBowl").visible = kind == "plov"
+	node.get_node("PlovBowl/Spoon").rotation.x = sin(maxf(0, time) * 8) * 0.25
+	node.get_node("SkewerStick").visible = kind in ["meat", "mushroom"]
 	node.get_node("SkewerHandle").visible = kind != "berries"
 	for i in range(3):
 		var remains = (2 - i) >= food_bites(time)
 		node.get_node("Meat%d" % i).visible = kind == "meat" and remains
 		node.get_node("Mushroom%d" % i).visible = kind == "mushroom" and remains
 		node.get_node("Berry%d" % i).visible = kind == "berries" and remains
+		node.get_node("PlovBowl/RicePiece%d" % i).visible = kind == "plov" and remains
 
 static func food_lift(time: float) -> float:
 	if time < 0:
@@ -953,10 +970,133 @@ static func chair(parent: Node3D, pos: Vector3) -> void:
 		for z in [-0.27, 0.27]:
 			box(parent, pos + Vector3(x, 0.23, z), Vector3(0.06, 0.46, 0.06), Color("dcd7c7"))
 
+static func wood_bundle(parent: Node3D, point: Vector3 = Vector3.ZERO) -> Node3D:
+	var root = Node3D.new()
+	parent.add_child(root)
+	root.position = point
+	for i in range(5):
+		var log = cylinder(root, Vector3((i % 3 - 1) * 0.12, 0.04 + (i / 3) * 0.10, 0), 0.065, 0.065, 0.42, Color("705035"), 7)
+		log.rotation.x = PI / 2
+	box(root, Vector3(0, 0.10, 0), Vector3(0.38, 0.025, 0.04), Color("d2bf89"))
+	return root
+
+static func campfire(parent: Node3D) -> Node3D:
+	var root = Node3D.new()
+	root.name = "Campfire"
+	parent.add_child(root)
+	for i in range(10):
+		var angle = i * TAU / 10
+		faceted(root, Vector3(cos(angle) * 0.7, 0.09, sin(angle) * 0.7), Vector3(0.27, 0.18, 0.23), Color("686e6a"), 6, 3)
+	for i in range(5):
+		var log = cylinder(root, Vector3(0, 0.17 + i * 0.035, 0), 0.075, 0.065, 0.95, Color("62412c"), 7)
+		log.rotation = Vector3(PI / 2, i * 1.3, 0)
+	var flames = Node3D.new()
+	flames.name = "Flames"
+	root.add_child(flames)
+	for i in range(5):
+		var flame = faceted(flames, Vector3(sin(i * 2.4) * 0.23, 0.35, cos(i * 2.4) * 0.23), Vector3(0.19, 0.55, 0.19), Color("ff751e") if i % 2 else Color("ffc53f"), 5, 3)
+		flame.material_override.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	return root
+
+static func cauldron(parent: Node3D) -> Node3D:
+	var root = Node3D.new()
+	root.name = "Cauldron"
+	parent.add_child(root)
+	# Three-legged stand and hollow tapered bowl; the inside stays visible when empty.
+	for i in range(3):
+		var angle = i * TAU / 3
+		var a = Vector3(cos(angle) * 0.68, 0.05, sin(angle) * 0.68)
+		var b = Vector3(cos(angle) * 0.50, 1.24, sin(angle) * 0.50)
+		var leg = cylinder(root, (a + b) / 2, 0.025, 0.025, a.distance_to(b), Color("444c50"), 6)
+		leg.quaternion = Quaternion(Vector3.UP, (b - a).normalized())
+	var vertices = PackedVector3Array()
+	var rim_vertices = PackedVector3Array()
+	for i in range(16):
+		var a = i * TAU / 16
+		var b = (i + 1) * TAU / 16
+		var low_a = Vector3(cos(a) * 0.32, 0.86, sin(a) * 0.32)
+		var low_b = Vector3(cos(b) * 0.32, 0.86, sin(b) * 0.32)
+		var high_a = Vector3(cos(a) * 0.55, 1.28, sin(a) * 0.55)
+		var high_b = Vector3(cos(b) * 0.55, 1.28, sin(b) * 0.55)
+		vertices.append_array(PackedVector3Array([low_a, high_a, high_b, low_a, high_b, low_b]))
+		var inner_a = Vector3(cos(a) * 0.50, 1.28, sin(a) * 0.50)
+		var inner_b = Vector3(cos(b) * 0.50, 1.28, sin(b) * 0.50)
+		rim_vertices.append_array(PackedVector3Array([high_a, inner_a, inner_b, high_a, inner_b, high_b]))
+	var metal = material(Color("303a40"))
+	metal.cull_mode = BaseMaterial3D.CULL_DISABLED
+	for data in [vertices, rim_vertices]:
+		var bowl = MeshInstance3D.new()
+		bowl.mesh = panel_mesh(data)
+		bowl.material_override = metal
+		root.add_child(bowl)
+	cylinder(root, Vector3(0, 0.88, 0), 0.32, 0.32, 0.025, Color("151d22"), 16).name = "EmptyBottom"
+	for side in [-1, 1]:
+		box(root, Vector3(side * 0.60, 1.15, 0), Vector3(0.22, 0.055, 0.10), Color("303a40"))
+	var rice = Node3D.new()
+	rice.name = "Rice"
+	root.add_child(rice)
+	cylinder(rice, Vector3.ZERO, 0.465, 0.36, 0.26, Color("e1ba64"), 16).name = "FoodSurface"
+	for i in range(FOOD_PORTIONS):
+		var portion = Node3D.new()
+		portion.name = "Portion_%02d" % i
+		rice.add_child(portion)
+		var angle = i * 2.4
+		var radius = 0.12 + (i % 3) * 0.12
+		portion.position = Vector3(cos(angle) * radius, 0.145, sin(angle) * radius)
+		for j in range(4):
+			var grain = box(portion, Vector3((j % 2) * 0.035, 0.008, (j / 2) * 0.035), Vector3(0.026, 0.020, 0.055), Color("f5d994"))
+			grain.rotation.y = j * 0.7
+		box(portion, Vector3(-0.03, 0.015, 0), Vector3(0.045, 0.035, 0.06), Color("d87e2f"))
+		box(portion, Vector3(0.03, 0.027, -0.025), Vector3(0.06, 0.05, 0.045), Color("895033"))
+	var bubbles = Node3D.new()
+	bubbles.name = "Bubbles"
+	root.add_child(bubbles)
+	for i in range(4):
+		faceted(bubbles, Vector3(cos(i * 2.3) * 0.28, 1.18, sin(i * 2.3) * 0.28), Vector3.ONE * 0.045, Color("fff0bb"), 6, 3)
+	var steam = Node3D.new()
+	steam.name = "Steam"
+	root.add_child(steam)
+	for i in range(5):
+		faceted(steam, Vector3.ZERO, Vector3.ONE * 0.13, Color("dbe0d6"), 6, 3)
+	pose_cauldron(root, "empty", 0, 0, 0)
+	return root
+
+static func pose_cauldron(root: Node3D, phase: String, progress: float, servings: int, time: float) -> void:
+	root.set_meta("phase", phase)
+	root.set_meta("servings", servings)
+	var rice = root.get_node("Rice")
+	var visible = phase == "cooking" or (phase == "ready" and servings > 0)
+	rice.visible = visible
+	var fraction = lerpf(0.15, 1.0, clampf(progress, 0, 1)) if phase == "cooking" else float(servings) / FOOD_PORTIONS
+	rice.scale.y = maxf(0.05, fraction)
+	rice.position.y = 0.95 + 0.13 * fraction
+	var surface = rice.get_node("FoodSurface")
+	surface.material_override.albedo_color = Color("eee3b5").lerp(Color("e1ba64"), clampf(progress, 0, 1)) if phase == "cooking" else Color("e1ba64")
+	for i in range(FOOD_PORTIONS):
+		rice.get_node("Portion_%02d" % i).visible = phase == "cooking" or i < servings
+	var bubbles = root.get_node("Bubbles")
+	bubbles.visible = phase == "cooking"
+	for i in range(bubbles.get_child_count()):
+		var bubble = bubbles.get_child(i)
+		bubble.position.y = rice.position.y + 0.13 * fraction + 0.03 + sin(time * 8 + i) * 0.014
+		bubble.scale = Vector3.ONE * (0.7 + sin(time * 7 + i * 2) * 0.3)
+	var steam = root.get_node("Steam")
+	steam.visible = visible
+	for i in range(steam.get_child_count()):
+		var puff = steam.get_child(i)
+		var cycle = fposmod(time * 0.45 + i * 0.2, 1.0)
+		puff.position = Vector3(sin(time + i) * 0.16, 1.30 + cycle * 0.65, cos(time * 0.7 + i) * 0.16)
+		puff.scale = Vector3.ONE * sin(cycle * PI)
+
+static func cargo_point(profile: Dictionary, index: int) -> Vector3:
+	if index < 3:
+		return Vector3((index - 1) * 0.39, profile.floor + 0.18, profile.rear - 0.30)
+	return Vector3(-0.30 if index == 3 else 0.30, profile.floor + 0.43, profile.rear - 0.33)
+
 static func grill(parent: Node3D) -> Node3D:
 	var root = Node3D.new()
 	root.name = "PicnicGrill"
-	root.set_meta("servings", 16)
+	root.set_meta("servings", FOOD_PORTIONS)
 	parent.add_child(root)
 	box(root, Vector3(0, 0.65, 0), Vector3(1.05, 0.32, 0.55), Color("393d37"))
 	for x in [-0.43, 0.43]:
@@ -965,13 +1105,13 @@ static func grill(parent: Node3D) -> Node3D:
 	box(root, Vector3(0, 0.83, 0), Vector3(0.9, 0.03, 0.4), Color("d9612e"))
 	for i in range(5):
 		box(root, Vector3(-0.36 + i * 0.18, 0.87, 0), Vector3(0.02, 0.02, 0.8), Color("d9cdb4"))
-	# Sixteen visible parallel skewers. Each skewer is a removable child so all
+	# Ten visible parallel skewers. Each skewer is a removable child so all
 	# copies of a grill can show its exact remaining serving count.
-	for i in range(16):
+	for i in range(FOOD_PORTIONS):
 		var skewer_node = Node3D.new()
 		skewer_node.name = "FoodSkewer_%02d" % i
 		root.add_child(skewer_node)
-		var x = -0.42 + i * 0.056
+		var x = -0.42 + i * (0.84 / (FOOD_PORTIONS - 1))
 		box(skewer_node, Vector3(x, 0.93, 0), Vector3(0.012, 0.018, 0.72), Color("b9b3a3"))
 		box(skewer_node, Vector3(x, 0.95, -0.39), Vector3(0.018, 0.022, 0.16), Color("a57949"))
 		var meat_group = Node3D.new()
@@ -992,10 +1132,10 @@ static func grill(parent: Node3D) -> Node3D:
 static func set_grill_servings(grill_node: Node3D, servings: int) -> void:
 	if grill_node == null:
 		return
-	var count = clampi(servings, 0, 16)
-	var mushrooms = clampi(int(grill_node.get_meta("mushrooms", 0)), 0, 16 - count)
+	var count = clampi(servings, 0, FOOD_PORTIONS)
+	var mushrooms = clampi(int(grill_node.get_meta("mushrooms", 0)), 0, FOOD_PORTIONS - count)
 	grill_node.set_meta("servings", count)
-	for i in range(16):
+	for i in range(FOOD_PORTIONS):
 		var skewer_node = grill_node.get_node_or_null("FoodSkewer_%02d" % i)
 		if skewer_node != null:
 			skewer_node.visible = i < count + mushrooms
@@ -1103,14 +1243,18 @@ static func trunk_profile(variant: int) -> Dictionary:
 	return {"rear": rear, "half": p.width * 0.37, "hinge": (0.35 if variant == 8 else (1.26 if hatch else rear - 0.80)), "floor": 0.70 if hatch else 0.56, "top": p.height - 0.02 if hatch else (0.99 if variant in [3, 6, 9] else 0.94), "hatch": hatch}
 
 static func gear_box(parent: Node3D, kind: String, point: Vector3 = Vector3.ZERO) -> Node3D:
+	if kind == "firewood":
+		var bundle = wood_bundle(parent, point)
+		bundle.name = "Box_firewood"
+		return bundle
 	var root = Node3D.new()
 	root.name = "Box_" + kind
 	parent.add_child(root)
 	root.position = point
-	var colors = {"table": "caa571", "chairs": "7fa78a", "grill": "a0a8b3"}
+	var colors = {"table": "caa571", "chairs": "7fa78a", "grill": "a0a8b3", "cauldron": "52626b"}
 	box(root, Vector3.ZERO, Vector3(0.34, 0.30, 0.48), Color(colors.get(kind, "caa571")))
 	box(root, Vector3(0, 0.157, 0), Vector3(0.05, 0.014, 0.49), Color("ead9b6"))
-	var titles = {"table": "СТОЛ", "chairs": "СТУЛ", "grill": "МАНГАЛ"}
+	var titles = {"table": "СТОЛ", "chairs": "СТУЛ", "grill": "МАНГАЛ", "cauldron": "КАЗАН"}
 	label_3d(root, Vector3(0, 0.02, 0.246), titles.get(kind, kind), 36, 0.0018, Color("18292e"), 0)
 	return root
 
@@ -1161,8 +1305,8 @@ static func add_player_trunk(root: Node3D, variant: int) -> Node3D:
 	var boxes = Node3D.new()
 	boxes.name = "TrunkBoxes"
 	root.add_child(boxes)
-	for i in range(3):
-		gear_box(boxes, ["table", "chairs", "grill"][i], Vector3((i - 1) * 0.39, p.floor + 0.18, p.rear - 0.30))
+	for i in range(CARGO_KINDS.size()):
+		gear_box(boxes, CARGO_KINDS[i], cargo_point(p, i))
 	boxes.hide()
 	root.set_meta("trunk_profile", p)
 	return root
@@ -1174,5 +1318,5 @@ static func update_player_trunk(root: Node3D, opened: bool, stored: Array, delta
 	hinge.rotation.x = move_toward(hinge.rotation.x, -1.18 if opened else 0.0, delta * 1.75)
 	var boxes = root.get_node("TrunkBoxes")
 	boxes.visible = absf(hinge.rotation.x) > 0.12
-	for i in range(3):
-		boxes.get_child(i).visible = bool(stored[i])
+	for i in range(boxes.get_child_count()):
+		boxes.get_child(i).visible = bool(stored[i]) if i < stored.size() else true

@@ -68,7 +68,7 @@ func meat_count(source: int) -> int:
 func free_skewers(source: int) -> int:
 	if grill_node(source) == null:
 		return 0
-	return maxi(0, 16 - meat_count(source) - skewers.get(str(source), []).size())
+	return maxi(0, Props.FOOD_PORTIONS - meat_count(source) - skewers.get(str(source), []).size())
 
 func can_mount() -> bool:
 	return available() and int(stock().mushrooms) > 0 and free_skewers(nearby_source()) > 0

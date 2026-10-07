@@ -39,6 +39,17 @@ jobs:
           path: flag-*.png
           if-no-files-found: warn
 
+      - name: Render cooking stages
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "true"
+        run: xvfb-run -a .cache/godot/Godot_v4.4.1-stable_linux.x86_64 --path game --rendering-method gl_compatibility --script res://tests/cooking_preview.gd
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cooking-preview
+          path: cooking-*.png
+          if-no-files-found: error
+
       - name: Render city reference views
         env:
           LIBGL_ALWAYS_SOFTWARE: "true"

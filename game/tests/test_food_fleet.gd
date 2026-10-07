@@ -71,7 +71,7 @@ func run() -> void:
 	var host_hand = host.meat_prop
 	host.room._apply_command({"id": "guest:1", "action": "eat", "state": guest.room.local_state()})
 	check(host.eaten and host.meat_prop == host_hand and host.eat_time < 0, "guest meal commits without animating host's hands")
-	check(host.grill_servings == 15 and int(host.grill.get_meta("servings")) == 15, "one of sixteen grill skewers disappears after a shared meal")
+	check(host.grill_servings == 9 and int(host.grill.get_meta("servings")) == 9, "one of ten grill skewers disappears after a shared meal")
 	guest.room.apply_world(host.room.world_state())
 	check(guest.eaten, "shared meal completion reaches guest")
 	guest._update_eating(1)

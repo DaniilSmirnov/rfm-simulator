@@ -1,6 +1,6 @@
 extends RefCounted
 const Props = preload("res://scripts/props.gd")
-const KINDS = ["table", "chairs", "grill"]
+const KINDS = Props.CARGO_KINDS
 var game: Node3D
 var opened: Dictionary = {}
 var held: Dictionary = {}
@@ -42,12 +42,15 @@ func stored(kind: String, owner: String) -> bool:
 		if (item.kind == kind or (item.kind == "chair" and kind == "chairs")) and owner_of(item) == owner:
 			return false
 	for carry in held.values():
-		if carry.owner == owner and carry.kind == kind and carry.returning:
+		if carry.owner == owner and carry.kind == kind:
 			return false
 	return true
 
 func boxes(owner: String) -> Array:
-	return [stored("table", owner), stored("chairs", owner), stored("grill", owner)]
+	var result = []
+	for kind in KINDS:
+		result.append(stored(kind, owner))
+	return result
 
 func target_owner(spot: Vector3) -> String:
 	for owner in poses():
@@ -102,7 +105,7 @@ func take(kind: String) -> bool:
 		return held[owner].kind == kind and not held[owner].returning
 	# Moving an existing item does not produce another box or duplicate equipment.
 	for item in game.packing.items():
-		if (item.kind == kind or (kind == "chairs" and item.kind == "chair")) and owner_of(item) == owner and game.walker.distance_to(item.node.position) < 3.5:
+		if (item.kind == kind or (kind == "chairs" and item.kind == "chair")) and owner_of(item) == owner and game.walker.distance_to(item.node.global_position) < 3.5:
 			if game.room.submit("take_gear", {"resource_id": KINDS.find(kind)}):
 				return true
 			held[owner] = {"kind": kind, "owner": owner, "returning": false}
@@ -110,7 +113,7 @@ func take(kind: String) -> bool:
 	if not opened.get(owner, false) or not near(owner) or not stored(kind, owner):
 		game.toast("Подойди к задней части своей машины — багажник откроется сам.")
 		return false
-	if (kind == "table" and game.camp != null) or (kind == "grill" and game.grill != null):
+	if (kind == "table" and game.camp != null) or (kind == "grill" and game.grill != null) or (kind == "firewood" and game.camp_cooking.fire != null) or (kind == "cauldron" and game.camp_cooking.pot != null):
 		game.toast("Общий предмет уже установлен. Возьми свой стул.")
 		return false
 	if game.room.submit("take_gear", {"resource_id": KINDS.find(kind)}):
@@ -122,7 +125,8 @@ func deploy(kind: String, spot: Vector3, yaw: float) -> bool:
 	var owner = actor()
 	if not available() or game.packing.active() or not held.has(owner) or held[owner].kind != kind or held[owner].returning or game.walker.distance_to(spot) > 5:
 		return false
-	if (kind == "table" and game.camp != null and str(game.camp.get_meta("gear_owner", owner)) != owner) or (kind == "grill" and game.grill != null and str(game.grill.get_meta("gear_owner", owner)) != owner):
+	var existing = game.camp if kind == "table" else (game.grill if kind == "grill" else (game.camp_cooking.fire if kind == "firewood" else (game.camp_cooking.pot if kind == "cauldron" else null)))
+	if existing != null and str(existing.get_meta("gear_owner", owner)) != owner:
 		game.toast("Общий предмет уже установлен другим игроком. Верни коробку.")
 		return false
 	var placed = false
@@ -130,8 +134,10 @@ func deploy(kind: String, spot: Vector3, yaw: float) -> bool:
 		"table": placed = game.place_table(spot, yaw)
 		"chairs": placed = game.place_chairs(spot, yaw, owner)
 		"grill": placed = game.start_grill(spot, yaw)
+		"firewood": placed = game.camp_cooking.deploy_fire(spot, yaw)
+		"cauldron": placed = game.camp_cooking.place_pot(spot)
 	if placed:
-		var node = game.camp if kind == "table" else (game.grill if kind == "grill" else game.personal_chairs[owner])
+		var node = game.camp if kind == "table" else (game.grill if kind == "grill" else (game.camp_cooking.fire if kind == "firewood" else (game.camp_cooking.pot if kind == "cauldron" else game.personal_chairs[owner])))
 		node.set_meta("gear_owner", owner)
 		held.erase(owner)
 	return placed
@@ -180,11 +186,11 @@ func offers(items: Array, interaction) -> void:
 		if owner != game.chair_owner() or not opened.get(owner, false) or not holding.is_empty() or game.packing.active():
 			continue
 		var p = Props.trunk_profile(int(cars[owner].variant))
-		for i in range(3):
+		for i in range(KINDS.size()):
 			if not stored(KINDS[i], owner):
 				continue
-			var box_point: Vector3 = cars[owner].pos + Vector3((i - 1) * 0.39, p.floor + 0.18, p.rear - 0.30).rotated(Vector3.UP, cars[owner].heading)
-			interaction.offer(items, box_point, 0.19, 3.3, "take_gear", "Взять " + ["стол", "стул", "мангал"][i], KINDS[i])
+			var box_point: Vector3 = cars[owner].pos + Props.cargo_point(p, i).rotated(Vector3.UP, cars[owner].heading)
+			interaction.offer(items, box_point, 0.19, 3.3, "take_gear", "Взять " + ["стол", "стул", "мангал", "дрова", "казан"][i], KINDS[i])
 
 # A departed carrier's box is considered loaded into their departed car.
 # Installed items stay in the camp and can still be collected by friends.
