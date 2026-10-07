@@ -3,7 +3,7 @@ config_version=5
 
 [application]
 config/name="Симулятор раллийного овоща"
-config/version="0.10.20"
+config/version="0.10.21"
 config/icon="res://branding/rfm-icon.svg"
 boot_splash/image="res://branding/rfm-splash.png"
 boot_splash/show_image=true
@@ -34,3 +34,4 @@ default_bus_layout="res://default_bus_layout.tres"
 [physics]
 2d/physics_engine="Dummy"
 3d/physics_engine="GodotPhysics3D"
+

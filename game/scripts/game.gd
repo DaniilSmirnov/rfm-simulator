@@ -95,7 +95,9 @@ func valid_furniture_spot(spot: Vector3, kind: String, ignored_owner: String = "
 		return false
 	if kind != "grill" and grill != null and spot.distance_to(grill.position) < 1.4:
 		return false
-	if kind != "firewood" and camp_cooking.fire != null and spot.distance_to(camp_cooking.fire.position) < 1.5:
+	if kind not in ["firewood", "cauldron"] and camp_cooking.fire != null and spot.distance_to(camp_cooking.fire.position) < 1.5:
+		return false
+	if kind not in ["firewood", "cauldron"] and camp_cooking.pot != null and spot.distance_to(camp_cooking.pot.position) < 1.5:
 		return false
 	for owner in personal_chairs:
 		if kind == "chairs" and owner == (chair_owner() if ignored_owner == "" else ignored_owner):
@@ -120,9 +122,6 @@ func begin_placement(kind: String) -> void:
 	if kind in cargo.KINDS and not cargo.take(kind):
 		return
 	cancel_placement()
-	if kind == "cauldron":
-		toast("Казан в руках. Подойди к костру и нажми F.")
-		return
 	if kind == "flag" and flag_count() >= FLAGS_PER_PLAYER:
 		toast("Можно поставить только три флага.")
 		return
@@ -135,6 +134,7 @@ func begin_placement(kind: String) -> void:
 		"chairs": Props.chair(placement_preview, Vector3.ZERO)
 		"grill": Props.grill(placement_preview)
 		"firewood": Props.campfire(placement_preview)
+		"cauldron": Props.cauldron(placement_preview)
 		"flag": Props.rally_fans_map_flag(placement_preview, Vector3.ZERO, 0.0, flag_count())
 	placement_material = Props.material(Color("82c991"))
 	for child in placement_preview.find_children("*", "MeshInstance3D", true, false):
@@ -147,6 +147,10 @@ func _update_placement() -> void:
 	if placement_preview == null:
 		return
 	var spot = walker + Vector3(-sin(view_yaw), 0, -cos(view_yaw)) * 2.5
+	if placement_kind == "cauldron" and camp_cooking.fire != null and spot.distance_to(camp_cooking.fire.position) < 1.5:
+		spot = camp_cooking.fire.position
+	if placement_kind == "firewood" and camp_cooking.pot != null and spot.distance_to(camp_cooking.pot.position) < 1.5:
+		spot = camp_cooking.pot.position
 	spot.y = stage.ground(spot)
 	placement_preview.position = spot
 	placement_preview.rotation.y = placement_yaw
@@ -171,7 +175,7 @@ func confirm_placement() -> void:
 		room.submit(kind, {"pos": room.a(spot), "yaw": yaw})
 	else:
 		match kind:
-			"table", "chairs", "grill", "firewood": cargo.deploy(kind, spot, yaw)
+			"table", "chairs", "grill", "firewood", "cauldron": cargo.deploy(kind, spot, yaw)
 			"flag": place_flag(spot, yaw)
 	cancel_placement()
 
@@ -1042,9 +1046,9 @@ func place_chairs(spot: Vector3 = Vector3.INF, yaw: float = 0.0, owner: String =
 	if owner == "":
 		owner = chair_owner()
 	if spot == Vector3.INF:
-		if personal_chairs.has(owner) or not near_camp():
+		if personal_chairs.has(owner):
 			return false
-		spot = camp.position + Vector3(-1.6, 0, 0.7)
+		spot = camp.position + Vector3(-1.6, 0, 0.7) if near_camp() else walker + Vector3(-sin(view_yaw), 0, -cos(view_yaw)) * 2.5
 	if not valid_furniture_spot(spot, "chairs", owner):
 		return false
 	apply_chair(owner, spot, yaw)
@@ -1079,13 +1083,12 @@ func place_flag(spot: Vector3 = Vector3.INF, yaw: float = 0.0, owner: String = "
 
 func start_grill(spot: Vector3 = Vector3.INF, yaw: float = 0.0, replicated: bool = false) -> bool:
 	var moving = spot != Vector3.INF
-	if not replicated and (in_car or camp == null or not has_chairs):
-		toast("Сначала поставь стол и стул.")
+	if not replicated and in_car:
 		return false
 	if cooking and not moving:
 		return false
 	if not moving:
-		spot = camp.position + Vector3(0.3, 0, -2.4)
+		spot = camp.position + Vector3(0.3, 0, -2.4) if camp != null else walker + Vector3(-sin(view_yaw), 0, -cos(view_yaw)) * 2.5
 	if not replicated and not valid_furniture_spot(spot, "grill"):
 		return false
 	if grill != null:
@@ -1883,3 +1886,4 @@ func stand_up() -> void:
 	seated = false
 	walker = seat_exit
 	walker.y = stage.ground(walker)
+

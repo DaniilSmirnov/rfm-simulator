@@ -47,7 +47,6 @@ func run() -> void:
 	scene.walker = scene.stage.clearings[0]
 	check(scene.place_table(), "free placement outside stage")
 	check(not scene.place_table(), "no duplicate table")
-	check(not scene.start_grill(), "grill needs chairs")
 	check(scene.place_chairs(), "chairs installed")
 	check(not scene.place_chairs(), "no duplicate chairs")
 	check(scene.start_grill(), "grill starts")
@@ -154,3 +153,4 @@ func run() -> void:
 	scene.queue_free()
 	await process_frame
 	call_deferred("quit", 1 if failures else 0)
+

@@ -10,7 +10,7 @@ func offer(items: Array, point: Vector3, radius: float, reach: float, action: St
 	var depth = offset.dot(forward)
 	if depth <= 0 or offset.distance_to(forward * depth) > radius:
 		return
-	items.append({"action": action, "label": label, "value": value, "depth": depth})
+	items.append({"action": action, "label": label, "value": value, "depth": depth, "aim_error": offset.distance_to(forward * depth) / depth})
 
 func current() -> Dictionary:
 	if not game.playing or game.paused or game.dead or game.finished or game.drink_time >= 0 or game.eat_time >= 0 or (game.room.connected and not game.room.is_host and game.room.world_paused):
@@ -92,6 +92,7 @@ func activate() -> void:
 		return
 	match target.action:
 		"mount_cauldron": game.camp_cooking.mount()
+		"mount_firewood": game.camp_cooking.light_under_pot()
 		"plov_cook": game.camp_cooking.start()
 		"plov": game.eat_plov()
 		"trunk": game.cargo.toggle(target.value)
@@ -106,3 +107,4 @@ func activate() -> void:
 		"mushroom": game.eat_foraged("mushroom", int(target.value))
 		"meat": game.eat_meat(int(target.value))
 		"beer": game.drink_beer()
+

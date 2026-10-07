@@ -12,6 +12,8 @@ func can_act() -> bool:
 	return game.playing and not game.in_car and not game.paused and not game.dead and not game.finished and game.beers < 30
 
 func deploy_fire(spot: Vector3, yaw: float) -> bool:
+	if pot != null and spot.distance_to(pot.position) < 1.5:
+		spot = pot.position
 	if not can_act() or game.packing.active() or not game.valid_furniture_spot(spot, "firewood"):
 		return false
 	if fire == null:
@@ -22,16 +24,31 @@ func deploy_fire(spot: Vector3, yaw: float) -> bool:
 	game.toast("Костёр разожжён. Принеси казан из багажника.")
 	return true
 
-func place_pot(spot: Vector3) -> bool:
-	if not can_act() or game.packing.active() or fire == null or spot.distance_to(fire.position) > 0.5 or game.walker.distance_to(fire.position) > 3.5:
+func heated() -> bool:
+	return fire != null and pot != null and fire.position.distance_to(pot.position) < 0.55
+
+func place_pot(spot: Vector3, yaw: float = 0) -> bool:
+	if fire != null and spot.distance_to(fire.position) < 1.5:
+		spot = fire.position
+	if not can_act() or game.packing.active() or game.walker.distance_to(spot) > 5 or not game.valid_furniture_spot(spot, "cauldron"):
 		return false
 	if pot == null:
-		pot = Props.cauldron(fire)
+		pot = Props.cauldron(game)
 		phase = "empty"
 		cook_time = 0
 		servings = 0
-	game.toast("Казан на подставке. F — добавить ингредиенты и готовить плов.")
+	pot.position = spot
+	pot.position.y = game.stage.ground(spot)
+	pot.rotation.y = yaw
+	game.toast("Казан установлен. F — готовить плов." if heated() else "Казан установлен. Принеси дрова и разожги костёр под ним.")
 	return true
+
+func light_under_pot() -> bool:
+	if pot == null:
+		return false
+	if game.room.submit("firewood", {"pos": game.room.a(pot.position), "yaw": pot.rotation.y}):
+		return true
+	return game.cargo.deploy("firewood", pot.position, pot.rotation.y)
 
 func mount() -> bool:
 	if fire == null:
@@ -41,7 +58,7 @@ func mount() -> bool:
 	return game.cargo.deploy("cauldron", fire.position, 0)
 
 func start() -> bool:
-	if not can_act() or not game.cargo.available() or game.packing.active() or pot == null or phase != "empty" or game.walker.distance_to(fire.position) > 3.5 or game.cargo.held.has(game.cargo.actor()):
+	if not can_act() or not game.cargo.available() or game.packing.active() or not heated() or phase != "empty" or game.walker.distance_to(pot.position) > 3.5 or game.cargo.held.has(game.cargo.actor()):
 		return false
 	if game.room.submit("plov_cook"):
 		return true
@@ -52,7 +69,7 @@ func start() -> bool:
 	return true
 
 func can_eat() -> bool:
-	return can_act() and pot != null and phase == "ready" and servings > 0 and game.walker.distance_to(fire.position) <= 3.5
+	return can_act() and pot != null and phase == "ready" and servings > 0 and game.walker.distance_to(pot.position) <= 3.5
 
 func consume() -> bool:
 	if not can_eat() or game.cargo.held.has(game.cargo.actor()):
@@ -66,7 +83,7 @@ func consume() -> bool:
 	return true
 
 func update(delta: float, guest: bool = false) -> void:
-	if phase == "cooking" and not guest:
+	if phase == "cooking" and heated() and not guest:
 		cook_time = minf(COOK_SECONDS, cook_time + delta)
 		if cook_time >= COOK_SECONDS:
 			phase = "ready"
@@ -81,21 +98,23 @@ func update(delta: float, guest: bool = false) -> void:
 		Props.pose_cauldron(pot, phase, cook_time / COOK_SECONDS, servings, game.elapsed)
 
 func offers(items: Array, interaction) -> void:
-	if fire == null or game.packing.active():
+	if (fire == null and pot == null) or game.packing.active():
 		return
 	var carry = game.cargo.held.get(game.chair_owner(), {})
 	if not carry.is_empty():
-		if carry.kind == "cauldron" and not carry.returning:
+		if fire != null and carry.kind == "cauldron" and not carry.returning:
 			interaction.offer(items, fire.position + Vector3(0, 0.45, 0), 0.8, 3.5, "mount_cauldron", "Поставить казан на костёр")
+		if pot != null and carry.kind == "firewood" and not carry.returning:
+			interaction.offer(items, pot.position + Vector3(0, 0.45, 0), 0.8, 3.5, "mount_firewood", "Разжечь костёр под казаном")
 		return
 	if pot == null:
 		interaction.offer(items, fire.position + Vector3(0, 0.3, 0), 0.75, 3.5, "", "")
-	elif phase == "empty":
-		interaction.offer(items, fire.position + Vector3(0, 1.1, 0), 0.65, 3.5, "plov_cook", "Добавить ингредиенты и готовить плов")
+	elif phase == "empty" and heated():
+		interaction.offer(items, pot.position + Vector3(0, 1.1, 0), 0.65, 3.5, "plov_cook", "Добавить ингредиенты и готовить плов")
 	elif phase == "ready":
-		interaction.offer(items, fire.position + Vector3(0, 1.1, 0), 0.65, 3.5, "plov", "Съесть плов · %d/10" % servings)
+		interaction.offer(items, pot.position + Vector3(0, 1.1, 0), 0.65, 3.5, "plov", "Съесть плов · %d/10" % servings)
 	else:
-		interaction.offer(items, fire.position + Vector3(0, 1.1, 0), 0.65, 3.5, "", "")
+		interaction.offer(items, pot.position + Vector3(0, 1.1, 0), 0.65, 3.5, "", "")
 
 func remove_pot() -> void:
 	if pot != null:
@@ -106,28 +125,33 @@ func remove_pot() -> void:
 	servings = 0
 
 func remove_fire() -> void:
-	remove_pot()
 	if fire != null:
 		fire.queue_free()
 	fire = null
 
 func snapshot() -> Dictionary:
-	if fire == null:
+	if fire == null and pot == null:
 		return {}
-	return {"pos": game.room.a(fire.position), "yaw": fire.rotation.y, "fire_owner": str(fire.get_meta("gear_owner", game.chair_owner())), "pot": pot != null, "pot_owner": str(pot.get_meta("gear_owner", game.chair_owner())) if pot != null else "", "phase": phase, "cook_time": cook_time, "servings": servings}
+	return {"fire": fire != null, "pos": game.room.a(fire.position if fire != null else pot.position), "yaw": fire.rotation.y if fire != null else 0, "fire_owner": str(fire.get_meta("gear_owner", game.chair_owner())) if fire != null else "", "pot": pot != null, "pot_pos": game.room.a(pot.position) if pot != null else [], "pot_yaw": pot.rotation.y if pot != null else 0, "pot_owner": str(pot.get_meta("gear_owner", game.chair_owner())) if pot != null else "", "phase": phase, "cook_time": cook_time, "servings": servings}
 
 func apply_snapshot(data: Dictionary) -> void:
 	if data.is_empty():
+		remove_pot()
 		remove_fire()
 		return
-	if fire == null:
-		fire = Props.campfire(game)
-	fire.position = game.room.v(data.pos)
-	fire.rotation.y = float(data.get("yaw", 0))
-	fire.set_meta("gear_owner", str(data.get("fire_owner", "")))
+	if data.get("fire", true):
+		if fire == null:
+			fire = Props.campfire(game)
+		fire.position = game.room.v(data.pos)
+		fire.rotation.y = float(data.get("yaw", 0))
+		fire.set_meta("gear_owner", str(data.get("fire_owner", "")))
+	else:
+		remove_fire()
 	if data.get("pot", false):
 		if pot == null:
-			pot = Props.cauldron(fire)
+			pot = Props.cauldron(game)
+		pot.position = game.room.v(data.get("pot_pos", data.pos))
+		pot.rotation.y = float(data.get("pot_yaw", 0))
 		pot.set_meta("gear_owner", str(data.get("pot_owner", "")))
 	else:
 		remove_pot()

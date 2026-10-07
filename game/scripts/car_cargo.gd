@@ -146,7 +146,7 @@ func deploy(kind: String, spot: Vector3, yaw: float) -> bool:
 		"chairs": placed = game.place_chairs(spot, yaw, owner)
 		"grill": placed = game.start_grill(spot, yaw)
 		"firewood": placed = game.camp_cooking.deploy_fire(spot, yaw)
-		"cauldron": placed = game.camp_cooking.place_pot(spot)
+		"cauldron": placed = game.camp_cooking.place_pot(spot, yaw)
 	if placed:
 		var node = game.camp if kind == "table" else (game.grill if kind == "grill" else (game.camp_cooking.fire if kind == "firewood" else (game.camp_cooking.pot if kind == "cauldron" else game.personal_chairs[owner])))
 		node.set_meta("gear_owner", owner)
@@ -197,11 +197,17 @@ func offers(items: Array, interaction) -> void:
 		if owner != game.chair_owner() or not opened.get(owner, false) or not holding.is_empty() or game.packing.active():
 			continue
 		var p = Props.trunk_profile(int(cars[owner].variant))
+		var candidates: Array = []
 		for i in range(KINDS.size()):
 			if not stored(KINDS[i], owner):
 				continue
 			var box_point: Vector3 = cars[owner].pos + Props.cargo_point(p, i).rotated(Vector3.UP, cars[owner].heading)
-			interaction.offer(items, box_point, 0.19, 3.3, "take_gear", "Взять " + ["стол", "стул", "мангал", "дрова", "казан"][i], KINDS[i])
+			interaction.offer(candidates, box_point, 0.42, 3.3, "take_gear", "Взять " + ["стол", "стул", "мангал", "дрова", "казан"][i], KINDS[i])
+
+		# Overlapping forgiving hit zones choose the box nearest the crosshair.
+		if not candidates.is_empty():
+			candidates.sort_custom(func(a, b): return a.aim_error < b.aim_error)
+			items.append(candidates[0])
 
 # A departed carrier's box is considered loaded into their departed car.
 # Installed items stay in the camp and can still be collected by friends.
@@ -240,3 +246,4 @@ func apply_snapshot(data: Dictionary) -> void:
 		game.camp.set_meta("gear_owner", str(data.get("table_owner", game.chair_owner())))
 	if game.grill != null:
 		game.grill.set_meta("gear_owner", str(data.get("grill_owner", game.chair_owner())))
+

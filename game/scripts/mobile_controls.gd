@@ -75,8 +75,7 @@ func _layout() -> void:
 			if not game.packing.active():
 				gear.append(["Стол", "table"])
 				gear.append(["Стул", "chairs"])
-				if game.camp != null and game.has_chairs:
-					gear.append(["Мангал", "grill"])
+				gear.append(["Мангал", "grill"])
 				gear.append(["Дрова", "firewood"])
 				gear.append(["Казан", "cauldron"])
 				if game.flag_count() < game.FLAGS_PER_PLAYER:
@@ -245,3 +244,4 @@ func _draw() -> void:
 		style.set_corner_radius_all(16)
 		draw_style_box(style, button.rect)
 		draw_string(font, button.rect.position + Vector2(4, button.rect.size.y / 2 + 6), button.label, HORIZONTAL_ALIGNMENT_CENTER, button.rect.size.x - 8, 17, Color("f6ead1"))
+

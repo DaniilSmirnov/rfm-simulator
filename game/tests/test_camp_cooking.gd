@@ -40,7 +40,8 @@ func run() -> void:
 	check(not host.cargo.deploy("cauldron", fire_spot, 0), "a pot cannot appear without taking it from the trunk")
 	host.walker = host.cargo.point(host.cargo.poses()["local"])
 	host.begin_placement("cauldron")
-	check(host.placement_preview == null and host.cargo.held.local.kind == "cauldron", "taking a cauldron carries it instead of placing it on the ground")
+	check(host.placement_preview != null and host.cargo.held.local.kind == "cauldron", "taking a cauldron offers free placement")
+	host.cancel_placement()
 	host.walker = fire_spot
 	host.camera.position = fire_spot + Vector3(0, 1.7, 2)
 	host.camera.look_at(fire_spot + Vector3(0, 0.45, 0))
@@ -83,7 +84,8 @@ func run() -> void:
 	guest.room.player_id = "guest"
 	# Use a fresh empty pot to test cooking and meals requested by a guest.
 	host.camp_cooking.remove_pot()
-	host.camp_cooking.pot = Props.cauldron(host.camp_cooking.fire)
+	host.camp_cooking.pot = Props.cauldron(host)
+	host.camp_cooking.pot.position = fire_spot
 	host.camp_cooking.phase = "empty"
 	host.camp_cooking.pot.set_meta("gear_owner", "host")
 	host.camp_cooking.fire.set_meta("gear_owner", "host")
@@ -132,3 +134,4 @@ func run() -> void:
 	await process_frame
 	print("CAMP COOKING RESULT: %d failures" % failures)
 	quit(1 if failures else 0)
+

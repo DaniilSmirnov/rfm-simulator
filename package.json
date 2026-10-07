@@ -1,6 +1,6 @@
 {
   "name": "rfm-simulator",
-  "version": "0.10.20",
+  "version": "0.10.21",
   "private": true,
   "description": "Симулятор раллийного овоща — Godot mini web demo",
   "type": "module",
@@ -19,3 +19,4 @@
     "wrangler": "4.147.0"
   }
 }
+
