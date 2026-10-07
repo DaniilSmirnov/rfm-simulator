@@ -9,6 +9,7 @@ var sidewalk_segments = 0
 var roadside_grass_count = 0
 var roadside_stone_count = 0
 var roadside_bush_count = 0
+var thuja_count = 0
 
 func build() -> void:
 	var floor_body = StaticBody3D.new()
@@ -35,6 +36,7 @@ func build() -> void:
 			_lamp(stage.at(s) + stage.side(s) * side_value * 6.2, -side_value)
 	_vineyards()
 	_roadside_details()
+	_thuja_forest()
 	_landscape()
 	_flush_batches()
 
@@ -332,6 +334,63 @@ func _roadside_details() -> void:
 	stage._detail_batch("VineyardRoadsideGrass", stage._grass_mesh(), grass_poses, grass_colors)
 	stage._detail_batch("VineyardRoadsideStones", stone_mesh, stone_poses, stone_colors)
 	stage._detail_batch("VineyardRoadsideBushes", bush_mesh, bush_poses, bush_colors)
+
+func _thuja_forest() -> void:
+	# A dense evergreen belt frames the village without intruding on the road,
+	# houses, church or the spectator spots. Three tapered layers read as thuja.
+	var tree_rng = RandomNumberGenerator.new()
+	tree_rng.seed = 71020264
+	var lower_poses: Array = []
+	var lower_colors: Array = []
+	var middle_poses: Array = []
+	var middle_colors: Array = []
+	var crown_poses: Array = []
+	var crown_colors: Array = []
+	for s in range(int(VILLAGE_START) - 34, int(VILLAGE_END) + 35, 5):
+		for side_value in [-1.0, 1.0]:
+			for row in range(3):
+				var lateral = 27.0 + row * 9.0 + tree_rng.randf_range(-2.0, 2.0)
+				var p = stage.at(clampf(float(s), 0.0, stage.LENGTH - 0.01)) + stage.side(clampf(float(s), 0.0, stage.LENGTH - 0.01)) * side_value * lateral
+				p += stage.direction(clampf(float(s), 0.0, stage.LENGTH - 0.01)) * tree_rng.randf_range(-2.0, 2.0)
+				var blocked = false
+				for spot in stage.clearings:
+					blocked = blocked or stage.flat(p).distance_to(stage.flat(spot)) < 10.0
+				for obstacle in obstacles:
+					blocked = blocked or stage.flat(p).distance_to(stage.flat(_relative_pose(obstacle.body).origin)) < 7.0
+				if blocked:
+					continue
+				p.y = stage.ground(p)
+				var height = tree_rng.randf_range(5.5, 9.5)
+				var width = tree_rng.randf_range(1.15, 1.75)
+				var yaw = tree_rng.randf() * TAU
+				lower_poses.append(Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3(width, height * 0.48, width)), p + Vector3(0, height * 0.24, 0)))
+				lower_colors.append(Color("314f35").lightened(tree_rng.randf_range(-0.04, 0.05)))
+				middle_poses.append(Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3(width * 0.78, height * 0.39, width * 0.78)), p + Vector3(0, height * 0.57, 0)))
+				middle_colors.append(Color("3b5c3b").lightened(tree_rng.randf_range(-0.04, 0.06)))
+				crown_poses.append(Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3(width * 0.48, height * 0.28, width * 0.48)), p + Vector3(0, height * 0.82, 0)))
+				crown_colors.append(Color("476a43").lightened(tree_rng.randf_range(-0.03, 0.06)))
+				thuja_count += 1
+	var lower = CylinderMesh.new()
+	lower.height = 1
+	lower.bottom_radius = 0.62
+	lower.top_radius = 0.28
+	lower.radial_segments = 7
+	lower.rings = 1
+	var middle = CylinderMesh.new()
+	middle.height = 1
+	middle.bottom_radius = 0.55
+	middle.top_radius = 0.18
+	middle.radial_segments = 7
+	middle.rings = 1
+	var crown = CylinderMesh.new()
+	crown.height = 1
+	crown.bottom_radius = 0.42
+	crown.top_radius = 0.02
+	crown.radial_segments = 7
+	crown.rings = 1
+	stage._detail_batch("VillageThujaLower", lower, lower_poses, lower_colors)
+	stage._detail_batch("VillageThujaMiddle", middle, middle_poses, middle_colors)
+	stage._detail_batch("VillageThujaCrown", crown, crown_poses, crown_colors)
 
 func _landscape() -> void:
 	var root = Node3D.new()
