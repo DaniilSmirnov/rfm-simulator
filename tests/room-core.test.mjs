@@ -3,6 +3,15 @@ import assert from 'node:assert/strict';
 import { RoomState, MAX_PLAYERS } from '../server/room-core.mjs';
 const state = (x = 0) => ({ pos: [x, 1, 2], car: [3, 4, 5], heading: 1, yaw: 2, pitch: 0, in_car: false, tow: false, beer: -1 });
 const setup = () => { const r = new RoomState(); const h = r.add('Хозяин', 1000, true); const g = r.add('Друг', 1000); return { r, h, g }; };
+test('mushroom species survives player sync and rejects unknown species', () => {
+  const { r, h, g } = setup();
+  for (const species of ['edible', 'fly_agaric', 'toadstool']) {
+    const reply = r.sync({ token: h.token, state: { ...state(), food_kind: 'mushroom', food_species: species } }, 1200);
+    assert.equal(reply.players.find(p => p.id === h.player).state.food_species, species);
+  }
+  const reply = r.sync({ token: g.token, state: { ...state(), food_species: 'unknown' } }, 1300);
+  assert.equal(reply.players.find(p => p.id === g.player).state.food_species, 'edible');
+});
 test('snapshot timestamps belong to state updates rather than polls or heartbeats', () => {
   const { r, h, g } = setup();
   r.sync({ token: h.token, state: state(), world: { elapsed: 1 } }, 1100);

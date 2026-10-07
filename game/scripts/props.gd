@@ -2,6 +2,28 @@ extends RefCounted
 class_name RallyProps
 const FOOD_PORTIONS = 10
 const CARGO_KINDS = ["table", "chairs", "grill", "firewood", "cauldron"]
+const MUSHROOM_TEXTURES = {
+	"fly_agaric": preload("res://textures/mushrooms/fly_agaric.svg"),
+	"toadstool": preload("res://textures/mushrooms/toadstool.svg"),
+}
+
+static func mushroom_material(species: String) -> StandardMaterial3D:
+	var mat = material(Color.WHITE if MUSHROOM_TEXTURES.has(species) else Color("916137"))
+	if MUSHROOM_TEXTURES.has(species):
+		mat.albedo_texture = MUSHROOM_TEXTURES[species]
+	return mat
+
+static func style_mushrooms(node: Node3D, species: String) -> void:
+	if node.get_meta("mushroom_species", "") == species:
+		return
+	node.set_meta("mushroom_species", species)
+	for cap in node.find_children("MushroomCap*", "MeshInstance3D", true, false):
+		cap.material_override = mushroom_material(species)
+	# Character GLBs were exported before caps had explicit node names.
+	for i in range(3):
+		var mushroom = node.get_node_or_null("Mushroom%d" % i)
+		if mushroom != null and mushroom.get_child_count() >= 2 and mushroom.get_child(1) is MeshInstance3D:
+			mushroom.get_child(1).material_override = mushroom_material(species)
 
 static func material(color: Color) -> StandardMaterial3D:
 	var m = StandardMaterial3D.new()
@@ -520,7 +542,7 @@ static func skewer() -> Node3D:
 		mushroom.name = "Mushroom%d" % i
 		root.add_child(mushroom)
 		cylinder(mushroom, Vector3(0, i * 0.13 + 0.03, 0), 0.025, 0.02, 0.07, Color("dbcc9b"), 5)
-		faceted(mushroom, Vector3(0, i * 0.13 + 0.08, 0), Vector3(0.16, 0.08, 0.14), Color("916137"), 6, 3)
+		faceted(mushroom, Vector3(0, i * 0.13 + 0.08, 0), Vector3(0.16, 0.08, 0.14), Color("916137"), 12, 6).name = "MushroomCap"
 		mushroom.hide()
 		var berry = faceted(root, Vector3((i - 1) * 0.055, 0.06 + i * 0.025, -0.03), Vector3.ONE * 0.09, Color("b83d39"), 6, 3)
 		berry.name = "Berry%d" % i
@@ -1044,7 +1066,7 @@ static func grill(parent: Node3D) -> Node3D:
 		skewer_node.add_child(mushroom_group)
 		for z in [-0.2, 0.0, 0.2]:
 			cylinder(mushroom_group, Vector3(x, 0.96, z), 0.015, 0.012, 0.05, Color("d3c49b"), 5)
-			faceted(mushroom_group, Vector3(x, 1.0, z), Vector3(0.055, 0.035, 0.07), Color("956337"), 5, 2)
+			faceted(mushroom_group, Vector3(x, 1.0, z), Vector3(0.055, 0.035, 0.07), Color("956337"), 12, 6).name = "MushroomCap_%s" % str(z)
 		mushroom_group.hide()
 	return root
 

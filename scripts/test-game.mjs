@@ -29,6 +29,7 @@ run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_physi
 
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_food_fleet.gd']);
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_foraging.gd']);
+run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_poison_mushrooms.gd']);
 
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_party.gd']);
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_selection.gd']);
