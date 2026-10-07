@@ -4,3 +4,9 @@ dist/
 .wrangler/
 **/.godot/
 .DS_Store
+
+dist-vk/
+dist-vk-prototype/
+
+.dev.vars*
+.env*

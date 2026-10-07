@@ -56,7 +56,8 @@ func current() -> Dictionary:
 			var label = ""
 			if game.foraging.ready_index(source) >= 0:
 				action = "mushroom"
-				label = "Съесть гриб"
+				var species = game.foraging.ready_species(source)
+				label = "Съесть мухомор" if species == "fly_agaric" else ("Съесть поганку" if species == "toadstool" else "Съесть гриб")
 			elif game.foraging.stock().mushrooms > 0 and game.foraging.free_skewers(source) > 0:
 				action = "mount"
 				label = "Насадить гриб"

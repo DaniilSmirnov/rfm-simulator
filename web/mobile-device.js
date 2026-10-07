@@ -9,8 +9,8 @@ const RallyDevice = {
   },
   async requestLandscape() {
     try {
-      if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
-        await document.documentElement.requestFullscreen();
+      if (!globalThis.RallyFullscreen?.isActive()) {
+        await globalThis.RallyFullscreen?.enter?.();
       }
     } catch { /* The rotate prompt also works without fullscreen permission. */ }
     try {

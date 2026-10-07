@@ -22,6 +22,7 @@ function observe(role, line) {
     (samples[role] ??= []).push(sample);
   } else if (/SCRIPT ERROR|Parse Error|RuntimeError|unreachable|NETWORK_FAIL/.test(line)) errors.push(line);
   logs.push(`[${role}] ${line}`);
+  if (!line.includes('NETWORK_SAMPLE ') && role !== 'worker') console.log(`[${role}] ${line}`);
 }
 function launch(args, role) {
   const child = spawn(args[0], args.slice(1), {cwd:root,env:{...process.env,WRANGLER_SEND_METRICS:'false'},stdio:['ignore','pipe','pipe']});
@@ -69,7 +70,7 @@ const proxy = createServer(async(req,res)=> {
     if(name==='index.html') {
       const args=['--','--smoke-test',`--network-role=${url.searchParams.get('role')??'host'}`,`--room-server=http://127.0.0.1:${proxy.address().port}/${url.searchParams.get('role')??'host'}`];
       if(url.searchParams.has('room'))args.push(`--network-room=${url.searchParams.get('room')}`);
-      bytes=Buffer.from(bytes.toString().replace('RallyDevice.configure(GODOT_CONFIG);',`GODOT_CONFIG.args.push(...${JSON.stringify(args)}); RallyDevice.configure(GODOT_CONFIG);`));
+      bytes=Buffer.from(bytes.toString().replace('RallyDevice.configure(GODOT_CONFIG);',`RallyDevice.configure(GODOT_CONFIG); GODOT_CONFIG.args = ${JSON.stringify(args)}.concat(RallyDevice.isMobile() ? ["--mobile-controls"] : []);`));
     }
     res.writeHead(200,{'Content-Type':{'.html':'text/html','.js':'text/javascript','.svg':'image/svg+xml','.png':'image/png'}[extname(name)]??'application/octet-stream'});res.end(bytes);
   } catch(error) {res.writeHead(500).end(String(error));}
@@ -145,8 +146,11 @@ try {
   command('guest','enter');await until(()=>latest('guest').in_car,'enter car');
   assert.equal(errors.length,0);
   console.log(`PASS: ${web?'two Chromium clients (mobile guest)':'two Godot clients'}: delayed HTTP, 2 lost responses, prediction, braking, convergence, pause/resume, recovery, exit/re-entry`);
+} catch (error) {
+  console.error(logs.filter(x => !x.includes('NETWORK_SAMPLE ')).slice(-100).join('\n'));
+  throw error;
 } finally {
-  await writeFile(join(root,'.cache/network-test.log'),logs.join('\n'));
+  await writeFile(join(root,'network-test.log'),logs.join('\n'));
   await browser?.close();
   for(const child of processes)child.kill('SIGTERM');
   await new Promise(resolve=>proxy.close(resolve));

@@ -15,6 +15,7 @@ var context: Dictionary = {}
 var events: Array[Dictionary] = []
 var replaying = false
 var visual_yaw = 0.0
+var recovery_ack = 0
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_PREDELETE:
@@ -33,9 +34,12 @@ func reset(position: Vector3, heading: float) -> void:
 	impact_timer = 0.0
 	events.clear()
 	visual_yaw = 0.0
+	recovery_ack = 0
+	context.clear()
+	replaying = false
 
 func snapshot() -> Dictionary:
-	return {"condition": condition, "impact_timer": impact_timer, "ack": ack, "pos": [node.position.x, node.position.y, node.position.z], "yaw": yaw, "velocity": [motion.velocity.x, motion.velocity.y, motion.velocity.z], "vertical": motion.vertical_speed, "initialized": motion.initialized, "grounded": motion.grounded, "pitch": motion.pitch, "roll": motion.roll, "steering": motion.handling.steering, "yaw_rate": motion.handling.yaw_rate, "longitudinal": motion.handling.longitudinal_accel}
+	return {"recovery_ack": recovery_ack, "condition": condition, "impact_timer": impact_timer, "ack": ack, "pos": [node.position.x, node.position.y, node.position.z], "yaw": yaw, "velocity": [motion.velocity.x, motion.velocity.y, motion.velocity.z], "vertical": motion.vertical_speed, "initialized": motion.initialized, "grounded": motion.grounded, "pitch": motion.pitch, "roll": motion.roll, "steering": motion.handling.steering, "yaw_rate": motion.handling.yaw_rate, "longitudinal": motion.handling.longitudinal_accel}
 
 func restore(s: Dictionary) -> void:
 	node.position = Vector3(s.pos[0], s.pos[1], s.pos[2])
@@ -54,6 +58,7 @@ func restore(s: Dictionary) -> void:
 	seq = maxi(seq, ack)
 	condition = float(s.get("condition", 100.0))
 	impact_timer = float(s.get("impact_timer", 0.0))
+	recovery_ack = int(s.get("recovery_ack", 0))
 
 func emit_event(event: Dictionary) -> void:
 	if not replaying:
@@ -61,6 +66,7 @@ func emit_event(event: Dictionary) -> void:
 
 func step(c: Dictionary, stage, model: int) -> void:
 	if c.get("recover", false) and not context.get("racing", false):
+		recovery_ack = int(c.seq)
 		node.position = stage.at(stage.road_s(node.position))
 		var direction = stage.direction(stage.road_s(node.position))
 		yaw = atan2(-direction.x, -direction.z)
@@ -143,6 +149,7 @@ func accept(commands: Array, stage, model: int, budget: int = 1152) -> int:
 func reconcile(s: Dictionary, stage, model: int) -> void:
 	if int(s.ack) < ack:
 		return
+	var recovered = int(s.get("recovery_ack", 0)) > recovery_ack
 	var before = node.position + visual_offset
 	var before_yaw = yaw + visual_yaw
 	restore(s)
@@ -153,5 +160,6 @@ func reconcile(s: Dictionary, stage, model: int) -> void:
 	replaying = false
 	visual_offset = before - node.position
 	visual_yaw = wrapf(before_yaw - yaw, -PI, PI)
-	if visual_offset.length() > 5.0 or (not pending.is_empty() and pending.back().get("recover", false)):
+	if recovered or visual_offset.length() > 5.0 or (not pending.is_empty() and pending.back().get("recover", false)):
 		visual_offset = Vector3.ZERO
+		visual_yaw = 0.0

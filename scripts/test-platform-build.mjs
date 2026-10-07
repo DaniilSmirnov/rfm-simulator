@@ -1,0 +1,20 @@
+import assert from 'node:assert/strict';
+import {readFile,readdir} from 'node:fs/promises';
+const targets = [['dist','standalone'],['dist-vk','vk'],['dist-vk-prototype','vk-prototype'],['dist/vk','vk']];
+const selected = process.argv[2];
+if (selected && !targets.some(([directory]) => directory === selected)) throw new Error('Unknown artifact');
+for(const [directory,adapter] of targets.filter(([directory]) => !selected || directory === selected)){
+ const files=await readdir(directory,{recursive:true});
+ const html=await readFile(directory+'/index.html','utf8');
+ const pack=await readFile(directory+'/index.pck');
+ assert.ok(pack.includes(Buffer.from('platform_probe')),directory+' is missing the exported platform probe scene');
+ assert.deepEqual(files.filter(name=>name.startsWith('platform/')).sort(),['platform/'+adapter+'.js','platform/transport.js'].sort());
+ assert.equal(files.includes('vk-bridge.js'),adapter==='vk');
+ assert.ok(html.includes('src="platform/'+adapter+'.js"'));
+ assert.equal(html.includes('src="vk-bridge.js"'),adapter==='vk');
+ assert.ok(html.includes('RallyPlatform.ready()'));
+ assert.ok(files.includes('fullscreen.js'),directory+' is missing fullscreen control');
+ assert.ok(html.includes('src="fullscreen.js"'),directory+' does not load fullscreen control');
+ assert.ok(html.indexOf('platform/transport.js')<html.indexOf('src="index.js"'));
+ console.log('BUILD_ISOLATION_PASS',directory);
+}

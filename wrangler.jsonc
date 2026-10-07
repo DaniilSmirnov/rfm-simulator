@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "rfm-simulator",
+  "name": "rally-fans-simulator",
   "compatibility_date": "2026-10-05",
   "workers_dev": true,
   "preview_urls": true,
@@ -9,10 +9,16 @@
     "not_found_handling": "none",
     "binding": "ASSETS",
     "run_worker_first": [
-      "/api/*"
+      "/api/*",
+      "/vk"
     ]
   },
   "main": "server/worker.mjs",
+  "secrets": {
+    "required": [
+      "VK_APP_SECRET"
+    ]
+  },
   "durable_objects": {
     "bindings": [
       {
@@ -28,5 +34,8 @@
         "RallyRoom"
       ]
     }
-  ]
+  ],
+  "vars": {
+    "VK_APP_ID": "54809523"
+  }
 }

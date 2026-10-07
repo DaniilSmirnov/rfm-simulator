@@ -8,6 +8,7 @@
 Фирменные иконки браузера и экрана загрузки: Rally Fans Map.
 Экран загрузки Web: чёрный фон, SVG логотип, надпись Rally Fans Map и оранжевый прогрессбар (#ff3b0a). Favicon использует SVG логотип напрямую.
 [Аудит готовности к бете и критерии выпуска](docs/BETA_READINESS.md).
+[Отдельные сборки и настройка VK в Cloudflare](docs/VK_CLOUDFLARE_SETUP.md).
 
 ## Горизонтальное мобильное управление · 0.10.18
 
@@ -152,7 +153,7 @@ Mini Web-движок пересобран с модулем GodotPhysics3D. П�
 | Поле | Значение |
 |---|---|
 | Repository | `DaniilSmirnov/rfm-simulator` |
-| Worker name | `rfm-simulator` |
+| Worker name | `rally-fans-simulator` |
 | Production branch | `main` |
 | Build command | `npm run build` |
 | Deploy command | `npx wrangler deploy` |

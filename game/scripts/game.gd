@@ -20,6 +20,7 @@ const Spectators = preload("res://scripts/spectators.gd")
 var spectators: Node3D
 const MiniMap = preload("res://scripts/minimap.gd")
 var stage: RallyStage
+var platform_service: Node
 var selected_stage = 0
 var selected_car = 0
 var selection_controls: VBoxContainer
@@ -185,6 +186,8 @@ var cook_time = 0.0
 var grill_servings = Props.FOOD_PORTIONS
 var eat_source_group = -2
 var eat_kind = "meat"
+var food_species = "edible"
+var mushroom_effect = preload("res://scripts/mushroom_effect.gd").new()
 var forage_source = -2
 var foraging = preload("res://scripts/foraging.gd").new()
 var eaten = false
@@ -352,6 +355,7 @@ func _ready() -> void:
 	camera.position = stage.at(45) + Vector3(22, 15, 12)
 	camera.look_at(stage.at(70))
 	_build_ui()
+	mushroom_effect.setup(self)
 	print("[RFM] Интерфейс готов; подготовка звука")
 	_setup_audio()
 	print("[RFM] Звук подготовлен; создание интерфейса комнаты")
@@ -369,6 +373,14 @@ func _ready() -> void:
 		_capture_menu()
 	elif "--smoke-test" in OS.get_cmdline_user_args():
 		start_game()
+	platform_service = preload("res://scripts/platform_service.gd").new()
+	platform_service.profile_ready.connect(func(profile):
+		if profile.get("platform", "standalone") != "standalone":
+			room.name_input.text = str(profile.get("nickname", ""))
+			room.name_input.editable = false
+	)
+	platform_service.failed.connect(func(message): push_error(message))
+	add_child(platform_service)
 	print("[RFM] Запуск завершён")
 
 func _setup_input() -> void:
@@ -618,7 +630,8 @@ func _setup_audio() -> void:
 	fire_audio = AudioStreamPlayer3D.new()
 	fire_audio.stream = load("res://audio/fire.wav")
 	fire_audio.max_distance = 24
-	fire_audio.volume_db = -12
+	# 20% of the previous cooking/fire linear gain (about -14 dB).
+	fire_audio.volume_db = -26
 	add_child(fire_audio)
 	beer_audio = AudioStreamPlayer.new()
 	beer_audio.volume_db = -10
@@ -766,6 +779,7 @@ func _process(delta: float) -> void:
 	else:
 		_walk(delta)
 	_update_drinking(delta)
+	mushroom_effect.update(delta)
 	_update_eating(delta)
 	_update_camera(delta)
 	if room.connected and room.prediction_enabled:
@@ -1150,7 +1164,7 @@ func start_grill(spot: Vector3 = Vector3.INF, yaw: float = 0.0, replicated: bool
 	mesh.material = mat
 	smoke.draw_pass_1 = mesh
 	fire_audio.position = grill.global_position
-	_play_audio(fire_audio)
+	# Fire crackle is scheduled sparsely by Soundscape instead of looping continuously.
 	toast("Угли разгорелись. Шашлык готовится 35 секунд. Следи за таймером СУ.")
 	return true
 
@@ -1323,9 +1337,11 @@ func eat_foraged(kind: String, source: int = -2) -> bool:
 	forage_source = (foraging.nearby_source() if source == -2 else source) if kind == "mushroom" else -2
 	if kind == "mushroom" and (foraging.grill_node(forage_source) == null or player_position().distance_to(foraging.grill_node(forage_source).position) > 4 or foraging.ready_index(forage_source) < 0):
 		return false
+	food_species = foraging.ready_species(forage_source) if kind == "mushroom" else "edible"
 	eat_time = 0
 	eat_committed = false
 	meat_prop = Props.meat_hand(avatar_variant, kind)
+	Props.style_mushrooms(meat_prop, food_species)
 	camera.add_child(meat_prop)
 	_update_eating(0)
 	toast("Едим ягоды." if kind == "berries" else "Едим гриб с шампура.")
@@ -1777,6 +1793,7 @@ func die(reason: String) -> void:
 	_show_result("Выезд окончен", reason + "\n\nЭкипажи: %d  ·  Помощь тросом: %d\nШашлык: %s" % [passed, helped, "съеден" if eaten else "не съеден"])
 
 func _show_result(title: String, body: String) -> void:
+	mushroom_effect.clear()
 	sobriety_panel.hide()
 	cancel_placement()
 	_cancel_drink()

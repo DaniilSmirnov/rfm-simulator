@@ -20,6 +20,16 @@ try {
     await wait(500);
   }
   assert.ok(ready, 'Worker must start: ' + logs);
+  const rootPage = await (await fetch(origin + '/')).text();
+  assert.ok(rootPage.includes('platform/standalone.js'));
+  assert.ok(!rootPage.includes('src="vk-bridge.js"'));
+  const redirect = await fetch(origin + '/vk?vk_user_id=42&sign=test', {redirect:'manual'});
+  assert.equal(redirect.status, 308);
+  assert.equal(redirect.headers.get('Location'), origin + '/vk/?vk_user_id=42&sign=test');
+  const vkPage = await fetch(origin + '/vk/');
+  assert.equal(vkPage.status, 200);
+  assert.ok((await vkPage.text()).includes('src="vk-bridge.js"'));
+  assert.equal((await fetch(origin + '/vk/index.wasm.gz')).headers.get('Content-Type'), 'application/gzip');
   assert.equal((await api('/api/rooms', { name: 'X' }, { Origin: 'https://foreign.test' })).status, 403);
   assert.equal((await api('/api/rooms/000000/join', { name: 'X' })).status, 404);
   const host = await api('/api/rooms', { name: 'Host', stage: 1, car_model: 5 });

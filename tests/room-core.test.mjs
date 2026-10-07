@@ -3,6 +3,15 @@ import assert from 'node:assert/strict';
 import { RoomState, MAX_PLAYERS } from '../server/room-core.mjs';
 const state = (x = 0) => ({ pos: [x, 1, 2], car: [3, 4, 5], heading: 1, yaw: 2, pitch: 0, in_car: false, tow: false, beer: -1 });
 const setup = () => { const r = new RoomState(); const h = r.add('Хозяин', 1000, true); const g = r.add('Друг', 1000); return { r, h, g }; };
+test('mushroom species survives player sync and rejects unknown species', () => {
+  const { r, h, g } = setup();
+  for (const species of ['edible', 'fly_agaric', 'toadstool']) {
+    const reply = r.sync({ token: h.token, state: { ...state(), food_kind: 'mushroom', food_species: species } }, 1200);
+    assert.equal(reply.players.find(p => p.id === h.player).state.food_species, species);
+  }
+  const reply = r.sync({ token: g.token, state: { ...state(), food_species: 'unknown' } }, 1300);
+  assert.equal(reply.players.find(p => p.id === g.player).state.food_species, 'edible');
+});
 test('snapshot timestamps belong to state updates rather than polls or heartbeats', () => {
   const { r, h, g } = setup();
   r.sync({ token: h.token, state: state(), world: { elapsed: 1 } }, 1100);
@@ -329,4 +338,21 @@ test('drive input transport limits and sanitizes prediction commands and preserv
   r.sync({token:g.token,state:state()},1300);
   reply = r.sync({token:h.token,state:state()},1400);
   assert.equal(reply.players.find(p=>p.id===g.player).state.drive_enabled,false);
+});
+
+test('recovery survives transport while extra input fields and forged authority are discarded', () => {
+  const {r,h,g}=setup();
+  const input={seq:1,ticks:1,throttle:0,steer:0,brake:false,recover:true,condition:1000,pos:[999,0,0]};
+  r.sync({token:h.token,state:state(),world:{driving:{[g.player]:{ack:0,pos:[0,0,0]}}}},1100);
+  const reply=r.sync({token:g.token,state:{...state(),drive_enabled:true,drive_inputs:[input]},world:{driving:{[g.player]:{ack:999}}}},1200);
+  assert.equal(reply.world.driving[g.player].ack,0);
+  assert.deepEqual(reply.players.find(p=>p.id===g.player).state.drive_inputs,[{seq:1,ticks:1,throttle:0,steer:0,brake:false,recover:true}]);
+});
+
+test('long VK shortnames survive room roster without legacy 24-character truncation', () => {
+  const room = new RoomState();
+  const name = 'rally_fan_with_long_shortname';
+  const result = room.add(name, Date.now(), true);
+  assert.equal(result.name, name);
+  assert.equal(Object.values(room.data.players)[0].name, name);
 });

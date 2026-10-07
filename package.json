@@ -8,15 +8,24 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "node scripts/build-web.mjs",
+    "build": "node scripts/build-all.mjs",
     "test": "node scripts/test-game.mjs",
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "deploy": "node scripts/deploy-cloudflare.mjs",
     "preview": "wrangler preview",
-    "test:server": "node tests/worker.integration.mjs"
+    "test:server": "node tests/worker.integration.mjs",
+    "build:vk": "node scripts/build-web.mjs --target=vk",
+    "build:vk:prototype": "node scripts/build-web.mjs --target=vk-prototype",
+    "test:platform": "node --test tests/platform.test.mjs",
+    "dev:vk": "wrangler dev",
+    "deploy:vk": "node scripts/deploy-cloudflare.mjs",
+    "test:vk": "node --test tests/platform.test.mjs tests/auth-vk.test.mjs tests/room-session.test.mjs tests/deploy-cloudflare.test.mjs tests/fullscreen.test.mjs",
+    "build:standalone": "node scripts/build-web.mjs --target=standalone"
   },
   "devDependencies": {
     "wrangler": "4.147.0"
+  },
+  "dependencies": {
+    "@vkontakte/vk-bridge": "3.0.2"
   }
 }
-
