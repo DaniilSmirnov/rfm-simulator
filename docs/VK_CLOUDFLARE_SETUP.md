@@ -30,13 +30,15 @@
 | Build command | `npm ci && npm run build` |
 | Deploy command | `npm run deploy` |
 
+В Cloudflare Workers Builds команда `npm run deploy` использует `scripts/deploy-cloudflare.mjs`. Скрипт берёт только VK-секреты из **Build variables and secrets**, создаёт временный JSON-файл с правами `0600`, вызывает `wrangler deploy --secrets-file <temp>` и удаляет файл в `finally`. Значения секретов не выводятся в лог и не попадают в `dist`/Git/artifacts.
+
 До слияния для тестового деплоя можно выбрать ветку `feature/vk-platform-prototype`. Для preview используйте `npx wrangler preview`; preview-секреты настраиваются отдельно, не считайте production-секреты автоматически доступными в preview.
 
 `VK_APP_ID: "54809523"` уже задан в `wrangler.jsonc`. Имя Worker, binding `ASSETS`, существующие `ROOMS` и миграция SQLite Durable Objects сохраняются. Комнаты не разделены по платформам: человек с обычной версии и человек из VK могут входить по одному ID. Изменять namespace или создавать D1/KV/R2 не нужно.
 
 В **Settings → Variables and Secrets** именно этого Worker добавьте **Secret**:
 
-Wrangler также объявляет `VK_APP_SECRET` обязательным runtime secret. Поэтому production deploy теперь должен завершаться ошибкой, если секрет не привязан именно к Worker `rally-fans-simulator`; это специально исключает ситуацию, когда ключ случайно добавлен только в **Build variables and secrets**.
+Wrangler объявляет `VK_APP_SECRET` обязательным runtime secret. Для production Workers Builds он загружается во время deploy из одноимённого **Build secret** через `--secrets-file`. Поэтому значение можно хранить только в build secrets: в репозитории и клиентском bundle его нет. Для ручного локального deploy по-прежнему можно использовать `wrangler secret put`.
 
 | Runtime secret | Значение |
 |---|---|
