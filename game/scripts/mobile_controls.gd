@@ -66,7 +66,7 @@ func _layout() -> void:
 			var target = game.interaction.current()
 			var label = "Действие"
 			if not target.is_empty():
-				label = str(target.label).replace("Вернуть коробку в багажник", "Вернуть").replace("Собрать казан с подставкой", "Убрать казан").replace("Потушить и собрать костёр", "Убрать костёр").replace("Сесть в машину", "В машину").replace("Сесть на стул", "На стул").replace("Встать со стула", "Встать").replace("Собрать гриб", "Собрать").replace("Собрать ягоды", "Собрать").replace("Насадить гриб", "Насадить").replace("Съесть шашлык", "Шашлык").replace("Съесть гриб", "Есть гриб").replace("Выпить пиво", "Пиво").replace("Потушить и собрать мангал", "Убрать мангал").replace("Поставить казан на костёр", "На костёр").replace("Добавить ингредиенты и готовить плов", "Готовить плов").replace("Съесть плов", "Плов").replace("Собрать ", "Убрать ")
+				label = str(target.label).replace("Вернуть коробку в багажник", "Вернуть").replace("Собрать казан с подставкой", "Убрать казан").replace("Потушить и собрать костёр", "Убрать костёр").replace("Сесть в машину", "В машину").replace("Сесть на стул", "На стул").replace("Встать со стула", "Встать").replace("Собрать гриб", "Собрать").replace("Собрать ягоды", "Собрать").replace("Собрать виноград", "Виноград").replace("Насадить гриб", "Насадить").replace("Съесть шашлык", "Шашлык").replace("Съесть гриб", "Есть гриб").replace("Выпить пиво", "Пиво").replace("Потушить и собрать мангал", "Убрать мангал").replace("Поставить казан на костёр", "На костёр").replace("Добавить ингредиенты и готовить плов", "Готовить плов").replace("Съесть плов", "Плов").replace("Собрать ", "Убрать ")
 			add_button(label, "interact", false, Rect2(primary, Vector2(112, 96)))
 			if not game.seated and game.beers < 30:
 				add_button("Бег", "sprint", true, Rect2(primary + Vector2(-80, 54), Vector2(68, 68)))
@@ -81,7 +81,7 @@ func _layout() -> void:
 				if game.flag_count() < game.FLAGS_PER_PLAYER:
 					gear.append(["Флаг", "flag"])
 			if game.foraging.can_eat("berries"):
-				gear.append(["Ягоды", "eat_berries"])
+				gear.append(["Виноград" if game.stage.urban else "Ягоды", "eat_berries"])
 			if game.tow_target != null or game.nearby_tow_racer():
 				add_button("Трос", "tow", true, Rect2(primary + Vector2(-80, -26), Vector2(68, 68)))
 		if not gear.is_empty():

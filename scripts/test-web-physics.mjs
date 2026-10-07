@@ -97,7 +97,7 @@ try {
     const faviconResponse = await page.request.get('http://127.0.0.1:' + server.address().port + '/favicon.svg');
     if ((await faviconResponse.text()) !== await readFile(join(root, 'game/branding/rfm-icon.svg'), 'utf8')) throw new Error('Favicon differs from canonical SVG logo');
     await page.locator('#status-brand').waitFor();
-    if (await page.locator('#status-brand').textContent() !== 'Rally Fans Map') throw new Error('Loading brand text is incorrect');
+    if (await page.locator('#status-brand').textContent() !== 'Rally Fans Simulator') throw new Error('Loading brand text is incorrect');
     const loadingStyle = await page.evaluate(() => ({
       background: getComputedStyle(document.getElementById('status')).backgroundColor,
       fill: getComputedStyle(document.getElementById('status-fill')).backgroundColor,
