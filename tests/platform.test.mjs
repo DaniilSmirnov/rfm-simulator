@@ -5,7 +5,7 @@ import {runInNewContext} from 'node:vm';
 const source = name => readFile(new URL('../web/platform/'+name+'.js',import.meta.url),'utf8');
 async function setup(adapter,extra={}) {
   const forwarded=[];
-  const context={Request,Response,Headers,AbortSignal,URL,JSON,Object,location:{origin:'https://game.test',href:'https://game.test/',search:'?vk_user_id=123&sign=test'},fetch:async (...args)=>{forwarded.push(args);return Response.json({ok:true});},...extra};
+  const context={Request,Response,Headers,AbortSignal,URL,URLSearchParams,JSON,Object,location:{origin:'https://game.test',href:'https://game.test/',search:'?vk_user_id=123&vk_app_id=123&vk_ts=1&sign=test'},fetch:async (...args)=>{forwarded.push(args);return Response.json({ok:true});},...extra};
   context.window=context;
   runInNewContext(await source(adapter),context);
   runInNewContext(await source('transport'),context);
@@ -42,16 +42,45 @@ test('VK requires a server-verified profile rather than launch query identity',a
  const {context:c}=await setup('vk',{RallyBoot:{setStage(){}},vkBridge:{send:async()=>({})},fetch:async()=>Response.json({profile:{platform:'vk',nickname:'fake',verified:false},entitlements:{skus:[]}})});
  await assert.rejects(c.RallyPlatform.ready(),/Некорректный/);
 });
-test('VK bootstrap uses init before sending raw launch params to backend',async()=>{
+test('VK bootstrap uses init, signed URL params and Bridge profile before backend session',async()=>{
  const calls=[];
- const {context:c}=await setup('vk',{RallyBoot:{setStage(){}},vkBridge:{send:async(method)=>{calls.push(method);}},fetch:async(url,init)=>{
+ const {context:c}=await setup('vk',{RallyBoot:{setStage(){}},vkBridge:{send:async(method)=>{
+  calls.push(method);
+  if(method==='VKWebAppGetUserInfo') return {id:123,screen_name:'bridge.shortname'};
+  return {};
+ }},fetch:async(url,init)=>{
   calls.push(url);
-  assert.equal(JSON.parse(init.body).launch_params,'?vk_user_id=123&sign=test');
+  const body=JSON.parse(init.body);
+  assert.equal(body.launch_params,'?vk_user_id=123&vk_app_id=123&vk_ts=1&sign=test');
+  assert.deepEqual(body.bridge_profile,{id:123,screen_name:'bridge.shortname'});
   return Response.json({profile:{platform:'vk',nickname:'shortname',verified:true},entitlements:{skus:[]},session:{token:'test-session',expires_at:Math.floor(Date.now()/1000)+3600}});
  }});
  await c.RallyPlatform.ready();
- assert.deepEqual(calls,['VKWebAppInit','/api/vk/session']);
+ assert.deepEqual(calls,['VKWebAppInit','VKWebAppGetUserInfo','/api/vk/session']);
  assert.equal((await c.RallyPlatform.getProfile()).nickname,'shortname');
+});
+
+test('VK bootstrap falls back to Bridge launch params when iframe query is missing',async()=>{
+ const calls=[];
+ const location={origin:'https://game.test',href:'https://game.test/vk/',search:''};
+ const {context:c}=await setup('vk',{location,RallyBoot:{setStage(){}},vkBridge:{send:async(method)=>{
+  calls.push(method);
+  if(method==='VKWebAppGetLaunchParams') return {vk_user_id:321,vk_app_id:123,vk_ts:456,vk_platform:'desktop_web',sign:'bridge-sign'};
+  if(method==='VKWebAppGetUserInfo') return {id:321,screen_name:'bridge.fan'};
+  return {};
+ }},fetch:async(url,init)=>{
+  calls.push(url);
+  const body=JSON.parse(init.body);
+  const params=new URLSearchParams(body.launch_params);
+  assert.equal(params.get('vk_user_id'),'321');
+  assert.equal(params.get('vk_app_id'),'123');
+  assert.equal(params.get('vk_ts'),'456');
+  assert.equal(params.get('sign'),'bridge-sign');
+  assert.deepEqual(body.bridge_profile,{id:321,screen_name:'bridge.fan'});
+  return Response.json({profile:{platform:'vk',nickname:'bridge.fan',verified:true},entitlements:{skus:[]},session:{token:'test-session',expires_at:Math.floor(Date.now()/1000)+3600}});
+ }});
+ await c.RallyPlatform.ready();
+ assert.deepEqual(calls,['VKWebAppInit','VKWebAppGetLaunchParams','VKWebAppGetUserInfo','/api/vk/session']);
 });
 
 test('VK attaches in-memory bearer only to same-origin room requests',async()=>{

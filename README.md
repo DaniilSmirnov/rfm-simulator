@@ -153,7 +153,7 @@ Mini Web-движок пересобран с модулем GodotPhysics3D. П�
 | Поле | Значение |
 |---|---|
 | Repository | `DaniilSmirnov/rfm-simulator` |
-| Worker name | `rfm-simulator` |
+| Worker name | `rally-fans-simulator` |
 | Production branch | `main` |
 | Build command | `npm run build` |
 | Deploy command | `npx wrangler deploy` |

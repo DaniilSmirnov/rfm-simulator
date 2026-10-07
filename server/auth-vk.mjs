@@ -13,11 +13,37 @@ async function verify(value, signature, secret) {
   return crypto.subtle.verify('HMAC', await key(secret), bytes, encoder.encode(value));
 }
 function configured(env) {
-  if (!/^[1-9]\d*$/.test(env.VK_APP_ID || '') || !env.VK_APP_SECRET || !env.VK_SERVICE_TOKEN || !env.VK_SESSION_SECRET) {
+  if (!/^[1-9]\d*$/.test(env.VK_APP_ID || '') || !env.VK_APP_SECRET || !env.VK_SESSION_SECRET) {
     throw new AuthError(503, 'Авторизация VK не настроена.');
   }
 }
-export async function authenticateLaunch(raw, env, now = Date.now(), network = fetch) {
+function nicknameFromBridge(profile, user) {
+  if (!profile || typeof profile !== 'object' || String(profile.id) !== user) return null;
+  return /^[A-Za-z0-9_.]{1,64}$/.test(profile.screen_name || '') ? profile.screen_name : `vk${user}`;
+}
+async function resolveNickname(user, env, network, bridgeProfile) {
+  if (env.VK_SERVICE_TOKEN) {
+    try {
+      const response = await network('https://api.vk.ru/method/users.get', {
+        method: 'POST',
+        body: new URLSearchParams({ user_ids: user, fields: 'screen_name', access_token: env.VK_SERVICE_TOKEN, v: '5.199' }),
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!response.ok) throw new Error('VK unavailable');
+      const data = await response.json();
+      const profile = data?.response?.[0];
+      if (!data?.error && String(profile?.id) === user) {
+        if (/^[A-Za-z0-9_.]{1,64}$/.test(profile.screen_name || '')) return profile.screen_name;
+        return nicknameFromBridge(bridgeProfile, user) || `vk${user}`;
+      }
+    } catch {}
+  }
+  const fallback = nicknameFromBridge(bridgeProfile, user);
+  if (fallback) return fallback;
+  if (!env.VK_SERVICE_TOKEN) throw new AuthError(503, 'Сервисный ключ VK не настроен и профиль VK Bridge недоступен.');
+  throw new AuthError(502, 'Не удалось получить профиль VK. Попробуйте ещё раз.');
+}
+export async function authenticateLaunch(raw, env, now = Date.now(), network = fetch, bridgeProfile = null) {
   configured(env);
   if (typeof raw !== 'string' || raw.length > 8192) throw new AuthError(400, 'Некорректные параметры запуска.');
   const params = new URLSearchParams(raw);
@@ -33,18 +59,7 @@ export async function authenticateLaunch(raw, env, now = Date.now(), network = f
   if (params.get('vk_app_id') !== env.VK_APP_ID || !/^[1-9]\d*$/.test(user || '') || !Number.isSafeInteger(timestamp) || timestamp < seconds - 3600 || timestamp > seconds + 60) {
     throw new AuthError(401, 'Запуск VK устарел или принадлежит другому приложению.');
   }
-  let data;
-  try {
-    const response = await network('https://api.vk.ru/method/users.get', {
-      method: 'POST', body: new URLSearchParams({ user_ids: user, fields: 'screen_name', access_token: env.VK_SERVICE_TOKEN, v: '5.199' }),
-      signal: AbortSignal.timeout(10000),
-    });
-    if (!response.ok) throw new Error('VK unavailable');
-    data = await response.json();
-  } catch { throw new AuthError(502, 'Не удалось получить профиль VK. Попробуйте ещё раз.'); }
-  const profile = data?.response?.[0];
-  if (data?.error || String(profile?.id) !== user) throw new AuthError(502, 'VK не вернул профиль пользователя.');
-  const nickname = /^[A-Za-z0-9_.]{1,64}$/.test(profile.screen_name || '') ? profile.screen_name : `vk${user}`;
+  const nickname = await resolveNickname(user, env, network, bridgeProfile);
   const expires = seconds + 3600;
   const payload = encode(encoder.encode(JSON.stringify({ app: env.VK_APP_ID, user, nickname, expires })));
   const token = `${payload}.${await sign(payload, env.VK_SESSION_SECRET)}`;
