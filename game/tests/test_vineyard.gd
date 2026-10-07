@@ -17,6 +17,11 @@ func run() -> void:
 	game.in_car = false
 	var stage = game.stage
 	check(stage.city.vine_count > 2000 and stage.get_node_or_null("VillageChurch") != null, "vineyard stage includes vines and church")
+	check(stage.city.roadside_grass_count > 500 and stage.city.roadside_stone_count > 20 and stage.city.roadside_bush_count > 20, "country road has dense grass, stones and bushes before and after village")
+	check(stage.woodland_details.get("VineyardRoadsideGrass", 0) == stage.city.roadside_grass_count, "roadside grass is instanced through shared detail batches")
+	check(not stage.city._roadside_station_allowed(435.0) and stage.city._roadside_station_allowed(180.0), "roadside vegetation stays outside village")
+	check(stage.city.village_cobblestones >= 2700 and stage.city.sidewalk_segments >= 170, "village has dense cobblestone paving and continuous sidewalks")
+	check(not stage.draw_base_road_surface(435.0) and stage.draw_base_road_surface(180.0), "village road uses cobblestones without the generic road surface underneath")
 	check(stage.direction(320).z < -0.8 and stage.direction(530).z < -0.8, "village route continues toward finish without a reversal")
 	var id = stage.collectibles.size() / 2
 	var grape = stage.collectibles[id]
