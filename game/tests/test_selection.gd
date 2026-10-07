@@ -52,6 +52,7 @@ func run() -> void:
 	check(city.urban and city.clearings.size() == 4 and city.trees.is_empty(), "vineyard stage has four ordinary spectator spots without a separate parking entity")
 	check(city.city.village_houses >= 14 and city.get_node_or_null("VillageChurch") != null, "village has detailed houses and church")
 	check(city.city.thuja_count > 300, "village is enclosed by a dense thuja forest belt")
+	check(city.city.mixed_tree_count >= 900, "village outer forest has increased tree density")
 	check(city.city.vine_count > 2000 and city.collectibles.size() > 2000, "vineyards contain continuous rows and collectible grapes")
 	city.free()
 	guest.select_player_car(2)

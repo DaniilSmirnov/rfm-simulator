@@ -11,8 +11,6 @@ var roadside_stone_count = 0
 var roadside_bush_count = 0
 var thuja_count = 0
 var mixed_tree_count = 0
-var mixed_conifer_count = 0
-var mixed_broadleaf_count = 0
 var forest_grass_count = 0
 var forest_stone_count = 0
 var forest_boulder_count = 0
@@ -395,8 +393,8 @@ func _roadside_details() -> void:
 					continue
 				p.y = stage.ground(p) - 0.08
 				var size = detail_rng.randf_range(0.28, 0.62)
-				grass_poses.append(Transform3D(Basis(Vector3.UP, detail_rng.randf() * TAU).scaled(Vector3(size * 1.7, size, size * 1.7)), p))
-				grass_colors.append(Color("566a35").lerp(Color("8d9157"), detail_rng.randf() * 0.65))
+				grass_poses.append(Transform3D(Basis(Vector3.UP, detail_rng.randf() * TAU).scaled(Vector3(size * 1.8, size, size * 1.8)), p))
+				grass_colors.append(stage.shared_grass_color(detail_rng.randf()))
 				roadside_grass_count += 1
 	for s in range(22, 820, 7):
 		if not _roadside_station_allowed(float(s), 10.0):
@@ -410,8 +408,8 @@ func _roadside_details() -> void:
 			continue
 		p.y = stage.ground(p)
 		var radius = detail_rng.randf_range(0.16, 0.48)
-		stone_poses.append(Transform3D(Basis(Vector3.UP, detail_rng.randf() * TAU).scaled(Vector3(radius * 1.8, radius, radius * 1.45)), p + Vector3(0, radius * 0.20, 0)))
-		stone_colors.append(Color("7c7d6e").lightened(detail_rng.randf_range(-0.12, 0.10)))
+		stone_poses.append(stage.shared_stone_pose(p + Vector3(0, radius * 0.20, 0), radius, detail_rng.randf() * TAU))
+		stone_colors.append(stage.shared_stone_color(detail_rng.randf_range(-0.10, 0.12)))
 		roadside_stone_count += 1
 	for s in range(28, 816, 9):
 		if not _roadside_station_allowed(float(s), 12.0):
@@ -434,14 +432,11 @@ func _roadside_details() -> void:
 				bush_poses.append(pose)
 				bush_colors.append(Color("405f32").lerp(Color("718044"), detail_rng.randf() * 0.6))
 			roadside_bush_count += 1
-	var stone_mesh = SphereMesh.new()
-	stone_mesh.radial_segments = 6
-	stone_mesh.rings = 3
 	var bush_mesh = SphereMesh.new()
 	bush_mesh.radial_segments = 7
 	bush_mesh.rings = 3
 	stage._detail_batch("VineyardRoadsideGrass", stage._grass_mesh(), grass_poses, grass_colors)
-	stage._detail_batch("VineyardRoadsideStones", stone_mesh, stone_poses, stone_colors)
+	stage._detail_batch("VineyardRoadsideStones", stage.shared_stone_mesh(), stone_poses, stone_colors)
 	stage._detail_batch("VineyardRoadsideBushes", bush_mesh, bush_poses, bush_colors)
 
 func _thuja_forest() -> void:
@@ -550,59 +545,34 @@ func _forest_spot_allowed(p: Vector3, padding: float = 0.0) -> bool:
 	return _point_clear_of_obstacles(p, 4.0 + padding)
 
 func _mixed_forest() -> void:
-	# Reuse the first stage's low-poly vocabulary: tapered conifers, rounded
-	# broadleaf crowns, grass, shrubs, berry bushes, stones and collidable boulders.
+	# The village uses the exact same four-layer tree asset as the first summer
+	# stage. Only density and placement differ, so both stages read as one world.
 	var forest_rng = RandomNumberGenerator.new()
 	forest_rng.seed = 71020265
-	var pine_poses: Array = []
-	var pine_colors: Array = []
-	var trunk_poses: Array = []
-	var trunk_colors: Array = []
-	var crown_poses: Array = []
-	var crown_colors: Array = []
-	for i in range(1500):
+	var tree_data: Array[Dictionary] = []
+	for i in range(3600):
 		var s = forest_rng.randf_range(VILLAGE_START - 52.0, VILLAGE_END + 52.0)
 		var side_value = -1.0 if forest_rng.randi() % 2 == 0 else 1.0
-		var lateral = forest_rng.randf_range(48.0, 140.0)
+		var lateral = forest_rng.randf_range(48.0, 142.0)
 		var p = stage.at(s) + stage.side(s) * side_value * lateral + stage.direction(s) * forest_rng.randf_range(-4.0, 4.0)
 		if not _forest_spot_allowed(p, 1.6):
 			continue
 		p.y = stage.ground(p)
-		var height = forest_rng.randf_range(7.0, 15.0)
-		var width = forest_rng.randf_range(1.6, 3.2)
-		var yaw = forest_rng.randf() * TAU
-		if forest_rng.randf() < 0.58:
-			pine_poses.append(Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3(width, height, width)), p + Vector3(0, height * 0.5, 0)))
-			pine_colors.append(Color("294c34").lerp(Color("496a3b"), forest_rng.randf() * 0.75))
-			mixed_conifer_count += 1
-		else:
-			trunk_poses.append(Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3(width * 0.16, height * 0.56, width * 0.16)), p + Vector3(0, height * 0.28, 0)))
-			trunk_colors.append(Color("6f5941").lightened(forest_rng.randf_range(-0.08, 0.08)))
-			var crown_height = height * forest_rng.randf_range(0.40, 0.52)
-			crown_poses.append(Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3(width * 1.25, crown_height, width * 1.15)), p + Vector3(0, height * 0.73, 0)))
-			crown_colors.append(Color("3f6335").lerp(Color("71804a"), forest_rng.randf() * 0.55))
-			mixed_broadleaf_count += 1
+		tree_data.append({
+			"position": p,
+			"height": forest_rng.randf_range(6.0, 17.0),
+			"shade": forest_rng.randf_range(-0.025, 0.045),
+		})
 		mixed_tree_count += 1
-		if mixed_tree_count >= 620:
+		if mixed_tree_count >= 1050:
 			break
-	var pine = CylinderMesh.new()
-	pine.height = 1
-	pine.bottom_radius = 0.58
-	pine.top_radius = 0.015
-	pine.radial_segments = 7
-	pine.rings = 1
-	var trunk = CylinderMesh.new()
-	trunk.height = 1
-	trunk.bottom_radius = 1
-	trunk.top_radius = 0.72
-	trunk.radial_segments = 6
-	trunk.rings = 1
-	var crown = SphereMesh.new()
-	crown.radial_segments = 7
-	crown.rings = 3
-	stage._detail_batch("VillageForestPines", pine, pine_poses, pine_colors)
-	stage._detail_batch("VillageForestBroadleafTrunks", trunk, trunk_poses, trunk_colors)
-	stage._detail_batch("VillageForestBroadleafCrowns", crown, crown_poses, crown_colors)
+	for layer in range(4):
+		var poses: Array = []
+		var colors: Array = []
+		for tree in tree_data:
+			poses.append(stage.shared_tree_pose(tree.position, float(tree.height), layer))
+			colors.append(stage.shared_tree_color(layer, float(tree.shade), false))
+		stage._detail_batch("VillageForestTreeLayer%d" % layer, stage.shared_tree_mesh(layer), poses, colors)
 
 	var grass_poses: Array = []
 	var grass_colors: Array = []
@@ -615,7 +585,7 @@ func _mixed_forest() -> void:
 		p.y = stage.ground(p) - 0.12
 		var size = forest_rng.randf_range(0.28, 0.70)
 		grass_poses.append(Transform3D(Basis(Vector3.UP, forest_rng.randf() * TAU).scaled(Vector3(size * 1.8, size, size * 1.8)), p))
-		grass_colors.append(Color("4f6634").lerp(Color("91905a"), forest_rng.randf() * 0.7))
+		grass_colors.append(stage.shared_grass_color(forest_rng.randf()))
 		forest_grass_count += 1
 		if forest_grass_count >= 1900:
 			break
@@ -631,15 +601,12 @@ func _mixed_forest() -> void:
 			continue
 		p.y = stage.ground(p)
 		var radius = forest_rng.randf_range(0.12, 0.38)
-		stone_poses.append(Transform3D(Basis(Vector3.UP, forest_rng.randf() * TAU).scaled(Vector3(radius * 2.0, radius, radius * 1.7)), p + Vector3(0, radius * 0.22, 0)))
-		stone_colors.append(Color("7e806e").lightened(forest_rng.randf_range(-0.10, 0.12)))
+		stone_poses.append(stage.shared_stone_pose(p + Vector3(0, radius * 0.22, 0), radius, forest_rng.randf() * TAU))
+		stone_colors.append(stage.shared_stone_color(forest_rng.randf_range(-0.10, 0.12)))
 		forest_stone_count += 1
 		if forest_stone_count >= 320:
 			break
-	var stones = SphereMesh.new()
-	stones.radial_segments = 5
-	stones.rings = 2
-	stage._detail_batch("VillageForestStones", stones, stone_poses, stone_colors)
+	stage._detail_batch("VillageForestStones", stage.shared_stone_mesh(), stone_poses, stone_colors)
 
 	var boulder_poses: Array = []
 	var boulder_colors: Array = []
@@ -754,8 +721,8 @@ func _village_natural_details() -> void:
 			continue
 		p.y = stage.ground(p) - 0.06
 		var size = detail_rng.randf_range(0.20, 0.52)
-		grass_poses.append(Transform3D(Basis(Vector3.UP, detail_rng.randf() * TAU).scaled(Vector3(size * 1.55, size, size * 1.55)), p))
-		grass_colors.append(Color("526a39").lerp(Color("8a8f57"), detail_rng.randf() * 0.55))
+		grass_poses.append(Transform3D(Basis(Vector3.UP, detail_rng.randf() * TAU).scaled(Vector3(size * 1.8, size, size * 1.8)), p))
+		grass_colors.append(stage.shared_grass_color(detail_rng.randf()))
 		village_detail_positions.append(p)
 		village_grass_count += 1
 		if village_grass_count >= 720:
@@ -768,17 +735,14 @@ func _village_natural_details() -> void:
 			continue
 		p.y = stage.ground(p)
 		var radius = detail_rng.randf_range(0.10, 0.30)
-		stone_poses.append(Transform3D(Basis(Vector3.UP, detail_rng.randf() * TAU).scaled(Vector3(radius * 1.9, radius, radius * 1.55)), p + Vector3(0, radius * 0.18, 0)))
-		stone_colors.append(Color("868476").lightened(detail_rng.randf_range(-0.10, 0.10)))
+		stone_poses.append(stage.shared_stone_pose(p + Vector3(0, radius * 0.18, 0), radius, detail_rng.randf() * TAU))
+		stone_colors.append(stage.shared_stone_color(detail_rng.randf_range(-0.10, 0.10)))
 		village_detail_positions.append(p)
 		village_stone_count += 1
 		if village_stone_count >= 150:
 			break
-	var stone_mesh = SphereMesh.new()
-	stone_mesh.radial_segments = 5
-	stone_mesh.rings = 2
 	stage._detail_batch("VillageGrass", stage._grass_mesh(), grass_poses, grass_colors)
-	stage._detail_batch("VillageStones", stone_mesh, stone_poses, stone_colors)
+	stage._detail_batch("VillageStones", stage.shared_stone_mesh(), stone_poses, stone_colors)
 
 func _landscape() -> void:
 	var root = Node3D.new()

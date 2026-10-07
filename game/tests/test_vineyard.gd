@@ -29,8 +29,18 @@ func run() -> void:
 	check(village_name_labels.size() == 4, "both village signs show Ля Газ в Польен on both faces")
 	check(stage.city.thuja_count > 300, "dense thuja forest surrounds the village")
 	check(stage.woodland_details.get("VillageThujaLower", 0) == stage.city.thuja_count and stage.woodland_details.get("VillageThujaCrown", 0) == stage.city.thuja_count, "thuja forest is rendered through instanced layers")
-	check(stage.city.mixed_tree_count > 500 and stage.city.mixed_conifer_count > 200 and stage.city.mixed_broadleaf_count > 120, "village is surrounded by a varied mixed forest beyond the thuja belt")
-	check(stage.woodland_details.get("VillageForestPines", 0) == stage.city.mixed_conifer_count and stage.woodland_details.get("VillageForestBroadleafCrowns", 0) == stage.city.mixed_broadleaf_count, "mixed forest trees are rendered through instanced layers")
+	check(stage.city.mixed_tree_count >= 900, "village has a denser forest using the shared summer tree asset")
+	var shared_tree_layers_match = true
+	for layer in range(4):
+		shared_tree_layers_match = shared_tree_layers_match and stage.woodland_details.get("VillageForestTreeLayer%d" % layer, 0) == stage.city.mixed_tree_count
+	check(shared_tree_layers_match, "all village forest trees use the same four instanced layers as the first summer stage")
+	var village_tree_tiles = stage.find_children("VillageForestTreeLayer0_Tile_*", "MultiMeshInstance3D", true, false)
+	check(not village_tree_tiles.is_empty() and village_tree_tiles[0].multimesh.mesh.radial_segments == stage.shared_tree_mesh(0).radial_segments, "village tree trunk mesh matches the shared forest primitive")
+	var village_stone_tiles = stage.find_children("VillageForestStones_Tile_*", "MultiMeshInstance3D", true, false)
+	var shared_stone_mesh = stage.shared_stone_mesh()
+	check(not village_stone_tiles.is_empty() and village_stone_tiles[0].multimesh.mesh.radial_segments == shared_stone_mesh.radial_segments and village_stone_tiles[0].multimesh.mesh.rings == shared_stone_mesh.rings, "village forest stones reuse the first-stage stone geometry")
+	var village_grass_tiles = stage.find_children("VillageForestGrass_Tile_*", "MultiMeshInstance3D", true, false)
+	check(not village_grass_tiles.is_empty() and village_grass_tiles[0].multimesh.mesh.get_aabb() == stage._grass_mesh().get_aabb(), "village forest grass reuses the first-stage grass mesh")
 	check(stage.city.forest_grass_count > 1000 and stage.city.forest_stone_count > 200, "mixed forest has dense grass and loose stones")
 	check(stage.city.forest_boulder_count > 25 and stage.rocks.size() >= stage.city.forest_boulder_count, "forest contains collidable boulders")
 	check(stage.city.forest_bush_count > 100 and stage.city.forest_berry_bush_count > 40, "forest has ordinary and berry undergrowth")

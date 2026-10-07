@@ -313,14 +313,46 @@ func _build_road() -> void:
 
 # Four instanced draw calls for the forest instead of thousands of nodes.
 # Collision positions remain in `trees`, matching the original gameplay.
+func shared_tree_mesh(layer: int) -> CylinderMesh:
+	var mesh = CylinderMesh.new()
+	mesh.bottom_radius = 1.0
+	mesh.top_radius = 0.65 if layer == 0 else 0.0
+	mesh.height = 1.0
+	mesh.radial_segments = 5 if layer == 0 else 6
+	mesh.rings = 1
+	return mesh
+
+func shared_tree_pose(position: Vector3, height_value: float, layer: int, basis: Basis = Basis.IDENTITY) -> Transform3D:
+	var radius = 0.2 if layer == 0 else height_value * (0.28 - (layer - 1) * 0.055)
+	var layer_height = height_value * (0.64 if layer == 0 else 0.49)
+	var y = height_value * (0.32 if layer == 0 else 0.47 + (layer - 1) * 0.18)
+	return Transform3D(basis * Basis.from_scale(Vector3(radius, layer_height, radius)), position + basis * Vector3(0, y, 0))
+
+func shared_tree_color(layer: int, shade: float = 0.0, snowy: bool = false) -> Color:
+	if layer == 0:
+		return Color("67543d")
+	if snowy:
+		return (Color("78958a") if layer == 1 else Color("b8cdd3")).lightened(shade)
+	return Color(0.17 + shade, 0.28 + shade, 0.21 + shade)
+
+func shared_grass_color(value: float) -> Color:
+	return Color("4f6634").lerp(Color("91905a"), clampf(value, 0.0, 1.0) * 0.7)
+
+func shared_stone_mesh() -> SphereMesh:
+	var mesh = SphereMesh.new()
+	mesh.radial_segments = 5
+	mesh.rings = 2
+	return mesh
+
+func shared_stone_pose(position: Vector3, radius: float, yaw: float = 0.0) -> Transform3D:
+	return Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3(radius * 2.0, radius, radius * 1.7)), position)
+
+func shared_stone_color(lightness: float = 0.0) -> Color:
+	return Color("7e806e").lightened(clampf(lightness, -0.10, 0.12))
+
 func _build_forest(forest: Array[Dictionary]) -> void:
 	for layer in range(4):
-		var mesh = CylinderMesh.new()
-		mesh.bottom_radius = 1.0
-		mesh.top_radius = 0.65 if layer == 0 else 0.0
-		mesh.height = 1.0
-		mesh.radial_segments = 5 if layer == 0 else 6
-		mesh.rings = 1
+		var mesh = shared_tree_mesh(layer)
 		var mat = RallyProps.material(Color.WHITE)
 		mat.vertex_color_use_as_albedo = true
 		mat.vertex_color_is_srgb = true
@@ -333,13 +365,8 @@ func _build_forest(forest: Array[Dictionary]) -> void:
 		forest_layers.append(mm)
 		for i in range(forest.size()):
 			var tree_data = forest[i]
-			var h: float = tree_data.height
-			var radius = 0.2 if layer == 0 else h * (0.28 - (layer - 1) * 0.055)
-			var height = h * (0.64 if layer == 0 else 0.49)
-			var y = h * (0.32 if layer == 0 else 0.47 + (layer - 1) * 0.18)
-			mm.set_instance_transform(i, Transform3D(Basis.from_scale(Vector3(radius, height, radius)), tree_data.position + Vector3(0, y, 0)))
-			var shade: float = tree_data.shade
-			mm.set_instance_color(i, Color("67543d") if layer == 0 else ((Color("78958a") if layer == 1 else Color("b8cdd3")).lightened(shade) if winter else Color(0.17 + shade, 0.28 + shade, 0.21 + shade)))
+			mm.set_instance_transform(i, shared_tree_pose(tree_data.position, float(tree_data.height), layer))
+			mm.set_instance_color(i, shared_tree_color(layer, float(tree_data.shade), winter))
 		var instance = MultiMeshInstance3D.new()
 		instance.name = "ForestLayer%d" % layer
 		instance.multimesh = mm
@@ -510,7 +537,7 @@ func woodland_spot(pos: Vector3, padding: float = 0.0) -> bool:
 	return true
 
 func _detail_batch(name: String, mesh: Mesh, poses: Array, colors: Array, indices: Array = []) -> void:
-	if name in ["ForestGrass", "ForestBushes", "ForestBerryBushes", "ForestBerries", "ForestBushStems", "VineyardGrapes", "VineyardLeaves", "VineyardRoadsideGrass", "VineyardRoadsideStones", "VineyardRoadsideBushes", "VillageForestPines", "VillageForestBroadleafTrunks", "VillageForestBroadleafCrowns", "VillageForestGrass", "VillageForestStones", "VillageForestBoulders", "VillageForestBushes", "VillageForestBerryBushes", "VillageForestBerries", "VillageGrass", "VillageStones"]:
+	if name in ["ForestGrass", "ForestBushes", "ForestBerryBushes", "ForestBerries", "ForestBushStems", "VineyardGrapes", "VineyardLeaves", "VineyardRoadsideGrass", "VineyardRoadsideStones", "VineyardRoadsideBushes", "VillageForestTreeLayer0", "VillageForestTreeLayer1", "VillageForestTreeLayer2", "VillageForestTreeLayer3", "VillageForestGrass", "VillageForestStones", "VillageForestBoulders", "VillageForestBushes", "VillageForestBerryBushes", "VillageForestBerries", "VillageGrass", "VillageStones"]:
 		var cells = {}
 		for i in range(poses.size()):
 			var origin: Vector3 = poses[i].origin
@@ -594,7 +621,7 @@ func _build_woodland_details() -> void:
 		p.y = ground(p) - 0.20
 		var size = detail_rng.randf_range(0.25, 0.65)
 		grass_poses.append(Transform3D(Basis(Vector3.UP, detail_rng.randf() * TAU).scaled(Vector3(size * 1.8, size, size * 1.8)), p))
-		grass_colors.append(Color("4f6634").lerp(Color("91905a"), detail_rng.randf() * 0.7))
+		grass_colors.append(shared_grass_color(detail_rng.randf()))
 	for i in range(4000):
 		var along = detail_rng.randf_range(20, LENGTH - 20)
 		var p = at(along) + side(along) * detail_rng.randf_range(13, 125) * (-1 if i % 2 else 1)
@@ -614,8 +641,8 @@ func _build_woodland_details() -> void:
 			continue
 		p.y = ground(p) - 0.18
 		var radius = detail_rng.randf_range(0.12, 0.35)
-		stone_poses.append(Transform3D(Basis(Vector3.UP, detail_rng.randf() * TAU).scaled(Vector3(radius * 2, radius, radius * 1.7)), p))
-		stone_colors.append(Color("7e806e").lightened(detail_rng.randf_range(-0.1, 0.12)))
+		stone_poses.append(shared_stone_pose(p, radius, detail_rng.randf() * TAU))
+		stone_colors.append(shared_stone_color(detail_rng.randf_range(-0.10, 0.12)))
 	# Clumped undergrowth rather than an even carpet; berry bushes use the
 	# same seeded generator on every client. Keep picnic spaces and paths open.
 	var bush_poses: Array = []
@@ -707,10 +734,7 @@ func _build_woodland_details() -> void:
 	boulder.radial_segments = 7
 	boulder.rings = 3
 	_detail_batch("ForestBoulders", boulder, boulder_poses, boulder_colors)
-	var stones_mesh = SphereMesh.new()
-	stones_mesh.radial_segments = 5
-	stones_mesh.rings = 2
-	_detail_batch("ForestPebbles", stones_mesh, stone_poses, stone_colors)
+	_detail_batch("ForestPebbles", shared_stone_mesh(), stone_poses, stone_colors)
 	_detail_batch("ForestGrass", _grass_mesh(), grass_poses, grass_colors)
 	var stem = CylinderMesh.new()
 	stem.height = 1
