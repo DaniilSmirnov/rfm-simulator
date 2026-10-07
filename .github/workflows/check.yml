@@ -39,7 +39,7 @@ jobs:
           path: flag-*.png
           if-no-files-found: warn
 
-      - name: Render imported low-poly characters
+      - name: Render imported reference-style characters
         env:
           LIBGL_ALWAYS_SOFTWARE: "true"
         run: xvfb-run -a .cache/godot/Godot_v4.4.1-stable_linux.x86_64 --path game --rendering-method gl_compatibility --script res://tests/character_preview.gd

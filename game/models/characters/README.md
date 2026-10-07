@@ -1,8 +1,8 @@
-# Low-poly spectators
+# Reference-style spectators
 
 Four editable GLB variants used by players, multiplayer peers, spectators and officials.
-Body geometry: 1360 / 1312 / 1408 / 1480 triangles (previously 2460 / 2584 / 2564 / 2840).
-Rounded capsule head and torso, large eyes, thin limbs and simplified fingers follow the supplied cartoon reference; all original skin, clothing and hair profiles are retained.
+Body geometry: 11172 / 9900 / 11628 / 10884 triangles. Visual fidelity takes priority over a polygon budget.
+Smooth shading, rounded capsule head and torso, large eyes, thin limbs and rounded fingers follow the supplied cartoon reference; all original skin, clothing and hair profiles are retained.
 Each body has six mesh nodes: torso, head, two arms and two legs.
 Beer and food are gameplay props attached separately at runtime.
 

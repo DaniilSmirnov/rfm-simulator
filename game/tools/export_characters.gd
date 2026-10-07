@@ -22,7 +22,10 @@ func bake(node: Node3D) -> void:
 		arrays.resize(Mesh.ARRAY_MAX)
 		arrays[Mesh.ARRAY_VERTEX] = group.vertices
 		arrays[Mesh.ARRAY_NORMAL] = group.normals
-		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+		var indexed = SurfaceTool.new()
+		indexed.create_from_arrays(arrays)
+		indexed.index()
+		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, indexed.commit_to_arrays())
 		mesh.surface_set_material(mesh.get_surface_count() - 1, group.material)
 	var body = MeshInstance3D.new()
 	body.name = "Geometry"
@@ -35,14 +38,18 @@ func collect(node: Node3D, pose: Transform3D, groups: Dictionary) -> void:
 		var key = mat.albedo_color.to_html()
 		if not groups.has(key):
 			groups[key] = {"vertices": PackedVector3Array(), "normals": PackedVector3Array(), "material": mat}
-		var faces = node.mesh.get_faces()
-		for i in range(0, faces.size(), 3):
-			var a = pose * faces[i]
-			var b = pose * faces[i + 1]
-			var c = pose * faces[i + 2]
-			var normal = (c - a).cross(b - a).normalized()
-			groups[key].vertices.append_array(PackedVector3Array([a, b, c]))
-			groups[key].normals.append_array(PackedVector3Array([normal, normal, normal]))
+		var normal_basis = pose.basis.inverse().transposed()
+		for surface in range(node.mesh.get_surface_count()):
+			var arrays = node.mesh.surface_get_arrays(surface)
+			var vertices = arrays[Mesh.ARRAY_VERTEX]
+			var normals = arrays[Mesh.ARRAY_NORMAL]
+			var indices = arrays[Mesh.ARRAY_INDEX]
+			var count = indices.size() if indices != null and not indices.is_empty() else vertices.size()
+			for i in range(count):
+				var index = indices[i] if indices != null and not indices.is_empty() else i
+				groups[key].vertices.append(pose * vertices[index])
+				groups[key].normals.append((normal_basis * normals[index]).normalized())
+
 	for child in node.get_children():
 		if child is Node3D and child.visible:
 			collect(child, pose * child.transform, groups)
