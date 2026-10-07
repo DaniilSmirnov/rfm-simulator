@@ -10,10 +10,17 @@ static func profile(id: int) -> Dictionary:
 static func nominal(racer: Dictionary, s: float) -> float:
 	return racer.get("bias", 0.0) + sin(s / 34.0 + racer.get("phase", 0.0)) * 0.24 + sin(s / 71.0 + racer.get("phase", 0.0) * 1.7) * 0.12
 
+static func speed_limit(game: Node3D, racer: Dictionary, s: float) -> float:
+	var stage = game.stage
+	var station = stage.road_s(game.race_at(s))
+	var role = str(racer.get("role", "racer"))
+	var unrestricted_village_run = stage.village(station) and role in ["racer", "zero"]
+	return (27.0 if unrestricted_village_run else game.race_speed(s)) * racer.get("pace", 1.0)
+
 static func plan(game: Node3D, racer: Dictionary) -> Dictionary:
 	var stage = game.stage
 	var s: float = racer.s
-	var limit: float = game.race_speed(s) * racer.get("pace", 1.0)
+	var limit: float = speed_limit(game, racer, s)
 	var current: float = racer.get("line", racer.slide)
 	var base = clampf(nominal(racer, s) + racer.slide, -1.45, 1.45)
 	var positions: Array[Dictionary] = [{"pos": game.car.position, "speed": 0.0}]
@@ -25,7 +32,7 @@ static func plan(game: Node3D, racer: Dictionary) -> Dictionary:
 	for other in game.racers:
 		if other.id == racer.id:
 			continue
-		var other_speed = other.get("drive_speed", game.race_speed(other.s)) if other.state == "racing" else 0.0
+		var other_speed = other.get("drive_speed", speed_limit(game, other, other.s)) if other.state == "racing" else 0.0
 		positions.append({"pos": other.node.position, "speed": other_speed})
 	var blockers: Array[Dictionary] = []
 	var closest = INF
