@@ -20,7 +20,7 @@ func run() -> void:
 	check(absf(absf(pose.rotation.y) - PI) < 0.02, "rotation follows short path across yaw wrap")
 	check(not buffer.push(1.2, Vector3(99, 0, 0), Vector3.ZERO) and not buffer.push(1.1, Vector3(99, 0, 0), Vector3.ZERO), "duplicates and reordered responses do not rewind movement")
 	check(absf(buffer.sample(1.25).position.x - 2.5) < 0.001, "brief missing sample predicts constant velocity")
-	check(absf(buffer.sample(20).position.x - 3.2) < 0.001, "lost connection stops prediction after 120 milliseconds")
+	check(absf(buffer.sample(20).position.x - 4.0) < 0.001, "lost connection stops prediction after 200 milliseconds")
 	buffer.push(2, Vector3(100, 0, 0), Vector3.ZERO)
 	check(buffer.samples.size() == 1 and buffer.sample(1).position.x == 100, "recovery teleport clears interpolation history")
 	buffer.push(2.1, Vector3(101, 0, 0), Vector3.ZERO, true)
@@ -29,7 +29,7 @@ func run() -> void:
 	fast.max_speed = 12
 	fast.push(0, Vector3.ZERO, Vector3.ZERO)
 	fast.push(0.01, Vector3(20, 0, 0), Vector3.ZERO)
-	check(fast.sample(1).position.x <= 21.45, "prediction velocity is bounded for noisy snapshots")
+	check(fast.sample(1).position.x <= 22.41, "prediction velocity is bounded for noisy snapshots")
 	var jittered = Buffer.new()
 	var snapshots = []
 	for i in range(61):
@@ -52,6 +52,34 @@ func run() -> void:
 		previous = rendered
 	check(largest_step < 0.64 and largest_error < 0.01, "10 Hz snapshots with variable delays move continuously at 24 FPS")
 	check(jittered.samples.size() <= Buffer.MAX_SAMPLES, "snapshot history remains bounded")
+	var adaptive = Buffer.new()
+	adaptive.push(0.0, Vector3.ZERO, Vector3.ZERO)
+	adaptive.push(0.1, Vector3(1.0, 0, 0), Vector3.ZERO)
+	check(adaptive.delay() <= 0.11, "stable 10 Hz transport uses roughly 100 ms buffer instead of 180 ms")
+	var before = adaptive.render(0.25).position.x
+	adaptive.push(0.4, Vector3(4.0, 0, 0), Vector3.ZERO)
+	check(adaptive.render(0.26).position.x >= before, "jitter-driven buffer increase never rewinds remote motion")
+	check(adaptive.render(0.1).position.x >= before, "backward network clock correction never rewinds remote motion")
+	check(adaptive.render(10, true).position.x == 4.0, "paused actors stop extrapolation")
+	adaptive.push(0.5, Vector3(100, 0, 0), Vector3.ZERO, true)
+	check(adaptive.render(0.5).position.x == 100, "teleport resets monotonic render timeline")
+	for latency in [0.05, 0.10, 0.20]:
+		var delayed = Buffer.new()
+		var next_snapshot = 0
+		var previous_render = 0.0
+		var monotonic = true
+		var finite_motion = true
+		for frame in range(144):
+			var now = frame / 24.0
+			while next_snapshot * 0.1 + latency <= now:
+				var sent = next_snapshot * 0.1
+				delayed.push(sent, Vector3(sent * 15.0, 0, 0), Vector3.ZERO)
+				next_snapshot += 1
+			var rendered = delayed.render(now).position.x
+			monotonic = monotonic and rendered >= previous_render - 0.001
+			finite_motion = finite_motion and is_finite(rendered)
+			previous_render = rendered
+		check(monotonic and finite_motion, "remote motion stays continuous with %d ms latency" % int(latency * 1000))
 	var game = load("res://main.tscn").instantiate()
 	root.add_child(game)
 	await process_frame
@@ -62,6 +90,9 @@ func run() -> void:
 	game.room.is_host = false
 	game.room.player_id = "guest"
 	game.room.request_kind = "sync"
+	var own_position = game.car.position
+	game.room._update_peers([{"id": "guest", "state": {"car": [900, 0, 0]}}])
+	check(game.car.position == own_position, "own local prediction is not overwritten by delayed echo")
 	var now = Time.get_ticks_usec() / 1000000.0
 	game.room.request_sent_at = now - 2.0
 	game.room.update_server_clock((now + 100) * 1000)
