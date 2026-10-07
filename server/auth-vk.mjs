@@ -17,11 +17,7 @@ function configured(env) {
     throw new AuthError(503, 'Авторизация VK не настроена.');
   }
 }
-function nicknameFromBridge(profile, user) {
-  if (!profile || typeof profile !== 'object' || String(profile.id) !== user) return null;
-  return /^[A-Za-z0-9_.]{1,64}$/.test(profile.screen_name || '') ? profile.screen_name : `vk${user}`;
-}
-async function resolveNickname(user, env, network, bridgeProfile) {
+async function resolveNickname(user, env, network) {
   if (env.VK_SERVICE_TOKEN) {
     try {
       const response = await network('https://api.vk.ru/method/users.get', {
@@ -33,17 +29,15 @@ async function resolveNickname(user, env, network, bridgeProfile) {
       const data = await response.json();
       const profile = data?.response?.[0];
       if (!data?.error && String(profile?.id) === user) {
-        if (/^[A-Za-z0-9_.]{1,64}$/.test(profile.screen_name || '')) return profile.screen_name;
-        return nicknameFromBridge(bridgeProfile, user) || `vk${user}`;
+        return /^[A-Za-z0-9_.]{1,64}$/.test(profile.screen_name || '') ? profile.screen_name : `vk${user}`;
       }
     } catch {}
   }
-  const fallback = nicknameFromBridge(bridgeProfile, user);
-  if (fallback) return fallback;
-  if (!env.VK_SERVICE_TOKEN) throw new AuthError(503, 'Сервисный ключ VK не настроен и профиль VK Bridge недоступен.');
-  throw new AuthError(502, 'Не удалось получить профиль VK. Попробуйте ещё раз.');
+  // Launch params already prove the VK user id. Profile lookup is only needed for
+  // the cosmetic shortname, so it must never make a valid signed launch unusable.
+  return `vk${user}`;
 }
-export async function authenticateLaunch(raw, env, now = Date.now(), network = fetch, bridgeProfile = null) {
+export async function authenticateLaunch(raw, env, now = Date.now(), network = fetch) {
   configured(env);
   if (typeof raw !== 'string' || raw.length > 8192) throw new AuthError(400, 'Некорректные параметры запуска.');
   const params = new URLSearchParams(raw);
@@ -59,7 +53,7 @@ export async function authenticateLaunch(raw, env, now = Date.now(), network = f
   if (params.get('vk_app_id') !== env.VK_APP_ID || !/^[1-9]\d*$/.test(user || '') || !Number.isSafeInteger(timestamp) || timestamp < seconds - 3600 || timestamp > seconds + 60) {
     throw new AuthError(401, 'Запуск VK устарел или принадлежит другому приложению.');
   }
-  const nickname = await resolveNickname(user, env, network, bridgeProfile);
+  const nickname = await resolveNickname(user, env, network);
   const expires = seconds + 3600;
   const payload = encode(encoder.encode(JSON.stringify({ app: env.VK_APP_ID, user, nickname, expires })));
   const token = `${payload}.${await sign(payload, env.VK_SESSION_SECRET)}`;

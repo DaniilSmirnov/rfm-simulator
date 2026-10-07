@@ -59,7 +59,7 @@ export default {
         if (raw.length > 16384) return json({ error: 'Слишком большое сообщение.' }, 413);
         let body;
         try { body = JSON.parse(raw); } catch { return json({ error: 'Некорректное сообщение.' }, 400); }
-        return json(await authenticateLaunch(body?.launch_params, env, Date.now(), fetch, body?.bridge_profile));
+        return json(await authenticateLaunch(body?.launch_params, env));
       }
       // Anonymous and authenticated players share the same room namespace.
       // An explicitly supplied session must never silently downgrade to anonymous.

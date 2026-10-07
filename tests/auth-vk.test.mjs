@@ -47,39 +47,36 @@ test('missing config and malformed input fail closed',async()=>{
   await assert.rejects(authenticateLaunch(launch(),{},now,network),error=>error.status===503);
   for(const raw of [null,{},'x'.repeat(8193)]) await assert.rejects(authenticateLaunch(raw,env,now,network),error=>error.status===400);
 });
-test('VK failures and mismatched profile are rejected; missing shortname uses technical ID',async()=>{
+test('VK profile lookup is cosmetic and valid signed launch falls back to technical ID',async()=>{
   for(const result of [{error:{error_code:5}}, {response:[{id:43,screen_name:'other'}]},null]) {
-    await assert.rejects(authenticateLaunch(launch(),env,now,async()=>Response.json(result)),error=>error.status===502);
+    const data=await authenticateLaunch(launch(),env,now,async()=>Response.json(result));
+    assert.equal(data.profile.nickname,'vk42');
   }
-  await assert.rejects(authenticateLaunch(launch(),env,now,async()=>{throw Error('down');}),error=>error.status===502);
-  const data=await authenticateLaunch(launch(),env,now,async()=>Response.json({response:[{id:42,first_name:'Do not use'}]}));
-  assert.equal(data.profile.nickname,'vk42');
-});
-test('signed launch can use same-user VK Bridge shortname when service profile lookup is unavailable',async()=>{
-  const withoutService={...env};
-  delete withoutService.VK_SERVICE_TOKEN;
-  const data=await authenticateLaunch(launch(),withoutService,now,async()=>{throw Error('must not call network');},{id:42,screen_name:'bridge.fan'});
-  assert.equal(data.profile.nickname,'bridge.fan');
-  assert.equal((await authenticateSession(request(data.session.token),withoutService,now)).user,'42');
-  await assert.rejects(authenticateLaunch(launch(),withoutService,now,async()=>{throw Error('must not call network');},{id:43,screen_name:'spoofed'}),error=>error.status===503);
+  const networkFailure=await authenticateLaunch(launch(),env,now,async()=>{throw Error('down');});
+  assert.equal(networkFailure.profile.nickname,'vk42');
+  const missingShortname=await authenticateLaunch(launch(),env,now,async()=>Response.json({response:[{id:42,first_name:'Do not use'}]}));
+  assert.equal(missingShortname.profile.nickname,'vk42');
 });
 
-test('VK API failure falls back only to a Bridge profile with the signed user id',async()=>{
-  const data=await authenticateLaunch(launch(),env,now,async()=>Response.json({error:{error_code:5}}),{id:42,screen_name:'bridge.fan'});
-  assert.equal(data.profile.nickname,'bridge.fan');
-  await assert.rejects(authenticateLaunch(launch(),env,now,async()=>Response.json({error:{error_code:5}}),{id:43,screen_name:'spoofed'}),error=>error.status===502);
+test('signed launch does not require a service token and still produces a verifiable session',async()=>{
+  const withoutService={...env};
+  delete withoutService.VK_SERVICE_TOKEN;
+  const data=await authenticateLaunch(launch(),withoutService,now,async()=>{throw Error('must not call network');});
+  assert.equal(data.profile.nickname,'vk42');
+  assert.equal((await authenticateSession(request(data.session.token),withoutService,now)).user,'42');
 });
+
 test('Worker gates VK room routes and overwrites client nickname, standalone stays anonymous',async()=>{
   assert.equal((await worker.fetch(new Request(request(),{headers:{'X-Rally-Platform':'vk'}}),env)).status,401);
   assert.equal((await worker.fetch(new Request(request(),{headers:{Authorization:'Bearer invalid'}}),env)).status,401);
   assert.equal((await worker.fetch(new Request('https://game.test/api/vk/session',{method:'POST',body:'{}'}),{})).status,503);
   assert.equal((await worker.fetch(new Request('https://game.test/api/vk/session',{method:'POST',body:'bad'}),env)).status,400);
-  const bridgeOnlyEnv={...env};
-  delete bridgeOnlyEnv.VK_SERVICE_TOKEN;
-  const bridgeLaunch=launch({vk_ts:String(Math.floor(Date.now()/1000))});
-  const bridgeSession=await worker.fetch(new Request('https://game.test/api/vk/session',{method:'POST',body:JSON.stringify({launch_params:bridgeLaunch,bridge_profile:{id:42,screen_name:'bridge.fan'}})}),bridgeOnlyEnv);
-  assert.equal(bridgeSession.status,200);
-  assert.equal((await bridgeSession.json()).profile.nickname,'bridge.fan');
+  const noServiceEnv={...env};
+  delete noServiceEnv.VK_SERVICE_TOKEN;
+  const noServiceLaunch=launch({vk_ts:String(Math.floor(Date.now()/1000))});
+  const noServiceSession=await worker.fetch(new Request('https://game.test/api/vk/session',{method:'POST',body:JSON.stringify({launch_params:noServiceLaunch})}),noServiceEnv);
+  assert.equal(noServiceSession.status,200);
+  assert.equal((await noServiceSession.json()).profile.nickname,'vk42');
   const realNow=Date.now();
   const currentLaunch=launch({vk_ts:String(Math.floor(realNow/1000))});
   const data=await authenticateLaunch(currentLaunch,env,realNow,network);

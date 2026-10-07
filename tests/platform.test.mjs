@@ -42,21 +42,17 @@ test('VK requires a server-verified profile rather than launch query identity',a
  const {context:c}=await setup('vk',{RallyBoot:{setStage(){}},vkBridge:{send:async()=>({})},fetch:async()=>Response.json({profile:{platform:'vk',nickname:'fake',verified:false},entitlements:{skus:[]}})});
  await assert.rejects(c.RallyPlatform.ready(),/Некорректный/);
 });
-test('VK bootstrap uses init, signed URL params and Bridge profile before backend session',async()=>{
+test('VK bootstrap uses init and signed URL params before backend session',async()=>{
  const calls=[];
- const {context:c}=await setup('vk',{RallyBoot:{setStage(){}},vkBridge:{send:async(method)=>{
-  calls.push(method);
-  if(method==='VKWebAppGetUserInfo') return {id:123,screen_name:'bridge.shortname'};
-  return {};
- }},fetch:async(url,init)=>{
+ const {context:c}=await setup('vk',{RallyBoot:{setStage(){}},vkBridge:{send:async(method)=>{calls.push(method);return {};}},fetch:async(url,init)=>{
   calls.push(url);
   const body=JSON.parse(init.body);
   assert.equal(body.launch_params,'?vk_user_id=123&vk_app_id=123&vk_ts=1&sign=test');
-  assert.deepEqual(body.bridge_profile,{id:123,screen_name:'bridge.shortname'});
+  assert.deepEqual(Object.keys(body),['launch_params']);
   return Response.json({profile:{platform:'vk',nickname:'shortname',verified:true},entitlements:{skus:[]},session:{token:'test-session',expires_at:Math.floor(Date.now()/1000)+3600}});
  }});
  await c.RallyPlatform.ready();
- assert.deepEqual(calls,['VKWebAppInit','VKWebAppGetUserInfo','/api/vk/session']);
+ assert.deepEqual(calls,['VKWebAppInit','/api/vk/session']);
  assert.equal((await c.RallyPlatform.getProfile()).nickname,'shortname');
 });
 
@@ -66,7 +62,6 @@ test('VK bootstrap falls back to Bridge launch params when iframe query is missi
  const {context:c}=await setup('vk',{location,RallyBoot:{setStage(){}},vkBridge:{send:async(method)=>{
   calls.push(method);
   if(method==='VKWebAppGetLaunchParams') return {vk_user_id:321,vk_app_id:123,vk_ts:456,vk_platform:'desktop_web',sign:'bridge-sign'};
-  if(method==='VKWebAppGetUserInfo') return {id:321,screen_name:'bridge.fan'};
   return {};
  }},fetch:async(url,init)=>{
   calls.push(url);
@@ -76,11 +71,10 @@ test('VK bootstrap falls back to Bridge launch params when iframe query is missi
   assert.equal(params.get('vk_app_id'),'123');
   assert.equal(params.get('vk_ts'),'456');
   assert.equal(params.get('sign'),'bridge-sign');
-  assert.deepEqual(body.bridge_profile,{id:321,screen_name:'bridge.fan'});
   return Response.json({profile:{platform:'vk',nickname:'bridge.fan',verified:true},entitlements:{skus:[]},session:{token:'test-session',expires_at:Math.floor(Date.now()/1000)+3600}});
  }});
  await c.RallyPlatform.ready();
- assert.deepEqual(calls,['VKWebAppInit','VKWebAppGetLaunchParams','VKWebAppGetUserInfo','/api/vk/session']);
+ assert.deepEqual(calls,['VKWebAppInit','VKWebAppGetLaunchParams','/api/vk/session']);
 });
 
 test('VK attaches in-memory bearer only to same-origin room requests',async()=>{

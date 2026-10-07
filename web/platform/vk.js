@@ -27,20 +27,9 @@
       launchParams = serializeLaunch(await vkBridge.send('VKWebAppGetLaunchParams'));
     }
 
-    let bridgeProfile = null;
-    try {
-      const user = await vkBridge.send('VKWebAppGetUserInfo');
-      if (user && Number.isSafeInteger(Number(user.id)) && Number(user.id) > 0) {
-        bridgeProfile = {
-          id: Number(user.id),
-          screen_name: typeof user.screen_name === 'string' ? user.screen_name : '',
-        };
-      }
-    } catch {}
-
     const response = await networkFetch('/api/vk/session', {
       method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({launch_params:launchParams, bridge_profile:bridgeProfile}),
+      body:JSON.stringify({launch_params:launchParams}),
       signal:AbortSignal.timeout(15000),
     });
     if (!response.ok) {
