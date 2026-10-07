@@ -496,9 +496,11 @@ func _update_peers(players: Array) -> void:
 		if p.state != null:
 			var peer = peers[p.id]
 			var sample_time = float(p.state_time) / 1000.0 if p.has("state_time") else server_clock()
-			if not is_host and authoritative_drives.has(p.id):
+			if is_host and host_drives.has(p.id):
+				sample_time = server_clock()
+			elif not is_host and authoritative_drives.has(p.id):
 				sample_time = authority_stamp / 1000.0
-			if peer.has("last_state_time") and sample_time <= peer.last_state_time:
+			if peer.has("last_sample_time") and sample_time <= peer.last_sample_time:
 				continue
 			var switched = peer.state != null and peer.state.in_car != p.state.in_car
 			var tilt = v(p.state.get("tilt", [0, p.state.heading, 0]))
@@ -506,9 +508,10 @@ func _update_peers(players: Array) -> void:
 			peer.car_motion.push(sample_time, v(p.state.car), tilt)
 			peer.avatar_motion.max_speed = 12.0
 			peer.avatar_motion.push(sample_time, v(p.state.pos), Vector3(0, p.state.yaw, 0), switched)
+			peer.last_sample_time = sample_time
 		peers[p.id].state = p.state
 		if p.state != null:
-			peers[p.id].last_state_time = authority_stamp / 1000.0 if not is_host and authoritative_drives.has(p.id) else (float(p.state_time) / 1000.0 if p.has("state_time") else server_clock())
+			peers[p.id].last_state_time = float(p.state_time) / 1000.0 if p.has("state_time") else server_clock()
 	for id in peers.keys():
 		if not present.has(id):
 			for node in [peers[id].car, peers[id].avatar, peers[id].label]:

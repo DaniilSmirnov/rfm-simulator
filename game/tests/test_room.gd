@@ -104,6 +104,18 @@ func run() -> void:
 	check(guest.racers.is_empty(), "removed rally car disappears from guest")
 	host.room._update_peers([])
 	check(host.room.peers.is_empty(), "departed player nodes removed")
+	var drive_state = {"drive_enabled": true, "drive_inputs": [{"seq": 1, "ticks": 12, "throttle": 1.0, "steer": 0.0, "brake": false}], "pos": [999, 0, 0], "car": [999, 0, 0], "in_car": true, "heading": 0.0, "yaw": 0.0, "pitch": 0.0, "beer": -1.0}
+	var driver = {"id": "driver", "name": "Driver", "slot": 1, "car_model": 0, "state_time": 10000, "state": drive_state.duplicate(true)}
+	host.room._update_peers([driver])
+	check(host.room.host_drives.driver.node.position.distance_to(host.stage.at(18)) < 2, "host initializes driving from trusted slot rather than claimed position")
+	var solver = host.room.host_drives.driver
+	driver.state = drive_state.duplicate(true)
+	driver.state.drive_inputs.append({"seq": 2, "ticks": 12, "throttle": 1.0, "steer": 0.0, "brake": false})
+	host.room._update_peers([driver])
+	check(solver.ack == 2 and host.room.peers.driver.state.car == host.room.a(solver.node.position), "host render and contacts advance when queued input shares the same client timestamp")
+	check(host.room.peers.driver.last_state_time == 10.0, "authoritative rendering does not refresh stale player activity")
+	host.room._update_peers([])
+	check(host.room.host_drives.is_empty(), "departed driver removes authoritative physics and budget")
 	host.dead = true
 	host.menu_title.text = "Общий выезд окончен"
 	guest.room.apply_world(host.room.world_state())

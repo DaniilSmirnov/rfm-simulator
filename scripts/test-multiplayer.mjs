@@ -114,7 +114,7 @@ try {
     const {stat}=await import('node:fs/promises');const size=(await stat(join(output,'index.pck'))).size;
     const html=join(output,'index.html');await writeFile(html,(await readFile(html,'utf8')).replace(/"index\.pck":\s*\d+/g,`"index.pck":${size}`));
     const {chromium}=await import('playwright');
-    browser=await chromium.launch({headless:true,args:['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
+    browser=await chromium.launch({headless:true,executablePath:process.env.CHROMIUM_EXECUTABLE,args:['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
   }
   async function client(role,room='') {
     if(web) {

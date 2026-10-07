@@ -16,13 +16,24 @@ console.log('PASS: 8 mobile browser detection checks');
 const orientationCalls = [];
 const orientation = runInNewContext(readFileSync(new URL('../web/mobile-device.js', import.meta.url), 'utf8') + '\nRallyDevice', {
   document: { fullscreenElement: null, documentElement: { async requestFullscreen() { orientationCalls.push('fullscreen'); } } },
-  screen: { orientation: { async lock(mode) { orientationCalls.push(mode); } } }
+  screen: { orientation: { async lock(mode) { orientationCalls.push(mode); } } },
+  RallyFullscreen: { isActive: () => false, async enter() { orientationCalls.push('fullscreen'); } }
 });
 await orientation.requestLandscape();
 assert.deepEqual(orientationCalls, ['fullscreen', 'landscape']);
 const unsupported = runInNewContext(readFileSync(new URL('../web/mobile-device.js', import.meta.url), 'utf8') + '\nRallyDevice', {
   document: { fullscreenElement: null, documentElement: { async requestFullscreen() { throw new Error('Denied'); } } },
-  screen: { orientation: { async lock() { throw new Error('Unsupported'); } } }
+  screen: { orientation: { async lock() { throw new Error('Unsupported'); } } },
+  RallyFullscreen: { isActive: () => false, async enter() { throw new Error('Denied'); } }
 });
 await unsupported.requestLandscape();
 console.log('PASS: mobile orientation requests and unsupported browser fallback');
+
+const activeCalls = [];
+const active = runInNewContext(readFileSync(new URL('../web/mobile-device.js', import.meta.url), 'utf8') + '\nRallyDevice', {
+  screen: { orientation: { async lock(mode) { activeCalls.push(mode); } } },
+  RallyFullscreen: { isActive: () => true, async enter() { throw new Error('Already fullscreen'); } }
+});
+await active.requestLandscape();
+assert.deepEqual(activeCalls, ['landscape']);
+console.log('PASS: active fullscreen still requests landscape without entering again');
