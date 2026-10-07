@@ -93,6 +93,7 @@ func run() -> void:
 	var police_speed = Traffic.speed_limit(game, racer, racer.s)
 	racer.role = "racer"
 	check(battle_speed > 25.0 and zero_speed > 25.0, "rally and zero crews keep normal pace through the village")
+	check(battle_speed <= Traffic.MAX_COMPETITION_SPEED + 0.001 and zero_speed <= Traffic.MAX_COMPETITION_SPEED + 0.001, "village competition speeds respect the 140 km/h cap")
 	check(police_speed < 17.0, "course-opening police keeps the village speed limit")
 	game._update_racers(0.1)
 	check(game.racers.size() == 1 and racer.s > 437.0, "rally crew crosses village without artificial slowdown")
