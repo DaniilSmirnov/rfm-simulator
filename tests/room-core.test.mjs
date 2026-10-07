@@ -292,3 +292,29 @@ test('cargo actions are authenticated, bounded and idempotent', () => {
   assert.ok(reply.commands.every(c => c.player === g.player));
   assert.deepEqual(reply.commands.map(c => c.action), ['trunk', 'take_gear', 'return_gear']);
 });
+
+test('cooking commands keep guest identity and repeated meal requests consume once', () => {
+  const { r, h, g } = setup();
+  const commands = ['firewood', 'cauldron', 'plov_cook', 'eat_plov'].map((action, i) => ({
+    seq: i + 1, action, player: h.player, placement: { pos: [1, 2, 3], yaw: 0 }
+  }));
+  const body = { token: g.token, state: { ...state(12), food_kind: 'plov', eat: 2.7 }, commands };
+  r.sync(body, 1100);
+  r.sync(body, 1200);
+  const reply = r.sync({ token: h.token, state: state() }, 1300);
+  assert.deepEqual(reply.commands.map(c => c.action), ['firewood', 'cauldron', 'plov_cook', 'eat_plov']);
+  assert.ok(reply.commands.every(c => c.player === g.player && c.state.pos[0] === 12));
+  assert.equal(reply.players.find(p => p.id === g.player).state.food_kind, 'plov');
+  r.sync({ token: h.token, state: state(), ack: reply.commands.map(c => c.id) }, 1400);
+  r.sync(body, 1500);
+  assert.equal(r.data.commands.length, 0);
+});
+test('late players receive cooked portions and cannot replace a host cauldron', () => {
+  const { r, h, g } = setup();
+  const world = { camp_cooking: { pos: [1, 2, 3], pot: true, phase: 'ready', cook_time: 45, servings: 7 } };
+  r.sync({ token: h.token, state: state(), world }, 1100);
+  const reply = r.sync({ token: g.token, state: state(), world: { camp_cooking: { servings: 10 } } }, 1200);
+  assert.deepEqual(reply.world, world);
+  const late = r.add('Late', 1300);
+  assert.deepEqual(r.sync({ token: late.token, state: state() }, 1400).world.camp_cooking, world.camp_cooking);
+});

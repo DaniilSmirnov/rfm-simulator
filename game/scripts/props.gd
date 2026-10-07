@@ -608,7 +608,7 @@ static func skewer() -> Node3D:
 	var bowl = Node3D.new()
 	bowl.name = "PlovBowl"
 	root.add_child(bowl)
-	cylinder(bowl, Vector3(0, 0.02, 0), 0.14, 0.10, 0.07, Color("c9d3ca"), 10)
+	cylinder(bowl, Vector3(0, 0.02, 0), 0.10, 0.14, 0.07, Color("c9d3ca"), 10)
 	for i in range(3):
 		faceted(bowl, Vector3((i - 1) * 0.045, 0.07, 0), Vector3(0.08, 0.045, 0.08), Color("e5c16b"), 6, 3).name = "RicePiece%d" % i
 	var spoon = Node3D.new()
@@ -638,7 +638,7 @@ static func pose_food(node: Node3D, time: float, kind: String = "meat") -> void:
 	node.get_node("PlovBowl").visible = kind == "plov"
 	node.get_node("PlovBowl/Spoon").rotation.x = sin(maxf(0, time) * 8) * 0.25
 	node.get_node("SkewerStick").visible = kind in ["meat", "mushroom"]
-	node.get_node("SkewerHandle").visible = kind != "berries"
+	node.get_node("SkewerHandle").visible = kind in ["meat", "mushroom"]
 	for i in range(3):
 		var remains = (2 - i) >= food_bites(time)
 		node.get_node("Meat%d" % i).visible = kind == "meat" and remains
@@ -1035,7 +1035,7 @@ static func cauldron(parent: Node3D) -> Node3D:
 	var rice = Node3D.new()
 	rice.name = "Rice"
 	root.add_child(rice)
-	cylinder(rice, Vector3.ZERO, 0.465, 0.36, 0.26, Color("e1ba64"), 16).name = "FoodSurface"
+	cylinder(rice, Vector3.ZERO, 0.36, 0.465, 0.26, Color("e1ba64"), 16).name = "FoodSurface"
 	for i in range(FOOD_PORTIONS):
 		var portion = Node3D.new()
 		portion.name = "Portion_%02d" % i
@@ -1068,7 +1068,7 @@ static func pose_cauldron(root: Node3D, phase: String, progress: float, servings
 	var visible = phase == "cooking" or (phase == "ready" and servings > 0)
 	rice.visible = visible
 	var fraction = lerpf(0.15, 1.0, clampf(progress, 0, 1)) if phase == "cooking" else float(servings) / FOOD_PORTIONS
-	rice.scale.y = maxf(0.05, fraction)
+	rice.scale = Vector3(lerpf(0.70, 1.0, fraction), maxf(0.05, fraction), lerpf(0.70, 1.0, fraction))
 	rice.position.y = 0.95 + 0.13 * fraction
 	var surface = rice.get_node("FoodSurface")
 	surface.material_override.albedo_color = Color("eee3b5").lerp(Color("e1ba64"), clampf(progress, 0, 1)) if phase == "cooking" else Color("e1ba64")
