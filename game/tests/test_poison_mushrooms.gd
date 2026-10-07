@@ -51,10 +51,12 @@ func run() -> void:
 		check(host.foraging.skewers["-1"][0].species == species, "cooking retains the species")
 		var cap = host.grill.get_node("FoodSkewer_00/MushroomFood").find_children("MushroomCap*", "MeshInstance3D", true, false)[0]
 		check(cap.material_override.albedo_texture == Props.MUSHROOM_TEXTURES[species], "grill uses the matching cap texture")
+		check(not cap.mesh.surface_get_arrays(0)[Mesh.ARRAY_TEX_UV].is_empty(), "grill cap has UV coordinates for visible texture details")
 		check(not host.eat_foraged("mushroom"), "raw skewer cannot trigger an effect")
 		host.elapsed += 10
 		check(host.eat_foraged("mushroom"), "ready poisonous mushroom starts eating")
 		check(host.food_species == species, "hand animation preserves the poisonous mushroom")
+		check(not host.meat_prop.get_node("Mushroom0").get_child(1).mesh.surface_get_arrays(0)[Mesh.ARRAY_TEX_UV].is_empty(), "hand cap has UV coordinates")
 		host._update_eating(1)
 		host._cancel_eat()
 		check(host.mushroom_effect.remaining == 0 and host.foraging.skewers["-1"].size() == 1, "cancelled bite neither consumes nor inverts colors")

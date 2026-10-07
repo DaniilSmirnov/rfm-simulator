@@ -13,17 +13,31 @@ static func mushroom_material(species: String) -> StandardMaterial3D:
 		mat.albedo_texture = MUSHROOM_TEXTURES[species]
 	return mat
 
+static func texture_mushroom_cap(cap: MeshInstance3D, species: String) -> void:
+	# Legacy faceted meshes (including character GLBs) have no UV channel.
+	# Substitute a UV sphere while preserving each cap's dimensions and pose.
+	if cap.mesh.surface_get_arrays(0)[Mesh.ARRAY_TEX_UV] == null or cap.mesh.surface_get_arrays(0)[Mesh.ARRAY_TEX_UV].is_empty():
+		var size = cap.mesh.get_aabb().size
+		var sphere = SphereMesh.new()
+		sphere.radius = 0.5
+		sphere.height = 1.0
+		sphere.radial_segments = 16
+		sphere.rings = 8
+		cap.mesh = sphere
+		cap.scale *= size
+	cap.material_override = mushroom_material(species)
+
 static func style_mushrooms(node: Node3D, species: String) -> void:
 	if node.get_meta("mushroom_species", "") == species:
 		return
 	node.set_meta("mushroom_species", species)
 	for cap in node.find_children("MushroomCap*", "MeshInstance3D", true, false):
-		cap.material_override = mushroom_material(species)
+		texture_mushroom_cap(cap, species)
 	# Character GLBs were exported before caps had explicit node names.
 	for i in range(3):
 		var mushroom = node.get_node_or_null("Mushroom%d" % i)
 		if mushroom != null and mushroom.get_child_count() >= 2 and mushroom.get_child(1) is MeshInstance3D:
-			mushroom.get_child(1).material_override = mushroom_material(species)
+			texture_mushroom_cap(mushroom.get_child(1), species)
 
 static func material(color: Color) -> StandardMaterial3D:
 	var m = StandardMaterial3D.new()

@@ -31,7 +31,7 @@ func run() -> void:
 		var x = (i - 1) * 2.0
 		Props.cylinder(world, Vector3(x, 0.38, 0), 0.10, 0.09, 0.75, Color("e7ddba"), 12)
 		var cap = Props.faceted(world, Vector3(x, 0.93, 0), Vector3(1.25, 0.55, 1.25), Color.WHITE, 24, 12)
-		cap.material_override = Props.mushroom_material(species[i])
+		Props.texture_mushroom_cap(cap, species[i])
 		Props.label_3d(world, Vector3(x, 1.65, 0), ["Гриб", "Мухомор", "Поганка"][i], 28, 0.012, Color.WHITE)
 	var camera = Camera3D.new()
 	world.add_child(camera)
