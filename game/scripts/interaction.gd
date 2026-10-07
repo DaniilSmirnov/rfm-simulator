@@ -22,8 +22,9 @@ func current() -> Dictionary:
 	if game.seated:
 		return {"action": "stand", "label": "Встать со стула"}
 	var items: Array = []
-	offer(items, game.car.position + Vector3(0, 0.9, 0), 1.4, 4, "car", "Сесть в машину")
 	game.cargo.offers(items, self)
+	if not game.cargo.at_open_trunk(game.chair_owner()):
+		offer(items, game.car.position + Vector3(0, 0.9, 0), 1.4, 4, "car", "Сесть в машину")
 	game.camp_cooking.offers(items, self)
 	if game.packing.active():
 		for item in game.packing.items():

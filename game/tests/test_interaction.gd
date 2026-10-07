@@ -97,11 +97,20 @@ func run() -> void:
 	game._cancel_drink()
 	game.camp.position = center + Vector3(10, 0, 0)
 	game.car.position = center
-	game.walker = center + Vector3(0, 0, 2.5)
+	game.walker = game.cargo.point(game.cargo.poses()[game.chair_owner()])
+	aim(game, center + Vector3(0, 0.9, 0))
+	check(game.interaction.current().get("action", "") != "car", "open trunk never offers car entry even when looking at the body")
+	press(game)
+	check(not game.in_car, "F at an open trunk cannot put the spectator in the car")
+	game.cancel_placement()
+	if game.cargo.held.has(game.chair_owner()):
+		game.cargo.return_item(game.cargo.point(game.cargo.poses()[game.chair_owner()]))
+	game.walker = center + Vector3(1.8, 0, -0.2).rotated(Vector3.UP, game.heading)
 	game.walker.y = game.stage.ground(game.walker)
 	aim(game, center + Vector3(0, 0.9, 0))
+	check(game.interaction.current().get("action", "") == "car", "side door still offers entry while the trunk is open")
 	press(game)
-	check(game.in_car, "F enters selected car")
+	check(game.in_car, "F enters selected car from its door")
 	game.speed = 5
 	check(game.interaction.current().is_empty(), "moving car cannot be exited")
 	game.speed = 0

@@ -52,6 +52,8 @@ func run() -> void:
 		host.camera.look_at(host.camera.position + Vector3(0, 0, 1))
 		host.cargo.update(1)
 		check(host.cargo.opened.get("local", false) and host.car.get_node("TrunkHinge").rotation.x < -1.0 and host.car.get_node("TrunkBoxes").visible, "model %d opens automatically without aiming or F" % variant)
+		host.camera.look_at(host.car.position + Vector3(0, 0.9, 0))
+		check(host.cargo.at_open_trunk("local") and host.interaction.current().get("action", "") != "car", "model %d reserves F for cargo at its open rear, including rotated cars" % variant)
 		var offers: Array = []
 		host.cargo.offers(offers, host.interaction)
 		check(not offers.any(func(item): return item.action == "trunk"), "model %d has no manual lid action" % variant)

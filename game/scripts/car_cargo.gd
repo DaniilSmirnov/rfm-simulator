@@ -34,6 +34,17 @@ func near(owner: String) -> bool:
 	var cars = poses()
 	return cars.has(owner) and game.walker.distance_to(point(cars[owner])) < 3.3
 
+# The lid opens in a broad proximity zone; only its rear access area reserves F.
+# Side doors remain usable even when the lid is open for a nearby spectator.
+func at_open_trunk(owner: String) -> bool:
+	var cars = poses()
+	if not cars.has(owner) or not opened.get(owner, false) or not near(owner):
+		return false
+	var pose: Dictionary = cars[owner]
+	var profile = Props.trunk_profile(int(pose.variant))
+	var offset: Vector3 = (game.walker - pose.pos).rotated(Vector3.UP, -float(pose.heading))
+	return offset.z >= profile.rear - 0.75 and absf(offset.x) <= profile.half + 0.85
+
 func owner_of(item: Dictionary) -> String:
 	return str(item.get("owner", item.node.get_meta("gear_owner", game.chair_owner())))
 
