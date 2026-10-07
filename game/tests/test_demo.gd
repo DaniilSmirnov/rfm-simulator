@@ -108,7 +108,10 @@ func run() -> void:
 	r.previous = r.node.position
 	scene._update_racers(0.1)
 	check(r.state == "offroad", "stranding begins at spectator zone")
-	scene._update_racers(1.2)
+	for i in range(600):
+		scene._update_racers(1.0 / 60.0)
+		if r.state == "stranded":
+			break
 	check(r.state == "stranded", "car stranded off road")
 	scene.car.position = r.node.position + Vector3(8, 0, 0)
 	scene.walker = r.node.position + scene.Recovery.road_direction(scene, r) * 3

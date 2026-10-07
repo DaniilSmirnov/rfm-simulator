@@ -38,8 +38,8 @@ static func plan(game: Node3D, racer: Dictionary) -> Dictionary:
 	var stage = game.stage
 	var s: float = racer.s
 	var limit: float = speed_limit(game, racer, s)
-	var current: float = racer.get("line", racer.slide)
-	var base = clampf(nominal(racer, s) + racer.slide, -1.45, 1.45)
+	var current: float = racer.get("line", 0.0) + racer.slide
+	var base = clampf(nominal(racer, s), -1.45, 1.45)
 	var positions: Array[Dictionary] = [{"pos": game.car.position, "speed": 0.0}]
 	for peer in game.room.peers.values():
 		if peer.state != null:
@@ -107,7 +107,7 @@ static func plan(game: Node3D, racer: Dictionary) -> Dictionary:
 static func _clear_path(game, racer: Dictionary, target: float, distance: float) -> bool:
 	var stage = game.stage
 	var previous: Vector3 = racer.node.position
-	var current: float = racer.get("line", racer.slide)
+	var current: float = racer.get("line", 0.0) + racer.slide
 	for i in range(1, 7):
 		var ahead = distance * i / 6.0
 		var s: float = minf(stage.LENGTH - 0.01, racer.s + ahead)

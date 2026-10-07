@@ -14,6 +14,7 @@ const WALK_GRAVITY = 18.0
 var seat_exit = Vector3.ZERO
 var crosshair: Label
 
+const RallyHandling = preload("res://scripts/rally_handling.gd")
 const Props = preload("res://scripts/props.gd")
 const Stage = preload("res://scripts/stage.gd")
 const Spectators = preload("res://scripts/spectators.gd")
@@ -1461,7 +1462,7 @@ func _update_racers(delta: float) -> void:
 	for racer in racers:
 		var node: Node3D = racer.node
 		racer.previous = node.position
-		var moving_before = racer.state in ["racing", "offroad"]
+		var was_racing = racer.state == "racing"
 		racer.age += delta
 		var service = racer.get("role", "racer") != "racer"
 		if service:
@@ -1488,62 +1489,54 @@ func _update_racers(delta: float) -> void:
 			var road_yaw = atan2(-race_direction(s).x, -race_direction(s).z)
 			var ahead = race_direction(s + 7)
 			var bend = wrapf(atan2(-ahead.x, -ahead.z) - road_yaw, -PI, PI) / 7.0
-			# Lateral inertia fights the tyres until countersteering catches the slide.
-			var substeps = maxi(1, int(ceil(delta / (1.0 / 120.0))))
-			var dt = delta / substeps
-			for step in range(substeps):
-				racer.slide_speed += ((0.0 if service else bend * race_speed * race_speed) - racer.slide * 14.0 - racer.slide_speed * stage.grip(node.position) * 5.0) * dt
-				racer.slide = clampf(racer.slide + racer.slide_speed * dt, -2.6, 2.6)
+			var lateral_accel = 0.0
+			if not service:
+				lateral_accel = RallyHandling.slide(racer, bend, race_speed, stage.grip(node.position), delta)
 			var height = node.position.y
-			node.position = race_at(s) + race_side(s) * racer.line
+			node.position = race_at(s) + race_side(s) * (racer.line + racer.slide)
 			node.position.y = height
-			var countersteer = clampf(racer.slide_speed / race_speed + racer.slide * 0.035, -0.32, 0.32)
 			var movement = node.position - racer.previous
 			var path_yaw = atan2(-movement.x, -movement.z) if Vector2(movement.x, movement.z).length() > 0.02 else road_yaw
-			racer.motion.suspension(node, stage, delta, path_yaw + countersteer, bend * race_speed * race_speed)
-			if s >= racer.focus and racer.kind != "pass":
+			racer.motion.suspension(node, stage, delta, path_yaw + float(racer.get("drift_yaw", 0.0)), lateral_accel)
+			if not service and ((s >= racer.focus and racer.kind != "pass") or absf(racer.slide) > 3.4 or absf(racer.line + racer.slide) > Stage.WIDTH * 0.5 + 0.6):
 				racer.state = "offroad"
 				racer.age = 0
-				racer.start = node.position
-				var side_sign = signf((player_position() - node.position).dot(race_side(s)))
-				if side_sign == 0:
-					side_sign = 1
-				racer.target = race_at(s + 7) + race_side(s) * side_sign * (15 if racer.kind == "crash" else 6)
-				racer.target.y = stage.ground(racer.target)
-				toast("ВЫЛЕТ! Отойди с траектории!" if racer.kind == "crash" else "Экипаж застрял. Нужен трос — T рядом с машиной.")
+				if racer.kind == "pass":
+					racer.kind = "crash"
+				RallyHandling.departure(racer, race_direction(s), race_side(s), bend)
+				toast("ВЫЛЕТ! Отойди с траектории!")
 			elif s > racer.focus + 45 and not racer.counted:
 				count_racer(racer)
 			if s >= Stage.LENGTH - 1:
 				to_remove.append(racer)
-		elif racer.state == "offroad":
-			var t = minf(1, racer.age / (0.7 if racer.kind == "crash" else 1.1))
-			node.position = racer.start.lerp(racer.target, t)
-			node.rotation.y += delta * 0.6
-			node.rotation.z = sin(t * PI) * 0.2
-			if t >= 1:
-				racer.state = "stranded"
-				racer.age = 0
-				count_racer(racer)
-		elif racer.state == "rock_bounce":
-			var steps = maxi(1, int(ceil(delta / (1.0 / 120.0))))
+		elif racer.state in ["offroad", "rock_bounce"]:
+			var steps = maxi(1, int(ceil(delta / RallyHandling.STEP)))
 			var dt = delta / steps
 			for step in range(steps):
-				var next: Vector3 = node.position + racer.motion.velocity * dt
-				var contact = stage.city.hit(node.position, next, 0.85) if stage.urban else stage.rock_hit(node.position, next, 0.85)
+				var previous: Vector3 = node.position
+				RallyHandling.free_step(racer, stage, dt)
+				var contact = stage.rock_hit(previous, node.position, 0.85)
+				var city_contact = stage.city.hit(previous, node.position, 0.85) if stage.urban else {}
+				if not city_contact.is_empty() and (contact.is_empty() or previous.distance_squared_to(city_contact.position) < previous.distance_squared_to(contact.position)):
+					contact = city_contact
 				if not contact.is_empty():
-					next = contact.position
+					if contact.has("kind"):
+						knock_city(contact, racer.motion.velocity)
+					node.position = contact.position
 					racer.motion.rock_impulse(contact.normal, node.rotation.y)
-				node.position = next
-				racer.motion.velocity = racer.motion.velocity.move_toward(Vector3.ZERO, dt * 16.0)
-				racer.motion.suspension(node, stage, dt, node.rotation.y)
-			if racer.age >= 0.8:
+					racer.state = "rock_bounce"
+					count_racer(racer)
+			if racer.motion.grounded and racer.motion.velocity.length() < 0.65:
+				racer.motion.velocity = Vector3.ZERO
 				racer.state = "stranded" if racer.kind in ["stuck", "crash"] else "stopped"
 				racer.age = 0.0
+				if racer.state == "stranded":
+					toast("Экипаж застрял. Нужен трос — T рядом с машиной.")
 		elif racer.state in ["stopped", "stranded"]:
 			racer.motion.suspension(node, stage, delta, node.rotation.y)
 			if racer.state == "stopped" and not service and racer.age > 18 and racer.node != tow_target and float(racer.get("recovery_progress", 0)) <= 0 and int(racer.get("recovery_helpers", 0)) == 0:
 				to_remove.append(racer)
-		if moving_before:
+		if was_racing:
 			var contact = stage.rock_hit(racer.previous, node.position, 0.85)
 			if not contact.is_empty():
 				racer.motion.velocity = (node.position - racer.previous) / maxf(delta, 0.001)
@@ -1553,7 +1546,7 @@ func _update_racers(delta: float) -> void:
 				racer.state = "rock_bounce"
 				racer.age = 0.0
 				count_racer(racer)
-		if stage.urban and moving_before:
+		if stage.urban and was_racing:
 			var city_hit = stage.city.hit(racer.previous, node.position, 0.85)
 			if not city_hit.is_empty():
 				var velocity: Vector3 = (node.position - racer.previous) / maxf(delta, 0.001)
@@ -1886,6 +1879,8 @@ func recover_racer(racer: Dictionary) -> void:
 	racer.motion = Motion.new()
 	racer.slide = 0.0
 	racer.slide_speed = 0.0
+	racer.drift_yaw = 0.0
+	racer.yaw_rate = 0.0
 	racer.line = 0.0
 	racer.avoiding = false
 	racer.avoid_line = 0.0
