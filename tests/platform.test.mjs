@@ -116,3 +116,12 @@ test('bootstrap delivers server catalog and restricted rights through engine tra
  assert.equal(result.result.catalog[0].sku,'stage_01');
  assert.deepEqual(result.result.entitlements.skus,[]);
 });
+
+test('isolated mock prototype remains unrestricted without claiming verified ownership',async()=>{
+ const {context:c}=await setup('vk-prototype');
+ const data=await (await c.fetch('/__rally_platform',{method:'POST',body:'{"method":"getBootstrap"}'})).json();
+ assert.equal(data.result.profile.verified,false);
+ assert.equal(data.result.entitlements.mode,'unrestricted');
+ assert.deepEqual(data.result.entitlements.skus,[]);
+ assert.deepEqual(data.result.catalog,[]);
+});
