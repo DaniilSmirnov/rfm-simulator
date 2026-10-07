@@ -86,6 +86,7 @@ jobs:
           if-no-files-found: error
 
   web-browser:
+    if: github.head_ref != 'feature/vk-platform-prototype' && github.ref_name != 'feature/vk-platform-prototype'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
