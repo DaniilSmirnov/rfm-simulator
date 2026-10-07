@@ -143,6 +143,66 @@ func run() -> void:
 	command.placement = {"pos": host.room.a(origin + Vector3(0, 0, -3)), "yaw": 0}
 	host.room._apply_command(command)
 	check(host.grill == null, "host rejects placement of a box that was never taken")
+	# Friends pack each other's chairs; overlapping trunks must not choose the
+	# first player in the pose dictionary. Exercise F and the host command path.
+	host.course.phase = "complete"
+	host.course.pass_index = 2
+	guest.course.phase = "complete"
+	guest.course.pass_index = 2
+	for variant in range(10):
+		host.room._update_peers([])
+		host.select_player_car(0)
+		guest.select_player_car(variant)
+		guest.heading = PI / 2 if variant % 2 else 0.0
+		guest.car.position = origin + Vector3(0, 10, 8)
+		var friend_trunk = trunk(guest)
+		host.heading = 0
+		host.car.position = friend_trunk + Vector3(0.3, 0, 0) - host.cargo.point({"pos": Vector3.ZERO, "heading": 0.0, "variant": 0})
+		host.room._update_peers([{"id": "guest", "name": "Друг", "state": guest.room.local_state(), "car_model": variant}])
+		var chair_spot = origin
+		chair_spot.y = host.stage.ground(chair_spot)
+		host.apply_chair("guest", chair_spot, 0)
+		host.walker = chair_spot
+		check(host.packing.pack(chair_spot) and host.cargo.held["host"].owner == "guest", "model %d keeps friend chair ownership when picked up" % variant)
+		var parked_car: Vector3 = host.car.position
+		host.car.position += Vector3(10, 0, 0)
+		host.walker = trunk(host)
+		check(not host.cargo.return_item(trunk(host)) and host.cargo.held.has("host"), "friend chair cannot be loaded into the carrier's separate car")
+		host.car.position = parked_car
+		host.walker = friend_trunk
+		check(host.cargo.return_item(friend_trunk) and not host.cargo.held.has("host"), "overlapping trunks validate the chair owner's car instead of the first car")
+		host.apply_chair("guest", chair_spot, 0)
+		host.walker = chair_spot
+		check(host.packing.pack(chair_spot), "friend chair is picked up again for the F interaction check")
+		host.walker = friend_trunk + Vector3(0, 0, 2)
+		host.camera.position = host.walker + Vector3(0, 1.72, 0)
+		host.camera.look_at(friend_trunk + Vector3(0, 0.65, 0))
+		check(host.interaction.current().get("action", "") == "return_gear", "model %d offers F across the friend's trunk opening" % variant)
+		host.interaction.activate()
+		check(not host.cargo.held.has("host") and host.cargo.stored("chairs", "guest"), "model %d F returns friend chair even beside another trunk" % variant)
+		guest.room._update_peers([{"id": "host", "name": "Хост", "state": host.room.local_state(), "car_model": 0}])
+		host.apply_chair("host", chair_spot, 0)
+		guest.room.apply_world(host.room.world_state())
+		guest.walker = chair_spot
+		guest.room.commands.clear()
+		check(guest.packing.pack(chair_spot), "guest requests packing host chair")
+		command = {"player": "guest", "action": "pack", "state": guest.room.local_state(), "placement": guest.room.commands[-1].placement}
+		host.room._apply_command(command)
+		guest.room.apply_world(host.room.world_state())
+		check(guest.cargo.held.get("guest", {}).get("owner", "") == "host", "snapshot preserves host ownership in guest hands")
+		var owner_trunk = trunk(host)
+		guest.walker = owner_trunk + Vector3(0, 0, 2)
+		guest.camera.position = guest.walker + Vector3(0, 1.72, 0)
+		guest.camera.look_at(owner_trunk + Vector3(0, 0.65, 0))
+		check(guest.interaction.current().get("action", "") == "return_gear", "guest F selects host trunk opening")
+		guest.room.commands.clear()
+		guest.interaction.activate()
+		if not guest.room.commands.is_empty():
+			command = {"player": "guest", "action": "return_gear", "state": guest.room.local_state(), "placement": guest.room.commands[-1].placement}
+			host.room._apply_command(command)
+			host.room._apply_command(command)
+		guest.room.apply_world(host.room.world_state())
+		check(not host.cargo.held.has("guest") and not guest.cargo.held.has("guest") and host.cargo.stored("chairs", "host"), "model %d guest returns host chair through an idempotent command and snapshot" % variant)
 	for game in [host, guest]:
 		await game._shutdown_audio()
 		game.queue_free()

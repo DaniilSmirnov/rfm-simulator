@@ -107,7 +107,8 @@ func ground(pos: Vector3) -> float:
 		var p = at(s)
 		var distance = road_distance(pos)
 		if village(s):
-			return 2.18 if distance > 3.72 and distance < 6.4 else 2.0
+			var junction = absf(s - 370.0) <= 3.0 or absf(s - 500.0) <= 3.0
+			return 2.36 if not junction and distance > 3.75 and distance < 6.45 else 2.0
 		var hillside = maxf(distance - 6.0, 0) * 0.12
 		var height = p.y + hillside + sin(pos.x * 0.075 + s * 0.025) * minf(hillside * 0.2, 1.5)
 		for parking in clearings:
@@ -203,18 +204,19 @@ func build() -> void:
 	for i in range(clearings.size()):
 		var c = clearings[i]
 		if urban:
-			_build_parking(c, i)
-		else:
-			RallyProps.cylinder(self, c + Vector3(0, 1.2, 0), 0.07, 0.07, 2.4, Color("d5bc8e"), 5)
-			var sign = RallyProps.box(self, c + Vector3(0, 2.15, 0), Vector3(2, 0.65, 0.12), Color("e5d9b9"))
-			var label = Label3D.new()
-			sign.add_child(label)
-			label.position = Vector3(0, 0, 0.075)
-			label.text = "ПОЛЯНА %d" % (i + 1)
-			label.font_size = 42
-			label.pixel_size = 0.005
-			label.modulate = Color("344537")
-			label.outline_size = 0
+			# Vineyard spectator spots are ordinary roadside/courtyard places.
+			# Keep the gameplay positions, but do not build a separate parking entity.
+			continue
+		RallyProps.cylinder(self, c + Vector3(0, 1.2, 0), 0.07, 0.07, 2.4, Color("d5bc8e"), 5)
+		var sign = RallyProps.box(self, c + Vector3(0, 2.15, 0), Vector3(2, 0.65, 0.12), Color("e5d9b9"))
+		var label = Label3D.new()
+		sign.add_child(label)
+		label.position = Vector3(0, 0, 0.075)
+		label.text = "ПОЛЯНА %d" % (i + 1)
+		label.font_size = 42
+		label.pixel_size = 0.005
+		label.modulate = Color("344537")
+		label.outline_size = 0
 	# Distant angular ridges, original meshes.
 	for i in range(0 if urban else 18):
 		var p = Vector3((-1 if i % 2 == 0 else 1) * rng.randf_range(220, 340), 30, -i * 65.0)
@@ -230,24 +232,6 @@ func _build_city() -> void:
 	city.stage = self
 	add_child(city)
 	city.build()
-
-func _build_parking(pos: Vector3, index: int) -> void:
-	var yaw = atan2(-direction(road_s(pos)).x, -direction(road_s(pos)).z)
-	var asphalt = RallyProps.box(self, pos + Vector3(0, 0.025, 0), Vector3(4.8, 0.05, 7.4), Color("464c4d"))
-	asphalt.rotation.y = yaw
-	for side_offset in [-2.0, 2.0]:
-		var line = RallyProps.box(self, pos + Vector3(0, 0.06, 0), Vector3(0.08, 0.015, 6.3), Color("e6d8ad"))
-		line.position += Vector3(side_offset * cos(yaw), 0, side_offset * sin(yaw))
-		line.rotation.y = yaw
-	var sign = RallyProps.box(self, pos + Vector3(0, 1.65, 0), Vector3(1.7, 0.55, 0.08), Color("e8dfc4"))
-	sign.rotation.y = yaw
-	var label = Label3D.new()
-	sign.add_child(label)
-	label.position = Vector3(0, 0, 0.06)
-	label.text = "P %d" % (index + 1)
-	label.font_size = 38
-	label.pixel_size = 0.005
-	label.modulate = Color("344537")
 
 func _build_terrain() -> void:
 	var st = SurfaceTool.new()
@@ -281,6 +265,11 @@ func _build_terrain() -> void:
 	n.material_override = mat
 	add_child(n)
 
+func draw_base_road_surface(s: float) -> bool:
+	# The village has its own explicit cobblestone mesh; do not leave asphalt
+	# underneath it where it can show through between individual stones.
+	return not village(s)
+
 func _build_road() -> void:
 	var st = SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -290,10 +279,11 @@ func _build_road() -> void:
 		var b = at(s) - side(s) * WIDTH / 2
 		var c = at(s + 1) + side(s + 1) * WIDTH / 2
 		var d = at(s + 1) - side(s + 1) * WIDTH / 2
-		for v in [a, b, c, b, d, c]:
-			st.set_color((Color("708a9c") if winter else ((Color("969180") if village(s) else Color("525757")) if urban else Color("9d896b"))).lightened(rng.randf_range(-0.065, 0.045)))
-			v.y = ground(v) + 0.04
-			st.add_vertex(v)
+		if draw_base_road_surface(s):
+			for v in [a, b, c, b, d, c]:
+				st.set_color((Color("708a9c") if winter else (Color("525757") if urban else Color("9d896b"))).lightened(rng.randf_range(-0.065, 0.045)))
+				v.y = ground(v) + 0.04
+				st.add_vertex(v)
 		# Broken muddy wheel tracks, shallow puddles.
 		if not urban and i % 12 == 0:
 			for offset in [-1.0, 1.0]:
@@ -324,14 +314,46 @@ func _build_road() -> void:
 
 # Four instanced draw calls for the forest instead of thousands of nodes.
 # Collision positions remain in `trees`, matching the original gameplay.
+func shared_tree_mesh(layer: int) -> CylinderMesh:
+	var mesh = CylinderMesh.new()
+	mesh.bottom_radius = 1.0
+	mesh.top_radius = 0.65 if layer == 0 else 0.0
+	mesh.height = 1.0
+	mesh.radial_segments = 5 if layer == 0 else 6
+	mesh.rings = 1
+	return mesh
+
+func shared_tree_pose(position: Vector3, height_value: float, layer: int, basis: Basis = Basis.IDENTITY) -> Transform3D:
+	var radius = 0.2 if layer == 0 else height_value * (0.28 - (layer - 1) * 0.055)
+	var layer_height = height_value * (0.64 if layer == 0 else 0.49)
+	var y = height_value * (0.32 if layer == 0 else 0.47 + (layer - 1) * 0.18)
+	return Transform3D(basis * Basis.from_scale(Vector3(radius, layer_height, radius)), position + basis * Vector3(0, y, 0))
+
+func shared_tree_color(layer: int, shade: float = 0.0, snowy: bool = false) -> Color:
+	if layer == 0:
+		return Color("67543d")
+	if snowy:
+		return (Color("78958a") if layer == 1 else Color("b8cdd3")).lightened(shade)
+	return Color(0.17 + shade, 0.28 + shade, 0.21 + shade)
+
+func shared_grass_color(value: float) -> Color:
+	return Color("4f6634").lerp(Color("91905a"), clampf(value, 0.0, 1.0) * 0.7)
+
+func shared_stone_mesh() -> SphereMesh:
+	var mesh = SphereMesh.new()
+	mesh.radial_segments = 5
+	mesh.rings = 2
+	return mesh
+
+func shared_stone_pose(position: Vector3, radius: float, yaw: float = 0.0) -> Transform3D:
+	return Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3(radius * 2.0, radius, radius * 1.7)), position)
+
+func shared_stone_color(lightness: float = 0.0) -> Color:
+	return Color("7e806e").lightened(clampf(lightness, -0.10, 0.12))
+
 func _build_forest(forest: Array[Dictionary]) -> void:
 	for layer in range(4):
-		var mesh = CylinderMesh.new()
-		mesh.bottom_radius = 1.0
-		mesh.top_radius = 0.65 if layer == 0 else 0.0
-		mesh.height = 1.0
-		mesh.radial_segments = 5 if layer == 0 else 6
-		mesh.rings = 1
+		var mesh = shared_tree_mesh(layer)
 		var mat = RallyProps.material(Color.WHITE)
 		mat.vertex_color_use_as_albedo = true
 		mat.vertex_color_is_srgb = true
@@ -344,13 +366,8 @@ func _build_forest(forest: Array[Dictionary]) -> void:
 		forest_layers.append(mm)
 		for i in range(forest.size()):
 			var tree_data = forest[i]
-			var h: float = tree_data.height
-			var radius = 0.2 if layer == 0 else h * (0.28 - (layer - 1) * 0.055)
-			var height = h * (0.64 if layer == 0 else 0.49)
-			var y = h * (0.32 if layer == 0 else 0.47 + (layer - 1) * 0.18)
-			mm.set_instance_transform(i, Transform3D(Basis.from_scale(Vector3(radius, height, radius)), tree_data.position + Vector3(0, y, 0)))
-			var shade: float = tree_data.shade
-			mm.set_instance_color(i, Color("67543d") if layer == 0 else ((Color("78958a") if layer == 1 else Color("b8cdd3")).lightened(shade) if winter else Color(0.17 + shade, 0.28 + shade, 0.21 + shade)))
+			mm.set_instance_transform(i, shared_tree_pose(tree_data.position, float(tree_data.height), layer))
+			mm.set_instance_color(i, shared_tree_color(layer, float(tree_data.shade), winter))
 		var instance = MultiMeshInstance3D.new()
 		instance.name = "ForestLayer%d" % layer
 		instance.multimesh = mm
@@ -521,7 +538,7 @@ func woodland_spot(pos: Vector3, padding: float = 0.0) -> bool:
 	return true
 
 func _detail_batch(name: String, mesh: Mesh, poses: Array, colors: Array, indices: Array = []) -> void:
-	if name in ["ForestGrass", "ForestBushes", "ForestBerryBushes", "ForestBerries", "ForestBushStems", "VineyardGrapes", "VineyardLeaves"]:
+	if name in ["ForestGrass", "ForestBushes", "ForestBerryBushes", "ForestBerries", "ForestBushStems", "VineyardGrapes", "VineyardLeaves", "VineyardRoadsideGrass", "VineyardRoadsideStones", "VineyardRoadsideBushes", "VillageForestTreeLayer0", "VillageForestTreeLayer1", "VillageForestTreeLayer2", "VillageForestTreeLayer3", "VillageForestGrass", "VillageForestStones", "VillageForestBoulders", "VillageForestBushes", "VillageForestBerryBushes", "VillageForestBerries", "VillageGrass", "VillageStones"]:
 		var cells = {}
 		for i in range(poses.size()):
 			var origin: Vector3 = poses[i].origin
@@ -554,7 +571,7 @@ func _detail_batch(name: String, mesh: Mesh, poses: Array, colors: Array, indice
 		mm.set_instance_transform(i, pose)
 		mm.set_instance_color(i, colors[i])
 		var source = name.get_slice("_Tile", 0)
-		if source in ["ForestBerries", "MushroomCaps", "MushroomStems", "VineyardGrapes"]:
+		if source in ["ForestBerries", "VillageForestBerries", "MushroomCaps", "MushroomStems", "VineyardGrapes"]:
 			if not collectible_parts.has(source):
 				collectible_parts[source] = {}
 			collectible_parts[source][i if indices.is_empty() else indices[i]] = {"mesh": mm, "instance": i, "pose": pose, "hidden": false}
@@ -605,7 +622,7 @@ func _build_woodland_details() -> void:
 		p.y = ground(p) - 0.20
 		var size = detail_rng.randf_range(0.25, 0.65)
 		grass_poses.append(Transform3D(Basis(Vector3.UP, detail_rng.randf() * TAU).scaled(Vector3(size * 1.8, size, size * 1.8)), p))
-		grass_colors.append(Color("4f6634").lerp(Color("91905a"), detail_rng.randf() * 0.7))
+		grass_colors.append(shared_grass_color(detail_rng.randf()))
 	for i in range(4000):
 		var along = detail_rng.randf_range(20, LENGTH - 20)
 		var p = at(along) + side(along) * detail_rng.randf_range(13, 125) * (-1 if i % 2 else 1)
@@ -625,8 +642,8 @@ func _build_woodland_details() -> void:
 			continue
 		p.y = ground(p) - 0.18
 		var radius = detail_rng.randf_range(0.12, 0.35)
-		stone_poses.append(Transform3D(Basis(Vector3.UP, detail_rng.randf() * TAU).scaled(Vector3(radius * 2, radius, radius * 1.7)), p))
-		stone_colors.append(Color("7e806e").lightened(detail_rng.randf_range(-0.1, 0.12)))
+		stone_poses.append(shared_stone_pose(p, radius, detail_rng.randf() * TAU))
+		stone_colors.append(shared_stone_color(detail_rng.randf_range(-0.10, 0.12)))
 	# Clumped undergrowth rather than an even carpet; berry bushes use the
 	# same seeded generator on every client. Keep picnic spaces and paths open.
 	var bush_poses: Array = []
@@ -718,10 +735,7 @@ func _build_woodland_details() -> void:
 	boulder.radial_segments = 7
 	boulder.rings = 3
 	_detail_batch("ForestBoulders", boulder, boulder_poses, boulder_colors)
-	var stones_mesh = SphereMesh.new()
-	stones_mesh.radial_segments = 5
-	stones_mesh.rings = 2
-	_detail_batch("ForestPebbles", stones_mesh, stone_poses, stone_colors)
+	_detail_batch("ForestPebbles", shared_stone_mesh(), stone_poses, stone_colors)
 	_detail_batch("ForestGrass", _grass_mesh(), grass_poses, grass_colors)
 	var stem = CylinderMesh.new()
 	stem.height = 1

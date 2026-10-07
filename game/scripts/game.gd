@@ -1383,8 +1383,8 @@ func spawn_course_car(role: String, id: int, zero_index: int = 0) -> void:
 		return
 	var node = Props.course_car(role, zero_index)
 	var racer = _add_course_vehicle(node, id, "pass", 0, role, zero_index)
-	racer.pace = 0.72
-	racer.drive_speed = race_speed(0) * racer.pace
+	racer.pace = 1.0 if role == "zero" else 0.72
+	racer.drive_speed = Traffic.speed_limit(self, racer, 0.0)
 	racer.bias = 0.0
 	racer.phase = 0.0
 	toast(course.caption())
@@ -1435,7 +1435,8 @@ func spawn_racer(forced: String = "") -> void:
 	var variant = [5, 0, 1, 2, 3, 4][rally_spawn_count % Props.RALLY_MODELS.size()]
 	rally_spawn_count += 1
 	var node = Props.car(Color.WHITE, true, variant)
-	_add_course_vehicle(node, rally_spawn_count + (course.pass_index - 1) * 200, kind, variant)
+	var racer = _add_course_vehicle(node, rally_spawn_count + (course.pass_index - 1) * 200, kind, variant)
+	racer.drive_speed = Traffic.speed_limit(self, racer, 0.0)
 	toast("Приближается %s, номер %d!" % [node.get_meta("model"), node.get_meta("number")])
 
 func _update_racers(delta: float) -> void:
@@ -1717,7 +1718,7 @@ func _update_hud() -> void:
 		hint_label.text += "   ·   Иди в машину, чтобы толкать · T — тяни пешком со стороны дороги"
 	if not in_car:
 		var bag = foraging.stock()
-		status_label.text += ("\nГРИБЫ %d · ВИНОГРАД %d" if stage.urban else "\nГРИБЫ %d · ЯГОДЫ %d") % [bag.mushrooms, bag.berries]
+		status_label.text += ("\nГРИБЫ %d · ЯГОДЫ/ВИНОГРАД %d" if stage.urban else "\nГРИБЫ %d · ЯГОДЫ %d") % [bag.mushrooms, bag.berries]
 		var target = interaction.current()
 		if not target.is_empty():
 			hint_label.text = "F — " + target.label + ("" if packing.active() else "   ·   Z/C/G/V — поставить предмет")
@@ -1732,7 +1733,7 @@ func _update_hud() -> void:
 	if mobile_mode:
 		course_label.text = course.caption().replace("ПРОХОД ", "СУ ").replace(" · ПРЯМО", "").replace(" · ОБРАТНО", "").replace("ДО ОТКРЫТИЯ СУ", "СТАРТ ЧЕРЕЗ")
 		if in_car and tow_target == null:
-			info_label.text = "%02d КМ/Ч · МАШИНА %d%% · %s %d м" % [int(absf(speed) * 3.6), int(condition), "ПАРКОВКА" if stage.urban else "ПОЛЯНА", distance]
+			info_label.text = "%02d КМ/Ч · МАШИНА %d%% · %s %d м" % [int(absf(speed) * 3.6), int(condition), "МЕСТО" if stage.urban else "ПОЛЯНА", distance]
 		elif not in_car and drink_time < 0 and eat_time < 0 and beers < 30 and tow_target == null:
 			if packing.active():
 				info_label.text = "ВЕРНУТЬ ВЕЩИ В БАГАЖНИК · ОСТАЛОСЬ %d" % packing.remaining()
@@ -1868,7 +1869,7 @@ func recover_racer(racer: Dictionary) -> void:
 	racer.line = 0.0
 	racer.avoiding = false
 	racer.avoid_line = 0.0
-	racer.drive_speed = race_speed(racer.s) * racer.get("pace", 1.0)
+	racer.drive_speed = Traffic.speed_limit(self, racer, racer.s)
 	racer.state = "racing"
 	racer.kind = "pass"
 	count_racer(racer)
