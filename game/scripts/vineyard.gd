@@ -370,6 +370,30 @@ func _thuja_forest() -> void:
 				crown_poses.append(Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3(width * 0.48, height * 0.28, width * 0.48)), p + Vector3(0, height * 0.82, 0)))
 				crown_colors.append(Color("476a43").lightened(tree_rng.randf_range(-0.03, 0.06)))
 				thuja_count += 1
+	# Close the forest belt around the village ends while keeping the road mouth open.
+	for station in [VILLAGE_START - 28.0, VILLAGE_END + 28.0]:
+		for lateral_step in range(-6, 7):
+			if abs(lateral_step) < 2:
+				continue
+			var lateral = lateral_step * 7.0 + tree_rng.randf_range(-1.5, 1.5)
+			var s = clampf(station + tree_rng.randf_range(-4.0, 4.0), 0.0, stage.LENGTH - 0.01)
+			var p = stage.at(s) + stage.side(s) * lateral
+			var blocked = false
+			for spot in stage.clearings:
+				blocked = blocked or stage.flat(p).distance_to(stage.flat(spot)) < 10.0
+			if blocked:
+				continue
+			p.y = stage.ground(p)
+			var height = tree_rng.randf_range(5.5, 9.5)
+			var width = tree_rng.randf_range(1.15, 1.75)
+			var yaw = tree_rng.randf() * TAU
+			lower_poses.append(Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3(width, height * 0.48, width)), p + Vector3(0, height * 0.24, 0)))
+			lower_colors.append(Color("314f35").lightened(tree_rng.randf_range(-0.04, 0.05)))
+			middle_poses.append(Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3(width * 0.78, height * 0.39, width * 0.78)), p + Vector3(0, height * 0.57, 0)))
+			middle_colors.append(Color("3b5c3b").lightened(tree_rng.randf_range(-0.04, 0.06)))
+			crown_poses.append(Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3(width * 0.48, height * 0.28, width * 0.48)), p + Vector3(0, height * 0.82, 0)))
+			crown_colors.append(Color("476a43").lightened(tree_rng.randf_range(-0.03, 0.06)))
+			thuja_count += 1
 	var lower = CylinderMesh.new()
 	lower.height = 1
 	lower.bottom_radius = 0.62
