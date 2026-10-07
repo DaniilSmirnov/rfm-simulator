@@ -316,6 +316,7 @@ var impact_shake = 0.0
 var stone_clock = 0.0
 
 func _ready() -> void:
+	print("[RFM] Подготовка игрового мира")
 	foraging.game = self
 	interaction.game = self
 	packing.game = self
@@ -326,11 +327,13 @@ func _ready() -> void:
 	stage = Stage.new()
 	add_child(stage)
 	stage.build()
+	print("[RFM] Рельеф и объекты карты готовы")
 	_build_environment()
 	spectators = Spectators.new()
 	spectators.game = self
 	add_child(spectators)
 	spectators.rebuild()
+	print("[RFM] Зрители и машина готовы к созданию")
 	car = Props.player_car(0)
 	add_child(car)
 	car.position = stage.at(12)
@@ -344,6 +347,7 @@ func _ready() -> void:
 	camera.position = stage.at(45) + Vector3(22, 15, 12)
 	camera.look_at(stage.at(70))
 	_build_ui()
+	print("[RFM] Интерфейс готов; подготовка звука")
 	_setup_audio()
 	room = preload("res://scripts/room.gd").new()
 	room.game = self
@@ -358,6 +362,7 @@ func _ready() -> void:
 		_capture_menu()
 	elif "--smoke-test" in OS.get_cmdline_user_args():
 		start_game()
+	print("[RFM] Запуск завершён")
 
 func _setup_input() -> void:
 	var bindings = {"forward": [KEY_W, KEY_UP], "back": [KEY_S, KEY_DOWN], "left": [KEY_A, KEY_LEFT], "right": [KEY_D, KEY_RIGHT], "brake": [KEY_SPACE], "jump": [KEY_SPACE], "sprint": [KEY_SHIFT], "interact": [KEY_F], "table": [KEY_Z], "flag": [KEY_V], "chairs": [KEY_C], "grill": [KEY_G], "firewood": [KEY_J], "cauldron": [KEY_H], "beer": [KEY_B], "eat": [], "collect": [], "mount_mushroom": [], "eat_mushroom": [], "eat_berries": [KEY_K], "rally": [KEY_R], "tow": [KEY_T], "random_spot": [KEY_Q], "map": [KEY_M], "recover": [KEY_HOME], "pause_demo": [KEY_ESCAPE], "placement_confirm": [KEY_ENTER], "placement_rotate": [], "placement_cancel": []}

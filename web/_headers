@@ -2,3 +2,12 @@
   Content-Type: application/gzip
 /index.html
   Cache-Control: no-cache
+
+/index.js
+  Cache-Control: no-store
+/index.pck
+  Cache-Control: no-store
+/mini-loader.js
+  Cache-Control: no-store
+/boot-diagnostics.js
+  Cache-Control: no-store
