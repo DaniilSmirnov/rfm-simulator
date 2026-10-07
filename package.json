@@ -13,10 +13,15 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "preview": "wrangler preview",
-    "test:server": "node tests/worker.integration.mjs"
+    "test:server": "node tests/worker.integration.mjs",
+    "build:vk": "node scripts/build-web.mjs --target=vk",
+    "build:vk:prototype": "node scripts/build-web.mjs --target=vk-prototype",
+    "test:platform": "node --test tests/platform.test.mjs"
   },
   "devDependencies": {
     "wrangler": "4.147.0"
+  },
+  "dependencies": {
+    "@vkontakte/vk-bridge": "3.0.2"
   }
 }
-

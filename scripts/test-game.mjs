@@ -2,6 +2,7 @@ import { join } from 'node:path';
 import { getGodot, root, run } from './godot.mjs';
 const godot = await getGodot();
 const project = join(root, 'game');
+run(process.execPath, ['--test', join(root,'tests/platform.test.mjs')]);
 run(process.execPath, ['--test', join(root, 'tests/branding.test.mjs'), join(root, 'tests/boot-diagnostics.test.mjs')]);
 run(godot, ['--headless', '--editor', '--path', project, '--import']);
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_character_asset.gd']);
