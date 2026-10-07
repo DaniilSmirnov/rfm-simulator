@@ -630,7 +630,8 @@ func start_game() -> void:
 	for panel in hud_panels:
 		panel.show()
 	mobile_sidebar.show()
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if mobile_mode or (room.connected and OS.has_feature("web")) else Input.MOUSE_MODE_CAPTURED
+	# Automated startup has no browser user gesture. Pointer lock is tested separately.
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if mobile_mode or "--smoke-test" in OS.get_cmdline_user_args() or (room.connected and OS.has_feature("web")) else Input.MOUSE_MODE_CAPTURED
 	toast("Доедь до любой парковки. Q — выбрать случайную на карте." if stage.urban else "Доедь до любой поляны. Q — выбрать случайную на карте.")
 
 func _menu_action() -> void:
