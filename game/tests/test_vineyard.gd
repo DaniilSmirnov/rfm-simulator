@@ -17,8 +17,34 @@ func run() -> void:
 	game.in_car = false
 	var stage = game.stage
 	check(stage.city.vine_count > 2000 and stage.get_node_or_null("VillageChurch") != null, "vineyard stage includes vines and church")
+	check(stage.city.church_square_cobblestones >= 180 and stage.get_node_or_null("VillageChurch/VillageChurchSquare") != null, "church forecourt is fully paved with cobblestones")
+	check(not stage.city.village_detail_allowed(stage.city.church_square_center), "church cobblestone square rejects grass and loose stones")
+	check(stage.get_node_or_null("VillageCemetery") != null and stage.city.cemetery_grave_count == 28, "forest behind church contains an open cemetery with ordered graves")
+	var church_center = stage.at(435.0) + stage.side(435.0) * 43.0
+	check(stage.road_distance(stage.city.cemetery_center) > stage.road_distance(church_center) + 20.0, "cemetery sits deeper in the forest behind the church")
+	check(not stage.city._forest_spot_allowed(stage.city.cemetery_center), "mixed forest generation preserves the cemetery clearing")
+	check(stage.city.side_lane_house_count >= 12, "both secondary village streets have additional houses")
+	check(stage.city.village_sign_count == 2, "village has name signs at both entrance and exit")
+	var village_name_labels = stage.find_children("*", "Label3D", true, false).filter(func(label): return str(label.text) == "Ля Газ в Польен")
+	check(village_name_labels.size() == 4, "both village signs show Ля Газ в Польен on both faces")
 	check(stage.city.thuja_count > 300, "dense thuja forest surrounds the village")
 	check(stage.woodland_details.get("VillageThujaLower", 0) == stage.city.thuja_count and stage.woodland_details.get("VillageThujaCrown", 0) == stage.city.thuja_count, "thuja forest is rendered through instanced layers")
+	check(stage.city.mixed_tree_count > 500 and stage.city.mixed_conifer_count > 200 and stage.city.mixed_broadleaf_count > 120, "village is surrounded by a varied mixed forest beyond the thuja belt")
+	check(stage.woodland_details.get("VillageForestPines", 0) == stage.city.mixed_conifer_count and stage.woodland_details.get("VillageForestBroadleafCrowns", 0) == stage.city.mixed_broadleaf_count, "mixed forest trees are rendered through instanced layers")
+	check(stage.city.forest_grass_count > 1000 and stage.city.forest_stone_count > 200, "mixed forest has dense grass and loose stones")
+	check(stage.city.forest_boulder_count > 25 and stage.rocks.size() >= stage.city.forest_boulder_count, "forest contains collidable boulders")
+	check(stage.city.forest_bush_count > 100 and stage.city.forest_berry_bush_count > 40, "forest has ordinary and berry undergrowth")
+	var forest_berry_items = stage.collectibles.filter(func(item): return item.get("name", "") == "лесные ягоды")
+	check(forest_berry_items.size() == stage.city.forest_berry_bush_count, "forest berry bushes expose deterministic collectible berries")
+	check(stage.woodland_details.get("VillageForestBerries", 0) > stage.city.forest_berry_bush_count * 6, "forest berry fruit is visibly instanced on bushes")
+	check(stage.city.village_grass_count > 400 and stage.city.village_stone_count > 80, "village yards and verges contain natural grass and stones")
+	var village_details_clear = true
+	for detail_position in stage.city.village_detail_positions:
+		village_details_clear = village_details_clear and stage.city.village_detail_allowed(detail_position)
+	check(village_details_clear, "generated village details never land on paved surfaces or occupied structures")
+	check(not stage.city.village_detail_allowed(stage.at(435.0)), "main village cobblestones reject natural detail")
+	check(not stage.city.village_detail_allowed(stage.at(435.0) + stage.side(435.0) * 5.1), "village sidewalks reject natural detail")
+	check(not stage.city.village_detail_allowed(stage.at(370.0) + stage.side(370.0) * 20.0), "transverse cobbled lanes reject natural detail")
 	var parking_labels = 0
 	for label in stage.find_children("*", "Label3D", true, false):
 		if str(label.text).begins_with("P "):

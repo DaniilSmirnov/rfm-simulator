@@ -510,7 +510,7 @@ func woodland_spot(pos: Vector3, padding: float = 0.0) -> bool:
 	return true
 
 func _detail_batch(name: String, mesh: Mesh, poses: Array, colors: Array, indices: Array = []) -> void:
-	if name in ["ForestGrass", "ForestBushes", "ForestBerryBushes", "ForestBerries", "ForestBushStems", "VineyardGrapes", "VineyardLeaves", "VineyardRoadsideGrass", "VineyardRoadsideStones", "VineyardRoadsideBushes"]:
+	if name in ["ForestGrass", "ForestBushes", "ForestBerryBushes", "ForestBerries", "ForestBushStems", "VineyardGrapes", "VineyardLeaves", "VineyardRoadsideGrass", "VineyardRoadsideStones", "VineyardRoadsideBushes", "VillageForestPines", "VillageForestBroadleafTrunks", "VillageForestBroadleafCrowns", "VillageForestGrass", "VillageForestStones", "VillageForestBoulders", "VillageForestBushes", "VillageForestBerryBushes", "VillageForestBerries", "VillageGrass", "VillageStones"]:
 		var cells = {}
 		for i in range(poses.size()):
 			var origin: Vector3 = poses[i].origin
@@ -543,7 +543,7 @@ func _detail_batch(name: String, mesh: Mesh, poses: Array, colors: Array, indice
 		mm.set_instance_transform(i, pose)
 		mm.set_instance_color(i, colors[i])
 		var source = name.get_slice("_Tile", 0)
-		if source in ["ForestBerries", "MushroomCaps", "MushroomStems", "VineyardGrapes"]:
+		if source in ["ForestBerries", "VillageForestBerries", "MushroomCaps", "MushroomStems", "VineyardGrapes"]:
 			if not collectible_parts.has(source):
 				collectible_parts[source] = {}
 			collectible_parts[source][i if indices.is_empty() else indices[i]] = {"mesh": mm, "instance": i, "pose": pose, "hidden": false}
