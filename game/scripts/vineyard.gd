@@ -4,6 +4,11 @@ const VILLAGE_START = 300.0
 const VILLAGE_END = 570.0
 var vine_count = 0
 var village_houses = 0
+var village_cobblestones = 0
+var sidewalk_segments = 0
+var roadside_grass_count = 0
+var roadside_stone_count = 0
+var roadside_bush_count = 0
 
 func build() -> void:
 	var floor_body = StaticBody3D.new()
@@ -29,6 +34,7 @@ func build() -> void:
 		for side_value in [-1.0, 1.0]:
 			_lamp(stage.at(s) + stage.side(s) * side_value * 6.2, -side_value)
 	_vineyards()
+	_roadside_details()
 	_landscape()
 	_flush_batches()
 
@@ -43,12 +49,14 @@ func _village_street() -> void:
 		for column in range(-5, 5):
 			var stone = Props.box(street, p + right * (column * 0.72 + (0.18 if s % 2 else 0.0)) + Vector3(0, 0.065, 0), Vector3(0.68, 0.045, 0.95), Color("a5a095").lightened(((s * 13 + column * 7) % 9) * 0.015 - 0.07))
 			stone.rotation.y = yaw
+			village_cobblestones += 1
 	for s in range(300, 570, 3):
 		var p = stage.at(s)
 		var yaw = atan2(-stage.direction(s).x, -stage.direction(s).z)
 		for side_value in [-1.0, 1.0]:
-			var sidewalk = Props.box(street, p + stage.side(s) * side_value * 5.1 + Vector3(0, 0.09, 0), Vector3(2.5, 0.18, 3.05), Color("bcb6a6"))
+			var sidewalk = Props.box(street, p + stage.side(s) * side_value * 5.1 + Vector3(0, 0.12, 0), Vector3(2.5, 0.24, 3.05), Color("c8c1ae"))
 			sidewalk.rotation.y = yaw
+			sidewalk_segments += 1
 			var curb = Props.box(street, p + stage.side(s) * side_value * 3.83 + Vector3(0, 0.10, 0), Vector3(0.17, 0.20, 3.02), Color("ded8c6"))
 			curb.rotation.y = yaw
 			for offset in [-0.75, 0.0, 0.75]:
@@ -65,7 +73,6 @@ func _village_street() -> void:
 		stage.add_child(lane)
 		lane.position = stage.at(s)
 		lane.rotation.y = atan2(-stage.direction(s).x, -stage.direction(s).z)
-		Props.box(lane, Vector3(0, 0.025, 0), Vector3(94, 0.05, 4.5), Color("89877b"))
 		for x in range(-46, 47):
 			for z in range(-2, 3):
 				Props.box(lane, Vector3(x, 0.06, z * 0.8), Vector3(0.95, 0.035, 0.76), Color("a49d8e"))
@@ -248,6 +255,80 @@ func _vineyards() -> void:
 				_batch(root, Transform3D.IDENTITY)
 	stage._detail_batch("VineyardLeaves", sphere, leaves, leaf_colors)
 	stage._detail_batch("VineyardGrapes", sphere, fruit, fruit_colors)
+
+func _roadside_details() -> void:
+	# Fill the previously empty verge between the road edge and the first vine
+	# rows. Keep the village and spectator parking pockets clean and readable.
+	var detail_rng = RandomNumberGenerator.new()
+	detail_rng.seed = 71020263
+	var grass_poses: Array = []
+	var grass_colors: Array = []
+	var stone_poses: Array = []
+	var stone_colors: Array = []
+	var bush_poses: Array = []
+	var bush_colors: Array = []
+	for s in range(14, 828, 2):
+		if s >= int(VILLAGE_START) - 8 and s <= int(VILLAGE_END) + 8:
+			continue
+		for side_value in [-1.0, 1.0]:
+			for tuft in range(3):
+				var lateral = detail_rng.randf_range(5.0, 11.6)
+				var p = stage.at(s) + stage.side(s) * side_value * lateral + stage.direction(s) * detail_rng.randf_range(-1.2, 1.2)
+				var blocked = false
+				for parking in stage.clearings:
+					blocked = blocked or stage.flat(p).distance_to(stage.flat(parking)) < 8.0
+				if blocked:
+					continue
+				p.y = stage.ground(p) - 0.08
+				var size = detail_rng.randf_range(0.28, 0.62)
+				grass_poses.append(Transform3D(Basis(Vector3.UP, detail_rng.randf() * TAU).scaled(Vector3(size * 1.7, size, size * 1.7)), p))
+				grass_colors.append(Color("566a35").lerp(Color("8d9157"), detail_rng.randf() * 0.65))
+				roadside_grass_count += 1
+	for s in range(22, 820, 7):
+		if s >= int(VILLAGE_START) - 10 and s <= int(VILLAGE_END) + 10:
+			continue
+		var side_value = -1.0 if detail_rng.randi() % 2 else 1.0
+		var p = stage.at(s) + stage.side(s) * side_value * detail_rng.randf_range(5.4, 11.2)
+		var blocked = false
+		for parking in stage.clearings:
+			blocked = blocked or stage.flat(p).distance_to(stage.flat(parking)) < 8.0
+		if blocked:
+			continue
+		p.y = stage.ground(p)
+		var radius = detail_rng.randf_range(0.16, 0.48)
+		stone_poses.append(Transform3D(Basis(Vector3.UP, detail_rng.randf() * TAU).scaled(Vector3(radius * 1.8, radius, radius * 1.45)), p + Vector3(0, radius * 0.20, 0)))
+		stone_colors.append(Color("7c7d6e").lightened(detail_rng.randf_range(-0.12, 0.10)))
+		roadside_stone_count += 1
+	for s in range(28, 816, 9):
+		if s >= int(VILLAGE_START) - 12 and s <= int(VILLAGE_END) + 12:
+			continue
+		for side_value in [-1.0, 1.0]:
+			if detail_rng.randf() < 0.38:
+				continue
+			var center = stage.at(s) + stage.side(s) * side_value * detail_rng.randf_range(7.0, 11.8)
+			var blocked = false
+			for parking in stage.clearings:
+				blocked = blocked or stage.flat(center).distance_to(stage.flat(parking)) < 9.0
+			if blocked:
+				continue
+			center.y = stage.ground(center)
+			var size = detail_rng.randf_range(0.55, 1.15)
+			for lobe in range(3):
+				var angle = detail_rng.randf() * TAU
+				var offset = Vector3(cos(angle), 0, sin(angle)) * size * 0.28
+				var pose = Transform3D(Basis(Vector3.UP, angle).scaled(Vector3(size * 0.95, size * 0.72, size * 0.90)), center + offset + Vector3(0, size * 0.45, 0))
+				bush_poses.append(pose)
+				bush_colors.append(Color("405f32").lerp(Color("718044"), detail_rng.randf() * 0.6))
+			roadside_bush_count += 1
+	var stone_mesh = SphereMesh.new()
+	stone_mesh.radial_segments = 6
+	stone_mesh.rings = 3
+	var bush_mesh = SphereMesh.new()
+	bush_mesh.radial_segments = 7
+	bush_mesh.rings = 3
+	stage._detail_batch("VineyardRoadsideGrass", stage._grass_mesh(), grass_poses, grass_colors)
+	stage._detail_batch("VineyardRoadsideStones", stone_mesh, stone_poses, stone_colors)
+	stage._detail_batch("VineyardRoadsideBushes", bush_mesh, bush_poses, bush_colors)
 
 func _landscape() -> void:
 	var root = Node3D.new()
