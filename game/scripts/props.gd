@@ -702,12 +702,12 @@ static func flag_wordmark(text: String, pixel: float) -> ArrayMesh:
 				vertices.append_array(PackedVector3Array([a, b, c, a, c, d]))
 	return panel_mesh(vertices)
 
-static func rally_fan_flag(parent: Node3D, pos: Vector3, yaw: float, index: int = 0) -> Node3D:
+static func rally_fans_map_flag(parent: Node3D, pos: Vector3, yaw: float, index: int = 0) -> Node3D:
 	var root = Node3D.new()
-	root.name = "RallyFanMapsFlag_%d" % (index + 1)
+	root.name = "RallyFansMapFlag_%d" % (index + 1)
 	root.position = pos
 	root.rotation.y = yaw
-	root.set_meta("rally_fan_maps_flag", true)
+	root.set_meta("rally_fans_map_flag", true)
 	root.set_meta("flag_index", index)
 	parent.add_child(root)
 	# The silhouette is geometry, not an alpha texture: no transparent sorting.
@@ -737,7 +737,7 @@ static func rally_fan_flag(parent: Node3D, pos: Vector3, yaw: float, index: int 
 		for line in range(2):
 			var text = MeshInstance3D.new()
 			text.name = "Wordmark_%s_%d" % ["Front" if face > 0 else "Back", line]
-			var title = "RALLY" if line == 0 else "FAN MAPS"
+			var title = "RALLY" if line == 0 else "FANS MAP"
 			text.set_meta("wordmark", title)
 			text.mesh = flag_wordmark(title, 0.035 if line == 0 else 0.023)
 			var ink = material(Color("fff4e6"))

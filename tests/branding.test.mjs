@@ -1,0 +1,52 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFile, readdir } from 'node:fs/promises';
+import { runInNewContext } from 'node:vm';
+import { join } from 'node:path';
+
+test('loading progress is real, bounded, supports unknown sizes and waits for startup', async () => {
+  const html = await readFile(new URL('../game/branding/web-shell.html', import.meta.url), 'utf8');
+  const nodes = {};
+  for (const id of ['status','status-progress','status-fill','status-label','status-notice']) nodes[id] = {
+    style: {}, attrs: {}, hidden: false, textContent: '', removed: false,
+    classList: { values: new Set(['indeterminate']), add(v) {this.values.add(v)}, remove(v) {this.values.delete(v)} },
+    setAttribute(k,v) {this.attrs[k]=String(v)}, removeAttribute(k) {delete this.attrs[k]},
+    remove() {this.removed=true}
+  };
+  let options, ready;
+  const inline = html.split('<script>')[1].split('</script>')[0].replace('$GODOT_CONFIG','{}').replace('$GODOT_THREADS_ENABLED','false');
+  class Engine {
+    static getMissingFeatures() {return []}
+    startGame(value) {options=value; return new Promise(resolve => {ready=resolve})}
+  }
+  runInNewContext(inline, {Engine, document:{getElementById:id=>nodes[id]}, console});
+  assert.equal(nodes.status.removed,false);
+  options.onProgress(25,100);
+  assert.equal(nodes['status-progress'].attrs['aria-valuenow'],'25');
+  assert.equal(nodes['status-fill'].style.width,'25%');
+  options.onProgress(200,100);
+  assert.equal(nodes['status-fill'].style.width,'100%');
+  assert.equal(nodes['status-label'].textContent,'Запуск игры…');
+  assert.equal(nodes.status.removed,false);
+  options.onProgress(0,0);
+  assert.equal(nodes['status-progress'].attrs['aria-valuenow'],undefined);
+  assert.ok(nodes['status-progress'].classList.values.has('indeterminate'));
+  ready();
+  await Promise.resolve();
+  assert.equal(nodes.status.removed,true);
+});
+test('all project brand references use Rally Fans Map spelling', async () => {
+  async function visit(directory) {
+    for (const entry of await readdir(directory,{withFileTypes:true})) {
+      if (entry.name.startsWith('.') || entry.name === 'node_modules' || entry.name === 'dist') continue;
+      const path = join(directory,entry.name);
+      if (entry.isDirectory()) await visit(path);
+      else if (/\.(gd|js|mjs|md|html|svg|json|godot|cfg)$/.test(path) && path !== new URL(import.meta.url).pathname) {
+        const text=await readFile(path,'utf8');
+        assert.equal(/Rally Fan Maps|RallyFanMaps|rally_fan_maps|FAN MAPS/.test(text),false,path);
+      }
+    }
+  }
+  for(const folder of ['game','scripts','web','docs']) await visit(new URL('../'+folder,import.meta.url).pathname);
+  assert.equal(/Rally Fan Maps|FAN MAPS/.test(await readFile(new URL('../README.md',import.meta.url),'utf8')),false);
+});

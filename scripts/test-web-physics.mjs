@@ -92,7 +92,33 @@ try {
       return isBrand(splash);
     });
     if (!branded) throw new Error('Exported splash/favicon/apple-touch-icon are not Rally Fans Map branded');
+    const favicon = page.locator('link[rel="icon"][type="image/svg+xml"]');
+    if (await favicon.count() !== 1 || !(await favicon.getAttribute('href')).endsWith('favicon.svg')) throw new Error('Missing canonical SVG favicon');
+    const faviconResponse = await page.request.get('http://127.0.0.1:' + server.address().port + '/favicon.svg');
+    if ((await faviconResponse.text()) !== await readFile(join(root, 'game/branding/rfm-icon.svg'), 'utf8')) throw new Error('Favicon differs from canonical SVG logo');
+    await page.locator('#status-brand').waitFor();
+    if (await page.locator('#status-brand').textContent() !== 'Rally Fans Map') throw new Error('Loading brand text is incorrect');
+    const loadingStyle = await page.evaluate(() => ({
+      background: getComputedStyle(document.getElementById('status')).backgroundColor,
+      fill: getComputedStyle(document.getElementById('status-fill')).backgroundColor,
+    }));
+    if (loadingStyle.background !== 'rgb(0, 0, 0)' || loadingStyle.fill !== 'rgb(255, 59, 10)') throw new Error('Loading screen must be black with brand orange progress');
+    await page.evaluate(() => loadingProgress(37, 100));
+    if (await page.locator('#status-progress').getAttribute('aria-valuenow') !== '37') throw new Error('Loading progress is not determinate');
+    if (!(await page.locator('#status-label').textContent()).includes('37%')) throw new Error('Loading percentage label is missing');
     await page.screenshot({ path: join(root, '.cache/branding-loading.png') });
+    await page.setViewportSize({width:844,height:390});
+    await page.screenshot({path:join(root,'.cache/branding-loading-mobile.png')});
+    const overflow = await page.evaluate(() => {
+      const card = document.querySelector('.loading-card').getBoundingClientRect();
+      return card.left < 0 || card.right > innerWidth || card.top < 0 || card.bottom > innerHeight;
+    });
+    if (overflow) throw new Error('Loading card overflows mobile landscape');
+    await page.setViewportSize({width:1280,height:720});
+    await page.evaluate(() => loadingProgress(100, 100));
+    if (await page.locator('#status-label').textContent() !== 'Запуск игры…') throw new Error('Completed downloads must wait for engine startup');
+    await page.evaluate(() => loadingProgress(0, 0));
+    if (!(await page.locator('#status-progress').getAttribute('class')).includes('indeterminate')) throw new Error('Unknown total should use indeterminate progress');
     console.log('Rally Fans Map loading screen and browser icons verified.');
   } finally {
     releaseEngine();
@@ -100,6 +126,7 @@ try {
   const until = Date.now() + 90000;
   while (!pass && !fail && Date.now() < until) await page.waitForTimeout(250);
   if (fail || !pass) throw new Error(fail || 'Exported Web physics check timed out');
+  if (await page.locator('#status').count() !== 0) throw new Error('Loading overlay still covers the started game');
   console.log('WebAssembly 3D physics verified in Chromium.');
 } finally {
   await browser?.close();

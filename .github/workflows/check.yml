@@ -84,5 +84,5 @@ jobs:
         if: always()
         with:
           name: branding-loading
-          path: .cache/branding-loading.png
+          path: .cache/branding-loading*.png
           if-no-files-found: warn

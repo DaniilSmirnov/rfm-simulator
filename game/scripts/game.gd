@@ -135,7 +135,7 @@ func begin_placement(kind: String) -> void:
 		"chairs": Props.chair(placement_preview, Vector3.ZERO)
 		"grill": Props.grill(placement_preview)
 		"firewood": Props.campfire(placement_preview)
-		"flag": Props.rally_fan_flag(placement_preview, Vector3.ZERO, 0.0, flag_count())
+		"flag": Props.rally_fans_map_flag(placement_preview, Vector3.ZERO, 0.0, flag_count())
 	placement_material = Props.material(Color("82c991"))
 	for child in placement_preview.find_children("*", "MeshInstance3D", true, false):
 		child.material_override = placement_material
@@ -1071,7 +1071,7 @@ func place_flag(spot: Vector3 = Vector3.INF, yaw: float = 0.0, owner: String = "
 	if not valid_furniture_spot(spot, "flag"):
 		return false
 	var flags: Array = personal_flags.get(owner, [])
-	var node = Props.rally_fan_flag(self, spot, yaw, flags.size())
+	var node = Props.rally_fans_map_flag(self, spot, yaw, flags.size())
 	node.position.y = stage.ground(spot)
 	flags.append(node)
 	personal_flags[owner] = flags

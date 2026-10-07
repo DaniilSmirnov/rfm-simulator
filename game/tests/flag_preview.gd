@@ -32,7 +32,7 @@ func run() -> void:
 	environment.environment.background_mode = Environment.BG_COLOR
 	environment.environment.background_color = Color("14242c")
 	scene.add_child(environment)
-	var flag = Props.rally_fan_flag(scene, Vector3.ZERO, 0)
+	var flag = Props.rally_fans_map_flag(scene, Vector3.ZERO, 0)
 	var camera = Camera3D.new()
 	scene.add_child(camera)
 	camera.current = true

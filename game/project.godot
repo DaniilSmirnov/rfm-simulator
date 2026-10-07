@@ -3,13 +3,13 @@ config_version=5
 
 [application]
 config/name="Симулятор раллийного овоща"
-config/version="0.10.19"
+config/version="0.10.20"
 config/icon="res://branding/rfm-icon.svg"
-boot_splash/image="res://branding/rfm-icon.svg"
+boot_splash/image="res://branding/rfm-splash.png"
 boot_splash/show_image=true
 boot_splash/fullsize=false
 boot_splash/use_filter=true
-boot_splash/bg_color=Color(0.067, 0.075, 0.094, 1)
+boot_splash/bg_color=Color(0, 0, 0, 1)
 run/max_fps=24
 run/main_scene="res://main.tscn"
 config/features=PackedStringArray("4.4", "GL Compatibility")
