@@ -107,7 +107,8 @@ func ground(pos: Vector3) -> float:
 		var p = at(s)
 		var distance = road_distance(pos)
 		if village(s):
-			return 2.18 if distance > 3.72 and distance < 6.4 else 2.0
+			var junction = absf(s - 370.0) <= 3.0 or absf(s - 500.0) <= 3.0
+			return 2.36 if not junction and distance > 3.75 and distance < 6.45 else 2.0
 		var hillside = maxf(distance - 6.0, 0) * 0.12
 		var height = p.y + hillside + sin(pos.x * 0.075 + s * 0.025) * minf(hillside * 0.2, 1.5)
 		for parking in clearings:
