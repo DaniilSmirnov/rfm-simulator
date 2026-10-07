@@ -54,7 +54,7 @@ func run() -> void:
 	host.room._update_peers([{"id": "guest", "name": "Друг", "slot": 7, "state": guest.room.local_state()}])
 	host.room._process(0.05)
 	var peer = host.room.peers.guest
-	check(peer.car.get_meta("model") == "Renault Duster", "remote model comes from assigned room slot")
+	check(peer.car.get_meta("model") == "Туристический кроссовер", "remote model comes from assigned room slot")
 	check(peer.skewer.visible and not peer.can.visible and peer.arm.rotation.x > 1, "friend sees lifted skewer and animated arm")
 	check(not peer.skewer.get_node("Meat2").visible, "friend sees the same eaten pieces")
 	var peer_time = peer.eat_time
@@ -99,7 +99,7 @@ func run() -> void:
 	check(guest.meat_prop == null and guest.eat_time < 0 and not guest.eaten, "death clears unfinished meal without credit")
 	var old_position = host.car.position
 	host.select_player_car(4)
-	check(host.car.get_meta("model") == "Hyundai Solaris" and host.car.position == old_position, "local assigned model preserves car position")
+	check(host.car.get_meta("model") == "Лёгкий седан" and host.car.position == old_position, "local assigned model preserves car position")
 	for game in [host, guest]:
 		await game._shutdown_audio()
 		game.queue_free()

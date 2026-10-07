@@ -240,10 +240,10 @@ test('seated posture is synchronized only for pedestrians and defaults off', () 
   assert.equal(reply.players[0].state.seated, false);
 });
 
-test('BMW model 9 survives joins and restored rooms while out-of-range models fall back', () => {
+test('Sport sedan model 9 survives joins and restored rooms while out-of-range models fall back', () => {
   const r = new RoomState();
-  const h = r.add('BMW Host', 1000, true, { car_model: 9 });
-  const g = r.add('BMW Guest', 1000, false, { car_model: 9 });
+  const h = r.add('Sport sedan Host', 1000, true, { car_model: 9 });
+  const g = r.add('Sport sedan Guest', 1000, false, { car_model: 9 });
   assert.equal(h.car_model, 9);
   assert.equal(g.car_model, 9);
   const restored = new RoomState(structuredClone(r.data));
