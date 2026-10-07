@@ -246,19 +246,21 @@ func enable_mobile() -> void:
 	if mobile_mode:
 		return
 	mobile_mode = true
-	get_window().content_scale_size = Vector2i(720, 480)
+	get_window().content_scale_size = Vector2i(960, 540)
 	get_window().content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	title_label.text = "РАЛЛИЙНЫЙ ОВОЩ"
-	title_label.add_theme_font_size_override("font_size", 22)
+	title_label.add_theme_font_size_override("font_size", 18)
+	course_label.add_theme_font_size_override("font_size", 14)
+	course_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	mobile_top.get_child(0).get_child(1).hide()
-	mobile_top.position = Vector2(36, 64)
-	mobile_top.size = Vector2.ZERO
+	mobile_top.position = Vector2(24, 20)
+	mobile_top.size = Vector2(360, 0)
 	mobile_bottom.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
 	mobile_bottom.offset_left = 36
-	mobile_bottom.offset_right = -36
-	mobile_bottom.offset_top = 150
-	mobile_bottom.offset_bottom = 220
+	mobile_bottom.offset_right = -270
+	mobile_bottom.offset_top = 110
+	mobile_bottom.offset_bottom = 164
 	info_label.add_theme_font_size_override("font_size", 18)
 	info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hint_label.hide()
@@ -266,8 +268,8 @@ func enable_mobile() -> void:
 	mobile_sidebar.get_child(0).get_child(0).hide()
 	mobile_sidebar.offset_left = -280
 	mobile_sidebar.offset_right = -36
-	mobile_sidebar.offset_top = 230
-	mobile_sidebar.offset_bottom = 410
+	mobile_sidebar.offset_top = 96
+	mobile_sidebar.offset_bottom = 282
 	minimap.custom_minimum_size = Vector2(204, 110)
 	toast_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	toast_label.offset_left = 36

@@ -15,6 +15,12 @@ func button(c: Control, action: String) -> Vector2:
 	for b in c.buttons:
 		if b.action == action:
 			return b.rect.get_center()
+	if action in ["table", "chairs", "grill", "firewood", "cauldron", "flag", "random_spot", "recover", "eat_berries"]:
+		c.gear_open = true
+		c._layout()
+		for b in c.buttons:
+			if b.action == action:
+				return b.rect.get_center()
 	return Vector2(-1000, -1000)
 func prepare_trunk(game) -> void:
 	game.car.position = game.walker - Vector3(0, 0, 3)
@@ -32,6 +38,8 @@ func run() -> void:
 	await process_frame
 	var c = game.mobile_controls
 	c.set_process(false)
+	check(c.landscape() and game.get_window().content_scale_size == Vector2i(960, 540), "mobile uses a landscape canvas")
+	check(not c.buttons.any(func(b): return b.action == "table"), "equipment is hidden behind the compact drawer")
 	check(game.mobile_mode and Input.mouse_mode == Input.MOUSE_MODE_VISIBLE, "mobile starts without pointer capture")
 	c.touch_begin(1, button(c, "forward"))
 	c.touch_begin(2, c.stick_center + Vector2(60, 0))
@@ -63,11 +71,11 @@ func run() -> void:
 	game.view_pitch = -0.12
 	game._update_camera(1)
 	var camera_height = game.camera.position.y
-	var left_free = Vector2(c.size.x * 0.18, 225)
+	var left_free = Vector2(c.size.x * 0.72, 190)
 	c.touch_begin(5, left_free)
 	c.touch_drag(5, left_free + Vector2(40, 80), Vector2(40, 80))
 	game._update_camera(1)
-	check(game.camera.position.y > camera_height + 0.5 and c.fingers.get(5, {}).get("kind", "") == "look", "free left-side swipe changes actual third-person camera height")
+	check(game.camera.position.y > camera_height + 0.5 and c.fingers.get(5, {}).get("kind", "") == "look", "right-side swipe changes actual third-person camera height")
 	c.touch_end(5)
 	game.car.position = car_before
 	c.map_open = true
@@ -93,8 +101,12 @@ func run() -> void:
 	c.touch_begin(2, Vector2(c.size.x * 0.6, 225))
 	c.touch_drag(2, Vector2(c.size.x * 0.6 + 50, 225), Vector2(50, 0))
 	check(Input.is_action_pressed("forward") and game.view_yaw != yaw, "walking and swipe look work together")
+	var crossing_yaw = game.view_yaw
+	c.touch_drag(1, Vector2(c.size.x * 0.8, c.size.y * 0.5), Vector2(20, 0))
+	check(c.fingers[1].kind == "stick" and game.view_yaw == crossing_yaw, "movement finger keeps its role when dragged into camera half")
 	c.touch_end(2)
-	check(Input.is_action_pressed("forward"), "look finger release preserves walking")
+	check(Input.is_action_pressed("right"), "look finger release preserves movement")
+	c.touch_drag(1, c.stick_center + Vector2(0, -60), Vector2.ZERO)
 	c.touch_begin(3, button(c, "pause_demo"))
 	c._process(0)
 	check(game.paused and not Input.is_action_pressed("forward") and c.fingers.is_empty(), "pause clears held touches")
@@ -103,6 +115,29 @@ func run() -> void:
 	c.touch_begin(1, c.stick_center + Vector2(60, 0))
 	c._notification(Control.NOTIFICATION_WM_WINDOW_FOCUS_OUT)
 	check(not Input.is_action_pressed("right"), "focus loss releases movement")
+	var floating_origin = Vector2(c.size.x * 0.30, c.size.y * 0.44)
+	var fixed_yaw = game.view_yaw
+	c.touch_begin(8, floating_origin)
+	c.touch_drag(8, floating_origin + Vector2(-35, -45), Vector2(-35, -45))
+	check(c.fingers[8].kind == "stick" and Input.is_action_pressed("left") and Input.is_action_pressed("forward") and game.view_yaw == fixed_yaw, "left half starts a floating movement stick without turning the camera")
+	c.touch_end(8)
+	c.touch_begin(8, c.stick_center + Vector2(0, -60))
+	c.touch_begin(9, button(c, "sprint"))
+	c.touch_begin(10, look_point)
+	check(Input.is_action_pressed("forward") and Input.is_action_pressed("sprint") and c.fingers[10].kind == "look", "sprint, movement and camera accept three independent fingers")
+	c.touch_end(9)
+	check(Input.is_action_pressed("forward") and not Input.is_action_pressed("sprint") and c.fingers.has(10), "releasing sprint preserves stick and camera")
+	c.reset_input()
+	var original_size = c.size
+	c.size = Vector2(540, 960)
+	c._process(0)
+	c.touch_begin(11, Vector2(300, 500))
+	check(not c.landscape() and c.buttons.is_empty() and c.fingers.is_empty(), "portrait mode refuses gameplay touches until rotated")
+	c.size = original_size
+	c._process(0)
+	check(c.landscape() and not c.buttons.is_empty(), "rotation restores controls with no stuck actions")
+	for b in c.buttons:
+		check(Rect2(Vector2.ZERO, c.size).encloses(b.rect), "landscape button remains inside viewport")
 	game.walker = game.stage.clearings[0]
 	game.view_yaw = 0
 	prepare_trunk(game)

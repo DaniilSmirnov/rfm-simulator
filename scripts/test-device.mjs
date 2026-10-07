@@ -12,3 +12,17 @@ assert.equal(detect('Macintosh Safari', 0), false);
 assert.equal(detect('Unknown', 2, true), true);
 assert.equal(detect('Unknown', 0, false, true), true);
 console.log('PASS: 8 mobile browser detection checks');
+
+const orientationCalls = [];
+const orientation = runInNewContext(readFileSync(new URL('../web/mobile-device.js', import.meta.url), 'utf8') + '\nRallyDevice', {
+  document: { fullscreenElement: null, documentElement: { async requestFullscreen() { orientationCalls.push('fullscreen'); } } },
+  screen: { orientation: { async lock(mode) { orientationCalls.push(mode); } } }
+});
+await orientation.requestLandscape();
+assert.deepEqual(orientationCalls, ['fullscreen', 'landscape']);
+const unsupported = runInNewContext(readFileSync(new URL('../web/mobile-device.js', import.meta.url), 'utf8') + '\nRallyDevice', {
+  document: { fullscreenElement: null, documentElement: { async requestFullscreen() { throw new Error('Denied'); } } },
+  screen: { orientation: { async lock() { throw new Error('Unsupported'); } } }
+});
+await unsupported.requestLandscape();
+console.log('PASS: mobile orientation requests and unsupported browser fallback');
