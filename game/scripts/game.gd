@@ -1724,7 +1724,7 @@ func _update_hud() -> void:
 	if mobile_mode:
 		course_label.text = course.caption().replace("ПРОХОД ", "СУ ").replace(" · ПРЯМО", "").replace(" · ОБРАТНО", "").replace("ДО ОТКРЫТИЯ СУ", "СТАРТ ЧЕРЕЗ")
 		if in_car and tow_target == null:
-			info_label.text = "%02d КМ/Ч · МАШИНА %d%% · %s %d м" % [int(absf(speed) * 3.6), int(condition), "ПАРКОВКА" if stage.urban else "ПОЛЯНА", distance]
+			info_label.text = "%02d КМ/Ч · МАШИНА %d%% · %s %d м" % [int(absf(speed) * 3.6), int(condition), "МЕСТО" if stage.urban else "ПОЛЯНА", distance]
 		elif not in_car and drink_time < 0 and eat_time < 0 and beers < 30 and tow_target == null:
 			if packing.active():
 				info_label.text = "ВЕРНУТЬ ВЕЩИ В БАГАЖНИК · ОСТАЛОСЬ %d" % packing.remaining()
