@@ -21,6 +21,12 @@ var forest_berry_bush_count = 0
 var village_grass_count = 0
 var village_stone_count = 0
 var village_detail_positions: Array[Vector3] = []
+var church_square_cobblestones = 0
+var side_lane_house_count = 0
+var cemetery_grave_count = 0
+var village_sign_count = 0
+var church_square_center = Vector3.ZERO
+var cemetery_center = Vector3.ZERO
 
 func build() -> void:
 	var floor_body = StaticBody3D.new()
@@ -41,7 +47,11 @@ func build() -> void:
 				reserved = reserved or stage.flat(p).distance_to(stage.flat(parking)) < 13
 			if not reserved:
 				_house(p, atan2(stage.side(s).x * side_value, stage.side(s).z * side_value), int(s / 18) + int(side_value))
+	_side_lane_houses()
 	_church(stage.at(435) + stage.side(435) * 43)
+	_cemetery()
+	_village_sign(VILLAGE_START - 10.0, -1.0)
+	_village_sign(VILLAGE_END + 10.0, 1.0)
 	for s in range(318, 565, 28):
 		for side_value in [-1.0, 1.0]:
 			_lamp(stage.at(s) + stage.side(s) * side_value * 6.2, -side_value)
@@ -92,6 +102,24 @@ func _village_street() -> void:
 			for z in range(-2, 3):
 				Props.box(lane, Vector3(x, 0.06, z * 0.8), Vector3(0.95, 0.035, 0.76), Color("a49d8e"))
 		_batch(lane, lane.transform)
+
+func _side_lane_houses() -> void:
+	for lane_s in [370.0, 500.0]:
+		var lane_direction = stage.side(lane_s).normalized()
+		var lane_normal = stage.direction(lane_s).normalized()
+		for along in [-32.0, -20.0, 20.0, 32.0]:
+			for side_value in [-1.0, 1.0]:
+				var p = stage.at(lane_s) + lane_direction * along + lane_normal * side_value * 10.5
+				p.y = stage.ground(p)
+				var blocked = false
+				for spot in stage.clearings:
+					blocked = blocked or stage.flat(p).distance_to(stage.flat(spot)) < 10.0
+				if blocked or not _point_clear_of_obstacles(p, 5.5):
+					continue
+				var facing = -lane_normal * side_value
+				var yaw = atan2(-facing.x, -facing.z)
+				_house(p, yaw, 100 + int(lane_s) + int(along) + int(side_value))
+				side_lane_house_count += 1
 
 func _roof(parent: Node3D, width: float, depth: float, y: float, height: float, color: Color) -> void:
 	if not meshes.has("village_roof"):
@@ -215,10 +243,75 @@ func _church(p: Vector3) -> void:
 	Props.cylinder(church, Vector3(0, 20, -11), 4.3, 0, 8.6, Color("665f5c"), 8)
 	Props.box(church, Vector3(0, 25.1, -11), Vector3(0.17, 2, 0.17), Color("c4ab6e"))
 	Props.box(church, Vector3(0, 25.5, -11), Vector3(1.1, 0.17, 0.17), Color("c4ab6e"))
-	Props.box(church, Vector3(0, 0.04, -18), Vector3(16, 0.08, 10), Color("b0a992"))
+	var square = Node3D.new()
+	square.name = "VillageChurchSquare"
+	church.add_child(square)
+	square.position = Vector3(0, 0.045, -18)
+	church_square_center = church.transform * square.position
+	for x in range(-8, 9):
+		for z in range(-5, 6):
+			var offset = Vector3(x * 0.92 + (0.28 if z % 2 else 0.0), 0, z * 0.92)
+			var stone = Props.box(square, offset, Vector3(0.88, 0.06, 0.88), Color("a7a194").lightened(float(posmod(x * 5 + z * 7, 9)) * 0.012 - 0.05))
+			stone.rotation.y = (PI / 2.0) if (x + z) % 7 == 0 else 0.0
+			church_square_cobblestones += 1
 	_solid(church, Vector3(0, 4.5, 0), Vector3(10, 9, 21), "building")
 	_solid(church, Vector3(0, 8, -11), Vector3(6, 16, 6), "building")
 	_batch(church, church.transform)
+
+func _cemetery() -> void:
+	var root = Node3D.new()
+	root.name = "VillageCemetery"
+	stage.add_child(root)
+	var s = 435.0
+	cemetery_center = stage.at(s) + stage.side(s) * 72.0
+	cemetery_center.y = stage.ground(cemetery_center)
+	root.position = cemetery_center
+	root.rotation.y = atan2(-stage.direction(s).x, -stage.direction(s).z)
+	Props.box(root, Vector3(0, 0.015, 0), Vector3(32, 0.03, 24), Color("64794d"))
+	# Open lawn with regular rows, inspired by small North American rural cemeteries.
+	for row in range(4):
+		for column in range(7):
+			var x = -12.0 + column * 4.0
+			var z = -8.0 + row * 5.2
+			var grave = Node3D.new()
+			grave.name = "CemeteryGrave_%02d" % cemetery_grave_count
+			root.add_child(grave)
+			grave.position = Vector3(x, 0.03, z)
+			Props.box(grave, Vector3(0, 0.015, 1.0), Vector3(1.4, 0.03, 2.6), Color("71815a").lightened(float((row + column) % 4) * 0.025))
+			if (row + column) % 3 == 0:
+				Props.box(grave, Vector3(0, 0.58, -0.62), Vector3(1.05, 1.15, 0.16), Color("9d9a8e"))
+			else:
+				Props.box(grave, Vector3(0, 0.78, -0.62), Vector3(0.18, 1.55, 0.18), Color("a7a397"))
+				Props.box(grave, Vector3(0, 1.03, -0.62), Vector3(0.92, 0.18, 0.18), Color("a7a397"))
+			cemetery_grave_count += 1
+	# A simple gravel walk keeps the lawn readable without fencing it off.
+	Props.box(root, Vector3(0, 0.025, 10.2), Vector3(28, 0.05, 1.5), Color("aaa38f"))
+	_batch(root, root.transform)
+
+func _village_sign(s: float, side_value: float) -> void:
+	var root = Node3D.new()
+	root.name = "VillageNameSign_%d" % village_sign_count
+	stage.add_child(root)
+	var p = stage.at(s) + stage.side(s) * side_value * 7.2
+	p.y = stage.ground(p)
+	root.position = p
+	root.rotation.y = atan2(-stage.direction(s).x, -stage.direction(s).z)
+	for x in [-1.45, 1.45]:
+		Props.cylinder(root, Vector3(x, 1.2, 0), 0.065, 0.065, 2.4, Color("62665f"), 7)
+	Props.box(root, Vector3(0, 2.15, 0), Vector3(4.2, 1.25, 0.12), Color("eee9d6"))
+	for face in [-1.0, 1.0]:
+		var label = Label3D.new()
+		root.add_child(label)
+		label.position = Vector3(0, 2.15, face * 0.075)
+		label.rotation.y = PI if face > 0 else 0.0
+		label.text = "Ля Газ в Польен"
+		label.font_size = 44
+		label.pixel_size = 0.005
+		label.modulate = Color("30342f")
+		label.outline_size = 0
+	_solid(root, Vector3(0, 2.15, 0), Vector3(4.2, 1.25, 0.12), "sign")
+	_batch(root, root.transform)
+	village_sign_count += 1
 
 func _vineyards() -> void:
 	var leaves: Array = []
@@ -439,6 +532,8 @@ func _point_clear_of_obstacles(p: Vector3, padding: float = 0.0) -> bool:
 	return true
 
 func _forest_spot_allowed(p: Vector3, padding: float = 0.0) -> bool:
+	if cemetery_center != Vector3.ZERO and stage.flat(p).distance_to(stage.flat(cemetery_center)) < 20.0 + padding:
+		return false
 	var s = stage.road_s(p)
 	if s < VILLAGE_START - 55.0 or s > VILLAGE_END + 55.0:
 		return false
@@ -630,9 +725,11 @@ func village_detail_allowed(p: Vector3) -> bool:
 	for lane_s in [370.0, 500.0]:
 		if absf(s - lane_s) <= 3.2 and distance <= 48.5:
 			return false
-	# Keep the paved church forecourt and camp spots clean.
+	# Keep the church building and its cobbled square clean.
 	var church_center = stage.at(435.0) + stage.side(435.0) * 43.0
 	if stage.flat(p).distance_to(stage.flat(church_center)) < 13.5:
+		return false
+	if church_square_center != Vector3.ZERO and stage.flat(p).distance_to(stage.flat(church_square_center)) < 10.5:
 		return false
 	for spot in stage.clearings:
 		if stage.flat(p).distance_to(stage.flat(spot)) < 3.5:
