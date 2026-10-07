@@ -177,6 +177,7 @@ func confirm_placement() -> void:
 		match kind:
 			"table", "chairs", "grill", "firewood", "cauldron": cargo.deploy(kind, spot, yaw)
 			"flag": place_flag(spot, yaw)
+	soundscape.placement()
 	cancel_placement()
 
 var cooking = false
@@ -236,6 +237,7 @@ var engine_audio: AudioStreamPlayer
 var rally_audio: AudioStreamPlayer3D
 var wind_audio: AudioStreamPlayer
 var fire_audio: AudioStreamPlayer3D
+var soundscape: Node
 var capture_mode = false
 var hud_panels: Array[Control] = []
 var room: Node
@@ -621,11 +623,15 @@ func _setup_audio() -> void:
 	beer_audio = AudioStreamPlayer.new()
 	beer_audio.volume_db = -10
 	add_child(beer_audio)
+	soundscape = preload("res://scripts/soundscape.gd").new()
+	soundscape.game = self
+	add_child(soundscape)
 
 func start_game() -> void:
 	if playing:
 		return
 	playing = true
+	soundscape.repair()
 	course.apply_snapshot({})
 	racing = false
 	selection_controls.hide()
@@ -724,6 +730,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		toast(("Выбрана парковка %d. Оранжевая точка на карте." if stage.urban else "Выбрана поляна %d. Оранжевая точка на карте.") % (target_clearing + 1))
 	elif event.is_action_pressed("recover"):
 		if not racing:
+			if room.connected and room.recover_drive():
+				toast("Машина возвращена на СУ.")
+				return
 			car.position = stage.at(stage.road_s(car.position))
 			heading = atan2(-stage.direction(stage.road_s(car.position)).x, -stage.direction(stage.road_s(car.position)).z)
 			speed = 0
@@ -740,6 +749,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			spawn_racer("crash")
 
 func _process(delta: float) -> void:
+	if soundscape != null:
+		soundscape.update(delta)
 	if not playing or paused or dead or finished or (room.connected and not room.is_host and room.world_paused):
 		return
 	if not room.connected or room.is_host:
@@ -759,6 +770,7 @@ func _process(delta: float) -> void:
 	_update_camera(delta)
 	if room.connected and room.prediction_enabled:
 		camera.position += room.prediction.visual_offset
+	room.smooth_car_visuals()
 	_update_placement()
 	cargo.update(delta)
 	camp_cooking.update(delta, room.connected and not room.is_host)
@@ -1592,6 +1604,8 @@ func _update_racers(delta: float) -> void:
 
 func stone_impact(id: String) -> void:
 	impact_serials[id] = int(impact_serials.get(id, 0)) + 1
+	if room.is_host and room.host_drives.has(id) and room.peers.has(id) and room.peers[id].state.in_car:
+		room.host_drives[id].condition = maxf(0, room.host_drives[id].condition - 0.8)
 	if id == room.player_id or id == "local":
 		impact_shake = 0.8
 		if in_car:
@@ -1807,6 +1821,10 @@ func _capture_menu() -> void:
 	get_tree().quit()
 
 func _shutdown_audio() -> void:
+	if soundscape != null:
+		soundscape.shutting_down = true
+		for player in [soundscape.birds, soundscape.effects, soundscape.steps]:
+			player.stop()
 	for audio in [engine_audio, rally_audio, wind_audio, fire_audio, beer_audio]:
 		audio.stop()
 	await get_tree().create_timer(0.15).timeout

@@ -2,7 +2,7 @@ import { join } from 'node:path';
 import { getGodot, root, run } from './godot.mjs';
 const godot = await getGodot();
 const project = join(root, 'game');
-run(process.execPath, ['--test', join(root, 'tests/branding.test.mjs'), join(root, 'tests/boot-diagnostics.test.mjs')]);
+run(process.execPath, ['--test', join(root, 'tests/branding.test.mjs'), join(root, 'tests/boot-diagnostics.test.mjs'), join(root, 'tests/audio-recovery.test.mjs')]);
 run(godot, ['--headless', '--editor', '--path', project, '--import']);
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_character_asset.gd']);
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_player_handling.gd']);
@@ -51,3 +51,4 @@ run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_inter
 
 
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_drive_prediction.gd']);
+run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_soundscape.gd']);

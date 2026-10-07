@@ -36,6 +36,51 @@ func run() -> void:
 	for i in range(120):
 		client.predict(5, 1.0, 0.0, false, stage, 0)
 	check(client.pending.size() == Predictor.LIMIT, "disconnection backlog stays bounded")
+	client.reset(stage.at(12), 0)
+	host.reset(stage.at(12), 0)
+	for i in range(8):
+		client.predict(12, 1, 0.1, false, stage, 0)
+	check(host.accept(client.pending, stage, 0, 25) == 24 and host.ack == 2, "host enforces tick budget without dropping a command")
+	host.accept(client.pending, stage, 0, 72)
+	client.reconcile(host.snapshot(), stage, 0)
+	check(client.pending.is_empty(), "budget-delayed commands eventually drain")
+	# A missing packet and an older reply are independent of simulation order.
+	for model in range(10):
+		client.reset(stage.at(100), 0)
+		host.reset(stage.at(100), 0)
+		for i in range(100):
+			client.predict(2, 1 if i < 60 else -1, 0.2 if i < 70 else -0.5, i > 85, stage, model)
+			if i % 13 == 0:
+				host.accept(client.pending, stage, model)
+				client.reconcile(host.snapshot(), stage, model)
+		host.accept(client.pending, stage, model)
+		client.reconcile(host.snapshot(), stage, model)
+		check(client.node.position.distance_to(host.node.position) < 0.00001 and client.motion.velocity.distance_to(host.motion.velocity) < 0.00001, "delayed throttle, reverse, steering and braking converge for model %d" % model)
+	client.node.position += Vector3(1, 0, 0)
+	var rendered = client.node.position
+	client.reconcile(host.snapshot(), stage, 9)
+	check((client.node.position + client.visual_offset).distance_to(rendered) < 0.00001, "small reconciliation preserves visible position")
+	client.node.position += Vector3(20, 0, 0)
+	client.reconcile(host.snapshot(), stage, 9)
+	check(client.visual_offset == Vector3.ZERO, "large correction snaps without a long visual trail")
+	client.reset(stage.at(12) + Vector3(12, 0, 0), 0)
+	host.reset(client.node.position, 0)
+	client.predict(1, 0, 0, false, stage, 0, true)
+	host.accept(client.pending, stage, 0)
+	client.reconcile(host.snapshot(), stage, 0)
+	check(stage.road_distance(client.node.position) < 0.1 and client.node.position.distance_to(host.node.position) < 0.00001, "recovery is a numbered command and survives resend")
+	client.reset(stage.at(12), 0)
+	client.motion.velocity = Vector3(0, 0, -12)
+	client.context = {"contacts": [{"position": client.node.position + Vector3(0, 0, -1)}]}
+	client.predict(1, 0, 0, false, stage, 0)
+	check(client.condition < 100 and client.motion.velocity.z > 0, "dynamic car contact blocks and damages predicted car")
+	var event_count = client.events.size()
+	var state = client.snapshot()
+	state.ack = 0
+	client.reconcile(state, stage, 0)
+	check(client.events.size() == event_count, "replay never repeats collision effects")
+	client.reset(stage.at(12), 0)
+	check(client.condition == 100 and client.pending.is_empty() and client.events.is_empty(), "new session clears damage and queued effects")
 	stage.free()
 	print("DRIVE PREDICTION RESULT: %d failures" % failures)
 	quit(1 if failures else 0)

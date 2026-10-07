@@ -5,11 +5,19 @@ var prediction = Prediction.new()
 var host_drives: Dictionary = {}
 var prediction_enabled = false
 var input_clock = 0.0
+var authoritative_drives: Dictionary = {}
+var authority_stamp = -1.0
+var drive_budgets: Dictionary = {}
+var visual_children: Dictionary = {}
 const SnapshotMotion = preload("res://scripts/snapshot_motion.gd")
 const SYNC_INTERVAL = 0.1
 var server_offset = 0.0
 var clock_initialized = false
 var best_round_trip = INF
+var round_trip_ms = 0.0
+var network_jitter_ms = 0.0
+var previous_round_trip = -1.0
+var diagnostic_clock = 0.0
 var request_sent_at = 0.0
 var last_world_time = -1.0
 var racer_motion: Dictionary = {}
@@ -197,6 +205,9 @@ func _response(result: int, code: int, _headers: PackedStringArray, bytes: Packe
 		prediction_enabled = false
 		input_clock = 0.0
 		host_drives.clear()
+		drive_budgets.clear()
+		authoritative_drives.clear()
+		authority_stamp = -1.0
 		player_id = data.player
 		token = data.token
 		is_host = data.host
@@ -219,6 +230,11 @@ func _response(result: int, code: int, _headers: PackedStringArray, bytes: Packe
 		game.toast("Комната %s · %s. Передай ID друзьям!" % [room_id, game.car.get_meta("model")])
 		print("ROOM_CONNECTED ", room_id, " host=", is_host)
 	else:
+		if not is_host and data.world is Dictionary:
+			var drive_stamp = float(data.get("world_time", -1))
+			if drive_stamp > authority_stamp:
+				authoritative_drives = data.world.get("driving", {})
+				authority_stamp = drive_stamp
 		_update_peers(data.players)
 		if is_host:
 			for command in data.commands:
@@ -237,7 +253,15 @@ func _response(result: int, code: int, _headers: PackedStringArray, bytes: Packe
 					if prediction_enabled and not drive.is_empty():
 						if not prediction.active:
 							prediction.reset(v(drive.pos), drive.yaw)
+						prediction.context = drive_context(player_id)
+						# Apply world collision geometry before replaying unacknowledged input.
+						game.stage.apply_trees(data.world.get("fallen", []))
+						if game.stage.urban:
+							game.stage.city.apply_snapshot(data.world.get("city_lamps", []))
 						prediction.reconcile(drive, game.stage, game.selected_car)
+						game.condition = prediction.condition
+						game.car.position = prediction.node.position
+						game.heading = prediction.yaw
 					apply_world(data.world, stamp / 1000.0 if stamp >= 0 else -1.0)
 					last_world_time = stamp
 		room_label.text = "ID %s · %d/8 · %s%s" % [room_id, peers.size() + 1, "СОЗДАТЕЛЬ" if is_host else "ЗРИТЕЛЬ", " · ПАУЗА ХОЗЯИНА" if world_paused else ""]
@@ -245,6 +269,10 @@ func _response(result: int, code: int, _headers: PackedStringArray, bytes: Packe
 func update_server_clock(server_msec: float) -> void:
 	var now = Time.get_ticks_usec() / 1000000.0
 	var round_trip = clampf(now - request_sent_at, 0, 2.0)
+	round_trip_ms = round_trip * 1000.0
+	if previous_round_trip >= 0:
+		network_jitter_ms = lerpf(network_jitter_ms, absf(round_trip - previous_round_trip) * 1000.0, 0.2)
+	previous_round_trip = round_trip
 	var estimate = server_msec / 1000.0 - now + round_trip * 0.5
 	best_round_trip = minf(best_round_trip, round_trip)
 	if not clock_initialized:
@@ -289,14 +317,19 @@ func _process(delta: float) -> void:
 			body.world = world_state()
 			body.ack = acknowledgements
 		_request("sync", body)
+	diagnostic_clock += delta
+	if diagnostic_clock >= 5.0:
+		diagnostic_clock = 0.0
+		print("[RFM network] RTT=%.0fms jitter=%.0fms peers=%d" % [round_trip_ms, network_jitter_ms, peers.size()])
 	game.cargo.refresh_opened()
 	for peer in peers.values():
 		if peer.state == null:
 			continue
-		var car_pose = peer.car_motion.render(server_clock())
+		var frozen = world_paused or game.paused or game.dead or game.finished
+		var car_pose = peer.car_motion.render(server_clock(), frozen)
 		peer.car.position = car_pose.position
 		peer.car.rotation = car_pose.rotation
-		var avatar_pose = peer.avatar_motion.render(server_clock())
+		var avatar_pose = peer.avatar_motion.render(server_clock(), frozen)
 		peer.avatar.position = avatar_pose.position
 		peer.avatar.rotation.y = avatar_pose.rotation.y
 		peer.avatar.visible = not peer.state.in_car
@@ -423,24 +456,50 @@ func _update_peers(players: Array) -> void:
 			if p.state != null:
 				car.position = v(p.state.car)
 				avatar.position = v(p.state.pos)
-		if is_host and p.state != null and bool(p.state.get("drive_enabled", false)):
+		if is_host and p.state != null and (bool(p.state.get("drive_enabled", false)) or host_drives.has(p.id)):
 			if not host_drives.has(p.id):
 				var solver = Prediction.new()
-				solver.reset(v(p.state.car), float(p.state.heading))
+				solver.reset(game.stage.at(12 + int(p.get("slot", 1)) * 6), atan2(-game.stage.direction(12).x, -game.stage.direction(12).z))
+				drive_budgets[p.id] = {"time": Time.get_ticks_usec(), "ticks": 30.0}
 				host_drives[p.id] = solver
 			var solver = host_drives[p.id]
-			if not game.dead and not game.finished:
-				solver.accept(p.state.get("drive_inputs", []), game.stage, int(p.get("car_model", 0)))
-				p.state.car = a(solver.node.position)
-				if p.state.in_car:
-					p.state.pos = p.state.car
-				p.state.heading = solver.yaw
-				p.state.speed = solver.motion.velocity.dot(Vector3(-sin(solver.yaw), 0, -cos(solver.yaw)))
-				p.state.tilt = a(solver.node.rotation)
+			var budget = drive_budgets[p.id]
+			var now = Time.get_ticks_usec()
+			budget.ticks = minf(120.0, budget.ticks + maxf(0, (now - budget.time) / 1000000.0) * 120.0)
+			budget.time = now
+			solver.context = drive_context(str(p.id))
+			if not game.paused and not game.dead and not game.finished:
+				budget.ticks -= solver.accept(p.state.get("drive_inputs", []), game.stage, int(p.get("car_model", 0)), int(budget.ticks))
+				apply_drive_events(solver, true)
+			else:
+				# Acknowledgement prevents pre-pause inputs from playing after resume.
+				for c in p.state.get("drive_inputs", []):
+					if int(c.seq) == solver.ack + 1:
+						solver.ack = int(c.seq)
+			if not p.state.in_car:
+				solver.motion.velocity = Vector3.ZERO
+			p.state.car = a(solver.node.position)
+			if p.state.in_car:
+				p.state.pos = p.state.car
+			p.state.heading = solver.yaw
+			p.state.speed = solver.motion.velocity.dot(Vector3(-sin(solver.yaw), 0, -cos(solver.yaw)))
+			p.state.tilt = a(solver.node.rotation)
+		elif not is_host and p.state != null and authoritative_drives.has(p.id):
+			var drive = authoritative_drives[p.id]
+			p.state.car = drive.pos
+			p.state.heading = drive.yaw
+			p.state.tilt = [drive.pitch, drive.yaw, drive.roll]
+			p.state.speed = v(drive.velocity).dot(Vector3(-sin(drive.yaw), 0, -cos(drive.yaw)))
+			if p.state.in_car:
+				p.state.pos = drive.pos
 		if p.state != null:
 			var peer = peers[p.id]
-			var switched = peer.state != null and peer.state.in_car != p.state.in_car
 			var sample_time = float(p.state_time) / 1000.0 if p.has("state_time") else server_clock()
+			if not is_host and authoritative_drives.has(p.id):
+				sample_time = authority_stamp / 1000.0
+			if peer.has("last_state_time") and sample_time <= peer.last_state_time:
+				continue
+			var switched = peer.state != null and peer.state.in_car != p.state.in_car
 			var tilt = v(p.state.get("tilt", [0, p.state.heading, 0]))
 			tilt.y = p.state.heading
 			peer.car_motion.push(sample_time, v(p.state.car), tilt)
@@ -448,13 +507,14 @@ func _update_peers(players: Array) -> void:
 			peer.avatar_motion.push(sample_time, v(p.state.pos), Vector3(0, p.state.yaw, 0), switched)
 		peers[p.id].state = p.state
 		if p.state != null:
-			peers[p.id].last_state_time = float(p.state_time) / 1000.0 if p.has("state_time") else server_clock()
+			peers[p.id].last_state_time = authority_stamp / 1000.0 if not is_host and authoritative_drives.has(p.id) else (float(p.state_time) / 1000.0 if p.has("state_time") else server_clock())
 	for id in peers.keys():
 		if not present.has(id):
 			for node in [peers[id].car, peers[id].avatar, peers[id].label]:
 				node.queue_free()
 			peers.erase(id)
 			host_drives.erase(id)
+			drive_budgets.erase(id)
 	game.cargo.release_departed()
 
 func submit(action: String, placement: Dictionary = {}) -> bool:
@@ -558,7 +618,8 @@ func apply_stones(w: Dictionary, sample_time: float = -1.0) -> void:
 	if count > last_impact:
 		game.impact_shake = 0.8
 		if game.in_car:
-			game.condition = maxf(0, game.condition - (count - last_impact) * 0.8)
+			if not prediction_enabled or not prediction.active:
+				game.condition = maxf(0, game.condition - (count - last_impact) * 0.8)
 		game.toast("Гравий из-под колёс! Отойди дальше от края СУ.")
 	last_impact = count
 	var present = {}
@@ -773,16 +834,82 @@ func disconnect_room(message: String) -> void:
 	exit_button.hide()
 
 func predict_drive(delta: float) -> bool:
-	if is_host or not prediction_enabled or not prediction.active:
+	if is_host or not prediction_enabled:
 		return false
+	if not prediction.active:
+		return true
 	input_clock += minf(delta, 0.1)
 	var ticks = int(input_clock / prediction.motion.handling.STEP)
 	input_clock -= ticks * prediction.motion.handling.STEP
+	prediction.context = drive_context(player_id)
 	prediction.predict(ticks, Input.get_axis("back", "forward"), Input.get_axis("left", "right"), Input.is_action_pressed("brake"), game.stage, game.selected_car)
+	apply_drive_events(prediction, false)
+	game.condition = prediction.condition
 	game.car.position = prediction.node.position
 	game.car.rotation = prediction.node.rotation
 	game.heading = prediction.yaw
 	game.speed = prediction.motion.velocity.dot(Vector3(-sin(game.heading), 0, -cos(game.heading)))
 	game.vehicle_motion = prediction.motion
 	prediction.visual_offset *= exp(-delta * 10.0)
+	prediction.visual_yaw *= exp(-delta * 10.0)
 	return true
+
+func drive_context(owner: String) -> Dictionary:
+	var contacts: Array = []
+	for group in game.spectators.groups:
+		contacts.append({"position": group.car.position})
+	for person in game.spectators.people:
+		contacts.append({"position": person.avatar.position})
+	for racer in game.racers:
+		contacts.append({"position": racer.node.position})
+	if owner != player_id:
+		contacts.append({"position": game.car.position})
+		if not game.in_car:
+			contacts.append({"position": game.walker, "person": true})
+	for id in peers:
+		var peer = peers[id]
+		if id == owner or peer.state == null:
+			continue
+		contacts.append({"position": v(peer.state.car)})
+		if not peer.state.in_car:
+			contacts.append({"position": v(peer.state.pos), "person": true})
+	return {"contacts": contacts, "racing": game.racing}
+
+func apply_drive_events(solver, authoritative: bool) -> void:
+	for event in solver.events:
+		match event.kind:
+			"tree": game.knock_tree(event.index, event.velocity)
+			"city": game.knock_city(event.hit, event.velocity)
+			"person":
+				if authoritative:
+					game.die("Легковушка сбила участника вашей компании.")
+			"impact":
+				if not authoritative:
+					game.impact_shake = minf(0.8, float(event.speed) * 0.055)
+					game.toast("Удар! Сбавь скорость.")
+	solver.events.clear()
+	if authoritative and solver.condition <= 0:
+		game.die("Легковушка участника разбита. Совместный выезд окончен.")
+
+func recover_drive() -> bool:
+	if is_host or not prediction_enabled or not prediction.active:
+		return false
+	prediction.context = drive_context(player_id)
+	prediction.predict(1, 0, 0, false, game.stage, game.selected_car, true)
+	return true
+
+func smooth_car_visuals() -> void:
+	var offset = Vector3.ZERO
+	if connected and prediction_enabled and prediction.active:
+		offset = game.car.basis.inverse() * prediction.visual_offset
+	var correction = Transform3D(Basis(Vector3.UP, prediction.visual_yaw if connected and prediction_enabled else 0.0), offset)
+	var present = {}
+	for child in game.car.get_children():
+		if child is Node3D and not child is CollisionObject3D and not child is CollisionShape3D:
+			var id = child.get_instance_id()
+			child.transform = correction * visual_children.get(id, Transform3D.IDENTITY).affine_inverse() * child.transform
+			visual_children[id] = correction
+			present[id] = true
+	for id in visual_children.keys():
+		if not present.has(id):
+			visual_children.erase(id)
