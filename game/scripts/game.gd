@@ -1156,7 +1156,7 @@ func start_grill(spot: Vector3 = Vector3.INF, yaw: float = 0.0, replicated: bool
 	mesh.material = mat
 	smoke.draw_pass_1 = mesh
 	fire_audio.position = grill.global_position
-	_play_audio(fire_audio)
+	# Fire crackle is scheduled sparsely by Soundscape instead of looping continuously.
 	toast("Угли разгорелись. Шашлык готовится 35 секунд. Следи за таймером СУ.")
 	return true
 
