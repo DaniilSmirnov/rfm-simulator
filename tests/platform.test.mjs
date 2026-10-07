@@ -67,3 +67,21 @@ test('VK attaches in-memory bearer only to same-origin room requests',async()=>{
  assert.equal(calls[1].headers.get('Authorization'),null);
  assert.equal(await calls[0].text(),'{"name":"ignored"}');
 });
+
+test('VK expired session blocks room access without sending a token',async()=>{
+ let roomCalls=0;
+ const {context:c}=await setup('vk',{RallyBoot:{setStage(){}},vkBridge:{send:async()=>({})},fetch:async(input)=>{
+  if(input==='/api/vk/session')return Response.json({profile:{platform:'vk',nickname:'shortname',verified:true},entitlements:{skus:[]},session:{token:'expired',expires_at:1}});
+  roomCalls++;return Response.json({});
+ }});
+ assert.equal((await c.fetch('/api/rooms',{method:'POST',body:'{}'})).status,401);
+ assert.equal(roomCalls,0);
+});
+
+test('VK network errors retain network semantics instead of claiming session expiry',async()=>{
+ const {context:c}=await setup('vk',{RallyBoot:{setStage(){}},vkBridge:{send:async()=>({})},fetch:async(input)=>{
+  if(input==='/api/vk/session')return Response.json({profile:{platform:'vk',nickname:'shortname',verified:true},entitlements:{skus:[]},session:{token:'valid',expires_at:Math.floor(Date.now()/1000)+3600}});
+  throw new Error('Network unavailable');
+ }});
+ await assert.rejects(c.fetch('/api/rooms',{method:'POST',body:'{}'}),/Network unavailable/);
+});

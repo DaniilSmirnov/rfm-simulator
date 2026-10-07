@@ -6,8 +6,10 @@
     const request = new Request(input instanceof Request ? input : new URL(input, location.href), init);
     const url = new URL(request.url);
     if (url.origin === origin && /^\/api\/rooms(?:\/|$)/.test(url.pathname) && RallyPlatform.target === 'vk') {
-      try { return await networkFetch(await RallyPlatform.authorize(request)); }
+      let authorized;
+      try { authorized = await RallyPlatform.authorize(request); }
       catch { return Response.json({error:'Сессия VK истекла. Откройте игру заново через VK.'}, {status:401}); }
+      return networkFetch(authorized);
     }
     if (url.origin !== origin || url.pathname !== '/__rally_platform') return networkFetch(input, init);
     if (request.method !== 'POST') return Response.json({error:'POST required'}, {status:405});
