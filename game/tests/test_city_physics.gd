@@ -1,5 +1,6 @@
 extends SceneTree
 const Stage = preload("res://scripts/stage.gd")
+const Traffic = preload("res://scripts/rally_traffic.gd")
 var failures = 0
 func check(ok: bool, title: String) -> void:
 	print(("PASS: " if ok else "FAIL: ") + title)
@@ -82,11 +83,19 @@ func run() -> void:
 	game.course.phase = "racing"
 	game.spawn_racer("pass")
 	var racer = game.racers[0]
-	racer.s = 310
+	racer.s = 435
 	racer.focus = 140
-	racer.node.position = stage.at(310)
+	racer.node.position = stage.at(435)
+	var battle_speed = Traffic.speed_limit(game, racer, racer.s)
+	racer.role = "zero"
+	var zero_speed = Traffic.speed_limit(game, racer, racer.s)
+	racer.role = "opening_police"
+	var police_speed = Traffic.speed_limit(game, racer, racer.s)
+	racer.role = "racer"
+	check(battle_speed > 25.0 and zero_speed > 25.0, "rally and zero crews keep normal pace through the village")
+	check(police_speed < 17.0, "course-opening police keeps the village speed limit")
 	game._update_racers(0.1)
-	check(game.racers.size() == 1 and racer.s > 310 and racer.s < 313, "crew survives past viewer and slows through the village")
+	check(game.racers.size() == 1 and racer.s > 437.0, "rally crew crosses village without artificial slowdown")
 	await game._shutdown_audio()
 	game.queue_free()
 	await process_frame
