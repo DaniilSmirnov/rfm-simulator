@@ -1,6 +1,16 @@
 extends Node3D
 const Stage = preload("res://scripts/stage.gd")
+const Motion = preload("res://scripts/vehicle_motion.gd")
 func _ready() -> void:
+	var motion = Motion.new()
+	var heading = 0.0
+	for step in range(120):
+		heading = motion.handling.advance(motion, heading, 1, 0.5, false, 0.78, 19, 0, motion.handling.STEP)
+	if not motion.velocity.is_finite() or motion.velocity.length() < 1 or heading >= -0.01:
+		push_error("WEB_PHYSICS_FAIL: player tyre model failed in exported Web game")
+		get_tree().quit(1)
+		return
+	print("WEB_HANDLING_PASS: exported player accelerates and steers")
 	var stage = Stage.new(2)
 	add_child(stage)
 	stage.build()

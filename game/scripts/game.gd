@@ -806,8 +806,16 @@ func player_position() -> Vector3:
 	return car.position if in_car else walker
 
 func _drive(delta: float) -> void:
-	var steps = maxi(1, int(ceil(delta / (1.0 / 120.0))))
-	var dt = delta / steps
+	# Carry fractional ticks across render frames; cap long stalls at one second.
+	vehicle_motion.drive_clock += clampf(delta, 0, 1.0)
+	var dt: float = vehicle_motion.handling.STEP
+	var steps = int(floor((vehicle_motion.drive_clock + 0.000001) / dt))
+	vehicle_motion.drive_clock = maxf(0, vehicle_motion.drive_clock - steps * dt)
+	var initial_forward = Vector3(-sin(heading), 0, -cos(heading))
+	var initial_speed: float = vehicle_motion.velocity.dot(initial_forward)
+	# Support explicit resets/recovery without discarding tangential momentum.
+	if absf(speed - initial_speed) > 3:
+		vehicle_motion.velocity += initial_forward * (speed - initial_speed)
 	for step in range(steps):
 		var throttle = Input.get_axis("back", "forward")
 		var steer = Input.get_axis("left", "right")
@@ -815,22 +823,9 @@ func _drive(delta: float) -> void:
 		var max_speed = 7.0 if offroad else 19.0
 		var braking = Input.is_action_pressed("brake")
 		var previous_heading = heading
-		# Bicycle steering with limited gravel adhesion. Velocity keeps its direction in a slide.
-		heading -= steer * dt * clampf(absf(speed) / 6, 0, 1) * signf(speed) * 1.15
+		heading = vehicle_motion.handling.advance(vehicle_motion, heading, throttle, steer, braking, stage.grip(car.position), max_speed, selected_car, dt)
 		var forward = Vector3(-sin(heading), 0, -cos(heading))
-		var right = forward.cross(Vector3.UP)
-		var longitudinal = vehicle_motion.velocity.dot(forward)
-		if absf(speed - longitudinal) > 3:
-			vehicle_motion.velocity = forward * speed
-			longitudinal = speed
-		longitudinal = move_toward(longitudinal, throttle * max_speed * (0.4 if throttle < 0 else 1.0), (7.0 if throttle != 0 else 2.7) * dt)
-		if braking:
-			longitudinal = move_toward(longitudinal, 0, 19 * dt)
-		var lateral = vehicle_motion.velocity.dot(right)
-		var friction = stage.grip(car.position) * (3.5 if braking else 8.5) * (1.0 if vehicle_motion.grounded else 0.08)
-		lateral = move_toward(lateral, 0, friction * dt)
-		vehicle_motion.velocity = forward * longitudinal + right * lateral
-		speed = longitudinal
+		speed = vehicle_motion.velocity.dot(forward)
 		rock_impact_timer = maxf(0.0, rock_impact_timer - dt)
 		var previous = car.position
 		var next = previous + vehicle_motion.velocity * dt

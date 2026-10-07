@@ -52,7 +52,7 @@ func run() -> void:
 	scene.speed = 18
 	Input.action_press("right")
 	Input.action_press("forward")
-	scene._drive(0.4)
+	scene._drive(0.8)
 	Input.action_release("right")
 	Input.action_release("forward")
 	var forward = Vector3(-sin(scene.heading), 0, -cos(scene.heading))
