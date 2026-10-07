@@ -253,7 +253,7 @@ func enable_mobile() -> void:
 	get_window().content_scale_size = Vector2i(960, 540)
 	get_window().content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	title_label.text = "РАЛЛИЙНЫЙ ОВОЩ"
+	title_label.text = "Rally Fans Simulator"
 	title_label.hide()
 	course_label.max_lines_visible = 2
 	course_label.add_theme_font_size_override("font_size", 14)
@@ -466,7 +466,7 @@ func _build_ui() -> void:
 	top.add_theme_stylebox_override("panel", _panel(Color("25352be8")))
 	var vb = VBoxContainer.new()
 	top.add_child(vb)
-	title_label = _label(vb, "СИМУЛЯТОР РАЛЛИЙНОГО ОВОЩА", 22)
+	title_label = _label(vb, "Rally Fans Simulator", 22)
 	stage_caption = _label(vb, Stage.STAGES[selected_stage] + "  /  ДЕМО " + str(ProjectSettings.get_setting("application/config/version")), 12, Color("b2bea1"))
 	course_label = _label(vb, "", 16, Color("ffe4a5"))
 	course_label.hide()

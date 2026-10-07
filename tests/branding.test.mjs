@@ -35,6 +35,15 @@ test('loading progress is real, bounded, supports unknown sizes and waits for st
   await Promise.resolve();
   assert.equal(nodes.status.removed,true);
 });
+test('game title is Rally Fans Simulator everywhere it is presented', async () => {
+  const project = await readFile(new URL('../game/project.godot', import.meta.url), 'utf8');
+  const shell = await readFile(new URL('../game/branding/web-shell.html', import.meta.url), 'utf8');
+  const game = await readFile(new URL('../game/scripts/game.gd', import.meta.url), 'utf8');
+  assert.match(project, /config\/name="Rally Fans Simulator"/);
+  assert.match(shell, /id="status-brand">Rally Fans Simulator<\/h1>/);
+  assert.ok((game.match(/Rally Fans Simulator/g) ?? []).length >= 2);
+  assert.equal(/СИМУЛЯТОР РАЛЛИЙНОГО ОВОЩА|РАЛЛИЙНЫЙ ОВОЩ/.test(game), false);
+});
 test('all project brand references use Rally Fans Map spelling', async () => {
   async function visit(directory) {
     for (const entry of await readdir(directory,{withFileTypes:true})) {
