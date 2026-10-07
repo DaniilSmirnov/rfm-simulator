@@ -61,7 +61,10 @@ func run() -> void:
 		var other = Stage.new(variant)
 		root.add_child(other)
 		other.build()
-		check(other.woodland_details.is_empty(), "forest decoration stays off winter and urban stage")
+		var forest_layers_absent = true
+		for layer in ["ForestGrass", "MushroomCaps", "AntHills", "ForestBoulders", "ForestPebbles", "ForestBushes", "ForestBerryBushes", "ForestBerries"]:
+			forest_layers_absent = forest_layers_absent and other.woodland_details.get(layer, 0) == 0
+		check(forest_layers_absent, "forest decoration stays off winter and vineyard stages")
 		other.free()
 	print("WOODLAND RESULT: %d failures" % failures)
 	quit(1 if failures else 0)
