@@ -24,7 +24,7 @@ await cp(join(root, 'game'), project, {
 const presetPath = join(project, 'export_presets.cfg');
 const preset = await readFile(presetPath, 'utf8');
 if (!preset.includes('custom_template/release=""')) throw new Error('Unexpected export preset.');
-await writeFile(presetPath, preset.replace('custom_template/release=""', `custom_template/release=${JSON.stringify(template)}`));
+await writeFile(presetPath, preset.replace('custom_features=""', 'custom_features="' + (target === 'vk' ? 'vk' : '') + '"').replace('custom_template/release=""', `custom_template/release=${JSON.stringify(template)}`));
 run(godot, ['--headless', '--path', project, '--export-release', 'Web', join(rawOutput, 'index.html')]);
 await cp(rawOutput, output, {
   recursive: true,

@@ -25,7 +25,7 @@ test('signed launch resolves server shortname and issues expiring verifiable ses
   assert.deepEqual(data.profile,{platform:'vk',platform_user_id:'42',nickname:'rally.fan',verified:true});
   assert.equal(data.session.expires_at,now/1000+3600);
   assert.equal((await authenticateSession(request(data.session.token),env,now)).user,'42');
-  assert.equal(data.entitlements.mode,'unrestricted');
+  assert.equal(data.entitlements.mode,'restricted');
   assert.ok(!JSON.stringify(data).includes('Never'));
 });
 test('invalid identity, signature, duplicate params and stale/future launches never call VK',async()=>{
@@ -90,10 +90,10 @@ test('Worker gates VK room routes and overwrites client nickname, standalone sta
   const data=await authenticateLaunch(currentLaunch,env,realNow,network);
   let body;
   const rooms={idFromName:id=>id,get:()=>({fetch:async req=>{body=await req.json();return Response.json({token:'room-token',player:'p'});}})};
-  const create=new Request('https://game.test/api/rooms',{method:'POST',headers:{Authorization:`Bearer ${data.session.token}`},body:JSON.stringify({name:'spoofed',stage:1})});
+  const create=new Request('https://game.test/api/rooms',{method:'POST',headers:{Authorization:`Bearer ${data.session.token}`},body:JSON.stringify({name:'spoofed',stage:0,car_model:2})});
   assert.equal((await worker.fetch(create,{...env,ROOMS:rooms})).status,200);
   assert.equal(body.name,'rally.fan');
-  assert.equal(body.stage,1);
+  assert.equal(body.stage,0);
   assert.equal((await worker.fetch(new Request('https://game.test/api/rooms/ABCDEF/join',{method:'POST',body:'{"name":"Guest"}'}),{ROOMS:rooms})).status,200);
   assert.equal(body.name,'Guest');
 });
@@ -131,3 +131,20 @@ test('/vk redirects to the folder URL and preserves signed launch query',async()
  assert.equal(response.status,308);
  assert.equal(response.headers.get('Location'),'https://game.test/vk/?vk_user_id=42&sign=example');
 });
+
+ test('VK Worker denies locked host stage and personal car, guests can borrow a stage', async()=>{
+  const data=await authenticateLaunch(launch({vk_ts:String(Math.floor(Date.now()/1000))}),env,Date.now(),network);
+  let forwarded=0;
+  const ROOMS={idFromName:id=>id,get:()=>({fetch:async()=>{forwarded++;return Response.json({ok:true});}})};
+  for(const [path,body,status] of [
+    ['/api/rooms',{stage:1,car_model:0},403],
+    ['/api/rooms',{stage:2,car_model:0},403],
+    ['/api/rooms',{stage:0,car_model:3,entitlements:{mode:'unrestricted',skus:['car_04']}},403],
+    ['/api/rooms/ABCDEF/join',{stage:2,car_model:2},200],
+    ['/api/rooms/ABCDEF/join',{stage:0,car_model:9},403],
+  ]) {
+    const response=await worker.fetch(new Request('https://game.test'+path,{method:'POST',headers:{Authorization:'Bearer '+data.session.token},body:JSON.stringify(body)}),{...env,ROOMS});
+    assert.equal(response.status,status);
+  }
+  assert.equal(forwarded,1);
+ });

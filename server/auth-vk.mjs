@@ -1,3 +1,4 @@
+import { catalog, vkEntitlements } from './store.mjs';
 const encoder = new TextEncoder();
 export class AuthError extends Error {
   constructor(status, message) { super(message); this.status = status; }
@@ -61,7 +62,7 @@ export async function authenticateLaunch(raw, env, now = Date.now(), network = f
   const expires = seconds + 3600;
   const payload = encode(encoder.encode(JSON.stringify({ app: env.VK_APP_ID, user, nickname, expires })));
   const token = `${payload}.${await sign(payload, sessionSecret(env))}`;
-  return { profile: { platform: 'vk', platform_user_id: user, nickname, verified: true }, session: { token, expires_at: expires }, entitlements: { mode: 'unrestricted', skus: [] } };
+  return { profile: { platform: 'vk', platform_user_id: user, nickname, verified: true }, session: { token, expires_at: expires }, entitlements: vkEntitlements(), catalog };
 }
 export async function authenticateSession(request, env, now = Date.now()) {
   configured(env);

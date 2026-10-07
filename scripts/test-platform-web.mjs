@@ -50,18 +50,19 @@ const browser=await chromium.launch({headless:true,args:['--use-gl=angle','--use
 try {
  for(const mobile of [false,true]){
   const context=await browser.newContext(mobile?{viewport:{width:844,height:390},isMobile:true,hasTouch:true}:{viewport:{width:1280,height:720}});
-  const page=await context.newPage();let profile;let failure;const logs=[];
-  page.on('console',m=>{const t=m.text();logs.push(t);console.log('[platform]',t);if(t.includes('[RFM Platform] profile '))profile=JSON.parse(t.split('[RFM Platform] profile ')[1]);if(/SCRIPT ERROR|FATAL:|RuntimeError:|ERROR: Cannot open file|ERROR: Failed loading scene/.test(t))failure=t;});
+  const page=await context.newPage();let profile;let access;let failure;const logs=[];
+  page.on('console',m=>{const t=m.text();logs.push(t);console.log('[platform]',t);if(t.includes('[RFM Platform] profile '))profile=JSON.parse(t.split('[RFM Platform] profile ')[1]);if(t.includes('[RFM Platform] access '))access=JSON.parse(t.split('[RFM Platform] access ')[1]);if(/SCRIPT ERROR|FATAL:|RuntimeError:|ERROR: Cannot open file|ERROR: Failed loading scene/.test(t))failure=t;});
   page.on('pageerror',e=>failure=String(e));
   page.on('crash',()=>failure='Browser renderer crashed');
   if(isVk) await page.route('**/vk-bridge.js',route=>route.fulfill({contentType:'application/javascript',body:'window.vkBridge={send:async method=>{if(method!=="VKWebAppInit")throw Error("Unexpected bridge method");return {result:true};}};'}));
   await page.goto('http://127.0.0.1:'+server.address().port+mount+(isVk?'?'+signedLaunch():''));
   const deadline=Date.now()+90000;
-  while(!profile&&!failure&&Date.now()<deadline)await page.waitForTimeout(250);
+  while((!profile||!access)&&!failure&&Date.now()<deadline)await page.waitForTimeout(250);
   assert.ok(!failure,failure);
   assert.ok(profile,'Godot profile roundtrip timed out: '+logs.slice(-20).join('\n'));
   assert.equal(profile.platform,target==='dist'?'standalone':isVk?'vk':'vk-prototype');
   assert.equal(profile.verified,isVk);
+  assert.deepEqual(access,{mode:isVk?'restricted':'unrestricted',stage_1:true,stage_2:!isVk,car_3:true,car_4:!isVk});
   if(isVk) {
    assert.equal(profile.nickname,'wasm_vk_fan');
    assert.equal(await page.evaluate(async()=> (await fetch('/api/rooms',{method:'POST',body:'{}'})).status),200);

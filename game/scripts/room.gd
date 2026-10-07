@@ -148,6 +148,9 @@ func _build_ui() -> void:
 	exit_button.hide()
 
 func connect_room(id: String) -> void:
+	if game.platform_service != null and (not game.platform_service.can_use("car", game.car_choice.selected) or (id == "" and not game.platform_service.can_use("stage", game.stage_choice.selected))):
+		lobby_status.text = "Выбери доступную машину и СУ. Продажи в VK ещё не открыты."
+		return
 	if busy or connected:
 		return
 	if id != "" and (id.length() != 6 or not id.is_valid_hex_number()):
@@ -204,7 +207,7 @@ func _response(result: int, code: int, _headers: PackedStringArray, bytes: Packe
 		friends_button.hide()
 		room_label.show()
 		exit_button.show()
-		game.select_stage(int(data.get("stage", 0)))
+		game.select_stage(int(data.get("stage", 0)), not is_host)
 		game.start_game()
 		# Separate parked cars at the start; local movement remains responsive.
 		var lane = int(data.get("slot", 0))

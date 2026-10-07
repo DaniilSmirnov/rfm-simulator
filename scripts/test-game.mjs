@@ -5,6 +5,7 @@ const project = join(root, 'game');
 run(process.execPath, ['--test',
   join(root,'tests/platform.test.mjs'),
   join(root,'tests/auth-vk.test.mjs'),
+  join(root,'tests/store.test.mjs'),
   join(root,'tests/deploy-cloudflare.test.mjs'),
   join(root,'tests/fullscreen.test.mjs'),
 ]);
@@ -39,6 +40,7 @@ run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_poiso
 
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_party.gd']);
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_selection.gd']);
+run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_vk_access.gd']);
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_network_motion.gd']);
 
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_furniture.gd']);

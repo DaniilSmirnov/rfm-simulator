@@ -1,6 +1,6 @@
 # VK platform transport prototype
 
-This is a technical prototype, not a completed VK integration. Minimal server-verified VK authentication is implemented. Permanent account storage, entitlements, purchase flow and achievements are not implemented. See [Cloudflare setup](VK_CLOUDFLARE_SETUP.md).
+This is a technical prototype, not a completed VK integration. Minimal server-verified VK authentication is implemented. The VK catalog and restricted content selection are implemented: one free stage and three free cars; paid products remain unavailable for purchase. Permanent account storage, persisted entitlements, purchase flow and achievements are pending. See the [current integration plan](prompts/VK_MINI_APPS_IMPLEMENTATION.md). See [Cloudflare setup](VK_CLOUDFLARE_SETUP.md).
 
 ## Build targets
 

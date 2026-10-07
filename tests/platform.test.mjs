@@ -108,3 +108,11 @@ test('VK network errors retain network semantics instead of claiming session exp
  }});
  await assert.rejects(c.fetch('/api/rooms',{method:'POST',body:'{}'}),/Network unavailable/);
 });
+
+test('bootstrap delivers server catalog and restricted rights through engine transport',async()=>{
+ const {context:c}=await setup('vk',{RallyBoot:{setStage(){}},vkBridge:{send:async()=>({})},fetch:async()=>Response.json({profile:{platform:'vk',nickname:'fan',verified:true},entitlements:{mode:'unrestricted',skus:[]},catalog:[{sku:'stage_01',type:'stage',content_id:0,free:true,enabled:true}],session:{token:'s',expires_at:Date.now()/1000+3600}})});
+ const result=await (await c.fetch('/__rally_platform',{method:'POST',body:'{"method":"getBootstrap"}'})).json();
+ assert.equal(result.result.entitlements.mode,'restricted');
+ assert.equal(result.result.catalog[0].sku,'stage_01');
+ assert.deepEqual(result.result.entitlements.skus,[]);
+});
