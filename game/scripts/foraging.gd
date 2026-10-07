@@ -4,6 +4,7 @@ const GRILL_SECONDS = 10.0
 var game: Node3D
 var inventories: Dictionary = {}
 var skewers: Dictionary = {}
+var effects: Dictionary = {}
 
 func owner_key(owner: String = "") -> String:
 	return game.chair_owner() if owner == "" else owner
@@ -12,6 +13,8 @@ func stock(owner: String = "") -> Dictionary:
 	var key = owner_key(owner)
 	if not inventories.has(key):
 		inventories[key] = {"mushrooms": 0, "berries": 0}
+	if not inventories[key].has("mushroom_types"):
+		inventories[key].mushroom_types = []
 	return inventories[key]
 
 func available() -> bool:
@@ -36,6 +39,9 @@ func collect(id: int = -1, owner: String = "") -> bool:
 		return false
 	var bag = stock(owner)
 	bag[item.kind] = int(bag[item.kind]) + int(item.quantity)
+	if item.kind == "mushrooms":
+		for i in range(int(item.quantity)):
+			bag.mushroom_types.append(str(item.get("species", "edible")))
 	game.toast("Собрано: " + item.get("name", "гриб" if item.kind == "mushrooms" else "ягоды"))
 	return true
 
@@ -84,8 +90,10 @@ func mount(source: int = -2, owner: String = "") -> bool:
 	if owner == "" and game.room.connected and not game.room.is_host:
 		return game.room.submit("mount_mushroom", {"source": source})
 	stock(owner).mushrooms = int(stock(owner).mushrooms) - 1
+	var types: Array = stock(owner).mushroom_types
+	var species = str(types.pop_front()) if not types.is_empty() else "edible"
 	var entries: Array = skewers.get(str(source), [])
-	entries.append({"ready_at": game.elapsed + GRILL_SECONDS})
+	entries.append({"ready_at": game.elapsed + GRILL_SECONDS, "species": species})
 	skewers[str(source)] = entries
 	update_visuals()
 	game.toast("Гриб на шампуре. Будет готов через 10 секунд.")
@@ -106,6 +114,10 @@ func can_eat(kind: String) -> bool:
 	var source = nearby_source()
 	return source != -2 and ready_index(source) >= 0
 
+func ready_species(source: int) -> String:
+	var index = ready_index(source)
+	return str(skewers[str(source)][index].get("species", "edible")) if index >= 0 else "edible"
+
 func consume(kind: String, owner: String = "", source: int = -2) -> bool:
 	if not game.playing or game.in_car or game.beers >= 30 or game.paused or game.dead or game.finished:
 		return false
@@ -124,7 +136,15 @@ func consume(kind: String, owner: String = "", source: int = -2) -> bool:
 	var index = ready_index(source)
 	if index < 0:
 		return false
+	var species = ready_species(source)
 	skewers[str(source)].remove_at(index)
+	if species in ["fly_agaric", "toadstool"]:
+		var key = owner_key(owner)
+		var serial = int(effects.get(key, {}).get("serial", 0)) + 1
+		effects[key] = {"serial": serial, "until": game.elapsed + 10.0}
+		if key == game.chair_owner():
+			game.mushroom_effect.trigger(serial)
+			game.toast("Странный гриб! Цвета инвертированы на 10 секунд.")
 	update_visuals()
 	return true
 
@@ -135,12 +155,26 @@ func update_visuals() -> void:
 		if node != null:
 			node.set_meta("mushrooms", skewers[key].size())
 			Props.set_grill_servings(node, meat_count(source))
+			for i in range(skewers[key].size()):
+				var skewer = node.get_node_or_null("FoodSkewer_%02d/MushroomFood" % (meat_count(source) + i))
+				if skewer != null:
+					Props.style_mushrooms(skewer, str(skewers[key][i].get("species", "edible")))
 
 func snapshot() -> Dictionary:
-	return {"harvested": game.stage.harvested.keys(), "inventories": inventories.duplicate(true), "skewers": skewers.duplicate(true)}
+	var effect_states = {}
+	for key in effects:
+		effect_states[key] = {"serial": effects[key].serial, "remaining": maxf(0, float(effects[key].until) - game.elapsed)}
+	return {"harvested": game.stage.harvested.keys(), "inventories": inventories.duplicate(true), "skewers": skewers.duplicate(true), "effects": effect_states}
 
 func apply_snapshot(data: Dictionary) -> void:
 	game.stage.apply_harvested(data.get("harvested", []))
 	inventories = data.get("inventories", {}).duplicate(true)
 	skewers = data.get("skewers", {}).duplicate(true)
+	effects.clear()
+	for key in data.get("effects", {}):
+		var state: Dictionary = data.effects[key]
+		effects[key] = {"serial": int(state.get("serial", 0)), "until": game.elapsed + float(state.get("remaining", 0))}
+	var effect: Dictionary = data.get("effects", {}).get(game.chair_owner(), {})
+	if not effect.is_empty():
+		game.mushroom_effect.trigger(int(effect.get("serial", 0)), float(effect.get("remaining", 0)))
 	update_visuals()

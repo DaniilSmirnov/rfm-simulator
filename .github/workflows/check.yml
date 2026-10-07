@@ -114,3 +114,24 @@ jobs:
             branding-loading*.png
             web-startup-*.png
           if-no-files-found: warn
+
+  mushroom-visuals:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      LIBGL_ALWAYS_SOFTWARE: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Import game resources
+        run: node --input-type=module -e "import {getGodot,run} from './scripts/godot.mjs'; const godot=await getGodot(); run(godot,['--headless','--editor','--path','game','--import']);"
+      - name: Render mushroom textures and verify color inversion
+        run: xvfb-run -a .cache/godot/Godot_v4.4.1-stable_linux.x86_64 --path game --rendering-method gl_compatibility --script res://tests/mushroom_preview.gd
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mushroom-preview
+          path: preview-artifacts/mushrooms-*.png
+          if-no-files-found: error

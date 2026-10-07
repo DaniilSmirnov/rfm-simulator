@@ -185,6 +185,8 @@ var cook_time = 0.0
 var grill_servings = Props.FOOD_PORTIONS
 var eat_source_group = -2
 var eat_kind = "meat"
+var food_species = "edible"
+var mushroom_effect = preload("res://scripts/mushroom_effect.gd").new()
 var forage_source = -2
 var foraging = preload("res://scripts/foraging.gd").new()
 var eaten = false
@@ -352,6 +354,7 @@ func _ready() -> void:
 	camera.position = stage.at(45) + Vector3(22, 15, 12)
 	camera.look_at(stage.at(70))
 	_build_ui()
+	mushroom_effect.setup(self)
 	print("[RFM] Интерфейс готов; подготовка звука")
 	_setup_audio()
 	print("[RFM] Звук подготовлен; создание интерфейса комнаты")
@@ -763,6 +766,7 @@ func _process(delta: float) -> void:
 	else:
 		_walk(delta)
 	_update_drinking(delta)
+	mushroom_effect.update(delta)
 	_update_eating(delta)
 	_update_camera(delta)
 	_update_placement()
@@ -1315,9 +1319,11 @@ func eat_foraged(kind: String, source: int = -2) -> bool:
 	forage_source = (foraging.nearby_source() if source == -2 else source) if kind == "mushroom" else -2
 	if kind == "mushroom" and (foraging.grill_node(forage_source) == null or player_position().distance_to(foraging.grill_node(forage_source).position) > 4 or foraging.ready_index(forage_source) < 0):
 		return false
+	food_species = foraging.ready_species(forage_source) if kind == "mushroom" else "edible"
 	eat_time = 0
 	eat_committed = false
 	meat_prop = Props.meat_hand(avatar_variant, kind)
+	Props.style_mushrooms(meat_prop, food_species)
 	camera.add_child(meat_prop)
 	_update_eating(0)
 	toast("Едим ягоды." if kind == "berries" else "Едим гриб с шампура.")
@@ -1767,6 +1773,7 @@ func die(reason: String) -> void:
 	_show_result("Выезд окончен", reason + "\n\nЭкипажи: %d  ·  Помощь тросом: %d\nШашлык: %s" % [passed, helped, "съеден" if eaten else "не съеден"])
 
 func _show_result(title: String, body: String) -> void:
+	mushroom_effect.clear()
 	sobriety_panel.hide()
 	cancel_placement()
 	_cancel_drink()

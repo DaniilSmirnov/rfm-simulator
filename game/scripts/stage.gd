@@ -558,6 +558,8 @@ func _detail_batch(name: String, mesh: Mesh, poses: Array, colors: Array, indice
 	mat.vertex_color_is_srgb = true
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	var mm = MultiMesh.new()
+	if name in ["FlyAgaricCaps", "ToadstoolCaps"]:
+		mat.albedo_texture = RallyProps.MUSHROOM_TEXTURES["fly_agaric" if name == "FlyAgaricCaps" else "toadstool"]
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.use_colors = true
 	mm.mesh = mesh
@@ -571,7 +573,7 @@ func _detail_batch(name: String, mesh: Mesh, poses: Array, colors: Array, indice
 		mm.set_instance_transform(i, pose)
 		mm.set_instance_color(i, colors[i])
 		var source = name.get_slice("_Tile", 0)
-		if source in ["ForestBerries", "VillageForestBerries", "MushroomCaps", "MushroomStems", "VineyardGrapes"]:
+		if source in ["ForestBerries", "VillageForestBerries", "MushroomCaps", "FlyAgaricCaps", "ToadstoolCaps", "MushroomStems", "VineyardGrapes"]:
 			if not collectible_parts.has(source):
 				collectible_parts[source] = {}
 			collectible_parts[source][i if indices.is_empty() else indices[i]] = {"mesh": mm, "instance": i, "pose": pose, "hidden": false}
@@ -607,6 +609,7 @@ func _build_woodland_details() -> void:
 	var stone_colors: Array = []
 	var cap_poses: Array = []
 	var cap_colors: Array = []
+	var poison_caps = {"fly_agaric": [], "toadstool": []}
 	var stem_poses: Array = []
 	var stem_colors: Array = []
 	var mound_poses: Array = []
@@ -710,13 +713,20 @@ func _build_woodland_details() -> void:
 			continue
 		for j in range(3):
 			var at = p + Vector3(detail_rng.randf_range(-0.45, 0.45), 0, detail_rng.randf_range(-0.45, 0.45))
-			at.y = ground(at) - 0.24
+			at.y = ground(at) + 0.02
 			var size = detail_rng.randf_range(0.10, 0.22)
-			collectibles.append({"kind": "mushrooms", "pos": Vector3(at.x, ground(at), at.z), "quantity": 1, "parts": {"MushroomCaps": [cap_poses.size()], "MushroomStems": [stem_poses.size()]}})
+			var species = "fly_agaric" if i % 10 == 4 else ("toadstool" if i % 10 == 7 else "edible")
+			var cap_layer = "FlyAgaricCaps" if species == "fly_agaric" else ("ToadstoolCaps" if species == "toadstool" else "MushroomCaps")
+			var cap_index = cap_poses.size() if species == "edible" else poison_caps[species].size()
+			collectibles.append({"kind": "mushrooms", "species": species, "name": "мухомор" if species == "fly_agaric" else ("поганка" if species == "toadstool" else "гриб"), "pos": Vector3(at.x, ground(at), at.z), "quantity": 1, "parts": {cap_layer: [cap_index], "MushroomStems": [stem_poses.size()]}})
 			stem_poses.append(Transform3D(Basis.from_scale(Vector3(size * 0.20, size, size * 0.20)), at + Vector3(0, size * 0.5, 0)))
 			stem_colors.append(Color("c5baa1"))
-			cap_poses.append(Transform3D(Basis.from_scale(Vector3(size, size * 0.45, size)), at + Vector3(0, size, 0)))
-			cap_colors.append(Color("b87743") if i % 4 else Color("ad4530"))
+			var cap_pose = Transform3D(Basis.from_scale(Vector3(size * 1.4, size * 0.55, size * 1.4)), at + Vector3(0, size, 0))
+			if species == "edible":
+				cap_poses.append(cap_pose)
+				cap_colors.append(Color("b87743"))
+			else:
+				poison_caps[species].append(cap_pose)
 	for i in range(110):
 		var along = detail_rng.randf_range(20, LENGTH - 20)
 		var p = at(along) + side(along) * detail_rng.randf_range(12, 45) * (-1 if i % 2 else 1)
@@ -745,9 +755,14 @@ func _build_woodland_details() -> void:
 	stem.rings = 1
 	_detail_batch("MushroomStems", stem, stem_poses, stem_colors)
 	var cap = SphereMesh.new()
-	cap.radial_segments = 7
-	cap.rings = 2
+	cap.radial_segments = 12
+	cap.rings = 6
 	_detail_batch("MushroomCaps", cap, cap_poses, cap_colors)
+	for species in poison_caps:
+		var colors: Array = []
+		colors.resize(poison_caps[species].size())
+		colors.fill(Color.WHITE)
+		_detail_batch("FlyAgaricCaps" if species == "fly_agaric" else "ToadstoolCaps", cap, poison_caps[species], colors)
 	var mound = CylinderMesh.new()
 	mound.height = 1
 	mound.bottom_radius = 1
