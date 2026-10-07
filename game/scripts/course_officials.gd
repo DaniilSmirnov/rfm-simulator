@@ -55,8 +55,8 @@ func solid(parent: Node3D, local: Vector3, radius: float, height: float) -> void
 
 func build() -> void:
 	name = "CourseOfficials"
-	arch(4.0, "Rally Fans Map", false)
-	arch(stage.LENGTH - 8.0, "Rally Fans Map", true)
+	arch(4.0, "Rally Fans Maps", false)
+	arch(stage.LENGTH - 8.0, "Rally Fans Maps", true)
 	station(24.0, 1.0, "Старт")
 	station(stage.LENGTH - 30.0, -1.0, "Финиш")
 	var positions: Array = [180.0, 420.0, 650.0] if stage.winter else [165.0, 365.0, 570.0, 730.0]

@@ -50,7 +50,7 @@ func run() -> void:
 	host.begin_placement("flag")
 	check(host.placement_preview.get_child_count() == 1 and host.placement_preview.find_children("*", "MeshInstance3D", true, false).size() == 6, "flag preview has its pole, opaque cloth and four text meshes attached to the scene")
 	host.cancel_placement()
-	check(host.place_flag(host.walker + Vector3(2, 0, 0), 0.0), "first personal Rally Fans Map flag can be placed")
+	check(host.place_flag(host.walker + Vector3(2, 0, 0), 0.0), "first personal Rally Fans Maps flag can be placed")
 	var placed_flag = host.personal_flags["host"][0]
 	var flag_cloth = placed_flag.get_child(1)
 	check(placed_flag.get_parent() == host and flag_cloth.is_visible_in_tree(), "placed flag and cloth are visible in the game scene")
@@ -63,11 +63,11 @@ func run() -> void:
 			continue
 		text_count += 1
 		rally_labels += int(node.get_meta("wordmark") == "RALLY")
-		maps_labels += int(node.get_meta("wordmark") == "FANS MAP")
+		maps_labels += int(node.get_meta("wordmark") == "FANS MAPS")
 		visible_wordmarks = visible_wordmarks and node.is_visible_in_tree() and not node.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX].is_empty()
 		visible_wordmarks = visible_wordmarks and node.material_override.transparency == BaseMaterial3D.TRANSPARENCY_DISABLED and absf(node.position.z) >= 0.03
 		check(absf(wrapf(node.rotation.y - (PI if node.position.z < 0 else 0.0), -PI, PI)) < 0.001, "text faces outward without mirroring")
-	check(visible_wordmarks and text_count == 4 and rally_labels == 2 and maps_labels == 2, "Rally Fans Map has opaque vector text on both faces")
+	check(visible_wordmarks and text_count == 4 and rally_labels == 2 and maps_labels == 2, "Rally Fans Maps has opaque vector text on both faces")
 	check(placed_flag.find_children("*", "Label3D", true, false).is_empty() and flag_cloth.material_override.albedo_texture == null, "flag has no icon texture or transparent text layer")
 	check(flag_cloth.mesh is ArrayMesh and flag_cloth.material_override.transparency == BaseMaterial3D.TRANSPARENCY_DISABLED and flag_cloth.material_override.cull_mode == BaseMaterial3D.CULL_DISABLED, "flag silhouette is opaque geometry visible on both sides")
 	check(host.flag_count() == 1, "flag count is tracked per player")

@@ -81,7 +81,7 @@ func _build_ui() -> void:
 	lobby.add_child(box)
 	game._label(box, "РАЛЛИ С ДРУЗЬЯМИ", 28)
 	name_input = LineEdit.new()
-	name_input.placeholder_text = "Твоё имя"
+	name_input.placeholder_text = "Твой ник"
 	name_input.max_length = 24
 	name_input.text = "Овощ"
 	name_input.custom_minimum_size.y = 48

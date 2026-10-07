@@ -44,7 +44,7 @@ test('game title is Rally Fans Simulator everywhere it is presented', async () =
   assert.ok((game.match(/Rally Fans Simulator/g) ?? []).length >= 2);
   assert.equal(/СИМУЛЯТОР РАЛЛИЙНОГО ОВОЩА|РАЛЛИЙНЫЙ ОВОЩ/.test(game), false);
 });
-test('all project brand references use Rally Fans Map spelling', async () => {
+test('all project brand references use Rally Fans Maps spelling', async () => {
   async function visit(directory) {
     for (const entry of await readdir(directory,{withFileTypes:true})) {
       if (entry.name.startsWith('.') || entry.name === 'node_modules' || entry.name === 'dist') continue;
@@ -58,4 +58,17 @@ test('all project brand references use Rally Fans Map spelling', async () => {
   }
   for(const folder of ['game','scripts','web','docs']) await visit(new URL('../'+folder,import.meta.url).pathname);
   assert.equal(/Rally Fan Maps|FAN MAPS/.test(await readFile(new URL('../README.md',import.meta.url),'utf8')),false);
+});
+
+test('authored game content has no third-party vehicle brands or named crews', async () => {
+  const props = await readFile(new URL('../game/scripts/props.gd', import.meta.url), 'utf8');
+  assert.doesNotMatch(props, /BMW|Lada|Hyundai|Kia Rio|Renault|ВАЗ|ТАТНЕФТЬ|Крылов|Ярош|KidneyGrille|var badge\s*=/i);
+  const rallyModels = props.split('const RALLY_MODELS = [')[1].split('\n]')[0];
+  const sponsors = [...rallyModels.matchAll(/"sponsor": "([^"]+)"/g)].map(match => match[1]);
+  assert.equal(sponsors.length, 6);
+  assert.ok(sponsors.every(sponsor => sponsor === 'Rally Fans Maps'));
+  assert.match(props, /name = "SportGrille"/);
+  assert.match(props, /"FANS MAPS"/);
+  const room = await readFile(new URL('../game/scripts/room.gd', import.meta.url), 'utf8');
+  assert.match(room, /placeholder_text = "Твой ник"/);
 });
