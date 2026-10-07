@@ -1,4 +1,6 @@
 extends SceneTree
+const Stage = preload("res://scripts/stage.gd")
+const Traffic = preload("res://scripts/rally_traffic.gd")
 var failures = 0
 func check(ok: bool, title: String) -> void:
 	print(("PASS: " if ok else "FAIL: ") + title)
@@ -46,6 +48,18 @@ func run() -> void:
 	game.in_car = false
 	game.walker = Vector3(170, 2, 5)
 	game.course.phase = "racing"
+	for variant in range(3):
+		var profile_stage = Stage.new(variant)
+		var min_target = INF
+		var max_target = 0.0
+		for progress in range(0, 821, 20):
+			var target = Traffic.competition_target(profile_stage, float(progress), 1.04, false)
+			min_target = minf(min_target, target)
+			max_target = maxf(max_target, target)
+			check(target >= 0.0 and target <= Traffic.MAX_COMPETITION_SPEED + 0.001, "stage %d competition target stays within 0..140 km/h" % variant)
+		check(max_target - min_target > 1.0, "stage %d changes competition target speed along the route" % variant)
+		check(max_target > 30.0, "stage %d allows high-speed competition sections" % variant)
+		profile_stage.free()
 	var biases = []
 	for i in range(10):
 		game.spawn_racer("pass")
