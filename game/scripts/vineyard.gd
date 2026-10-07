@@ -256,6 +256,9 @@ func _vineyards() -> void:
 	stage._detail_batch("VineyardLeaves", sphere, leaves, leaf_colors)
 	stage._detail_batch("VineyardGrapes", sphere, fruit, fruit_colors)
 
+func _roadside_station_allowed(s: float, buffer: float = 8.0) -> bool:
+	return s < VILLAGE_START - buffer or s > VILLAGE_END + buffer
+
 func _roadside_details() -> void:
 	# Fill the previously empty verge between the road edge and the first vine
 	# rows. Keep the village and spectator parking pockets clean and readable.
@@ -268,7 +271,7 @@ func _roadside_details() -> void:
 	var bush_poses: Array = []
 	var bush_colors: Array = []
 	for s in range(14, 828, 2):
-		if s >= int(VILLAGE_START) - 8 and s <= int(VILLAGE_END) + 8:
+		if not _roadside_station_allowed(float(s), 8.0):
 			continue
 		for side_value in [-1.0, 1.0]:
 			for tuft in range(3):
@@ -285,9 +288,9 @@ func _roadside_details() -> void:
 				grass_colors.append(Color("566a35").lerp(Color("8d9157"), detail_rng.randf() * 0.65))
 				roadside_grass_count += 1
 	for s in range(22, 820, 7):
-		if s >= int(VILLAGE_START) - 10 and s <= int(VILLAGE_END) + 10:
+		if not _roadside_station_allowed(float(s), 10.0):
 			continue
-		var side_value = -1.0 if detail_rng.randi() % 2 else 1.0
+		var side_value = -1.0 if detail_rng.randi() % 2 == 0 else 1.0
 		var p = stage.at(s) + stage.side(s) * side_value * detail_rng.randf_range(5.4, 11.2)
 		var blocked = false
 		for parking in stage.clearings:
@@ -300,7 +303,7 @@ func _roadside_details() -> void:
 		stone_colors.append(Color("7c7d6e").lightened(detail_rng.randf_range(-0.12, 0.10)))
 		roadside_stone_count += 1
 	for s in range(28, 816, 9):
-		if s >= int(VILLAGE_START) - 12 and s <= int(VILLAGE_END) + 12:
+		if not _roadside_station_allowed(float(s), 12.0):
 			continue
 		for side_value in [-1.0, 1.0]:
 			if detail_rng.randf() < 0.38:
