@@ -65,6 +65,8 @@ func run() -> void:
 		for layer in ["ForestGrass", "MushroomCaps", "AntHills", "ForestBoulders", "ForestPebbles", "ForestBushes", "ForestBerryBushes", "ForestBerries"]:
 			forest_layers_absent = forest_layers_absent and other.woodland_details.get(layer, 0) == 0
 		check(forest_layers_absent, "forest decoration stays off winter and vineyard stages")
+		if variant == 2:
+			check(other.woodland_details.get("VineyardLeaves", 0) > 0 and other.woodland_details.get("VineyardGrapes", 0) > 0, "vineyard keeps its own leaves and collectible grapes")
 		other.free()
 	print("WOODLAND RESULT: %d failures" % failures)
 	quit(1 if failures else 0)

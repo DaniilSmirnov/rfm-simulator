@@ -1,3 +1,4 @@
+import { AuthError, authenticateLaunch, authenticateSession } from './auth-vk.mjs';
 import { RoomState, RoomError } from './room-core.mjs';
 const json = (data, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
 export class RallyRoom {
@@ -43,11 +44,40 @@ export class RallyRoom {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.pathname === '/vk') {
+      url.pathname = '/vk/';
+      return Response.redirect(url.toString(), 308);
+    }
     if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
     if (request.method !== 'POST') return json({ error: 'Нужен POST.' }, 405);
     const origin = request.headers.get('Origin');
     if (origin && origin !== url.origin) return json({ error: 'Недопустимый источник.' }, 403);
     if (Number(request.headers.get('Content-Length')) > 65536) return json({ error: 'Слишком большое сообщение.' }, 413);
+    try {
+      if (url.pathname === '/api/vk/session') {
+        const raw = await request.text();
+        if (raw.length > 16384) return json({ error: 'Слишком большое сообщение.' }, 413);
+        let body;
+        try { body = JSON.parse(raw); } catch { return json({ error: 'Некорректное сообщение.' }, 400); }
+        return json(await authenticateLaunch(body?.launch_params, env));
+      }
+      // Anonymous and authenticated players share the same room namespace.
+      // An explicitly supplied session must never silently downgrade to anonymous.
+      if (request.headers.has('Authorization') || request.headers.get('X-Rally-Platform') === 'vk') {
+        const session = await authenticateSession(request, env);
+        if (url.pathname === '/api/rooms' || /^\/api\/rooms\/[A-F0-9]{6}\/join$/.test(url.pathname)) {
+          const raw = await request.text();
+          if (raw.length > 1024) return json({ error: 'Слишком большое сообщение.' }, 413);
+          let body;
+          try { body = JSON.parse(raw); } catch { return json({ error: 'Некорректное сообщение.' }, 400); }
+          if (!body || typeof body !== 'object' || Array.isArray(body)) return json({ error: 'Некорректное сообщение.' }, 400);
+          request = new Request(request, { body: JSON.stringify({ ...body, name: session.nickname }) });
+        }
+      }
+    } catch (error) {
+      if (error instanceof AuthError) return json({ error: error.message }, error.status);
+      return json({ error: 'Авторизация временно недоступна.' }, 503);
+    }
     if (url.pathname === '/api/rooms') {
       const raw = await request.text();
       if (raw.length > 1024) return json({ error: 'Слишком длинное имя.' }, 413);

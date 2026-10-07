@@ -33,3 +33,19 @@ test('foreign origin responses cannot establish membership', async () => {
   await s.window.fetch('https://other.test/api/rooms');
   await settle(); await s.tick(); assert.equal(s.requests.length, 1);
 });
+
+test('VK heartbeat and leave use the current authorized transport', async () => {
+  const s=setup();
+  await s.window.fetch('https://game.test/api/rooms',{method:'POST'});
+  await settle();
+  const calls=[];
+  s.window.RallyPlatform={target:'vk'};
+  const previous=s.window.fetch;
+  s.window.fetch=(input,init)=>{calls.push({input,init});return previous(input,init);};
+  await s.tick();
+  assert.equal(calls[0].input,'/api/rooms/ABC123/heartbeat');
+  s.events.pagehide({persisted:false});
+  assert.equal(calls[1].input,'/api/rooms/ABC123/leave');
+  assert.equal(calls[1].init.keepalive,true);
+  assert.equal(s.beacons.length,0);
+});

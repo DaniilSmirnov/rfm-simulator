@@ -20,6 +20,7 @@ const Spectators = preload("res://scripts/spectators.gd")
 var spectators: Node3D
 const MiniMap = preload("res://scripts/minimap.gd")
 var stage: RallyStage
+var platform_service: Node
 var selected_stage = 0
 var selected_car = 0
 var selection_controls: VBoxContainer
@@ -372,6 +373,14 @@ func _ready() -> void:
 		_capture_menu()
 	elif "--smoke-test" in OS.get_cmdline_user_args():
 		start_game()
+	platform_service = preload("res://scripts/platform_service.gd").new()
+	platform_service.profile_ready.connect(func(profile):
+		if profile.get("platform", "standalone") != "standalone":
+			room.name_input.text = str(profile.get("nickname", ""))
+			room.name_input.editable = false
+	)
+	platform_service.failed.connect(func(message): push_error(message))
+	add_child(platform_service)
 	print("[RFM] Запуск завершён")
 
 func _setup_input() -> void:

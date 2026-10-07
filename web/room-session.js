@@ -21,7 +21,7 @@
     heartbeatBusy = true;
     const current = session;
     try {
-      const response = await originalFetch(`/api/rooms/${current.room}/heartbeat`, {
+      const response = await window.fetch(`/api/rooms/${current.room}/heartbeat`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: current.token }), keepalive: true,
       });
@@ -30,6 +30,10 @@
   }, 5000);
   window.addEventListener('pagehide', event => {
     if (event.persisted || !session) return;
+    if (window.RallyPlatform?.target === 'vk') {
+      window.fetch(`/api/rooms/${session.room}/leave`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({token:session.token}), keepalive:true}).catch(() => {});
+      return;
+    }
     navigator.sendBeacon(`/api/rooms/${session.room}/leave`, new Blob([JSON.stringify({ token: session.token })], { type: 'application/json' }));
   });
 })();
