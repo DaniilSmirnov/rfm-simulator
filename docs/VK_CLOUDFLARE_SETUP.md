@@ -36,6 +36,8 @@
 
 В **Settings → Variables and Secrets** именно этого Worker добавьте **Secret**:
 
+Wrangler также объявляет `VK_APP_SECRET` обязательным runtime secret. Поэтому production deploy теперь должен завершаться ошибкой, если секрет не привязан именно к Worker `rally-fans-simulator`; это специально исключает ситуацию, когда ключ случайно добавлен только в **Build variables and secrets**.
+
 | Runtime secret | Значение |
 |---|---|
 | `VK_APP_SECRET` | Защищённый ключ приложения 54809523 |
