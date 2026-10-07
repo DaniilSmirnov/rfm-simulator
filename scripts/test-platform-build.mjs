@@ -13,6 +13,8 @@ for(const [directory,adapter] of targets.filter(([directory]) => !selected || di
  assert.ok(html.includes('src="platform/'+adapter+'.js"'));
  assert.equal(html.includes('src="vk-bridge.js"'),adapter==='vk');
  assert.ok(html.includes('RallyPlatform.ready()'));
+ assert.ok(files.includes('fullscreen.js'),directory+' is missing fullscreen control');
+ assert.ok(html.includes('src="fullscreen.js"'),directory+' does not load fullscreen control');
  assert.ok(html.indexOf('platform/transport.js')<html.indexOf('src="index.js"'));
  console.log('BUILD_ISOLATION_PASS',directory);
 }
