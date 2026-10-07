@@ -1,11 +1,11 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "rfm-simulator",
+  "name": "rfm-simulator-vk",
   "compatibility_date": "2026-10-05",
   "workers_dev": true,
   "preview_urls": true,
   "assets": {
-    "directory": "./dist",
+    "directory": "./dist-vk",
     "not_found_handling": "none",
     "binding": "ASSETS",
     "run_worker_first": [
@@ -30,6 +30,7 @@
     }
   ],
   "vars": {
-    "PLATFORM": "standalone"
+    "PLATFORM": "vk",
+    "VK_APP_ID": "0"
   }
 }

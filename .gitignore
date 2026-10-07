@@ -7,3 +7,6 @@ dist/
 
 dist-vk/
 dist-vk-prototype/
+
+.dev.vars*
+.env*

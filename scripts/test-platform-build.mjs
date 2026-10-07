@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import {readFile,readdir} from 'node:fs/promises';
-for(const [directory,adapter] of [['dist','standalone'],['dist-vk','vk'],['dist-vk-prototype','vk-prototype']]){
+const targets = [['dist','standalone'],['dist-vk','vk'],['dist-vk-prototype','vk-prototype']];
+const selected = process.argv[2];
+if (selected && !targets.some(([directory]) => directory === selected)) throw new Error('Unknown artifact');
+for(const [directory,adapter] of targets.filter(([directory]) => !selected || directory === selected)){
  const files=await readdir(directory,{recursive:true});
  const html=await readFile(directory+'/index.html','utf8');
  const pack=await readFile(directory+'/index.pck');

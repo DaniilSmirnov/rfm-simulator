@@ -5,7 +5,7 @@ import {runInNewContext} from 'node:vm';
 const source = name => readFile(new URL('../web/platform/'+name+'.js',import.meta.url),'utf8');
 async function setup(adapter,extra={}) {
   const forwarded=[];
-  const context={Request,Response,URL,JSON,Object,location:{origin:'https://game.test',href:'https://game.test/',search:'?vk_user_id=123&sign=test'},fetch:async (...args)=>{forwarded.push(args);return Response.json({ok:true});},...extra};
+  const context={Request,Response,Headers,AbortSignal,URL,JSON,Object,location:{origin:'https://game.test',href:'https://game.test/',search:'?vk_user_id=123&sign=test'},fetch:async (...args)=>{forwarded.push(args);return Response.json({ok:true});},...extra};
   context.window=context;
   runInNewContext(await source(adapter),context);
   runInNewContext(await source('transport'),context);
@@ -47,9 +47,23 @@ test('VK bootstrap uses init before sending raw launch params to backend',async(
  const {context:c}=await setup('vk',{RallyBoot:{setStage(){}},vkBridge:{send:async(method)=>{calls.push(method);}},fetch:async(url,init)=>{
   calls.push(url);
   assert.equal(JSON.parse(init.body).launch_params,'?vk_user_id=123&sign=test');
-  return Response.json({profile:{platform:'vk',nickname:'shortname',verified:true},entitlements:{skus:[]}});
+  return Response.json({profile:{platform:'vk',nickname:'shortname',verified:true},entitlements:{skus:[]},session:{token:'test-session',expires_at:Math.floor(Date.now()/1000)+3600}});
  }});
  await c.RallyPlatform.ready();
  assert.deepEqual(calls,['VKWebAppInit','/api/vk/session']);
  assert.equal((await c.RallyPlatform.getProfile()).nickname,'shortname');
+});
+
+test('VK attaches in-memory bearer only to same-origin room requests',async()=>{
+ const calls=[];
+ const {context:c}=await setup('vk',{RallyBoot:{setStage(){}},vkBridge:{send:async()=>({})},fetch:async(input,init)=>{
+  if(input==='/api/vk/session') return Response.json({profile:{platform:'vk',nickname:'shortname',verified:true},entitlements:{skus:[]},session:{token:'private-session',expires_at:Math.floor(Date.now()/1000)+3600}});
+  calls.push(new Request(input,init));return Response.json({ok:true});
+ }});
+ await c.RallyPlatform.ready();
+ await c.fetch('/api/rooms',{method:'POST',body:'{"name":"ignored"}'});
+ await c.fetch('https://other.test/api/rooms',{method:'POST',body:'{}'});
+ assert.equal(calls[0].headers.get('Authorization'),'Bearer private-session');
+ assert.equal(calls[1].headers.get('Authorization'),null);
+ assert.equal(await calls[0].text(),'{"name":"ignored"}');
 });

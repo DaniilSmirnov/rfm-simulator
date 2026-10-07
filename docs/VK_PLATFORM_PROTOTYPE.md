@@ -1,24 +1,24 @@
 # VK platform transport prototype
 
-This is a technical prototype, not a completed VK integration. No account authentication, permanent entitlements, purchase flow or achievements are implemented.
+This is a technical prototype, not a completed VK integration. Minimal server-verified VK authentication is implemented. Permanent account storage, entitlements, purchase flow and achievements are not implemented. See [Cloudflare setup](VK_CLOUDFLARE_SETUP.md).
 
 ## Build targets
 
 - `npm run build`: standalone `dist/`; no VK Bridge or VK adapters.
 - `npm run build:vk:prototype`: `dist-vk-prototype/`; explicit mock profile `vk_prototype`, `verified: false`. No VK Bridge, real accounts or purchases. Never use this artifact as the production VK application.
-- `npm run build:vk`: `dist-vk/`; pinned VK Bridge 3.0.2, real `VKWebAppInit`, then `/api/vk/session`. That endpoint is not implemented in this prototype, so startup fails explicitly until the authentication backend is provided. This build never falls back to the mock adapter.
+- `npm run build:vk`: `dist-vk/`; pinned VK Bridge 3.0.2, real `VKWebAppInit`, then `/api/vk/session`. The endpoint validates signed launch parameters and resolves the shortname through VK API; configure the VK Worker secrets before use. This build never falls back to the mock adapter.
 
 The common exporter preserves WASM/PCK integrity and asset-size checks. Every target has its own output and temporary directories; building another target does not delete the previous artifact.
 
 ## Communication
 
-The existing minimal engine has no JS bridge. `PlatformService` sends `HTTPRequest` POST requests to an absolute same-origin `/__rally_platform` URL. The browser intercepts only that exact route and passes an allowlisted method to `RallyPlatform`. The returned JSON Response is consumed by Godot through its normal HTTP completion signal. Requests for all other routes/origins pass through unchanged, including the existing room transport.
+The existing minimal engine has no JS bridge. `PlatformService` sends `HTTPRequest` POST requests to an absolute same-origin `/__rally_platform` URL. The browser intercepts only that exact route and passes an allowlisted method to `RallyPlatform`. The returned JSON Response is consumed by Godot through its normal HTTP completion signal. VK room requests additionally receive an in-memory bearer session; other routes/origins pass through unchanged.
 
 The virtual endpoint is not a backend endpoint and grants no identity or ownership. Native/headless game execution does not use it. Native tests can continue without a browser adapter.
 
 Methods in this prototype: `ready`, `getProfile`, `getEntitlements`. No `buy` method is exposed. The game consumes the returned profile and displays a noneditable platform nickname for a VK/prototype profile; standalone keeps the existing editable nickname.
 
-VK bootstrap finishes before the engine starts; errors appear through existing boot diagnostics. Server authentication, session token lifecycle and profile validation will be added in the next stage. Raw launch parameters must never be logged.
+VK bootstrap finishes before the engine starts; errors appear through existing boot diagnostics. A signed session lasts one hour; reopening through VK is required after expiry. Raw launch parameters must never be logged.
 
 ## Validation
 
@@ -32,8 +32,8 @@ The probe intentionally isolates communication from the expensive full game scen
 
 ## Next stage
 
-Implement the signed-launch verification/session endpoint and persistent accounts, then test the `dist-vk/` artifact inside an actual VK test application. Payment callbacks and server-authoritative content access follow separately.
+Configure the Worker and test `dist-vk/` inside an actual VK test application; add persistent accounts next. Payment callbacks and server-authoritative content access follow separately.
 
-## Current local verification limitation
+## Verified transport and remaining limitations
 
-On the development execution host, the Web smoke test could not complete: the headless Chromium process closed during engine initialization; full Chromium launch reported `socket() failed: Operation not permitted`. No successful WASM-to-adapter roundtrip is claimed from this host. CI includes both desktop/mobile probe checks on Ubuntu; their successful results are required before treating the transport as proven in the exported engine. Unit tests and the three export/asset-isolation checks can run independently of that browser limitation.
+The original standalone/prototype WASM transport passed Chromium desktop/mobile CI on 2026-10-07. The VK build test now exercises a synthetic signed launch against the real auth module, a fixture VK API response, a stub Bridge initialization and an authorized room request. This does not prove production VK credentials or native VK container behavior. Actual VK Android/iOS and desktop launches remain deployment acceptance checks.

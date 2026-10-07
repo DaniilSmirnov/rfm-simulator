@@ -318,3 +318,11 @@ test('late players receive cooked portions and cannot replace a host cauldron', 
   const late = r.add('Late', 1300);
   assert.deepEqual(r.sync({ token: late.token, state: state() }, 1400).world.camp_cooking, world.camp_cooking);
 });
+
+test('long VK shortnames survive room roster without legacy 24-character truncation', () => {
+  const room = new RoomState();
+  const name = 'rally_fan_with_long_shortname';
+  const result = room.add(name, Date.now(), true);
+  assert.equal(result.name, name);
+  assert.equal(Object.values(room.data.players)[0].name, name);
+});
