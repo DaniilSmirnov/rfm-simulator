@@ -945,12 +945,27 @@ func village_forest_offset(s: float) -> float:
 	if s <= 370.0 or s >= 500.0:
 		return 0.0
 	var stations = [370.0, 385.0, 402.0, 418.0, 438.0, 453.0, 469.0, 487.0, 500.0]
-	var offsets = [0.0, 36.0, 71.0, 87.0, 89.0, 87.0, 77.0, 33.0, 0.0]
+	var offsets = [0.0, 25.0, 49.0, 59.0, 60.0, 59.0, 53.0, 23.0, 0.0]
 	for i in range(stations.size() - 1):
 		if s <= stations[i + 1]:
 			var t = smoothstep(stations[i], stations[i + 1], s)
 			return lerpf(offsets[i], offsets[i + 1], t)
 	return 0.0
+
+# Village buildings and the original cobblestone main road must not follow
+# the rally-only forest bypass. Keep their historical straight village axis.
+func village_main_at(s: float) -> Vector3:
+	var village_blend = smoothstep(260.0, 300.0, s) * (1.0 - smoothstep(570.0, 610.0, s))
+	var country_x = sin(s / 85.0) * 34.0 + sin(s / 43.0) * 10.0
+	var village_x = sin((s - 300.0) / 100.0) * 14.0
+	var height = 2.0 + (1.0 - village_blend) * (7.0 + sin(s / 95.0) * 3.0 + s * 0.004)
+	return Vector3(lerpf(country_x, village_x, village_blend), height, -s)
+
+func village_main_direction(s: float) -> Vector3:
+	return (village_main_at(minf(s + 2.0, LENGTH - 0.01)) - village_main_at(maxf(s - 2.0, 0.0))).normalized()
+
+func village_main_side(s: float) -> Vector3:
+	return village_main_direction(s).cross(Vector3.UP).normalized()
 
 func urban_at(s: float) -> Vector3:
 	var village_blend = smoothstep(260.0, 300.0, s) * (1.0 - smoothstep(570.0, 610.0, s))

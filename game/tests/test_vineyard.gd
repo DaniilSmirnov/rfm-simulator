@@ -27,8 +27,13 @@ func run() -> void:
 	check(stage.city.church_square_cobblestones >= 180 and stage.get_node_or_null("VillageChurch/VillageChurchSquare") != null, "church forecourt is fully paved with cobblestones")
 	check(not stage.city.village_detail_allowed(stage.city.church_square_center), "church cobblestone square rejects grass and loose stones")
 	check(stage.get_node_or_null("VillageCemetery") != null and stage.city.cemetery_grave_count == 28, "forest behind church contains an open cemetery with ordered graves")
-	var church_center = stage.at(435.0) + stage.side(435.0) * 43.0
-	check(absf(stage.road_distance(stage.city.cemetery_center) - 26.0) < 10.0, "forest route passes alongside cemetery")
+	var church_center = stage.village_main_at(435.0) + stage.village_main_side(435.0) * 43.0
+	var cemetery_lateral = (stage.city.cemetery_center - stage.village_main_at(435.0)).dot(stage.village_main_side(435.0))
+	var detour_lateral = (stage.at(435.0) - stage.village_main_at(435.0)).dot(stage.village_main_side(435.0))
+	var cemetery_edge_gap = cemetery_lateral - detour_lateral - 16.0 - stage.WIDTH * 0.5
+	check(cemetery_lateral > 80.0 and detour_lateral > 45.0 and detour_lateral < cemetery_lateral, "cemetery stays behind church and rally cars pass on its left")
+	check(cemetery_edge_gap >= 5.0 and cemetery_edge_gap <= 10.0, "gravel road runs 5-10 m from cemetery boundary")
+	check(stage.village_main_at(435.0).distance_to(stage.at(435.0)) > 45.0, "historic cobblestone road remains separate from gravel detour")
 	check(not stage.city._forest_spot_allowed(stage.city.cemetery_center), "mixed forest generation preserves the cemetery clearing")
 	check(stage.city.side_lane_house_count >= 8, "both secondary village streets have additional houses")
 	check(stage.city.village_sign_count == 2, "village has name signs at both entrance and exit")
@@ -86,8 +91,8 @@ func run() -> void:
 	for detail_position in stage.city.village_detail_positions:
 		village_details_clear = village_details_clear and stage.city.village_detail_allowed(detail_position)
 	check(village_details_clear, "generated village details never land on paved surfaces or occupied structures")
-	check(not stage.city.village_detail_allowed(stage.at(335.0)), "main village cobblestones reject natural detail")
-	check(not stage.city.village_detail_allowed(stage.at(435.0) + stage.side(435.0) * 5.1), "village sidewalks reject natural detail")
+	check(not stage.city.village_detail_allowed(stage.village_main_at(335.0)), "main village cobblestones reject natural detail")
+	check(not stage.city.village_detail_allowed(stage.village_main_at(435.0) + stage.village_main_side(435.0) * 5.1), "village sidewalks reject natural detail")
 	check(not stage.city.village_detail_allowed(stage.at(370.0) + stage.side(370.0) * 20.0), "transverse cobbled lanes reject natural detail")
 	var parking_labels = 0
 	for label in stage.find_children("*", "Label3D", true, false):
@@ -97,10 +102,10 @@ func run() -> void:
 	check(stage.city.roadside_grass_count > 500 and stage.city.roadside_stone_count > 20 and stage.city.roadside_bush_count > 20, "country road has dense grass, stones and bushes before and after village")
 	check(stage.woodland_details.get("VineyardRoadsideGrass", 0) == stage.city.roadside_grass_count, "roadside grass is instanced through shared detail batches")
 	check(not stage.city._roadside_station_allowed(435.0) and stage.city._roadside_station_allowed(180.0), "roadside vegetation stays outside village")
-	check(stage.city.village_cobblestones >= 1500 and stage.city.sidewalk_segments >= 170, "both remaining village streets have dense cobblestone paving and sidewalks")
+	check(stage.city.village_cobblestones >= 2700 and stage.city.sidewalk_segments >= 170, "both remaining village streets have dense cobblestone paving and sidewalks")
 	check(not stage.draw_base_road_surface(335.0) and stage.draw_base_road_surface(435.0) and stage.draw_base_road_surface(180.0), "village road uses cobblestones while the forest detour has a gravel base")
 	check(stage.direction(320).z < -0.8 and stage.direction(530).z < -0.8, "village route continues toward finish without a reversal")
-	check(stage.village_forest_offset(435.0) > 80.0 and stage.village_forest_offset(370.0) == 0.0 and stage.village_forest_offset(500.0) == 0.0, "forest diversion joins both village side streets")
+	check(stage.village_forest_offset(435.0) > 45.0 and stage.village_forest_offset(370.0) == 0.0 and stage.village_forest_offset(500.0) == 0.0, "forest diversion joins both village side streets")
 	check(stage.village_forest_detour(435.0) and not stage.village_forest_detour(320.0), "only wooded section uses gravel grip and light terrain")
 	var id = stage.collectibles.size() / 2
 	var grape = stage.collectibles[id]
