@@ -24,6 +24,12 @@ var stage: RallyStage
 var platform_service: Node
 var selected_stage = 0
 var selected_car = 0
+# Headless fixtures may construct synchronously; real clients enter a lightweight menu.
+var defer_world = DisplayServer.get_name() != "headless" and not ("--script" in OS.get_cmdline_args() or "--capture" in OS.get_cmdline_user_args() or "--smoke-test" in OS.get_cmdline_user_args())
+var world_ready = false
+var loading_world = false
+var loading_screen: Node
+
 var lobby_ui: Node
 var selection_controls: VBoxContainer
 var car_choice: HBoxContainer
@@ -403,15 +409,18 @@ func _ready() -> void:
 	_setup_input()
 	stage = Stage.new()
 	add_child(stage)
-	stage.build()
-	print("[RFM] Рельеф и объекты карты готовы")
+	if not defer_world:
+		stage.build()
+		world_ready = true
+	print("[RFM] Лёгкое меню: карта будет подготовлена при входе" if defer_world else "[RFM] Рельеф и объекты карты готовы")
 	_build_environment()
 	spectators = Spectators.new()
 	spectators.game = self
 	add_child(spectators)
-	spectators.rebuild()
+	if world_ready:
+		spectators.rebuild()
 	print("[RFM] Зрители и машина готовы к созданию")
-	car = Props.player_car(0)
+	car = Node3D.new() if defer_world else Props.player_car(0)
 	add_child(car)
 	car.position = stage.at(12)
 	heading = atan2(-stage.direction(12).x, -stage.direction(12).z)
@@ -426,6 +435,9 @@ func _ready() -> void:
 	if lobby_ui != null:
 		lobby_ui.refresh()
 	_build_ui()
+	loading_screen = preload("res://scripts/loading_screen.gd").new()
+	loading_screen.game = self
+	add_child(loading_screen)
 	mushroom_effect.setup(self)
 	print("[RFM] Интерфейс готов; подготовка звука")
 	_setup_audio()
@@ -730,12 +742,35 @@ func _setup_audio() -> void:
 	soundscape.game = self
 	add_child(soundscape)
 
+func prepare_world() -> void:
+	if world_ready or loading_world:
+		return
+	loading_world = true
+	loading_screen.show_loading()
+	await stage.build_async(loading_screen.stage_progress)
+	await loading_screen.stage_progress("Зрители и лагерь", 85)
+	await spectators.rebuild(true)
+	await loading_screen.stage_progress("Машина", 95)
+	var previous = car.transform
+	car.free()
+	car = Props.player_car(selected_car)
+	add_child(car)
+	car.transform = previous
+	await loading_screen.stage_progress("Готово", 100)
+	world_ready = true
+	loading_world = false
+	loading_screen.hide_loading()
+
 func start_game() -> void:
 	if platform_service != null and (not platform_service.can_use("car", car_choice.selected) or not platform_service.can_use("stage", stage_choice.selected, room.connected and not room.is_host)):
 		toast("Выбранный контент недоступен в VK. Дождитесь загрузки прав или выберите бесплатный вариант.")
 		return
 	if playing:
 		return
+	if loading_world:
+		return
+	if not world_ready:
+		await prepare_world()
 	playing = true
 	soundscape.repair()
 	course.apply_snapshot({})
@@ -1365,11 +1400,17 @@ func _cancel_drink() -> void:
 		beer_audio.stop()
 
 func select_player_car(variant: int) -> void:
+	if loading_world:
+		return
 	if playing and platform_service != null and not platform_service.can_use("car", posmod(variant, Props.PLAYER_MODELS.size())):
 		return
 	selected_car = posmod(variant, Props.PLAYER_MODELS.size())
 	if car_choice != null:
 		car_choice.select(selected_car)
+	if defer_world and not world_ready:
+		if lobby_ui != null:
+			lobby_ui.refresh()
+		return
 	var transform_before = car.transform
 	car.queue_free()
 	car = Props.player_car(selected_car)
@@ -1379,7 +1420,7 @@ func select_player_car(variant: int) -> void:
 		lobby_ui.refresh()
 
 func select_stage(variant: int, hosted_guest: bool = false) -> void:
-	if playing:
+	if playing or loading_world:
 		return
 	variant = clampi(variant, 0, Stage.STAGES.size() - 1)
 	if variant == selected_stage:
@@ -1392,8 +1433,11 @@ func select_stage(variant: int, hosted_guest: bool = false) -> void:
 	stage.free()
 	stage = Stage.new(variant)
 	add_child(stage)
-	stage.build()
-	spectators.rebuild()
+	if not defer_world:
+		stage.build()
+		spectators.rebuild()
+	else:
+		world_ready = false
 	world_environment.free()
 	sunlight.free()
 	_build_environment()

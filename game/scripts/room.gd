@@ -132,7 +132,7 @@ func connect_room(id: String) -> void:
 	if game.platform_service != null and (not game.platform_service.can_use("car", game.car_choice.selected) or (id == "" and not game.platform_service.can_use("stage", game.stage_choice.selected))):
 		lobby_status.text = "Выбери доступную машину и СУ. Продажи в VK ещё не открыты."
 		return
-	if busy or connected:
+	if busy or connected or game.loading_world:
 		return
 	if id != "" and (id.length() != 6 or not id.is_valid_hex_number()):
 		lobby_status.text = "ID состоит из 6 символов: 0–9 и A–F."
@@ -196,7 +196,7 @@ func _response(result: int, code: int, _headers: PackedStringArray, bytes: Packe
 		room_label.show()
 		game.select_stage(int(data.get("stage", 0)), not is_host)
 		game.select_player_car(int(data.get("car_model", game.selected_car)))
-		game.start_game()
+		await game.start_game()
 		# Separate parked cars at the start; local movement remains responsive.
 		var lane = int(data.get("slot", 0))
 		game.avatar_variant = posmod(lane, Props.SPECTATOR_MODELS.size())
@@ -264,7 +264,7 @@ func server_clock() -> float:
 	return Time.get_ticks_usec() / 1000000.0 + server_offset
 
 func _process(delta: float) -> void:
-	if not connected:
+	if not connected or game.loading_world:
 		return
 	clock += delta
 	if not busy and clock >= SYNC_INTERVAL:

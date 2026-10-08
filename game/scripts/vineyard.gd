@@ -30,7 +30,7 @@ var tree_positions: Array[Vector3] = []
 var village_prop_count = 0
 var sidewalk_poses: Array[Transform3D] = []
 
-func build() -> void:
+func build(cooperative: bool = false) -> void:
 	var floor_body = StaticBody3D.new()
 	floor_body.name = "VillagePhysicsGround"
 	stage.add_child(floor_body)
@@ -40,8 +40,13 @@ func build() -> void:
 	box.size = Vector3(230, 0.5, 290)
 	shape.shape = box
 	floor_body.add_child(shape)
-	_village_street()
+	if cooperative:
+		await _village_street(true)
+	else:
+		_village_street()
 	for s in range(316, 562, 18):
+		if cooperative:
+			await get_tree().process_frame
 		for side_value in [-1.0, 1.0]:
 			var p = stage.at(s) + stage.side(s) * side_value * 14.0
 			var reserved = absf(s - 370) < 11 or absf(s - 500) < 11
@@ -58,19 +63,36 @@ func build() -> void:
 		for side_value in [-1.0, 1.0]:
 			_lamp(stage.at(s) + stage.side(s) * side_value * 6.2, -side_value)
 	_village_props()
-	_vineyards()
-	_roadside_details()
-	_thuja_forest()
-	_mixed_forest()
-	_village_natural_details()
+	if cooperative:
+		await _vineyards(true)
+	else:
+		_vineyards()
+	if cooperative:
+		await _roadside_details(true)
+	else:
+		_roadside_details()
+	if cooperative:
+		await _thuja_forest(true)
+	else:
+		_thuja_forest()
+	if cooperative:
+		await _mixed_forest(true)
+	else:
+		_mixed_forest()
+	if cooperative:
+		await _village_natural_details(true)
+	else:
+		_village_natural_details()
 	_landscape()
 	_flush_batches()
 
-func _village_street() -> void:
+func _village_street(cooperative: bool = false) -> void:
 	var street = Node3D.new()
 	street.name = "VillageCobblestoneStreet"
 	stage.add_child(street)
 	for s in range(300, 570):
+		if cooperative and int(s) % 20 == 0:
+			await get_tree().process_frame
 		var p = stage.at(s)
 		var right = stage.side(s)
 		var yaw = atan2(-stage.direction(s).x, -stage.direction(s).z)
@@ -79,6 +101,8 @@ func _village_street() -> void:
 			stone.rotation.y = yaw
 			village_cobblestones += 1
 	for s in range(300, 571):
+		if cooperative and int(s) % 20 == 0:
+			await get_tree().process_frame
 		if absf(s - 370.0) <= 2.5 or absf(s - 500.0) <= 2.5:
 			continue # Side-street junctions must stay open, without a raised kerb.
 		var p = stage.at(s)
@@ -324,7 +348,7 @@ func _village_sign(s: float, side_value: float) -> void:
 	_batch(root, root.transform)
 	village_sign_count += 1
 
-func _vineyards() -> void:
+func _vineyards(cooperative: bool = false) -> void:
 	var leaves: Array = []
 	var leaf_colors: Array = []
 	var fruit: Array = []
@@ -335,11 +359,15 @@ func _vineyards() -> void:
 	for start in [18, 585]:
 		for side_value in [-1.0, 1.0]:
 			for row in range(18):
+				if cooperative:
+					await get_tree().process_frame
 				var root = Node3D.new()
 				root.name = "VineyardRow_%d_%d_%d" % [start, int(side_value), row]
 				stage.add_child(root)
 				var row_end = 286 if start == 18 else 825
 				for s in range(start, row_end, 6):
+					if cooperative and int(s) % 20 == 0:
+						await get_tree().process_frame
 					var p = stage.at(s) + stage.side(s) * side_value * (13.0 + row * 4)
 					var blocked = false
 					for parking in stage.clearings:
@@ -378,7 +406,7 @@ func _vineyards() -> void:
 func _roadside_station_allowed(s: float, buffer: float = 8.0) -> bool:
 	return s < VILLAGE_START - buffer or s > VILLAGE_END + buffer
 
-func _roadside_details() -> void:
+func _roadside_details(cooperative: bool = false) -> void:
 	# Fill the previously empty verge between the road edge and the first vine
 	# rows. Keep the village and spectator parking pockets clean and readable.
 	var detail_rng = RandomNumberGenerator.new()
@@ -390,6 +418,8 @@ func _roadside_details() -> void:
 	var bush_poses: Array = []
 	var bush_colors: Array = []
 	for s in range(14, 828, 2):
+		if cooperative and int(s) % 20 == 0:
+			await get_tree().process_frame
 		if not _roadside_station_allowed(float(s), 8.0):
 			continue
 		for side_value in [-1.0, 1.0]:
@@ -407,6 +437,8 @@ func _roadside_details() -> void:
 				grass_colors.append(stage.shared_grass_color(detail_rng.randf()))
 				roadside_grass_count += 1
 	for s in range(22, 820, 7):
+		if cooperative and int(s) % 20 == 0:
+			await get_tree().process_frame
 		if not _roadside_station_allowed(float(s), 10.0):
 			continue
 		var side_value = -1.0 if detail_rng.randi() % 2 == 0 else 1.0
@@ -422,6 +454,8 @@ func _roadside_details() -> void:
 		stone_colors.append(stage.shared_stone_color(detail_rng.randf_range(-0.10, 0.12)))
 		roadside_stone_count += 1
 	for s in range(28, 816, 9):
+		if cooperative and int(s) % 20 == 0:
+			await get_tree().process_frame
 		if not _roadside_station_allowed(float(s), 12.0):
 			continue
 		for side_value in [-1.0, 1.0]:
@@ -449,7 +483,7 @@ func _roadside_details() -> void:
 	stage._detail_batch("VineyardRoadsideStones", stage.shared_stone_mesh(), stone_poses, stone_colors)
 	stage._detail_batch("VineyardRoadsideBushes", bush_mesh, bush_poses, bush_colors)
 
-func _thuja_forest() -> void:
+func _thuja_forest(cooperative: bool = false) -> void:
 	# A dense evergreen belt frames the village without intruding on the road,
 	# houses, church or the spectator spots. Three tapered layers read as thuja.
 	var tree_rng = RandomNumberGenerator.new()
@@ -461,6 +495,8 @@ func _thuja_forest() -> void:
 	var crown_poses: Array = []
 	var crown_colors: Array = []
 	for s in range(int(VILLAGE_START) - 34, int(VILLAGE_END) + 35, 4):
+		if cooperative and int(s) % 20 == 0:
+			await get_tree().process_frame
 		for side_value in [-1.0, 1.0]:
 			for row in range(4):
 				var lateral = 27.0 + row * 9.0 + tree_rng.randf_range(-2.0, 2.0)
@@ -558,13 +594,15 @@ func _forest_spot_allowed(p: Vector3, padding: float = 0.0) -> bool:
 			return false
 	return _point_clear_of_obstacles(p, 4.0 + padding)
 
-func _mixed_forest() -> void:
+func _mixed_forest(cooperative: bool = false) -> void:
 	# The village uses the exact same four-layer tree asset as the first summer
 	# stage. Only density and placement differ, so both stages read as one world.
 	var forest_rng = RandomNumberGenerator.new()
 	forest_rng.seed = 71020265
 	var tree_data: Array[Dictionary] = []
 	for i in range(3600):
+		if cooperative and i % 200 == 0:
+			await get_tree().process_frame
 		var s = forest_rng.randf_range(VILLAGE_START - 52.0, VILLAGE_END + 52.0)
 		var side_value = -1.0 if forest_rng.randi() % 2 == 0 else 1.0
 		var lateral = forest_rng.randf_range(48.0, 142.0)
@@ -592,6 +630,8 @@ func _mixed_forest() -> void:
 	var grass_poses: Array = []
 	var grass_colors: Array = []
 	for i in range(4200):
+		if cooperative and i % 200 == 0:
+			await get_tree().process_frame
 		var s = forest_rng.randf_range(VILLAGE_START - 52.0, VILLAGE_END + 52.0)
 		var side_value = -1.0 if forest_rng.randi() % 2 == 0 else 1.0
 		var p = stage.at(s) + stage.side(s) * side_value * forest_rng.randf_range(48.0, 142.0)
@@ -609,6 +649,8 @@ func _mixed_forest() -> void:
 	var stone_poses: Array = []
 	var stone_colors: Array = []
 	for i in range(900):
+		if cooperative and i % 200 == 0:
+			await get_tree().process_frame
 		var s = forest_rng.randf_range(VILLAGE_START - 50.0, VILLAGE_END + 50.0)
 		var side_value = -1.0 if forest_rng.randi() % 2 == 0 else 1.0
 		var p = stage.at(s) + stage.side(s) * side_value * forest_rng.randf_range(50.0, 140.0)
@@ -626,6 +668,8 @@ func _mixed_forest() -> void:
 	var boulder_poses: Array = []
 	var boulder_colors: Array = []
 	for i in range(260):
+		if cooperative and i % 200 == 0:
+			await get_tree().process_frame
 		var s = forest_rng.randf_range(VILLAGE_START - 48.0, VILLAGE_END + 48.0)
 		var side_value = -1.0 if forest_rng.randi() % 2 == 0 else 1.0
 		var p = stage.at(s) + stage.side(s) * side_value * forest_rng.randf_range(55.0, 138.0)
@@ -652,6 +696,8 @@ func _mixed_forest() -> void:
 	var berry_poses: Array = []
 	var berry_colors: Array = []
 	for i in range(900):
+		if cooperative and i % 200 == 0:
+			await get_tree().process_frame
 		var s = forest_rng.randf_range(VILLAGE_START - 50.0, VILLAGE_END + 50.0)
 		var side_value = -1.0 if forest_rng.randi() % 2 == 0 else 1.0
 		var center = stage.at(s) + stage.side(s) * side_value * forest_rng.randf_range(50.0, 136.0)
@@ -723,7 +769,7 @@ func village_detail_allowed(p: Vector3) -> bool:
 			return false
 	return _point_clear_of_obstacles(p, 0.9)
 
-func _village_natural_details() -> void:
+func _village_natural_details(cooperative: bool = false) -> void:
 	var detail_rng = RandomNumberGenerator.new()
 	detail_rng.seed = 71020266
 	var grass_poses: Array = []
@@ -731,6 +777,8 @@ func _village_natural_details() -> void:
 	var stone_poses: Array = []
 	var stone_colors: Array = []
 	for i in range(2600):
+		if cooperative and i % 200 == 0:
+			await get_tree().process_frame
 		var s = detail_rng.randf_range(VILLAGE_START + 3.0, VILLAGE_END - 3.0)
 		var side_value = -1.0 if detail_rng.randi() % 2 == 0 else 1.0
 		var p = stage.at(s) + stage.side(s) * side_value * detail_rng.randf_range(7.0, 47.0) + stage.direction(s) * detail_rng.randf_range(-1.5, 1.5)
@@ -745,6 +793,8 @@ func _village_natural_details() -> void:
 		if village_grass_count >= 720:
 			break
 	for i in range(900):
+		if cooperative and i % 200 == 0:
+			await get_tree().process_frame
 		var s = detail_rng.randf_range(VILLAGE_START + 4.0, VILLAGE_END - 4.0)
 		var side_value = -1.0 if detail_rng.randi() % 2 == 0 else 1.0
 		var p = stage.at(s) + stage.side(s) * side_value * detail_rng.randf_range(7.2, 46.0)

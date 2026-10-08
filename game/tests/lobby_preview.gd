@@ -13,6 +13,7 @@ func run() -> void:
 	DirAccess.make_dir_recursive_absolute("res://../.cache/ui-screens")
 	root.size = Vector2i(1440, 900)
 	var game = load("res://main.tscn").instantiate()
+	game.defer_world = true
 	root.add_child(game)
 	await process_frame
 	game.set_process(false)
@@ -28,7 +29,7 @@ func run() -> void:
 	await capture(game, "mobile-lobby")
 	game.select_player_car(0)
 	game.select_stage(0)
-	game.start_game()
+	await game.start_game()
 	game.paused = true
 	game.menu.show()
 	game.menu_title.text = "Перерыв на природе"

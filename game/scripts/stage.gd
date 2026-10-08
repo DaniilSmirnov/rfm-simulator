@@ -166,8 +166,28 @@ func build() -> void:
 	rng.seed = 7102026 + variant * 971
 	_build_terrain()
 	_build_road()
+	_build_nature()
+	_build_details()
+	_build_finish()
+
+func build_async(progress: Callable) -> void:
+	rng.seed = 7102026 + variant * 971
+	await progress.call("Рельеф", 0)
+	await _build_terrain(true)
+	await progress.call("Дорога", 30)
+	_build_road()
+	await progress.call("Лес и окружение", 40)
+	await _build_nature(true)
+	await progress.call("Объекты спецучастка", 55)
+	await _build_details(true)
+	await progress.call("Судьи и указатели", 75)
+	_build_finish()
+
+func _build_nature(cooperative: bool = false) -> void:
 	var forest: Array[Dictionary] = []
 	for i in range(100 if urban else (520 if winter else 7600)):
+		if cooperative and i % 400 == 0:
+			await get_tree().process_frame
 		var p = Vector3(rng.randf_range(-150, 150), 0, rng.randf_range(-LENGTH - 65, 50))
 		if urban:
 			continue
@@ -197,10 +217,20 @@ func build() -> void:
 		var rock = RallyProps.cylinder(self, p + Vector3(0, 0.2, 0), radius, 0.18, 0.65, Color("7d8070"), 5)
 		rocks.append({"pos": p, "radius": radius, "height": 0.75})
 		rock.rotation.z = rng.randf_range(-0.3, 0.3)
+
+func _build_details(cooperative: bool = false) -> void:
 	if variant == 0:
-		_build_woodland_details()
+		if cooperative:
+			await _build_woodland_details(true)
+		else:
+			_build_woodland_details()
 	if urban:
-		_build_city()
+		if cooperative:
+			await _build_city(true)
+		else:
+			_build_city()
+
+func _build_finish() -> void:
 	for i in range(clearings.size()):
 		var c = clearings[i]
 		if urban:
@@ -227,16 +257,21 @@ func build() -> void:
 	add_child(officials)
 	officials.build()
 
-func _build_city() -> void:
+func _build_city(cooperative: bool = false) -> void:
 	city = City.new()
 	city.stage = self
 	add_child(city)
-	city.build()
+	if cooperative:
+		await city.build(true)
+	else:
+		city.build()
 
-func _build_terrain() -> void:
+func _build_terrain(cooperative: bool = false) -> void:
 	var st = SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	for z in range(-920, 81, 4):
+		if cooperative and (z + 920) % 64 == 0:
+			await get_tree().process_frame
 		for x in range(-204, 204, 4):
 			# Resolve narrow roadside ditches without subdividing the whole map.
 			var step = 2 if variant == 0 and road_distance(Vector3(x + 2, 0, z + 2)) < 12 else 4
@@ -600,7 +635,7 @@ func _grass_mesh() -> ArrayMesh:
 	st.generate_normals()
 	return st.commit()
 
-func _build_woodland_details() -> void:
+func _build_woodland_details(cooperative: bool = false) -> void:
 	var detail_rng = RandomNumberGenerator.new()
 	detail_rng.seed = 6022026
 	var grass_poses: Array = []
@@ -619,6 +654,8 @@ func _build_woodland_details() -> void:
 	var boulder_poses: Array = []
 	var boulder_colors: Array = []
 	for i in range(30000):
+		if cooperative and i % 400 == 0:
+			await get_tree().process_frame
 		var p = Vector3(detail_rng.randf_range(-145, 145), 0, detail_rng.randf_range(-LENGTH, 0))
 		if not woodland_spot(p):
 			continue
@@ -627,6 +664,8 @@ func _build_woodland_details() -> void:
 		grass_poses.append(Transform3D(Basis(Vector3.UP, detail_rng.randf() * TAU).scaled(Vector3(size * 1.8, size, size * 1.8)), p))
 		grass_colors.append(shared_grass_color(detail_rng.randf()))
 	for i in range(4000):
+		if cooperative and i % 400 == 0:
+			await get_tree().process_frame
 		var along = detail_rng.randf_range(20, LENGTH - 20)
 		var p = at(along) + side(along) * detail_rng.randf_range(13, 125) * (-1 if i % 2 else 1)
 		var radius = detail_rng.randf_range(0.8, 2.4)
@@ -640,6 +679,8 @@ func _build_woodland_details() -> void:
 		if boulder_poses.size() >= 240:
 			break
 	for i in range(1600):
+		if cooperative and i % 400 == 0:
+			await get_tree().process_frame
 		var p = Vector3(detail_rng.randf_range(-135, 135), 0, detail_rng.randf_range(-LENGTH, 0))
 		if not woodland_spot(p):
 			continue
@@ -658,6 +699,8 @@ func _build_woodland_details() -> void:
 	var bush_stem_poses: Array = []
 	var bush_stem_colors: Array = []
 	for i in range(2000):
+		if cooperative and i % 400 == 0:
+			await get_tree().process_frame
 		var p = Vector3(detail_rng.randf_range(-140, 140), 0, detail_rng.randf_range(-LENGTH, 0))
 		var patch = sin(p.x * 0.075 + p.z * 0.027) * sin(p.z * 0.054)
 		if patch < -0.35 or not woodland_spot(p, 1.4) or not rock_hit(p, p, 1.1, false).is_empty():
@@ -707,6 +750,8 @@ func _build_woodland_details() -> void:
 	bush_stem_mesh.rings = 1
 	_detail_batch("ForestBushStems", bush_stem_mesh, bush_stem_poses, bush_stem_colors)
 	for i in range(300):
+		if cooperative and i % 400 == 0:
+			await get_tree().process_frame
 		var along = detail_rng.randf_range(20, LENGTH - 20)
 		var p = at(along) + side(along) * detail_rng.randf_range(10, 38) * (-1 if i % 2 else 1)
 		if not woodland_spot(p) or not rock_hit(p, p, 0.5, false).is_empty():
@@ -728,6 +773,8 @@ func _build_woodland_details() -> void:
 			else:
 				poison_caps[species].append(cap_pose)
 	for i in range(110):
+		if cooperative and i % 400 == 0:
+			await get_tree().process_frame
 		var along = detail_rng.randf_range(20, LENGTH - 20)
 		var p = at(along) + side(along) * detail_rng.randf_range(12, 45) * (-1 if i % 2 else 1)
 		if not woodland_spot(p, 0.8) or not rock_hit(p, p, 0.8, false).is_empty():
