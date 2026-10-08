@@ -26,6 +26,8 @@ static func competition_target(stage: Node3D, progress: float, pace: float = 1.0
 		worst_corner = maxf(worst_corner, angle)
 	var corner_factor = clampf(worst_corner / CORNER_FULL_EFFECT, 0.0, 1.0)
 	var geometry_target = lerpf(MAX_COMPETITION_SPEED, MIN_CORNER_TARGET, pow(corner_factor, 0.75))
+	# Tight village junctions need a lower entry speed than flowing bends.
+	geometry_target = minf(geometry_target, lerpf(MIN_CORNER_TARGET, 7.0, smoothstep(0.7, 1.3, worst_corner))) if worst_corner > 0.7 else geometry_target
 	return clampf(geometry_target * pace, 0.0, MAX_COMPETITION_SPEED)
 
 static func speed_limit(game: Node3D, racer: Dictionary, s: float) -> float:
