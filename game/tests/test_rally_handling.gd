@@ -45,21 +45,24 @@ func tour() -> void:
 			var r = {"node": node, "motion": Motion.new(), "slide": 0.0, "slide_speed": 0.0}
 			var progress = 10.0
 			var max_slide = 0.0
-			for frame in range(2400):
+			for frame in range(4800):
 				var speed = Traffic.recovery_speed(Traffic.competition_target(stage, progress, 1.04, reverse), r)
-				progress += speed / 24.0
+				progress += Handling.advance(stage, progress, speed / 24.0, reverse, r.slide)
 				var station = Stage.LENGTH - progress if reverse else progress
-				var direction = stage.direction(station) * (-1 if reverse else 1)
-				var ahead = stage.direction(station + (-7 if reverse else 7)) * (-1 if reverse else 1)
+				var travel_sign = -1.0 if reverse else 1.0
+				var direction = Handling.direction(stage, station, reverse)
+				var ahead_station = station + travel_sign * 7.0
+				var ahead = Handling.direction(stage, ahead_station, reverse)
 				var yaw = atan2(-direction.x, -direction.z)
-				var bend = wrapf(atan2(-ahead.x, -ahead.z) - yaw, -PI, PI) / 7.0
+				var bend = wrapf(atan2(-ahead.x, -ahead.z) - yaw, -PI, PI) / maxf((Handling.path(stage, ahead_station) - Handling.path(stage, station)).length(), 1.0)
 				Handling.slide(r, bend, speed, stage.grip(node.position), 1.0 / 24.0)
 				var height = node.position.y
-				node.position = stage.at(station) + direction.cross(Vector3.UP).normalized() * r.slide
+				node.position = Handling.path(stage, station) + direction.cross(Vector3.UP).normalized() * r.slide
 				node.position.y = height
 				r.motion.suspension(node, stage, 1.0 / 24.0, yaw)
 				max_slide = maxf(max_slide, absf(r.slide))
 				if max_slide > 3.4 or progress > 835:
+					if max_slide > 3.4: print("UNCAUGHT SLIDE: station=", station, " speed=",speed," bend=",bend)
 					break
 			check(progress > 830 and max_slide < 3.4, "driver catches slides across stage %d, reverse=%s (maximum %.2f m)" % [variant, reverse, max_slide])
 			node.free()

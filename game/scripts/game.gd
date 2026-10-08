@@ -1622,11 +1622,10 @@ func race_station(point: Vector3) -> float:
 
 func race_at(progress: float) -> Vector3:
 	var station = clampf(progress, 0, Stage.LENGTH)
-	return stage.at(Stage.LENGTH - station if course.pass_index == 2 else station)
+	return RallyHandling.path(stage, Stage.LENGTH - station if course.pass_index == 2 else station)
 
 func race_direction(progress: float) -> Vector3:
-	var station = clampf(progress, 0, Stage.LENGTH)
-	return -stage.direction(Stage.LENGTH - station) if course.pass_index == 2 else stage.direction(station)
+	return RallyHandling.direction(stage, Stage.LENGTH - progress if course.pass_index == 2 else progress, course.pass_index == 2)
 
 func race_side(progress: float) -> Vector3:
 	return race_direction(progress).cross(Vector3.UP).normalized()
@@ -1667,6 +1666,13 @@ func spawn_racer(forced: String = "") -> void:
 	toast("Приближается %s, номер %d!" % [node.get_meta("model"), node.get_meta("number")])
 
 func _update_racers(delta: float) -> void:
+	var remaining = maxf(delta, 0)
+	while remaining > 0.000001:
+		var step = minf(remaining, 1.0 / 60.0)
+		_update_racers_step(step)
+		remaining -= step
+
+func _update_racers_step(delta: float) -> void:
 	var to_remove: Array[Dictionary] = []
 	var nearest: Node3D = null
 	var nearest_d = 9999.0
@@ -1683,12 +1689,11 @@ func _update_racers(delta: float) -> void:
 			racer.avoiding = traffic.avoiding
 			racer.avoid_line = traffic.line
 			var actual_speed = move_toward(float(racer.get("drive_speed", race_speed(racer.s))), float(traffic.speed), delta * (Traffic.BRAKE if traffic.speed < racer.get("drive_speed", 0) else 8.0))
-			# The braking envelope is also a hard speed cap for long frame gaps.
-			actual_speed = minf(actual_speed, float(traffic.speed)) if traffic.speed < actual_speed else actual_speed
 			actual_speed = minf(actual_speed, float(traffic.get("advance", INF)) / maxf(delta, 0.001))
 			racer.drive_speed = actual_speed
 			var race_speed = maxf(actual_speed, 0.1)
-			racer.s += delta * actual_speed
+			var advance = RallyHandling.advance(stage, racer.s, delta * actual_speed, course.pass_index == 2, racer.line + racer.slide)
+			racer.s += minf(advance, float(traffic.get("advance", INF)))
 			# A crew braking just short of lateral clearance must finish its slow
 			# manoeuvre; tying all steering motion to zero forward speed deadlocks it.
 			var lateral_rate = minf(2.8, actual_speed * 0.14)
@@ -1699,7 +1704,7 @@ func _update_racers(delta: float) -> void:
 			var s: float = racer.s
 			var road_yaw = atan2(-race_direction(s).x, -race_direction(s).z)
 			var ahead = race_direction(s + 7)
-			var bend = wrapf(atan2(-ahead.x, -ahead.z) - road_yaw, -PI, PI) / 7.0
+			var bend = wrapf(atan2(-ahead.x, -ahead.z) - road_yaw, -PI, PI) / maxf(Vector2((race_at(s + 7) - race_at(s)).x, (race_at(s + 7) - race_at(s)).z).length(), 1.0)
 			var lateral_accel = 0.0
 			if not service:
 				lateral_accel = RallyHandling.slide(racer, bend, race_speed, stage.grip(node.position), delta)
@@ -1708,7 +1713,9 @@ func _update_racers(delta: float) -> void:
 			node.position.y = height
 			var movement = node.position - racer.previous
 			var path_yaw = atan2(-movement.x, -movement.z) if Vector2(movement.x, movement.z).length() > 0.02 else road_yaw
-			racer.motion.suspension(node, stage, delta, path_yaw + float(racer.get("drift_yaw", 0.0)), lateral_accel)
+			var desired_yaw = path_yaw + float(racer.get("drift_yaw", 0.0))
+			var yaw = node.rotation.y + clampf(wrapf(desired_yaw - node.rotation.y, -PI, PI), -2.5 * delta, 2.5 * delta)
+			racer.motion.suspension(node, stage, delta, yaw, lateral_accel)
 			if not service and ((s >= racer.focus and racer.kind != "pass") or absf(racer.slide) > 3.4 or absf(racer.line + racer.slide) > Stage.WIDTH * 0.5 + 0.6):
 				racer.state = "offroad"
 				racer.age = 0
