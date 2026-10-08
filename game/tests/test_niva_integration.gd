@@ -23,6 +23,20 @@ func run() -> void:
 	check(body != null and body.mesh != null and body.mesh.get_surface_count() > 0, "static body preserves its materials and geometry")
 	check(door != null and door.mesh != null and door.mesh.get_surface_count() > 0, "rear hatch is a separate mesh with rear glass")
 	check(hinge != null and hinge.get_child_count() == 1, "no rear passenger panels or wheels are parented to trunk hinge")
+	var wheels: Array[Node3D] = []
+	for part in car.get_node("NivaStaticParts").get_children():
+		if part.has_meta("rolling_wheel_radius"):
+			wheels.append(part)
+	check(wheels.size() == 8, "four Niva wheels each have rubber and metal meshes with rotating pivots")
+	if not wheels.is_empty():
+		Props.animate_wheels(car)
+		var wheel_start: Quaternion = wheels[0].quaternion
+		car.position.z -= 1.0
+		Props.animate_wheels(car)
+		check(not wheels[0].quaternion.is_equal_approx(wheel_start), "Niva wheels turn when driving forwards")
+		car.position.z += 1.0
+		Props.animate_wheels(car)
+		check(wheels[0].quaternion.is_equal_approx(wheel_start), "Niva wheel rotation reverses while backing up")
 	if hinge != null and door != null:
 		check(hinge.position.distance_to(NivaAsset.HINGE) < 0.001, "rear door hinge located at upper edge of tailgate")
 		var door_bounds = door.mesh.get_aabb()
