@@ -3,6 +3,8 @@ extends "res://scripts/city.gd"
 const VILLAGE_START = 300.0
 const VILLAGE_END = 570.0
 var vine_count = 0
+var lavender_count = 0
+var lavender_positions: Array[Vector3] = []
 var village_houses = 0
 var village_cobblestones = 0
 var sidewalk_segments = 0
@@ -349,6 +351,10 @@ func _village_sign(s: float, side_value: float) -> void:
 	village_sign_count += 1
 
 func _vineyards(cooperative: bool = false) -> void:
+	if cooperative:
+		await _lavender_fields(true)
+	else:
+		_lavender_fields()
 	var leaves: Array = []
 	var leaf_colors: Array = []
 	var fruit: Array = []
@@ -356,7 +362,7 @@ func _vineyards(cooperative: bool = false) -> void:
 	var sphere = SphereMesh.new()
 	sphere.radial_segments = 8
 	sphere.rings = 3
-	for start in [18, 585]:
+	for start in [585]:
 		for side_value in [-1.0, 1.0]:
 			for row in range(18):
 				if cooperative:
@@ -402,6 +408,56 @@ func _vineyards(cooperative: bool = false) -> void:
 				_batch(root, Transform3D.IDENTITY)
 	stage._detail_batch("VineyardLeaves", sphere, leaves, leaf_colors)
 	stage._detail_batch("VineyardGrapes", sphere, fruit, fruit_colors)
+
+# Low flowering rows replace the start-side vines; no trellises or grapes.
+func _lavender_fields(cooperative: bool = false) -> void:
+	var foliage: Array = []
+	var foliage_colors: Array = []
+	var flowers: Array = []
+	var flower_colors: Array = []
+	var stems: Array = []
+	var stem_colors: Array = []
+	var leaf_mesh = SphereMesh.new()
+	leaf_mesh.radial_segments = 6
+	leaf_mesh.rings = 3
+	var flower_mesh = SphereMesh.new()
+	flower_mesh.radial_segments = 6
+	flower_mesh.rings = 3
+	var stem_mesh = CylinderMesh.new()
+	stem_mesh.bottom_radius = 1.0
+	stem_mesh.top_radius = 0.75
+	stem_mesh.height = 1.0
+	stem_mesh.radial_segments = 5
+	stem_mesh.rings = 1
+	for side_value in [-1.0, 1.0]:
+		for row in range(18):
+			if cooperative:
+				await get_tree().process_frame
+			for station in range(18, 286, 2):
+				var s = float(station) + (0.4 if row % 2 else 0.0)
+				var p = stage.village_main_at(s) + stage.village_main_side(s) * side_value * (13.0 + row * 4.0)
+				var blocked = stage.road_distance(p) < 6.0 or -p.z < 12.0 or -p.z >= VILLAGE_START - 10.0
+				for parking in stage.clearings:
+					blocked = blocked or stage.flat(p).distance_to(stage.flat(parking)) < 10.0
+				if blocked:
+					continue
+				p.y = stage.terrain_surface_height(p) - 0.015
+				lavender_positions.append(p)
+				lavender_count += 1
+				var yaw = atan2(-stage.village_main_direction(s).x, -stage.village_main_direction(s).z)
+				foliage.append(Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3(0.62, 0.30, 0.90)), p + Vector3(0, 0.15, 0)))
+				foliage_colors.append(Color("617660").lightened(float((station + row) % 5) * 0.015))
+				for spike in range(5):
+					var angle = spike * TAU / 5.0 + row * 0.7
+					var base = p + Vector3(cos(angle) * 0.19, 0, sin(angle) * 0.28)
+					var height = 0.52 + float(posmod(station + row + spike, 5)) * 0.035
+					stems.append(Transform3D(Basis.from_scale(Vector3(0.012, height, 0.012)), base + Vector3(0, height * 0.5, 0)))
+					stem_colors.append(Color("697b51"))
+					flowers.append(Transform3D(Basis.from_scale(Vector3(0.13, 0.26, 0.13)), base + Vector3(0, height, 0)))
+					flower_colors.append(Color("8053a6").lerp(Color("b28bc9"), float(posmod(station * 3 + row + spike, 7)) / 9.0))
+	stage._detail_batch("LavenderFoliage", leaf_mesh, foliage, foliage_colors)
+	stage._detail_batch("LavenderStems", stem_mesh, stems, stem_colors)
+	stage._detail_batch("LavenderFlowers", flower_mesh, flowers, flower_colors)
 
 func _roadside_station_allowed(s: float, buffer: float = 8.0) -> bool:
 	return s < VILLAGE_START - buffer or s > VILLAGE_END + buffer
