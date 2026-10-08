@@ -157,6 +157,7 @@ try {
   await until(()=>latest('guest').pending===0 && !Object.hasOwn(latest('host').driving,previousPlayer),'departed solver removed and fresh input queue acknowledged');
   assert.equal(latest('guest').condition,100);
   assert.equal(errors.length,0);
+  if(web)assert.equal(latest("guest").safe_area_ready,true,"mobile Web client reads safe area through the compiled JavaScript interface");
   console.log(`PASS: ${web?'two Chromium clients (mobile guest)':'two Godot clients'}: delayed HTTP, 2 lost responses, prediction, braking, convergence, pause/resume, recovery, exit/re-entry, leave/rejoin`);
 } catch (error) {
   console.error(logs.filter(x => !x.includes('NETWORK_SAMPLE ')).slice(-100).join('\n'));

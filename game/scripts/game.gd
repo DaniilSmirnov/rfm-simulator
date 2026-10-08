@@ -354,8 +354,12 @@ func update_mobile_safe_area(delta: float) -> void:
 	if mobile_safe_timer > 0.0:
 		return
 	mobile_safe_timer = 0.25
-	var data = JSON.parse_string(str(JavaScriptBridge.eval("JSON.stringify(window.RallyViewport?.snapshot() || null)")))
-	if not data is Dictionary:
+	# The minimal Web template disables eval. Access the interface directly.
+	var bridge = JavaScriptBridge.get_interface("RallyViewport")
+	if bridge == null:
+		return
+	var data = bridge.snapshot()
+	if data == null:
 		return
 	var extent = get_viewport().get_visible_rect().size
 	var ratio = extent / Vector2(maxf(float(data.width), 1.0), maxf(float(data.height), 1.0))
