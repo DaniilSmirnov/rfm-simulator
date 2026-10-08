@@ -163,7 +163,7 @@ func gravel_relief(pos: Vector3, s: float) -> float:
 	var blend = smoothstep(386.0, 398.0, s) * (1.0 - smoothstep(474.0, 484.0, s))
 	var bank = lateral * sin(s * 0.095) * 0.10
 	var bumps = sin(s * 1.8) * 0.08 + sin(s * 0.77 + lateral * 1.5) * 0.10
-	var ramps = gravel_profile(s, 423.0, 5.0) * 0.90 + gravel_profile(s, 450.0, 4.0) * 0.65
+	var ramps = gravel_profile(s, 423.0, 7.0) * 1.15 + gravel_profile(s, 450.0, 6.0) * 0.85
 	var wheel_rut = exp(-pow((absf(lateral) - 0.80) / 0.24, 2.0))
 	var ruts = -wheel_rut * (0.09 + 0.04 * sin(s * 0.6))
 	var puddles = -gravel_profile(s, 407.0, 2.2) * 0.13 * exp(-pow((lateral - 0.5) / 0.7, 2.0))
@@ -246,6 +246,16 @@ func ground(pos: Vector3) -> float:
 				height = lerpf(height, trail_sample.height, blend)
 	return height
 
+func village_country_relief(s: float) -> float:
+	return gravel_profile(s, 94.0, 16.0) * 0.65 - gravel_profile(s, 126.0, 14.0) * 0.35 + gravel_profile(s, 224.0, 18.0) * 0.80 + gravel_profile(s, 620.0, 17.0) * 0.70 + gravel_profile(s, 748.0, 15.0) * 0.95 - gravel_profile(s, 786.0, 16.0) * 0.35
+
+func village_forest_microrelief(pos: Vector3) -> float:
+	# Geographic mask, independent of nearest route segment: no switching cliffs.
+	var s = -pos.z
+	var edge = absf(pos.x - village_main_at(clampf(s, 0, LENGTH)).x)
+	var mask = smoothstep(270.0, 310.0, s) * (1.0 - smoothstep(570.0, 620.0, s)) * smoothstep(36.0, 58.0, edge)
+	return (sin(pos.x * 0.13) * sin(pos.z * 0.15) * 0.28 + sin(pos.x * 0.31 + pos.z * 0.16) * 0.14) * mask
+
 func village_hill_height(pos: Vector3) -> float:
 	var station = clampf(-pos.z, 0.0, LENGTH - 0.001)
 	var axis = village_main_at(station)
@@ -254,8 +264,8 @@ func village_hill_height(pos: Vector3) -> float:
 	var hillside = (sqrt(excess * excess + 1296.0) - 36.0) * 0.045
 	var village_blend = smoothstep(250.0, 320.0, station) * (1.0 - smoothstep(550.0, 640.0, station))
 	var road_blend = smoothstep(190.0, 300.0, station) * (1.0 - smoothstep(570.0, 710.0, station))
-	var axis_height = axis.y - (1.0 - road_blend) * (sin(station / 14.0) * 0.32 + gravel_profile(station, 178.0, 9.0) * 1.1 + gravel_profile(station, 686.0, 6.5) * 1.25)
-	return axis_height + hillside * (1.0 - village_blend) + sin(pos.x * 0.016 + pos.z * 0.010) * minf(hillside * 0.08, 0.20) * (1.0 - village_blend)
+	var axis_height = axis.y - (1.0 - road_blend) * (sin(station / 14.0) * 0.32 + gravel_profile(station, 178.0, 9.0) * 1.1 + gravel_profile(station, 686.0, 6.5) * 1.25 + village_country_relief(station))
+	return axis_height + hillside * (1.0 - village_blend) + sin(pos.x * 0.016 + pos.z * 0.010) * minf(hillside * 0.08, 0.20) * (1.0 - village_blend) + village_forest_microrelief(pos)
 
 # Trees must touch the *rendered* terrain, not the continuous ground()
 # function. Terrain is triangulated in 4 m cells (2 m near forest roads)
@@ -266,26 +276,36 @@ func village_hill_height(pos: Vector3) -> float:
 # Otherwise the ground() midpoint can be above/below the straight 4 m edge,
 # creating visible cracks (and floating trees).
 func terrain_tile_step(cell_x: float, cell_z: float) -> float:
-	return 2.0 if variant == 0 and road_distance(Vector3(cell_x + 2.0, 0, cell_z + 2.0)) < 12.0 else 4.0
+	var p = Vector3(cell_x + 2.0, 0, cell_z + 2.0)
+	var nearest = urban_nearest(p) if urban else {}
+	if urban and nearest.distance < road_width(nearest.s) * 0.5 + 4.0:
+		return 1.0
+	return 2.0 if (variant == 0 or urban) and road_distance(p) < 12.0 else 4.0
+
+func terrain_base_vertex_height(x: float, z: float) -> float:
+	var p = Vector3(x, 0, z)
+	var margin = 0.25
+	if urban:
+		var nearest = urban_nearest(p)
+		margin = lerpf(0.20, 0.25, smoothstep(road_width(nearest.s) * 0.5, road_width(nearest.s) * 0.5 + 3.0, nearest.distance))
+	return ground(p) - margin
 
 func terrain_vertex_height(x: float, z: float) -> float:
 	if desert:
 		return canyon.base_ground(self, Vector3(x, 0, z)) - 0.25
-	var value = ground(Vector3(x, 0, z)) - 0.25
-	if variant != 0:
+	var value = terrain_base_vertex_height(x, z)
+	if variant != 0 and not urban:
 		return value
 	var cell_x = floorf(x / 4.0) * 4.0
 	var cell_z = floorf(z / 4.0) * 4.0
-	var middle_x = is_equal_approx(x - cell_x, 2.0)
-	var middle_z = is_equal_approx(z - cell_z, 2.0)
-	if middle_x and not middle_z:
-		# The edge runs in X; the two touching tiles sit across Z.
-		if terrain_tile_step(cell_x, z - 4.0) == 4.0 or terrain_tile_step(cell_x, z) == 4.0:
-			return (ground(Vector3(cell_x, 0, z)) + ground(Vector3(cell_x + 4.0, 0, z))) * 0.5 - 0.25
-	elif middle_z and not middle_x:
-		# The edge runs in Z; the two touching tiles sit across X.
-		if terrain_tile_step(x - 4.0, cell_z) == 4.0 or terrain_tile_step(x, cell_z) == 4.0:
-			return (ground(Vector3(x, 0, cell_z)) + ground(Vector3(x, 0, cell_z + 4.0))) * 0.5 - 0.25
+	if not is_equal_approx(x, cell_x) and is_equal_approx(z, cell_z):
+		var edge_step = maxf(terrain_tile_step(cell_x, z - 4), terrain_tile_step(cell_x, z))
+		var begin = floorf(x / edge_step) * edge_step
+		return lerpf(terrain_base_vertex_height(begin, z), terrain_base_vertex_height(begin + edge_step, z), (x - begin) / edge_step)
+	elif not is_equal_approx(z, cell_z) and is_equal_approx(x, cell_x):
+		var edge_step = maxf(terrain_tile_step(x - 4, cell_z), terrain_tile_step(x, cell_z))
+		var begin = floorf(z / edge_step) * edge_step
+		return lerpf(terrain_base_vertex_height(x, begin), terrain_base_vertex_height(x, begin + edge_step), (z - begin) / edge_step)
 	return value
 
 func terrain_surface_height(pos: Vector3) -> float:
@@ -566,6 +586,19 @@ func _build_road() -> void:
 					for v in [a, b, c, b, d, c]:
 						st.set_color(road_surface_color(v, s))
 						st.add_vertex(v)
+				if urban:
+					# A visible earth shoulder closes the road-to-terrain seam.
+					# Keep the analytical tyre-contact surface unchanged.
+					for edge_side in [-1.0, 1.0]:
+						var a = road_surface_vertex(begin, edge_side * road_width(s) * 0.5)
+						var b = road_surface_vertex(end, edge_side * road_width(s) * 0.5)
+						var c = a
+						var d = b
+						c.y = terrain_surface_height(c)
+						d.y = terrain_surface_height(d)
+						for v in ([a, c, b, b, c, d] if edge_side > 0 else [a, b, c, b, d, c]):
+							st.set_color(road_surface_color(v, s).darkened(0.12))
+							st.add_vertex(v)
 		# Broken muddy wheel tracks, shallow puddles.
 		if not urban and not desert and i % 12 == 0:
 			for offset in [-1.0, 1.0]:
@@ -911,7 +944,7 @@ func woodland_spot(pos: Vector3, padding: float = 0.0) -> bool:
 	return true
 
 func _detail_batch(name: String, mesh: Mesh, poses: Array, colors: Array, indices: Array = []) -> void:
-	if name in ["LavenderFoliage", "LavenderStems", "LavenderFlowers", "VillageThujaLower", "VillageThujaMiddle", "VillageThujaCrown", "ForestGrass", "ForestBushes", "ForestBerryBushes", "ForestBerries", "ForestBushStems", "VineyardGrapes", "VineyardLeaves", "VineyardRoadsideGrass", "VineyardRoadsideStones", "VineyardRoadsideBushes", "VillageForestTreeLayer0", "VillageForestTreeLayer1", "VillageForestTreeLayer2", "VillageForestTreeLayer3", "VillageForestGrass", "VillageForestStones", "VillageForestBoulders", "VillageForestBushes", "VillageForestBerryBushes", "VillageForestBerries", "VillageGrass", "VillageStones"]:
+	if (urban and name in ["MushroomCaps", "FlyAgaricCaps", "ToadstoolCaps", "MushroomStems"]) or name in ["LavenderFoliage", "LavenderStems", "LavenderFlowers", "VillageThujaLower", "VillageThujaMiddle", "VillageThujaCrown", "ForestGrass", "ForestBushes", "ForestBerryBushes", "ForestBerries", "ForestBushStems", "VineyardGrapes", "VineyardLeaves", "VineyardRoadsideGrass", "VineyardRoadsideStones", "VineyardRoadsideBushes", "VillageForestTreeLayer0", "VillageForestTreeLayer1", "VillageForestTreeLayer2", "VillageForestTreeLayer3", "VillageForestGrass", "VillageForestStones", "VillageForestBoulders", "VillageForestBushes", "VillageForestBerryBushes", "VillageForestBerries", "VillageGrass", "VillageStones"]:
 		var cells = {}
 		for i in range(poses.size()):
 			var origin: Vector3 = poses[i].origin
@@ -931,8 +964,8 @@ func _detail_batch(name: String, mesh: Mesh, poses: Array, colors: Array, indice
 	mat.vertex_color_is_srgb = true
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	var mm = MultiMesh.new()
-	if name in ["FlyAgaricCaps", "ToadstoolCaps"]:
-		mat.albedo_texture = RallyProps.MUSHROOM_TEXTURES["fly_agaric" if name == "FlyAgaricCaps" else "toadstool"]
+	if name.begins_with("FlyAgaricCaps") or name.begins_with("ToadstoolCaps"):
+		mat.albedo_texture = RallyProps.MUSHROOM_TEXTURES["fly_agaric" if name.begins_with("FlyAgaricCaps") else "toadstool"]
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.use_colors = true
 	mm.mesh = mesh
@@ -956,6 +989,8 @@ func _detail_batch(name: String, mesh: Mesh, poses: Array, colors: Array, indice
 	if name.begins_with("GrassTile") or name.contains("_Tile_"):
 		node.visibility_range_end = 70 if name.begins_with("VineyardGrapes") else (110 if name.begins_with("LavenderFlowers") or name.begins_with("LavenderStems") else 160)
 		node.visibility_range_end_margin = 15
+		if urban and name.begins_with("Mushroom") or urban and name.begins_with("FlyAgaric") or urban and name.begins_with("Toadstool"):
+			node.visibility_range_end = 70
 	node.multimesh = mm
 	if capture_bake_buffers:
 		BakedVillage.capture_instances(node, poses, colors, center)
@@ -1156,7 +1191,7 @@ func village_main_at(s: float) -> Vector3:
 	var village_blend = smoothstep(190.0, 300.0, s) * (1.0 - smoothstep(570.0, 710.0, s))
 	var country_x = sin(s / 85.0) * 34.0 + sin(s / 43.0) * 10.0
 	var village_x = sin((s - 300.0) / 100.0) * 14.0
-	var height = 2.0 + (1.0 - village_blend) * (7.0 + sin(s / 95.0) * 3.0 + s * 0.004 + sin(s / 14.0) * 0.32 + gravel_profile(s, 178.0, 9.0) * 1.1 + gravel_profile(s, 686.0, 6.5) * 1.25)
+	var height = 2.0 + (1.0 - village_blend) * (7.0 + sin(s / 95.0) * 3.0 + s * 0.004 + sin(s / 14.0) * 0.32 + gravel_profile(s, 178.0, 9.0) * 1.1 + gravel_profile(s, 686.0, 6.5) * 1.25 + village_country_relief(s))
 	return Vector3(lerpf(country_x, village_x, village_blend), height, -s)
 
 func village_main_direction(s: float) -> Vector3:
@@ -1176,16 +1211,28 @@ func urban_at(s: float) -> Vector3:
 	var last_side = village_main_side(500.0)
 	var stations = [370.0, 382.0, 402.0, 418.0, 435.0, 454.0, 474.0, 488.0, 500.0]
 	var route = [
-		first, first + first_side * 47.0, first + first_side * 115.0,
-		village_main_at(410.0) + village_main_side(410.0) * 117.0,
+		first, first + first_side * 47.0, first + first_side * 96.0 + village_main_direction(370.0) * 28.0,
+		village_main_at(420.0) + village_main_side(420.0) * 117.0,
 		village_main_at(435.0) + village_main_side(435.0) * 115.0,
 		village_main_at(460.0) + village_main_side(460.0) * 118.0,
-		last + last_side * 115.0, last + last_side * 47.0, last
+		last + last_side * 96.0 - village_main_direction(500.0) * 28.0, last + last_side * 47.0, last
 	]
 	for i in range(stations.size() - 1):
 		if s <= stations[i + 1]:
 			var t = smoothstep(stations[i], stations[i + 1], s)
 			var p: Vector3 = route[i].lerp(route[i + 1], t)
+			if i >= 1 and i <= 6:
+				# Smooth forest bends instead of stopped straight-line corners.
+				t = (s - stations[i]) / (stations[i + 1] - stations[i])
+				var a: Vector3 = route[i]
+				var b: Vector3 = route[i + 1]
+				var start_tangent: Vector3 = (route[i + 1] - route[i - 1]) * 0.5
+				var end_tangent: Vector3 = (route[i + 2] - route[i]) * 0.5
+				if i == 1:
+					start_tangent = first_side * a.distance_to(b)
+				if i == 6:
+					end_tangent = -last_side * a.distance_to(b)
+				p = a * (2*t*t*t - 3*t*t + 1) + start_tangent * (t*t*t - 2*t*t + t) + b * (-2*t*t*t + 3*t*t) + end_tangent * (t*t*t - t*t)
 			p.y += (sin(s * 0.12) * 0.55 + sin(s * 0.037) * 0.75) * smoothstep(402.0, 418.0, s) * (1.0 - smoothstep(454.0, 474.0, s))
 			return p
 	return last

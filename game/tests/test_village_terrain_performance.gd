@@ -45,6 +45,16 @@ func run():
  check(smooth,'distant hills have no nearest-road cliffs (max half-metre rise %.3f m)' % worst)
  var old_cliff = Vector3(144,0,-228)
  check(absf(stage.ground(old_cliff)-stage.ground(old_cliff+Vector3(0,0,0.5)))<0.10,'reported twenty-metre terrain jump is removed')
+ var contact = true
+ var largest_gap = 0.0
+ for s in range(0, 840, 2):
+  if stage.village(s) and not stage.village_forest_detour(s): continue
+  for lateral in [-1.4, 0.0, 1.4]:
+   var road = stage.road_surface_vertex(s, lateral)
+   var gap = road.y-stage.terrain_surface_height(road)
+   largest_gap = maxf(largest_gap, absf(gap))
+   contact = contact and gap>0 and gap<0.50
+ check(contact,'road follows refined terrain (largest gap %.3f m)' % largest_gap)
  stage._build_terrain()
  var tiles = stage.find_children('TerrainTile_*','MeshInstance3D',false,false)
  var triangles = 0
@@ -52,7 +62,7 @@ func run():
  for tile in tiles:
   triangles += tile.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX].size()/3
   local_bounds = local_bounds and tile.mesh.get_aabb().size.x<=64.01 and tile.mesh.get_aabb().size.z<=64.01
- check(tiles.size()>80 and local_bounds and triangles==51204,'terrain tiles preserve every triangle with local culling bounds')
+ check(tiles.size()>80 and local_bounds and triangles>51204 and triangles<100000,'refined roadside terrain stays within geometry budget and local culling bounds')
  stage.free()
  print('VILLAGE TERRAIN/PERFORMANCE RESULT: %d failures' % failures)
  quit(1 if failures else 0)
