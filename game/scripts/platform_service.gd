@@ -101,6 +101,7 @@ func _invite_response(result: int, code: int, _headers: PackedStringArray, body:
 		invite_feedback.emit("VK вернул некорректный ответ.")
 		return
 	match str(parsed.result.get("status", "")):
+		"opened": invite_feedback.emit("Выбери друга в открывшемся VK-окне или отправь ссылку на комнату.")
 		"sent": invite_feedback.emit("Приглашение отправлено! Друг войдёт сразу в эту комнату.")
 		"cancel": invite_feedback.emit("Приглашение отменено.")
 		_: invite_feedback.emit("Не удалось отправить приглашение.")
