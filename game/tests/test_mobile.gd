@@ -57,6 +57,7 @@ func run() -> void:
 	check(game.mobile_top.global_position.y >= safe.position.y and game.mobile_bottom.global_position.x >= safe.position.x, "HUD respects safe area origin")
 	check(game.crosshair.get_global_rect().get_center().distance_to(game.get_viewport().get_visible_rect().size / 2) < 0.1, "aim stays at camera centre when safe area moves HUD")
 	check(safe.encloses(game.mobile_bottom.get_global_rect()), "bottom status panel fits safe area with startup message")
+	check(c.LOOK_RADIUS == c.STICK_RADIUS and c.look_center.y == c.stick_center.y and is_equal_approx(c.size.x - c.look_center.x, c.stick_center.x), "camera and movement sticks have matching size and mirrored placement")
 	check(game.mobile_bottom.anchor_top == 1 and game.mobile_bottom.anchor_bottom == 1, "status HUD anchored at bottom")
 	check(Rect2(Vector2.ZERO, c.size).encloses(Rect2(c.look_center - Vector2.ONE * c.LOOK_RADIUS, Vector2.ONE * c.LOOK_RADIUS * 2)), "look stick fits safe area")
 	for b in c.buttons:
