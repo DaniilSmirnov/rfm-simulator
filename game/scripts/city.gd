@@ -453,6 +453,8 @@ func apply_snapshot(data: Array) -> void:
 
 func _batch(parent: Node3D, pose: Transform3D) -> void:
 	for child in parent.get_children():
+		if child.has_meta("unbatched"):
+			continue
 		if child is RigidBody3D or child is StaticBody3D:
 			continue
 		if child is MeshInstance3D:

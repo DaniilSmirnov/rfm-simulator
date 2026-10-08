@@ -32,6 +32,15 @@ func run() -> void:
 	check(lavender_clear, "lavender stays before village and leaves the road clear")
 	var grape_positions = stage.collectibles.filter(func(item): return item.get("name", "") == "виноград")
 	check(not grape_positions.is_empty() and stage.find_children("VineyardRow_18_*", "Node3D", true, false).is_empty() and not stage.find_children("VineyardRow_585_*", "Node3D", true, false).is_empty(), "grapes remain only in finish-side vineyards")
+	var bell = stage.city.bell
+	var saved_walker: Vector3 = game.walker
+	game.walker = bell.handle_position() - Vector3(0.8, 0.4, 0)
+	game._update_camera(1)
+	game.camera.look_at(bell.handle_position())
+	check(game.interaction.current().get("action", "") == "church_bell", "aiming at rope offers church bell interaction")
+	game.interaction.activate()
+	check(bell.serial == 1, "F interaction rings bell")
+	game.walker = saved_walker
 	check(stage.city.church_square_cobblestones >= 180 and stage.get_node_or_null("VillageChurch/VillageChurchSquare") != null, "church forecourt is fully paved with cobblestones")
 	check(not stage.city.village_detail_allowed(stage.city.church_square_center), "church cobblestone square rejects grass and loose stones")
 	check(stage.get_node_or_null("VillageCemetery") != null and stage.city.cemetery_grave_count == 28, "forest behind church contains an open cemetery with ordered graves")

@@ -103,6 +103,30 @@ func run() -> void:
 	check(walking_game.jump_height == 0, "falling player lands on terrain")
 	var deck: Vector3 = church.transform * Vector3(-1, 24.1, -11.1)
 	check(is_equal_approx(stage.ground(deck), stage.ground(Vector3(deck.x, 0, deck.z))), "elevated walking floors do not change vehicle terrain")
+	# Repeated fall queries must never accumulate height or launch the walker.
+	for point in [Vector3(0, 20, -11.1), Vector3(1.45, 23.8, -11.1), Vector3(-1, 24.1, -11.1)]:
+		walking_game.walker = church.transform * point
+		walking_game.jump_height = 0
+		walking_game.jump_velocity = 0
+		var initial = walking_game.walker.y
+		var bounded = true
+		for frame in range(240):
+			walking_game._walk(1.0 / 60)
+			bounded = bounded and walking_game.walker.y <= initial + 0.45
+		check(bounded, "falling inside tower never accumulates upward displacement")
+	var tread: Vector3 = church.transform * Vector3(-1.45, 0.1, -12.96)
+	check(is_equal_approx(city.walking_floor(tread, tread.y), church.position.y + 0.25), "stair support matches visible tread top instead of sinking into mesh")
+	var bell = city.bell
+	check(bell.rope != null and is_instance_valid(bell.rope), "animated bell rope survives village batching")
+	check(not bell.pull(Vector3.ZERO), "bell rejects remote interaction")
+	check(bell.pull(bell.handle_position()), "nearby player can pull bell rope")
+	check(not bell.pull(bell.handle_position()), "bell has a cooldown")
+	bell._process(0.15)
+	check(absf(bell.pivot.rotation.z) > 0.05, "bell swings after pulling")
+	var previous_serial = bell.serial
+	bell.apply_snapshot({"serial": previous_serial, "elapsed": 0})
+	check(bell.elapsed > 0, "duplicate network snapshots do not restart ringing")
+	check(bell.audio.stream.data.size() > 0, "bell contains original PCM audio")
 	walking_game.free()
 	stage.queue_free()
 	await process_frame

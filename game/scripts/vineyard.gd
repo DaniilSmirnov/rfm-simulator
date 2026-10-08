@@ -32,6 +32,7 @@ var tree_positions: Array[Vector3] = []
 var village_prop_count = 0
 var sidewalk_poses: Array[Transform3D] = []
 var interior_footprints: Array[Dictionary] = []
+var bell: Node3D
 var walk_surfaces: Array[Dictionary] = []
 var viewpoints: Array[Dictionary] = []
 const Interiors = preload("res://scripts/village_interiors.gd")
@@ -911,7 +912,11 @@ func walking_floor(pos: Vector3, feet_height: float) -> float:
 		var local: Vector3 = surface.inverse * pos
 		if absf(local.x) > surface.half.x or absf(local.z) > surface.half.y:
 			continue
-		var height: float = surface.pose.origin.y + surface.rise * (local.z / (surface.half.y * 2.0) + 0.5)
+		var progress = clampf(local.z / (surface.half.y * 2.0) + 0.5, 0.0, 1.0)
+		var steps = int(surface.get("steps", 0))
+		if steps > 0:
+			progress = ceilf(progress * steps) / steps
+		var height: float = surface.pose.origin.y + surface.rise * progress
 		if height <= feet_height + 0.45:
 			result = maxf(result, height)
 	return result if is_finite(result) else stage.ground(pos)

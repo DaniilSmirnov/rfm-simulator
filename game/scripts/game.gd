@@ -1124,6 +1124,13 @@ func contact_blocked(start: Vector3, end: Vector3, driving: bool) -> bool:
 	return false
 
 func _walk(delta: float) -> void:
+	var remaining = maxf(delta, 0.0)
+	while remaining > 0.000001:
+		var step = minf(remaining, 1.0 / 60.0)
+		_walk_step(step)
+		remaining -= step
+
+func _walk_step(delta: float) -> void:
 	if beers >= 30 or seated:
 		return
 	var motion = Vector2(Input.get_axis("left", "right"), Input.get_axis("forward", "back"))
@@ -1135,15 +1142,15 @@ func _walk(delta: float) -> void:
 	next.z = clampf(next.z, -Stage.LENGTH + 5, 10)
 	var old_floor = walker.y - jump_height
 	var floor_height = stage.city.walking_floor(next, walker.y) if stage.urban and stage.city.has_method("walking_floor") else stage.ground(next)
-	next.y = maxf(next.y, floor_height + jump_height)
+	next.y = floor_height if jump_height <= 0 and floor_height >= old_floor - 0.45 else walker.y
 	var hit = (stage.urban and not stage.city.hit(walker, next, 0.3).is_empty()) or not stage.rock_hit(walker, next, 0.3).is_empty() or stage.obstacle_hit(walker, next, 0.3, true) >= 0 or contact_blocked(walker, next, false)
 	if not hit:
 		walker = next
 	else:
 		floor_height = old_floor
 	# Small steps follow the stairs; leaving a roof starts a real fall.
-	if old_floor - floor_height > 0.45:
-		jump_height += old_floor - floor_height
+	if jump_height > 0 or old_floor - floor_height > 0.45:
+		jump_height = maxf(0, walker.y - floor_height)
 	var remaining = maxf(0, delta)
 	while remaining > 0.000001:
 		var step = minf(remaining, 1.0 / 120.0)
