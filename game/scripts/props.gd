@@ -186,11 +186,11 @@ static func car(color: Color, rally: bool = false, variant: int = 0) -> Node3D:
 		for z in [-1.22, 1.25]:
 			var wheel = cylinder(root, Vector3(x, 0.39, z), 0.4, 0.4, 0.28, Color("222b2a"), 10)
 			wheel.rotation.z = PI / 2
+			wheel.set_meta("rolling_wheel_radius", 0.4)
 
 			
 			var hub = cylinder(root, Vector3(x * 1.15, 0.39, z), 0.22, 0.22, 0.03, Color("ddd7c3"), 8)
 			hub.rotation.z = PI / 2
-
 			hub.set_meta("rolling_wheel_radius", "inherit")
 	if rally:
 		box(root, Vector3(0, 1.3, 1.65), Vector3(2, 0.1, 0.42), Color("273230"))
@@ -332,11 +332,11 @@ static func player_car_camping_hatchback() -> Node3D:
 		for z in [-1.33, 1.34]:
 			var wheel = cylinder(root, Vector3(side * 0.87, 0.39, z), 0.39, 0.39, 0.28, Color("171c1e"), 12)
 			wheel.rotation.z = PI / 2
+			wheel.set_meta("rolling_wheel_radius", 0.39)
 
 			
 			var hub = cylinder(root, Vector3(side * 1.03, 0.39, z), 0.22, 0.22, 0.035, Color("323b40"), 8)
 			hub.rotation.z = PI / 2
-
 			hub.set_meta("rolling_wheel_radius", "inherit")
 	# Large slanted windscreen; the rear glass is a long fastback panel into the hatch.
 	quad_panel(root, PackedVector3Array([
@@ -437,6 +437,7 @@ static func player_car_sport_sedan() -> Node3D:
 			var z = -1.42 if wheel_index == 0 else 1.39
 			var wheel = cylinder(root, Vector3(side * 0.94, 0.36, z), 0.36, 0.36, 0.26, black, 16)
 			wheel.rotation.z = PI / 2
+			wheel.set_meta("rolling_wheel_radius", 0.36)
 
 			
 			wheel.name = "SportWheel_%s_%d" % [side, wheel_index]
@@ -538,11 +539,11 @@ static func player_car(variant: int = 0) -> Node3D:
 		for z in [front + shape[4], rear - shape[5]]:
 			var wheel = cylinder(root, Vector3(side * half * 1.01, radius, z), radius, radius, 0.26, Color("202827"), 12)
 			wheel.rotation.z = PI / 2
+			wheel.set_meta("rolling_wheel_radius", radius)
 
 			
 			var hub = cylinder(root, Vector3(side * half * 1.17, radius, z), radius * 0.60, radius * 0.60, 0.035, Color("b8c0bf"), 8)
 			hub.rotation.z = PI / 2
-
 			hub.set_meta("rolling_wheel_radius", "inherit")
 			cylinder(hub, Vector3(0, 0.024, 0), radius * 0.19, radius * 0.19, 0.025, Color("515b5e"), 8)
 			if suv:
@@ -807,11 +808,11 @@ static func rally_car(variant: int, number_override: int = -1, sponsor_override:
 		for z in [-1.25, 1.27]:
 			var wheel = cylinder(root, Vector3(side * 0.9, 0.38, z), 0.38, 0.38, 0.3, Color("202826"), 10)
 			wheel.rotation.z = PI / 2
+			wheel.set_meta("rolling_wheel_radius", 0.38)
 
 			
 			var hub = cylinder(root, Vector3(side * 1.06, 0.38, z), 0.23, 0.23, 0.035, accent, 8)
 			hub.rotation.z = PI / 2
-
 			hub.set_meta("rolling_wheel_radius", "inherit")
 			box(root, Vector3(side * 0.9, 0.47, z + 0.4), Vector3(0.27, 0.44, 0.06), Color("212a24"))
 			box(root, Vector3(side * 0.89, 0.79, z), Vector3(0.13, 0.13, 0.77), accent)
