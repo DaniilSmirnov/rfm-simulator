@@ -186,25 +186,74 @@ test('additional car and stage SKU reach VK and reconcile their own rights',asyn
  }
 });
 
-test('VK request invitation selects one friend and passes the exact room in requestKey',async()=>{
- const calls=[];
- const {context:c}=await setup('vk',{RallyBoot:{setStage(){}},vkBridge:{send:async(method,params)=>{
-  calls.push([method,params]);
-  if(method==='VKWebAppGetFriends') return {users:[{id:4567}]};
-  if(method==='VKWebAppShowRequestBox') return {success:true,requestKey:params.requestKey};
-  return {};
- }},fetch:async input=>{
-   if(input==='/api/vk/session') return Response.json({profile:{platform:'vk',nickname:'fan',verified:true},entitlements:{skus:[]},session:{token:'verified',expires_at:Math.floor(Date.now()/1000)+3600}});
-   return Response.json({});
- }});
- await c.RallyPlatform.ready();
+function fakeDocument(){
+ const make=tag=>({
+  tag,style:{},children:[],parentNode:null,handlers:{},textContent:'',value:'',
+  append(...children){for(const child of children){this.children.push(child);child.parentNode=this;}},
+  addEventListener(type,fn){this.handlers[type]=fn;},
+  remove(){if(this.parentNode){this.parentNode.children=this.parentNode.children.filter(c=>c!==this);this.parentNode=null;}},
+  setAttribute(){},focus(){},select(){},
+  click(){return this.handlers.click?.();}
+ });
+ const body=make('body');
+ const find=(text,node=body)=>{
+   if(node.textContent===text)return node;
+   for(const child of node.children){const found=find(text,child);if(found)return found;}
+   return null;
+ };
+ return {body,createElement:make,find,execCommand:()=>true};
+}
+
+test('VK invite opens a real DOM dialog and calls the picker only after its native click',async()=>{
+ const calls=[],doc=fakeDocument();
+ const {context:c}=await setup('vk',{document:doc,navigator:{clipboard:{writeText:async()=>{}}},RallyBoot:{setStage(){}},
+  vkBridge:{send:async(method,params)=>{
+    calls.push([method,params]);
+    if(method==='VKWebAppGetFriends')return {users:[{id:4567}]};
+    if(method==='VKWebAppShowRequestBox')return {success:true,requestKey:params.requestKey};
+    return {};
+  }},
+  fetch:async input=>input==='/api/vk/session'
+    ? Response.json({profile:{platform:'vk',nickname:'fan',verified:true},entitlements:{skus:[]},session:{token:'verified',expires_at:Math.floor(Date.now()/1000)+3600}})
+    : Response.json({})
+ });
  const response=await c.fetch('/__rally_platform',{method:'POST',body:JSON.stringify({method:'inviteFriend',room_id:'a1B2c3'})});
  assert.equal(response.status,200);
- assert.deepEqual(await response.json(),{result:{status:'sent'}});
+ assert.deepEqual(await response.json(),{result:{status:'opened'}});
+ assert.deepEqual(calls.map(x=>x[0]),['VKWebAppInit'],'initial game click does not open Bridge without native activation');
+ assert.ok(doc.find('Выбрать друга в VK'));
+ doc.find('Выбрать друга в VK').click();
+ await new Promise(resolve=>setImmediate(resolve));
  assert.deepEqual(calls.map(x=>x[0]),['VKWebAppInit','VKWebAppGetFriends','VKWebAppShowRequestBox']);
  assert.deepEqual(JSON.parse(JSON.stringify(calls[1][1])),{multi:false});
  assert.equal(calls[2][1].uid,4567);
  assert.equal(calls[2][1].requestKey,'rfm_room_A1B2C3');
+ doc.find('Закрыть').click();
+ assert.equal(doc.body.children.length,0);
+});
+
+test('unsupported native VK friend picker leaves a usable room link and share fallback',async()=>{
+ const calls=[],doc=fakeDocument(),copied=[];
+ const {context:c}=await setup('vk',{document:doc,navigator:{clipboard:{writeText:async link=>{copied.push(link);}}},RallyBoot:{setStage(){}},
+  vkBridge:{send:async(method,params)=>{
+    calls.push([method,params]);
+    if(method==='VKWebAppGetFriends')throw {error_type:'unsupported_method'};
+    return {};
+  }},
+  fetch:async()=>Response.json({profile:{platform:'vk',nickname:'fan',verified:true},entitlements:{skus:[]},session:{token:'verified',expires_at:Math.floor(Date.now()/1000)+3600}})
+ });
+ await c.RallyPlatform.inviteFriend('AABB22');
+ doc.find('Выбрать друга в VK').click();
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.ok(doc.body.children.length===1,'dialog stays available after unsupported Bridge call');
+ assert.ok(doc.find('Поделиться ссылкой через VK'));
+ doc.find('Поделиться ссылкой через VK').click();
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(calls.at(-1)[0],'VKWebAppShare');
+ assert.equal(calls.at(-1)[1].link,'https://vk.com/app54809523#rfm_room_AABB22');
+ doc.find('Скопировать ссылку на комнату').click();
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.deepEqual(copied,['https://vk.com/app54809523#rfm_room_AABB22']);
 });
 test('VK invitation launch keys route only correctly formatted room ids',async()=>{
  const fakeServer=async()=>Response.json({profile:{platform:'vk',nickname:'fan',verified:true},entitlements:{skus:[]},session:{token:'verified',expires_at:Math.floor(Date.now()/1000)+3600}});
@@ -237,18 +286,23 @@ test('only VK production can send room invitations',async()=>{
   assert.equal(resp.status,400,adapter);
  }
 });
-test('VK invalid room ids and dismissed picker do not send requests',async()=>{
- const calls=[];
- const {context:c}=await setup('vk',{RallyBoot:{setStage(){}},vkBridge:{send:async method=>{
-   calls.push(method);
-   if(method==='VKWebAppGetFriends') return {users:[]};
-   return {};
-  }},fetch:async()=>Response.json({profile:{platform:'vk',nickname:'fan',verified:true},entitlements:{skus:[]},session:{token:'verified',expires_at:Math.floor(Date.now()/1000)+3600}})});
+test('VK invalid room ids do not open a picker and malformed hashes are ignored',async()=>{
+ const calls=[],doc=fakeDocument();
+ const {context:c}=await setup('vk',{document:doc,RallyBoot:{setStage(){}},vkBridge:{send:async method=>{calls.push(method);return {};}},fetch:async()=>Response.json({profile:{platform:'vk',nickname:'fan',verified:true},entitlements:{skus:[]},session:{token:'verified',expires_at:Math.floor(Date.now()/1000)+3600}})});
  await c.RallyPlatform.ready();
  const invalid=await c.fetch('/__rally_platform',{method:'POST',body:JSON.stringify({method:'inviteFriend',room_id:'BAD!!'})});
  assert.equal(invalid.status,503);
- const cancelled=await c.fetch('/__rally_platform',{method:'POST',body:JSON.stringify({method:'inviteFriend',room_id:'ABC123'})});
- assert.equal(cancelled.status,200);
- assert.deepEqual(await cancelled.json(),{result:{status:'cancel'}});
- assert.deepEqual(calls,['VKWebAppInit','VKWebAppGetFriends']);
+ assert.equal(doc.body.children.length,0);
+ assert.deepEqual(calls,['VKWebAppInit']);
+ const loc={origin:'https://game.test',href:'https://game.test/vk/#%broken',search:'?vk_user_id=123&vk_app_id=123&vk_ts=1&sign=test',hash:'#%broken'};
+ const v=await setup('vk',{location:loc,RallyBoot:{setStage(){}},vkBridge:{send:async()=>({})},fetch:async()=>Response.json({profile:{platform:'vk',nickname:'fan',verified:true},entitlements:{skus:[]},session:{token:'verified',expires_at:Math.floor(Date.now()/1000)+3600}})});
+ assert.equal((await v.context.RallyPlatform.getBootstrap()).invite_room,'');
+});
+test('room deep link hash restores the exact room id without changing verified VK identity',async()=>{
+ const loc={origin:'https://game.test',href:'https://game.test/vk/#rfm_room_Ab12eF',search:'?vk_user_id=123&vk_app_id=123&vk_ts=1&sign=test',hash:'#rfm_room_Ab12eF'};
+ const {context:c}=await setup('vk',{location:loc,RallyBoot:{setStage(){}},vkBridge:{send:async()=>({})},fetch:async input=>{
+   assert.equal(input,'/api/vk/session');
+   return Response.json({profile:{platform:'vk',nickname:'fan',verified:true},entitlements:{skus:[]},session:{token:'verified',expires_at:Math.floor(Date.now()/1000)+3600}});
+ }});
+ assert.equal((await c.RallyPlatform.getBootstrap()).invite_room,'AB12EF');
 });
