@@ -39,7 +39,7 @@ func _ready() -> void:
 	add_child(http)
 	http.request_completed.connect(_response)
 	invite_http = HTTPRequest.new()
-	invite_http.timeout = 30.0
+	invite_http.timeout = 120.0
 	invite_http.accept_gzip = false
 	invite_http.body_size_limit = 4096
 	add_child(invite_http)
