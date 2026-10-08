@@ -76,7 +76,7 @@ test('fullscreen button stays visible on browsers without Fullscreen API', async
   assert.equal(context.RallyFullscreen.isActive(), false);
 });
 
-test('fullscreen is available on both VK mobile and desktop', () => {
-  assert.ok(setup({vkMobile:true}).button);
+test('VK mobile hides fullscreen button while desktop keeps it', () => {
+  assert.equal(setup({vkMobile:true}).button, undefined);
   assert.ok(setup({vkMobile:false}).button);
 });
