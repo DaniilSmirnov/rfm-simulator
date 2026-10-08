@@ -1,5 +1,6 @@
 extends RefCounted
 class_name RallyProps
+const CampingHatchbackAsset = preload("res://scripts/camping_hatchback_asset.gd")
 const FOOD_PORTIONS = 10
 const CARGO_KINDS = ["table", "chairs", "grill", "firewood", "cauldron"]
 const MUSHROOM_TEXTURES = {
@@ -271,6 +272,9 @@ static func quad_panel(parent: Node3D, points: PackedVector3Array, color: Color)
 	return panel
 
 static func player_car_camping_hatchback() -> Node3D:
+	var imported = CampingHatchbackAsset.build()
+	if imported != null:
+		return add_player_trunk(imported, 8)
 	var root = Node3D.new()
 	root.name = "PlayerCar_8"
 	root.set_meta("model", "Походный хэтчбек")
