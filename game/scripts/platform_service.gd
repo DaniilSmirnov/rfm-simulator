@@ -3,12 +3,16 @@ extends Node
 signal profile_ready(profile: Dictionary)
 signal failed(message: String)
 signal purchase_changed
+signal invite_feedback(message: String)
 var busy = false
 var purchase_message = ""
 var origin = ""
 var profile: Dictionary = {}
 var entitlements: Dictionary = {"mode": "unrestricted", "skus": []}
 var catalog: Array = []
+var invite_room = ""
+var invite_busy = false
+var invite_http: HTTPRequest
 var http: HTTPRequest
 
 func can_use(kind: String, index: int, guest: bool = false) -> bool:
@@ -34,6 +38,12 @@ func _ready() -> void:
 	http.body_size_limit = 16384
 	add_child(http)
 	http.request_completed.connect(_response)
+	invite_http = HTTPRequest.new()
+	invite_http.timeout = 120.0
+	invite_http.accept_gzip = false
+	invite_http.body_size_limit = 4096
+	add_child(invite_http)
+	invite_http.request_completed.connect(_invite_response)
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--room-server="):
 			origin = arg.trim_prefix("--room-server=").trim_suffix("/")
@@ -65,6 +75,36 @@ func refresh_store() -> void:
 	if profile.get("platform") == "vk":
 		_request("refreshStore")
 
+func invite_friend(id: String) -> void:
+	if profile.get("platform", "") != "vk" or not OS.has_feature("web"):
+		return
+	if invite_busy:
+		return
+	if id.length() != 6 or not id.is_valid_hex_number():
+		invite_feedback.emit("Не удалось определить ID комнаты.")
+		return
+	invite_busy = true
+	invite_feedback.emit("Выбери друга в VK…")
+	var payload = JSON.stringify({"method": "inviteFriend", "room_id": id.to_upper()})
+	var err = invite_http.request(origin + "/__rally_platform", ["Content-Type: application/json"], HTTPClient.METHOD_POST, payload)
+	if err != OK:
+		invite_busy = false
+		invite_feedback.emit("Не удалось открыть приглашение VK.")
+
+func _invite_response(result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
+	invite_busy = false
+	var parsed = JSON.parse_string(body.get_string_from_utf8())
+	if result != HTTPRequest.RESULT_SUCCESS or code != 200 or not parsed is Dictionary:
+		invite_feedback.emit(str(parsed.get("error", "Не удалось отправить приглашение.")) if parsed is Dictionary else "Не удалось отправить приглашение.")
+		return
+	if not parsed.get("result") is Dictionary:
+		invite_feedback.emit("VK вернул некорректный ответ.")
+		return
+	match str(parsed.result.get("status", "")):
+		"sent": invite_feedback.emit("Приглашение отправлено! Друг войдёт сразу в эту комнату.")
+		"cancel": invite_feedback.emit("Приглашение отменено.")
+		_: invite_feedback.emit("Не удалось отправить приглашение.")
+
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_FOCUS_IN and not busy:
 		refresh_store()
@@ -86,6 +126,7 @@ func _response(result: int, code: int, _headers: PackedStringArray, body: Packed
 	profile = bootstrap.profile
 	entitlements = bootstrap.entitlements
 	catalog = bootstrap.get("catalog", [])
+	invite_room = str(bootstrap.get("invite_room", ""))
 	print("[RFM Platform] profile ", JSON.stringify(profile))
 	print("[RFM Platform] access ", JSON.stringify({"mode": entitlements.get("mode"), "stage_1": can_use("stage", 0), "stage_2": can_use("stage", 1), "car_3": can_use("car", 2), "car_4": can_use("car", 3)}))
 	purchase_message = ""

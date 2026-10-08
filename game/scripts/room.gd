@@ -152,6 +152,25 @@ func _request(kind: String, body: Dictionary) -> void:
 	if err != OK:
 		_response(HTTPRequest.RESULT_CANT_CONNECT, 0, PackedStringArray(), PackedByteArray())
 
+# Convert an already-running solo stage to a hosted room without losing the
+# local player's furniture, carried gear, foraged food or placement ownership.
+func _adopt_local_host_state() -> void:
+	if player_id.is_empty():
+		return
+	for mapping in [game.personal_chairs, game.personal_flags, game.foraging.inventories, game.foraging.effects, game.cargo.opened]:
+		if mapping.has("local"):
+			mapping[player_id] = mapping["local"]
+			mapping.erase("local")
+	if game.cargo.held.has("local"):
+		var carry: Dictionary = game.cargo.held["local"]
+		if str(carry.get("owner", "")) == "local":
+			carry["owner"] = player_id
+		game.cargo.held[player_id] = carry
+		game.cargo.held.erase("local")
+	for item in game.packing.items():
+		if str(item.node.get_meta("gear_owner", "")) == "local":
+			item.node.set_meta("gear_owner", player_id)
+
 func _response(result: int, code: int, _headers: PackedStringArray, bytes: PackedByteArray) -> void:
 	busy = false
 	var parser = JSON.new()
@@ -171,6 +190,9 @@ func _response(result: int, code: int, _headers: PackedStringArray, bytes: Packe
 			lobby_status.text = message
 			create_button.disabled = false
 			join_button.disabled = false
+			if game.invite_after_room_create:
+				game.invite_after_room_create = false
+				game.invite_status.text = "Не удалось создать комнату: " + message
 			game.lobby_ui.refresh()
 		return
 	errors = 0
@@ -184,24 +206,32 @@ func _response(result: int, code: int, _headers: PackedStringArray, bytes: Packe
 		drive_budgets.clear()
 		authoritative_drives.clear()
 		authority_stamp = -1.0
+		var converting_solo = game.playing and bool(data.host)
 		player_id = data.player
 		token = data.token
 		is_host = data.host
 		if is_host:
 			room_id = data.room
 		connected = true
+		if converting_solo:
+			_adopt_local_host_state()
 		for control in [name_input, id_input, create_button, join_button]:
 			control.release_focus()
 		lobby.hide()
 		room_label.show()
-		game.select_stage(int(data.get("stage", 0)), not is_host)
-		game.select_player_car(int(data.get("car_model", game.selected_car)))
-		await game.start_game()
-		# Separate parked cars at the start; local movement remains responsive.
-		var lane = int(data.get("slot", 0))
-		game.avatar_variant = posmod(lane, Props.SPECTATOR_MODELS.size())
-		game.car.position = game.stage.at(12 + lane * 6)
+		if not converting_solo:
+			game.select_stage(int(data.get("stage", 0)), not is_host)
+			game.select_player_car(int(data.get("car_model", game.selected_car)))
+			await game.start_game()
+			# New guests and lobby hosts spawn at the start; a player already
+			# watching the stage keeps their current parking and camp position.
+			var lane = int(data.get("slot", 0))
+			game.avatar_variant = posmod(lane, Props.SPECTATOR_MODELS.size())
+			game.car.position = game.stage.at(12 + lane * 6)
 		game.toast("Комната %s · %s. Передай ID друзьям!" % [room_id, game.car.get_meta("model")])
+		if game.invite_after_room_create:
+			game.invite_after_room_create = false
+			game._invite_friends()
 		print("ROOM_CONNECTED ", room_id, " host=", is_host)
 	else:
 		if not is_host and data.world is Dictionary:

@@ -185,3 +185,70 @@ test('additional car and stage SKU reach VK and reconcile their own rights',asyn
   assert.equal(count(),1);
  }
 });
+
+test('VK request invitation selects one friend and passes the exact room in requestKey',async()=>{
+ const calls=[];
+ const {context:c}=await setup('vk',{RallyBoot:{setStage(){}},vkBridge:{send:async(method,params)=>{
+  calls.push([method,params]);
+  if(method==='VKWebAppGetFriends') return {users:[{id:4567}]};
+  if(method==='VKWebAppShowRequestBox') return {success:true,requestKey:params.requestKey};
+  return {};
+ }},fetch:async input=>{
+   if(input==='/api/vk/session') return Response.json({profile:{platform:'vk',nickname:'fan',verified:true},entitlements:{skus:[]},session:{token:'verified',expires_at:Math.floor(Date.now()/1000)+3600}});
+   return Response.json({});
+ }});
+ await c.RallyPlatform.ready();
+ const response=await c.fetch('/__rally_platform',{method:'POST',body:JSON.stringify({method:'inviteFriend',room_id:'a1B2c3'})});
+ assert.equal(response.status,200);
+ assert.deepEqual(await response.json(),{result:{status:'sent'}});
+ assert.deepEqual(calls.map(x=>x[0]),['VKWebAppInit','VKWebAppGetFriends','VKWebAppShowRequestBox']);
+ assert.deepEqual(JSON.parse(JSON.stringify(calls[1][1])),{multi:false});
+ assert.equal(calls[2][1].uid,4567);
+ assert.equal(calls[2][1].requestKey,'rfm_room_A1B2C3');
+});
+test('VK invitation launch keys route only correctly formatted room ids',async()=>{
+ const fakeServer=async()=>Response.json({profile:{platform:'vk',nickname:'fan',verified:true},entitlements:{skus:[]},session:{token:'verified',expires_at:Math.floor(Date.now()/1000)+3600}});
+ for(const [suffix,expectRoom] of [
+  ['request_key=rfm_room_AB12EF','AB12EF'],
+  ['vk_request_key=rfm_room_123abc','123ABC'],
+  ['request_key=rfm_room_INVALID',''],
+  ['request_key=rfm_room_012345%26evil%3D1',''],
+  ['request_key=not_a_room',''],
+ ]) {
+   const search='?vk_user_id=123&vk_app_id=123&vk_ts=1&sign=test&'+suffix;
+   const loc={origin:'https://game.test',href:'https://game.test/vk/'+search,search};
+   const {context:c}=await setup('vk',{location:loc,RallyBoot:{setStage(){}},vkBridge:{send:async()=>({})},fetch:fakeServer});
+   const data=await c.RallyPlatform.getBootstrap();
+   assert.equal(data.invite_room,expectRoom,suffix);
+ }
+});
+test('VK launch parameters from Bridge also restore invitation room',async()=>{
+ const loc={origin:'https://game.test',href:'https://game.test/vk/',search:''};
+ const {context:c}=await setup('vk',{location:loc,RallyBoot:{setStage(){}},vkBridge:{send:async method=>method==='VKWebAppGetLaunchParams'
+   ? {vk_user_id:123,vk_app_id:123,vk_ts:1,sign:'test',request_key:'rfm_room_AABB22'} : {}},
+   fetch:async()=>Response.json({profile:{platform:'vk',nickname:'fan',verified:true},entitlements:{skus:[]},session:{token:'verified',expires_at:Math.floor(Date.now()/1000)+3600}})});
+ const bootstrap=await c.RallyPlatform.getBootstrap();
+ assert.equal(bootstrap.invite_room,'AABB22');
+});
+test('only VK production can send room invitations',async()=>{
+ for(const adapter of ['standalone','vk-prototype']){
+  const {context:c}=await setup(adapter);
+  const resp=await c.fetch('/__rally_platform',{method:'POST',body:JSON.stringify({method:'inviteFriend',room_id:'ABC123'})});
+  assert.equal(resp.status,400,adapter);
+ }
+});
+test('VK invalid room ids and dismissed picker do not send requests',async()=>{
+ const calls=[];
+ const {context:c}=await setup('vk',{RallyBoot:{setStage(){}},vkBridge:{send:async method=>{
+   calls.push(method);
+   if(method==='VKWebAppGetFriends') return {users:[]};
+   return {};
+  }},fetch:async()=>Response.json({profile:{platform:'vk',nickname:'fan',verified:true},entitlements:{skus:[]},session:{token:'verified',expires_at:Math.floor(Date.now()/1000)+3600}})});
+ await c.RallyPlatform.ready();
+ const invalid=await c.fetch('/__rally_platform',{method:'POST',body:JSON.stringify({method:'inviteFriend',room_id:'BAD!!'})});
+ assert.equal(invalid.status,503);
+ const cancelled=await c.fetch('/__rally_platform',{method:'POST',body:JSON.stringify({method:'inviteFriend',room_id:'ABC123'})});
+ assert.equal(cancelled.status,200);
+ assert.deepEqual(await cancelled.json(),{result:{status:'cancel'}});
+ assert.deepEqual(calls,['VKWebAppInit','VKWebAppGetFriends']);
+});

@@ -1,6 +1,22 @@
 (() => {
   let profile, entitlements, session, catalog, purchasing = false, orderOpen = false;
   window.RallyViewport?.attachVK(vkBridge);
+  // RequestBox, unlike InviteBox, carries a per-invitation requestKey.
+  // The key is only a room locator; authorization and room capacity are still
+  // enforced by the normal signed VK session and /api/rooms/:id/join endpoint.
+  const roomId = value => typeof value === 'string' && /^[A-F0-9]{6}$/i.test(value) ? value.toUpperCase() : '';
+  const keyForRoom = id => 'rfm_room_' + id;
+  const roomFromKey = value => {
+    const match = typeof value === 'string' && /^rfm_room_([A-F0-9]{6})$/i.exec(value);
+    return match ? roomId(match[1]) : '';
+  };
+  const roomFromLaunch = raw => {
+    const query = typeof raw === 'string' ? new URLSearchParams(raw) : raw || {};
+    const read = key => query instanceof URLSearchParams ? query.get(key) : query[key];
+    return roomFromKey(read('request_key')) || roomFromKey(read('vk_request_key')) || roomFromKey(read('requestKey'));
+  };
+  let inviteRoom = roomFromLaunch(location.search);
+
   // Preserve the real network transport, before the browser-local handler wraps it.
   const networkFetch = window.fetch.bind(window);
 
@@ -25,7 +41,9 @@
 
     let launchParams = location.search;
     if (!hasSignedLaunch(launchParams)) {
-      launchParams = serializeLaunch(await vkBridge.send('VKWebAppGetLaunchParams'));
+      const launch = await vkBridge.send('VKWebAppGetLaunchParams');
+      inviteRoom ||= roomFromLaunch(launch);
+      launchParams = serializeLaunch(launch);
     }
 
     const response = await networkFetch('/api/vk/session', {
@@ -94,8 +112,22 @@
       return {profile,entitlements,catalog,status:'pending'};
     } finally { purchasing = false; }
   };
+  const inviteFriend = async rawRoom => {
+    await ready;
+    const id = roomId(rawRoom);
+    if (!id) throw new Error('Некорректный ID комнаты.');
+    // The user explicitly chooses one VK friend; do not send bulk/spam requests.
+    const selection = await vkBridge.send('VKWebAppGetFriends', {multi:false});
+    const uid = Number(selection?.users?.[0]?.id);
+    if (!Number.isSafeInteger(uid) || uid <= 0) return {status:'cancel'};
+    const request = await vkBridge.send('VKWebAppShowRequestBox', {
+      uid, message:'Заходи смотреть ралли со мной в Rally Fans Simulator!',
+      requestKey:keyForRoom(id),
+    });
+    return {status:request?.success === true ? 'sent' : 'cancel'};
+  };
   window.RallyPlatform = {
-    target:'vk',ready:() => ready, buy, refreshStore,
+    target:'vk',ready:() => ready, buy, refreshStore, inviteFriend,
     authorize:async request => {
       await ready;
       if (Date.now() >= session.expires_at * 1000) throw new Error('Сессия VK истекла. Откройте игру заново через VK.');
@@ -104,7 +136,7 @@
       headers.set('X-Rally-Platform', 'vk');
       return new Request(request, {headers});
     },
-    getBootstrap:async () => {await ready;return {profile,entitlements,catalog};},
+    getBootstrap:async () => {await ready;return {profile,entitlements,catalog,invite_room:inviteRoom};},
     getProfile:async () => {await ready;return profile;},
     getEntitlements:async () => {await ready;return entitlements;},
   };
