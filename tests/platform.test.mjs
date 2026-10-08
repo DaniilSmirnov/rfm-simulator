@@ -125,3 +125,15 @@ test('isolated mock prototype remains unrestricted without claiming verified own
  assert.deepEqual(data.result.entitlements.skus,[]);
  assert.deepEqual(data.result.catalog,[]);
 });
+
+test('safe viewport transport is local, independent of authorization, and same-origin only', async () => {
+ const safe={width:844,height:390,top:88,left:44,right:44,bottom:21};
+ const {context:c,forwarded}=await setup('standalone',{RallyViewport:{snapshot:()=>safe}});
+ assert.deepEqual(await (await c.fetch('/__rally_viewport')).json(),safe);
+ assert.equal((await c.fetch('/__rally_viewport',{method:'POST'})).status,405);
+ await c.fetch('https://other.test/__rally_viewport');
+ assert.equal(forwarded.length,1);
+ delete c.RallyViewport;
+ assert.equal((await c.fetch('/__rally_viewport')).status,503);
+ assert.equal(forwarded.length,1);
+});

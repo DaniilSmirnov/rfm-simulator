@@ -34,6 +34,7 @@ func _process(delta: float) -> void:
 		var sample = {"role": role, "connected": game.room.connected, "room": game.room.room_id, "player": game.room.player_id, "enabled": game.room.prediction_enabled, "active": p.active, "ack": p.ack, "seq": p.seq, "pending": p.pending.size(), "pos": game.room.a(game.car.position), "speed": game.speed, "condition": game.condition, "dead": game.dead, "paused": game.paused, "world_paused": game.room.world_paused, "in_car": game.in_car, "driving": {}}
 		for id in game.room.host_drives:
 			sample.driving[id] = game.room.host_drives[id].snapshot()
+		sample.safe_area_ready = game.mobile_safe_rect.has_area()
 		print("NETWORK_SAMPLE ", JSON.stringify(sample))
 func on_control(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
 	if code != 200: return

@@ -15,6 +15,9 @@ for(const [directory,adapter] of targets.filter(([directory]) => !selected || di
  assert.ok(html.includes('RallyPlatform.ready()'));
  assert.ok(files.includes('fullscreen.js'),directory+' is missing fullscreen control');
  assert.ok(html.includes('src="fullscreen.js"'),directory+' does not load fullscreen control');
+ assert.ok(files.includes('mobile-viewport.js'));
+ assert.ok(html.includes('name="rally-platform" content="'+adapter+'"'));
+ assert.ok(html.indexOf('src="mobile-viewport.js"')<html.indexOf('src="fullscreen.js"'));
  assert.ok(html.indexOf('platform/transport.js')<html.indexOf('src="index.js"'));
  console.log('BUILD_ISOLATION_PASS',directory);
 }

@@ -251,6 +251,10 @@ var mobile_sidebar: PanelContainer
 var mobile_top: PanelContainer
 var mobile_bottom: PanelContainer
 var menu_help: Label
+var mobile_ui: Control
+var mobile_safe_rect = Rect2()
+var mobile_safe_timer = 0.0
+var mobile_safe_http: HTTPRequest
 
 func enable_mobile() -> void:
 	if mobile_mode:
@@ -310,6 +314,69 @@ func enable_mobile() -> void:
 	mobile_controls.game = self
 	layer.add_child(mobile_controls)
 	print("[RFM] Мобильный интерфейс: контроллы готовы")
+
+func apply_mobile_safe_rect(rect: Rect2) -> void:
+	if rect == mobile_safe_rect:
+		return
+	mobile_safe_rect = rect
+	mobile_controls.reset_input()
+	# Keep the complete HUD/menu and touch controls in one safe coordinate space.
+	# Compact screens scale that space instead of clipping a fixed-height menu.
+	var factor = minf(1.0, minf(rect.size.x / 800.0, rect.size.y / 480.0))
+	factor = maxf(factor, 0.1)
+	for control in [mobile_ui, mobile_controls]:
+		control.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+		control.position = rect.position
+		control.scale = Vector2.ONE * factor
+		control.size = rect.size / factor
+	# Aiming follows the camera in the full canvas, independently of HUD insets.
+	crosshair.position = (get_viewport().get_visible_rect().size / 2 - rect.position) / factor - crosshair.size / 2
+	fit_mobile_dialogs()
+
+func fit_mobile_dialogs() -> void:
+	if not mobile_mode or not mobile_safe_rect.has_area():
+		return
+	for dialog in [menu, room.lobby]:
+		var minimum = dialog.get_combined_minimum_size()
+		var extent = Vector2(maxf(620, minimum.x), maxf(390, minimum.y))
+		var factor = minf(1.0, minf((mobile_ui.size.x - 24) / extent.x, (mobile_ui.size.y - 24) / extent.y))
+		dialog.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+		dialog.offset_left = -extent.x / 2
+		dialog.offset_right = extent.x / 2
+		dialog.offset_top = -extent.y / 2
+		dialog.offset_bottom = extent.y / 2
+		dialog.pivot_offset = extent / 2
+		dialog.scale = Vector2.ONE * factor
+
+func update_mobile_safe_area(delta: float) -> void:
+	if not mobile_mode or not OS.has_feature("web"):
+		return
+	if mobile_safe_http == null:
+		mobile_safe_http = HTTPRequest.new()
+		mobile_safe_http.accept_gzip = false
+		mobile_safe_http.timeout = 2.0
+		mobile_safe_http.body_size_limit = 1024
+		add_child(mobile_safe_http)
+		mobile_safe_http.request_completed.connect(_mobile_safe_response)
+	mobile_safe_timer -= delta
+	if mobile_safe_timer > 0.0 or mobile_safe_http.get_http_client_status() != HTTPClient.STATUS_DISCONNECTED:
+		return
+	mobile_safe_timer = 0.25
+	# Like profile bootstrap, this is intercepted locally by the browser shell.
+	# The minimal engine has neither eval nor JavaScript object interfaces.
+	mobile_safe_http.request(room.server + "/__rally_viewport")
+
+func _mobile_safe_response(result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
+	if result != HTTPRequest.RESULT_SUCCESS or code != 200:
+		return
+	var data = JSON.parse_string(body.get_string_from_utf8())
+	if not data is Dictionary or not data.has_all(["width", "height", "left", "right", "top", "bottom"]):
+		return
+	var extent = get_viewport().get_visible_rect().size
+	var ratio = extent / Vector2(maxf(float(data.width), 1.0), maxf(float(data.height), 1.0))
+	var origin = Vector2(float(data.left), float(data.top)) * ratio
+	var end = extent - Vector2(float(data.right), float(data.bottom)) * ratio
+	apply_mobile_safe_rect(Rect2(origin, end - origin))
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch and event.pressed and not mobile_mode:
@@ -473,6 +540,7 @@ func _build_ui() -> void:
 	var canvas = CanvasLayer.new()
 	add_child(canvas)
 	var ui = Control.new()
+	mobile_ui = ui
 	canvas.add_child(ui)
 	ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ui.mouse_filter = Control.MOUSE_FILTER_IGNORE

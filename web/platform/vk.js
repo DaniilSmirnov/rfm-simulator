@@ -1,5 +1,6 @@
 (() => {
   let profile, entitlements, session, catalog;
+  window.RallyViewport?.attachVK(vkBridge);
   // Preserve the real network transport, before the browser-local handler wraps it.
   const networkFetch = window.fetch.bind(window);
 

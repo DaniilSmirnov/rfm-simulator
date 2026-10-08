@@ -25,6 +25,8 @@ func world_blocked() -> bool:
 	return game.room.connected and not game.room.is_host and game.room.world_paused
 
 func _process(_delta: float) -> void:
+	game.update_mobile_safe_area(_delta)
+	game.fit_mobile_dialogs()
 	if not active() or world_blocked() or last_in_car != game.in_car or last_size != size or not landscape():
 		reset_input()
 	last_in_car = game.in_car
@@ -99,12 +101,15 @@ func _input(event: InputEvent) -> void:
 		return
 	if event is InputEventScreenTouch:
 		if event.pressed and not event.canceled:
-			touch_begin(event.index, event.position)
+			var point = get_global_transform().affine_inverse() * event.position
+			if not Rect2(Vector2.ZERO, size).has_point(point):
+				return
+			touch_begin(event.index, point)
 		else:
 			touch_end(event.index)
 		get_viewport().set_input_as_handled()
 	elif event is InputEventScreenDrag:
-		touch_drag(event.index, event.position, event.relative)
+		touch_drag(event.index, get_global_transform().affine_inverse() * event.position, event.relative / scale)
 		get_viewport().set_input_as_handled()
 
 func touch_begin(index: int, pos: Vector2) -> void:
@@ -113,7 +118,7 @@ func touch_begin(index: int, pos: Vector2) -> void:
 		return
 	if fingers.has(index):
 		touch_end(index)
-	if map_open and game.mobile_sidebar.get_global_rect().has_point(pos):
+	if map_open and game.mobile_sidebar.get_global_rect().has_point(get_global_transform() * pos):
 		return
 	for button in buttons:
 		if button.rect.has_point(pos):
