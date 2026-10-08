@@ -727,8 +727,8 @@ func _detail_batch(name: String, mesh: Mesh, poses: Array, colors: Array, indice
 	mat.vertex_color_is_srgb = true
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	var mm = MultiMesh.new()
-	if name in ["FlyAgaricCaps", "ToadstoolCaps"]:
-		mat.albedo_texture = RallyProps.MUSHROOM_TEXTURES["fly_agaric" if name == "FlyAgaricCaps" else "toadstool"]
+	if name in ["FlyAgaricCaps", "ToadstoolCaps", "VillageFlyAgaricCaps", "VillageToadstoolCaps"]:
+		mat.albedo_texture = RallyProps.MUSHROOM_TEXTURES["fly_agaric" if name.ends_with("FlyAgaricCaps") else "toadstool"]
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.use_colors = true
 	mm.mesh = mesh

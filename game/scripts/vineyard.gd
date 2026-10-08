@@ -16,6 +16,7 @@ var forest_stone_count = 0
 var forest_boulder_count = 0
 var forest_bush_count = 0
 var forest_berry_bush_count = 0
+var forest_mushroom_count = 0
 var village_grass_count = 0
 var village_stone_count = 0
 var village_detail_positions: Array[Vector3] = []
@@ -83,6 +84,7 @@ func build(cooperative: bool = false) -> void:
 		await _village_natural_details(true)
 	else:
 		_village_natural_details()
+	_forest_mushrooms()
 	_landscape()
 	_flush_batches()
 
@@ -715,11 +717,95 @@ func _mixed_forest(cooperative: bool = false) -> void:
 			forest_bush_count += 1
 		if forest_bush_count >= 170 and forest_berry_bush_count >= 70:
 			break
+	# Dedicated berry thickets, independent of the random ordinary undergrowth.
+	# Use the same collectible batches so picking berries hides their fruit.
+	var grove_rng = RandomNumberGenerator.new()
+	grove_rng.seed = 71020267
+	var grove_count = 0
+	for attempt in range(720):
+		if grove_count >= 65:
+			break
+		if cooperative and attempt % 180 == 0:
+			await get_tree().process_frame
+		var station = grove_rng.randf_range(VILLAGE_START - 45.0, VILLAGE_END + 45.0)
+		var side_value = -1.0 if grove_rng.randi() % 2 == 0 else 1.0
+		var center = stage.at(station) + stage.side(station) * side_value * grove_rng.randf_range(52.0, 131.0)
+		if not _forest_spot_allowed(center, 1.25) or not stage.rock_hit(center, center, 1.0, false).is_empty():
+			continue
+		center.y = stage.ground(center)
+		var size = grove_rng.randf_range(0.75, 1.35)
+		var start_index = berry_poses.size()
+		for lobe in range(4):
+			var angle = grove_rng.randf() * TAU
+			var leaf_center = center + Vector3(cos(angle) * size * 0.33, size * 0.58, sin(angle) * size * 0.33)
+			berry_bush_poses.append(Transform3D(Basis(Vector3.UP, angle).scaled(Vector3(size * 0.92, size * 0.78, size * 0.92)), leaf_center))
+			berry_bush_colors.append(Color("3c5830").lerp(Color("6c8040"), grove_rng.randf()).darkened(0.08))
+			for fruit in range(5):
+				var fruit_angle = angle + float(fruit) * TAU / 5.0
+				var fruit_position = leaf_center + Vector3(cos(fruit_angle) * size * 0.40, size * 0.15, sin(fruit_angle) * size * 0.36)
+				berry_poses.append(Transform3D(Basis.from_scale(Vector3.ONE * 0.09), fruit_position))
+				berry_colors.append(Color("c34237") if fruit % 2 == 0 else Color("383353"))
+		var indices: Array = []
+		for fruit_index in range(start_index, berry_poses.size()):
+			indices.append(fruit_index)
+		stage.collectibles.append({"kind": "berries", "name": "лесные ягоды", "pos": center, "quantity": 3, "parts": {"VillageForestBerries": indices}})
+		forest_berry_bush_count += 1
+		grove_count += 1
 	var bush_mesh = stage.NATURE_BUSH
 	var berry_mesh = stage.NATURE_BERRY
 	stage._detail_batch("VillageForestBushes", bush_mesh, bush_poses, bush_colors)
 	stage._detail_batch("VillageForestBerryBushes", bush_mesh, berry_bush_poses, berry_bush_colors)
 	stage._detail_batch("VillageForestBerries", berry_mesh, berry_poses, berry_colors)
+
+
+# Same edible, fly agaric and toadstool species as the original forest stage.
+# Separate deterministic RNG keeps collectible IDs stable across room members.
+func _forest_mushrooms() -> void:
+	var mushroom_rng = RandomNumberGenerator.new()
+	mushroom_rng.seed = 71020266
+	var stem_poses: Array = []
+	var stem_colors: Array = []
+	var cap_poses: Array = []
+	var cap_colors: Array = []
+	var poison_caps = {"fly_agaric": [], "toadstool": []}
+	for i in range(460):
+		var s = mushroom_rng.randf_range(VILLAGE_START - 48.0, VILLAGE_END + 48.0)
+		var side_value = -1.0 if mushroom_rng.randi() % 2 == 0 else 1.0
+		var p = stage.at(s) + stage.side(s) * side_value * mushroom_rng.randf_range(12.0, 118.0)
+		if not _forest_spot_allowed(p, 0.9) or not stage.rock_hit(p, p, 0.5, false).is_empty():
+			continue
+		for j in range(2):
+			var item_pos = p + Vector3(mushroom_rng.randf_range(-0.45, 0.45), 0, mushroom_rng.randf_range(-0.45, 0.45))
+			if not _forest_spot_allowed(item_pos, 0.5):
+				continue
+			item_pos.y = stage.ground(item_pos)
+			var size = mushroom_rng.randf_range(0.10, 0.22)
+			var species = "fly_agaric" if i % 10 == 4 else ("toadstool" if i % 10 == 7 else "edible")
+			var layer = "VillageFlyAgaricCaps" if species == "fly_agaric" else ("VillageToadstoolCaps" if species == "toadstool" else "VillageMushroomCaps")
+			var index = cap_poses.size() if species == "edible" else poison_caps[species].size()
+			stage.collectibles.append({
+				"kind": "mushrooms", "species": species,
+				"name": "мухомор" if species == "fly_agaric" else ("поганка" if species == "toadstool" else "гриб"),
+				"pos": item_pos, "quantity": 1,
+				"parts": {layer: [index], "VillageMushroomStems": [stem_poses.size()]}
+			})
+			var origin = item_pos + Vector3(0, 0.02, 0)
+			stem_poses.append(Transform3D(Basis.from_scale(Vector3(size * 0.20, size, size * 0.20)), origin + Vector3(0, size * 0.5, 0)))
+			stem_colors.append(Color("c5baa1"))
+			var cap = Transform3D(Basis.from_scale(Vector3(size * 1.4, size * 0.55, size * 1.4)), origin + Vector3(0, size, 0))
+			if species == "edible":
+				cap_poses.append(cap)
+				cap_colors.append(Color("b87743"))
+			else:
+				poison_caps[species].append(cap)
+			forest_mushroom_count += 1
+	stage._detail_batch("VillageMushroomStems", stage.NATURE_MUSHROOM_STEM, stem_poses, stem_colors)
+	stage._detail_batch("VillageMushroomCaps", stage.NATURE_MUSHROOM_CAP, cap_poses, cap_colors)
+	for species in poison_caps:
+		var colors: Array = []
+		colors.resize(poison_caps[species].size())
+		colors.fill(Color.WHITE)
+		stage._detail_batch("VillageFlyAgaricCaps" if species == "fly_agaric" else "VillageToadstoolCaps", stage.NATURE_MUSHROOM_CAP, poison_caps[species], colors)
 
 func village_detail_allowed(p: Vector3) -> bool:
 	var s = stage.road_s(p)
