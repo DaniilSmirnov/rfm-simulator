@@ -89,13 +89,16 @@ func update(delta: float, guest: bool = false) -> void:
 			phase = "ready"
 			servings = Props.FOOD_PORTIONS
 			game.toast("Плов готов! F — съесть порцию.")
-	if fire != null:
-		var flames = fire.get_node("Flames")
-		for i in range(flames.get_child_count()):
-			var flame = flames.get_child(i)
-			flame.scale = Vector3(1 + sin(game.elapsed * 9 + i) * 0.08, 0.85 + sin(game.elapsed * 7 + i * 2) * 0.22, 1)
 	if pot != null:
 		Props.pose_cauldron(pot, phase, cook_time / COOK_SECONDS, servings, game.elapsed)
+
+func animate_flames(visual_time: float) -> void:
+	if fire == null:
+		return
+	var flames = fire.get_node("Flames")
+	for i in range(flames.get_child_count()):
+		var flame = flames.get_child(i)
+		flame.scale = Vector3(1 + sin(visual_time * 9 + i) * 0.08, 0.85 + sin(visual_time * 7 + i * 2) * 0.22, 1)
 
 func offers(items: Array, interaction) -> void:
 	if (fire == null and pot == null) or game.packing.active():
