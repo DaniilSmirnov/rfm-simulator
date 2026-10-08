@@ -24,6 +24,7 @@ var stage: RallyStage
 var platform_service: Node
 var selected_stage = 0
 var selected_car = 0
+var lobby_ui: Node
 var selection_controls: VBoxContainer
 var car_choice: HBoxContainer
 var stage_choice: HBoxContainer
@@ -422,6 +423,8 @@ func _ready() -> void:
 	camera.current = true
 	camera.position = stage.at(45) + Vector3(22, 15, 12)
 	camera.look_at(stage.at(70))
+	if lobby_ui != null:
+		lobby_ui.refresh()
 	_build_ui()
 	mushroom_effect.setup(self)
 	print("[RFM] Интерфейс готов; подготовка звука")
@@ -447,11 +450,12 @@ func _ready() -> void:
 			room.name_input.text = str(profile.get("nickname", ""))
 			room.name_input.editable = false
 		for i in range(car_choice.items.size()):
-			car_choice.items[i] = Props.PLAYER_MODELS[i].name + (" · Закрыто" if not platform_service.can_use("car", i) else "")
+			car_choice.items[i] = Props.PLAYER_MODELS[i].name
 		for i in range(stage_choice.items.size()):
-			stage_choice.items[i] = Stage.STAGES[i] + (" · Закрыто" if not platform_service.can_use("stage", i) else "")
+			stage_choice.items[i] = Stage.STAGES[i].get_slice("·", 0).strip_edges()
 		car_choice.select(selected_car)
 		stage_choice.select(selected_stage)
+		lobby_ui.refresh()
 	)
 	platform_service.failed.connect(func(message): push_error(message))
 	add_child(platform_service)
@@ -647,16 +651,25 @@ func _build_ui() -> void:
 	mv.add_theme_constant_override("separation", 12)
 	menu.add_child(mv)
 	_label(mv, "ПЕРЕВАЛ. РАЛЛИ. ШАШЛЫК.", 14, Color("dfb270"))
-	menu_title = _label(mv, "Симулятор\nраллийного овоща", 42)
-	menu_text = _label(mv, "Выбери машину и спецучасток. Доедь до места,\nдо открытия СУ — 3 минуты. Успей разложить лагерь.", 19)
+	menu_title = _label(mv, "Rally Fans Simulator", 34)
+	menu_text = _label(mv, "Твой выезд · до 8 игроков в общем лагере", 17)
 	selection_controls = VBoxContainer.new()
 	selection_controls.add_theme_constant_override("separation", 8)
 	mv.add_child(selection_controls)
+	lobby_ui = preload("res://scripts/lobby_ui.gd").new()
+	lobby_ui.game = self
+	add_child(lobby_ui)
+	var cards = HBoxContainer.new()
+	cards.add_theme_constant_override("separation", 16)
+	selection_controls.add_child(cards)
 	for kind in ["МАШИНА", "СПЕЦУЧАСТОК"]:
+		var card = VBoxContainer.new()
+		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		cards.add_child(card)
+		_label(card, kind, 14, Color("dfb270"))
+		lobby_ui.add_preview(card, kind)
 		var row = HBoxContainer.new()
-		selection_controls.add_child(row)
-		var caption = _label(row, kind, 16)
-		caption.custom_minimum_size.x = 145
+		card.add_child(row)
 		var choice = preload("res://scripts/menu_choice.gd").new()
 		choice.custom_minimum_size.y = 40
 		choice.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -670,7 +683,7 @@ func _build_ui() -> void:
 		else:
 			stage_choice = choice
 			for title in Stage.STAGES:
-				choice.add_item(title)
+				choice.add_item(title.get_slice("·", 0).strip_edges())
 			choice.item_selected.connect(select_stage)
 	stage_choice.tooltip_text = "В комнате СУ выбирает создатель. Все участники играют на одной трассе."
 	start_button = Button.new()
@@ -683,6 +696,8 @@ func _build_ui() -> void:
 	start_button.add_theme_stylebox_override("pressed", _panel(Color("c78f4a")))
 	start_button.pressed.connect(_menu_action)
 	mv.add_child(start_button)
+	start_button.hide()
+	lobby_ui.finish(mv)
 	menu_help = _label(mv, "WASD — движение   ·   F — выйти   ·   Esc — пауза\nНа ногах: мышь — обзор   ·   Z/C/G — лагерь", 14, Color("b2bea1"))
 
 func _setup_audio() -> void:
@@ -726,6 +741,8 @@ func start_game() -> void:
 	course.apply_snapshot({})
 	racing = false
 	selection_controls.hide()
+	room.lobby.hide()
+	start_button.show()
 	menu.hide()
 	course_label.show()
 	course_label.text = course.caption()
@@ -748,7 +765,15 @@ func _menu_action() -> void:
 		menu.hide()
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if mobile_mode else Input.MOUSE_MODE_CAPTURED
 	else:
-		start_game()
+		room.connect_room("")
+
+func return_to_main_menu() -> void:
+	lobby_ui.return_button.disabled = true
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	if room.connected:
+		room.leave()
+	else:
+		get_tree().reload_current_scene()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if placement_kind != "":
@@ -773,6 +798,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		menu_title.text = "Перерыв на природе"
 		menu_text.text = "Пауза. Ралли, мангал и таймеры остановлены.\n\nHome — вернуть машину на дорогу.\nF8 / F9 — показать застревание / вылет.\n\nПродолжить — кнопкой или Esc."
 		start_button.text = "ПРОДОЛЖИТЬ"
+		menu_text.text = "Выезд приостановлен. Продолжить или вернуться в меню." if not room.connected or room.is_host else "Твоя пауза. Остальные игроки продолжают выезд."
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if paused or mobile_mode else Input.MOUSE_MODE_CAPTURED
 		return
 	if not playing or paused or dead or finished:
@@ -1339,8 +1365,7 @@ func _cancel_drink() -> void:
 		beer_audio.stop()
 
 func select_player_car(variant: int) -> void:
-	if platform_service != null and not platform_service.can_use("car", posmod(variant, Props.PLAYER_MODELS.size())):
-		toast("Эта машина пока недоступна в VK. Продажи ещё не открыты.")
+	if playing and platform_service != null and not platform_service.can_use("car", posmod(variant, Props.PLAYER_MODELS.size())):
 		return
 	selected_car = posmod(variant, Props.PLAYER_MODELS.size())
 	if car_choice != null:
@@ -1350,14 +1375,13 @@ func select_player_car(variant: int) -> void:
 	car = Props.player_car(selected_car)
 	add_child(car)
 	car.transform = transform_before
+	if lobby_ui != null:
+		lobby_ui.refresh()
 
 func select_stage(variant: int, hosted_guest: bool = false) -> void:
 	if playing:
 		return
 	variant = clampi(variant, 0, Stage.STAGES.size() - 1)
-	if platform_service != null and not platform_service.can_use("stage", variant, hosted_guest and room.connected and not room.is_host):
-		toast("Этот спецучасток пока недоступен в VK. Продажи ещё не открыты.")
-		return
 	if variant == selected_stage:
 		return
 	jump_height = 0
@@ -1380,6 +1404,8 @@ func select_stage(variant: int, hosted_guest: bool = false) -> void:
 	speed = 0
 	camera.position = stage.at(45) + Vector3(22, 15, 12)
 	camera.look_at(stage.at(70))
+	if lobby_ui != null:
+		lobby_ui.refresh()
 
 func eat_meat(source_group: int = -2) -> bool:
 	if cargo.held.has(chair_owner()):

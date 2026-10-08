@@ -32,6 +32,8 @@ jobs:
       - run: npm ci
       - run: npm test
 
+      - name: Render desktop and mobile lobby
+        run: xvfb-run -a .cache/godot/Godot_v4.4.1-stable_linux.x86_64 --path game --script res://tests/lobby_preview.gd
       - name: Render text flag faces
         run: xvfb-run -a .cache/godot/Godot_v4.4.1-stable_linux.x86_64 --path game --rendering-method gl_compatibility --script res://tests/flag_preview.gd
       - name: Render imported reference-style characters
@@ -50,6 +52,7 @@ jobs:
         with:
           name: visual-previews
           path: |
+            .cache/ui-screens/*.png
             flag-*.png
             character-preview.png
             cooking-*.png
