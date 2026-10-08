@@ -55,7 +55,7 @@ func build(cooperative: bool = false) -> void:
 			if not reserved:
 				_house(p, atan2(stage.village_main_side(s).x * side_value, stage.village_main_side(s).z * side_value), int(s / 18) + int(side_value))
 	_side_lane_houses()
-	_church(Vector3(43.0, stage.ground(Vector3(43, 0, -435)), -435.0))
+	_church(stage.village_main_at(435.0) + stage.village_main_side(435.0) * 43.0)
 	_cemetery()
 	_village_sign(VILLAGE_START - 10.0, -1.0)
 	_village_sign(VILLAGE_END + 10.0, 1.0)
