@@ -700,6 +700,7 @@ func _menu_action() -> void:
 		room.connect_room("")
 
 func return_to_main_menu() -> void:
+	lobby_ui.return_button.disabled = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	if room.connected:
 		room.leave()

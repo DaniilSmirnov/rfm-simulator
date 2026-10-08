@@ -50,7 +50,6 @@ var name_input: LineEdit
 var id_input: LineEdit
 var create_button: Button
 var join_button: Button
-var exit_button: Button
 var racer_targets: Dictionary = {}
 var last_ui_size = Vector2.ZERO
 var last_mobile = false
@@ -128,16 +127,6 @@ func _build_ui() -> void:
 	room_label.offset_top = -45
 	room_label.offset_bottom = -8
 	room_label.hide()
-	exit_button = Button.new()
-	exit_button.text = "ВЫЙТИ"
-	ui.add_child(exit_button)
-	exit_button.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
-	exit_button.offset_left = -150
-	exit_button.offset_right = -36
-	exit_button.offset_top = -48
-	exit_button.offset_bottom = -6
-	exit_button.pressed.connect(leave)
-	exit_button.hide()
 
 func connect_room(id: String) -> void:
 	if game.platform_service != null and (not game.platform_service.can_use("car", game.car_choice.selected) or (id == "" and not game.platform_service.can_use("stage", game.stage_choice.selected))):
@@ -205,14 +194,12 @@ func _response(result: int, code: int, _headers: PackedStringArray, bytes: Packe
 			control.release_focus()
 		lobby.hide()
 		room_label.show()
-		exit_button.show()
 		game.select_stage(int(data.get("stage", 0)), not is_host)
 		game.select_player_car(int(data.get("car_model", game.selected_car)))
 		game.start_game()
 		# Separate parked cars at the start; local movement remains responsive.
 		var lane = int(data.get("slot", 0))
 		game.avatar_variant = posmod(lane, Props.SPECTATOR_MODELS.size())
-		game.select_player_car(int(data.get("car_model", game.selected_car)))
 		game.car.position = game.stage.at(12 + lane * 6)
 		game.toast("Комната %s · %s. Передай ID друзьям!" % [room_id, game.car.get_meta("model")])
 		print("ROOM_CONNECTED ", room_id, " host=", is_host)
@@ -279,7 +266,6 @@ func server_clock() -> float:
 func _process(delta: float) -> void:
 	if not connected:
 		return
-	exit_button.visible = game.paused or game.dead or game.finished
 	clock += delta
 	if not busy and clock >= SYNC_INTERVAL:
 		clock = fmod(clock, SYNC_INTERVAL)
@@ -806,7 +792,6 @@ func disconnect_room(message: String) -> void:
 	if game.mobile_controls != null:
 		game.mobile_controls.reset_input()
 	room_label.text = message
-	exit_button.hide()
 
 func predict_drive(delta: float) -> bool:
 	if is_host or not prediction_enabled:
