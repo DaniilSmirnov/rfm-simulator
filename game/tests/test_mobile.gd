@@ -41,6 +41,28 @@ func run() -> void:
 	check(c.landscape() and game.get_window().content_scale_size == Vector2i(960, 540), "mobile uses a landscape canvas")
 	check(not c.buttons.any(func(b): return b.action == "table"), "equipment is hidden behind the compact drawer")
 	check(game.mobile_mode and Input.mouse_mode == Input.MOUSE_MODE_VISIBLE, "mobile starts without pointer capture")
+	var safe = Rect2(54, 120, 852, 390)
+	game.apply_mobile_safe_rect(safe)
+	c._process(0)
+	await process_frame
+	for b in c.buttons:
+		var screen_rect = Rect2(c.get_global_transform() * b.rect.position, b.rect.size * c.scale)
+		check(safe.encloses(screen_rect), "VK buttons stay outside shell and system edges")
+	check(safe.encloses(game.menu.get_global_rect()), "compact menu fits inside VK safe area")
+	check(game.mobile_top.global_position.y >= safe.position.y and game.mobile_bottom.global_position.x >= safe.position.x, "HUD respects safe area origin")
+	var touch = InputEventScreenTouch.new()
+	touch.index = 21
+	touch.pressed = true
+	touch.position = c.get_global_transform() * button(c, "forward")
+	c._input(touch)
+	check(Input.is_action_pressed("forward"), "scaled safe-area input hits the visible pedal")
+	touch.index = 22
+	touch.position = Vector2(100, 20)
+	c._input(touch)
+	check(not c.fingers.has(22), "VK overlay band does not acquire a gameplay gesture")
+	game.apply_mobile_safe_rect(Rect2(Vector2.ZERO, Vector2(960, 540)))
+	c._process(0)
+	check(not Input.is_action_pressed("forward") and c.fingers.is_empty(), "inset changes cancel held touches")
 	c.touch_begin(1, button(c, "forward"))
 	c.touch_begin(2, c.stick_center + Vector2(60, 0))
 	check(Input.is_action_pressed("forward") and Input.is_action_pressed("right"), "gas and steering support multitouch")

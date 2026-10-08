@@ -250,6 +250,9 @@ var mobile_sidebar: PanelContainer
 var mobile_top: PanelContainer
 var mobile_bottom: PanelContainer
 var menu_help: Label
+var mobile_ui: Control
+var mobile_safe_rect = Rect2()
+var mobile_safe_timer = 0.0
 
 func enable_mobile() -> void:
 	if mobile_mode:
@@ -309,6 +312,53 @@ func enable_mobile() -> void:
 	mobile_controls.game = self
 	layer.add_child(mobile_controls)
 	print("[RFM] Мобильный интерфейс: контроллы готовы")
+
+func apply_mobile_safe_rect(rect: Rect2) -> void:
+	if rect == mobile_safe_rect:
+		return
+	mobile_safe_rect = rect
+	mobile_controls.reset_input()
+	# Keep the complete HUD/menu and touch controls in one safe coordinate space.
+	# Compact screens scale that space instead of clipping a fixed-height menu.
+	var factor = minf(1.0, minf(rect.size.x / 800.0, rect.size.y / 480.0))
+	factor = maxf(factor, 0.1)
+	for control in [mobile_ui, mobile_controls]:
+		control.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+		control.position = rect.position
+		control.scale = Vector2.ONE * factor
+		control.size = rect.size / factor
+	fit_mobile_dialogs()
+
+func fit_mobile_dialogs() -> void:
+	if not mobile_mode or not mobile_safe_rect.has_area():
+		return
+	for dialog in [menu, room.lobby]:
+		var minimum = dialog.get_combined_minimum_size()
+		var extent = Vector2(maxf(620, minimum.x), maxf(390, minimum.y))
+		var factor = minf(1.0, minf((mobile_ui.size.x - 24) / extent.x, (mobile_ui.size.y - 24) / extent.y))
+		dialog.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+		dialog.offset_left = -extent.x / 2
+		dialog.offset_right = extent.x / 2
+		dialog.offset_top = -extent.y / 2
+		dialog.offset_bottom = extent.y / 2
+		dialog.pivot_offset = extent / 2
+		dialog.scale = Vector2.ONE * factor
+
+func update_mobile_safe_area(delta: float) -> void:
+	if not mobile_mode or not OS.has_feature("web"):
+		return
+	mobile_safe_timer -= delta
+	if mobile_safe_timer > 0.0:
+		return
+	mobile_safe_timer = 0.25
+	var data = JSON.parse_string(str(JavaScriptBridge.eval("JSON.stringify(window.RallyViewport?.snapshot() || null)")))
+	if not data is Dictionary:
+		return
+	var extent = get_viewport().get_visible_rect().size
+	var ratio = extent / Vector2(maxf(float(data.width), 1.0), maxf(float(data.height), 1.0))
+	var origin = Vector2(float(data.left), float(data.top)) * ratio
+	var end = extent - Vector2(float(data.right), float(data.bottom)) * ratio
+	apply_mobile_safe_rect(Rect2(origin, end - origin))
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch and event.pressed and not mobile_mode:
@@ -472,6 +522,7 @@ func _build_ui() -> void:
 	var canvas = CanvasLayer.new()
 	add_child(canvas)
 	var ui = Control.new()
+	mobile_ui = ui
 	canvas.add_child(ui)
 	ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ui.mouse_filter = Control.MOUSE_FILTER_IGNORE

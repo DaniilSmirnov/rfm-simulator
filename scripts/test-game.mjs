@@ -8,6 +8,7 @@ run(process.execPath, ['--test',
   join(root,'tests/store.test.mjs'),
   join(root,'tests/deploy-cloudflare.test.mjs'),
   join(root,'tests/fullscreen.test.mjs'),
+  join(root,'tests/mobile-viewport.test.mjs'),
 ]);
 run(process.execPath, ['--test', join(root, 'tests/branding.test.mjs'), join(root, 'tests/boot-diagnostics.test.mjs'), join(root, 'tests/audio-recovery.test.mjs')]);
 run(godot, ['--headless', '--editor', '--path', project, '--import']);

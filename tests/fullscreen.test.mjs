@@ -5,7 +5,7 @@ import { runInNewContext } from 'node:vm';
 
 const source = await readFile(new URL('../web/fullscreen.js', import.meta.url), 'utf8');
 
-function setup({ supported = true } = {}) {
+function setup({ supported = true, vkMobile = false } = {}) {
   const listeners = new Map();
   const byId = new Map();
   const makeNode = tag => ({
@@ -49,7 +49,7 @@ function setup({ supported = true } = {}) {
     };
   }
 
-  const context = { document, console, window: null };
+  const context = { document, console, window: null, RallyViewport:{isVKMobile:() => vkMobile} };
   context.window = context;
   runInNewContext(source, context);
   return { context, document, button: byId.get('rally-fullscreen') };
@@ -74,4 +74,9 @@ test('fullscreen button stays visible on browsers without Fullscreen API', async
   assert.equal(await context.RallyFullscreen.enter(), false);
   await button.listeners.click();
   assert.equal(context.RallyFullscreen.isActive(), false);
+});
+
+test('VK mobile has no fullscreen overlay; VK desktop keeps it', () => {
+  assert.equal(setup({vkMobile:true}).button, undefined);
+  assert.ok(setup({vkMobile:false}).button);
 });

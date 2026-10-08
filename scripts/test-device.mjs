@@ -37,3 +37,13 @@ const active = runInNewContext(readFileSync(new URL('../web/mobile-device.js', i
 await active.requestLandscape();
 assert.deepEqual(activeCalls, ['landscape']);
 console.log('PASS: active fullscreen still requests landscape without entering again');
+
+const vkCalls = [];
+const vk = runInNewContext(readFileSync(new URL('../web/mobile-device.js', import.meta.url), 'utf8') + '\nRallyDevice', {
+  RallyViewport:{isVKMobile:() => true},
+  RallyFullscreen:{isActive:() => false, enter:async () => vkCalls.push('fullscreen')},
+  screen:{orientation:{lock:async mode => vkCalls.push(mode)}}
+});
+await vk.requestLandscape();
+assert.deepEqual(vkCalls, ['landscape']);
+console.log('PASS: VK mobile never requests browser fullscreen');

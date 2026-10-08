@@ -15,8 +15,10 @@ func run() -> void:
 	game.in_car = false
 	game._update_camera(1)
 	game._update_hud()
-	for view in ["walking", "gear", "driving"]:
-		game.in_car = view == "driving"
+	for view in ["walking", "gear", "driving", "vk-driving"]:
+		game.in_car = view in ["driving", "vk-driving"]
+		if view == "vk-driving":
+			game.apply_mobile_safe_rect(Rect2(54, 120, 852, 390))
 		game.mobile_controls.gear_open = view == "gear"
 		game.mobile_controls._process(0)
 		game._update_camera(1)
