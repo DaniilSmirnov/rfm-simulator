@@ -169,21 +169,46 @@ func ground(pos: Vector3) -> float:
 # function. Terrain is triangulated in 4 m cells (2 m near forest roads)
 # and its vertices are 0.25 m below ground(). Reproduce that interpolation
 # exactly to avoid suspended trunks on slopes and relief crests.
+# The 2 m roadside tiles meet 4 m terrain tiles at T-junctions.
+# On those boundaries, snap the fine tile's midpoint to the coarse edge.
+# Otherwise the ground() midpoint can be above/below the straight 4 m edge,
+# creating visible cracks (and floating trees).
+func terrain_tile_step(cell_x: float, cell_z: float) -> float:
+	return 2.0 if variant == 0 and road_distance(Vector3(cell_x + 2.0, 0, cell_z + 2.0)) < 12.0 else 4.0
+
+func terrain_vertex_height(x: float, z: float) -> float:
+	var value = ground(Vector3(x, 0, z)) - 0.25
+	if variant != 0:
+		return value
+	var cell_x = floorf(x / 4.0) * 4.0
+	var cell_z = floorf(z / 4.0) * 4.0
+	var middle_x = is_equal_approx(x - cell_x, 2.0)
+	var middle_z = is_equal_approx(z - cell_z, 2.0)
+	if middle_x and not middle_z:
+		# The edge runs in X; the two touching tiles sit across Z.
+		if terrain_tile_step(cell_x, z - 4.0) == 4.0 or terrain_tile_step(cell_x, z) == 4.0:
+			return (ground(Vector3(cell_x, 0, z)) + ground(Vector3(cell_x + 4.0, 0, z))) * 0.5 - 0.25
+	elif middle_z and not middle_x:
+		# The edge runs in Z; the two touching tiles sit across X.
+		if terrain_tile_step(x - 4.0, cell_z) == 4.0 or terrain_tile_step(x, cell_z) == 4.0:
+			return (ground(Vector3(x, 0, cell_z)) + ground(Vector3(x, 0, cell_z + 4.0))) * 0.5 - 0.25
+	return value
+
 func terrain_surface_height(pos: Vector3) -> float:
 	var cell_x = floorf(pos.x / 4.0) * 4.0
 	var cell_z = floorf(pos.z / 4.0) * 4.0
-	var step = 2.0 if variant == 0 and road_distance(Vector3(cell_x + 2.0, 0, cell_z + 2.0)) < 12.0 else 4.0
+	var step = terrain_tile_step(cell_x, cell_z)
 	var x = cell_x + floorf((pos.x - cell_x) / step) * step
 	var z = cell_z + floorf((pos.z - cell_z) / step) * step
 	var u = clampf((pos.x - x) / step, 0.0, 1.0)
 	var v = clampf((pos.z - z) / step, 0.0, 1.0)
-	var a = ground(Vector3(x, 0, z))
-	var b = ground(Vector3(x + step, 0, z))
-	var c = ground(Vector3(x, 0, z + step))
-	var d = ground(Vector3(x + step, 0, z + step))
+	var a = terrain_vertex_height(x, z)
+	var b = terrain_vertex_height(x + step, z)
+	var c = terrain_vertex_height(x, z + step)
+	var d = terrain_vertex_height(x + step, z + step)
 	if u + v <= 1.0:
-		return a + (b - a) * u + (c - a) * v - 0.25
-	return d + (c - d) * (1.0 - u) + (b - d) * (1.0 - v) - 0.25
+		return a + (b - a) * u + (c - a) * v
+	return d + (c - d) * (1.0 - u) + (b - d) * (1.0 - v)
 
 func _trail_sample(pos: Vector3, trail: Dictionary) -> Dictionary:
 	var nearest_distance = INF
@@ -336,7 +361,7 @@ func _build_terrain(cooperative: bool = false) -> void:
 			await get_tree().process_frame
 		for x in range(-204, 204, 4):
 			# Resolve narrow roadside ditches without subdividing the whole map.
-			var step = 2 if variant == 0 and road_distance(Vector3(x + 2, 0, z + 2)) < 12 else 4
+			var step = int(terrain_tile_step(x, z))
 			for dz in range(0, 4, step):
 				for dx in range(0, 4, step):
 					var a = Vector3(x + dx, 0, z + dz)
@@ -344,7 +369,7 @@ func _build_terrain(cooperative: bool = false) -> void:
 					var c = a + Vector3(0, 0, step)
 					var d = a + Vector3(step, 0, step)
 					for v in [a, b, c, b, d, c]:
-						v.y = ground(v) - 0.25
+						v.y = terrain_vertex_height(v.x, v.z)
 						var color = Color("b6c9d3") if winter else Color(0.32, 0.38, 0.25)
 						if variant == 0:
 							var patch = (sin(v.x * 0.065) * sin(v.z * 0.041) + 1.0) * 0.5
