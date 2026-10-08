@@ -73,7 +73,7 @@ try {
   if(isVk&&mobile) {
    await page.evaluate(()=>window.testVKConfig({detail:{type:'VKWebAppUpdateConfig',data:{insets:{top:0,left:44,right:44,bottom:21}}}}));
    const safe=await page.evaluate(()=>window.RallyViewport.snapshot());
-   assert.equal(safe.top,88);assert.equal(safe.left,44);assert.equal(safe.bottom,21);
+   assert.equal(safe.top,0);assert.equal(safe.left,108);assert.equal(safe.bottom,21);
    await page.setViewportSize({width:390,height:844});
    assert.equal(await page.locator('#rally-rotate button').count(),0);
    await page.setViewportSize({width:844,height:390});

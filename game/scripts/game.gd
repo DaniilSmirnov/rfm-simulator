@@ -286,6 +286,10 @@ func enable_mobile() -> void:
 	mobile_bottom.offset_bottom = 148
 	info_label.add_theme_font_size_override("font_size", 16)
 	info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	room.room_label.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+	room.room_label.position = Vector2(24, 76)
+	room.room_label.size = Vector2(400, 16)
+	room.room_label.add_theme_font_size_override("font_size", 12)
 	hint_label.hide()
 	quest_label.hide()
 	mobile_sidebar.get_child(0).get_child(0).hide()
@@ -325,17 +329,14 @@ func apply_mobile_safe_rect(rect: Rect2) -> void:
 		return
 	mobile_safe_rect = rect
 	mobile_controls.reset_input()
-	# Keep the complete HUD/menu and touch controls in one safe coordinate space.
-	# Compact screens scale that space instead of clipping a fixed-height menu.
-	var factor = minf(1.0, minf(rect.size.x / 800.0, rect.size.y / 480.0))
-	factor = maxf(factor, 0.1)
+	# Insets move anchors; they must never shrink gameplay buttons or text.
 	for control in [mobile_ui, mobile_controls]:
 		control.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
 		control.position = rect.position
-		control.scale = Vector2.ONE * factor
-		control.size = rect.size / factor
-	# Aiming follows the camera in the full canvas, independently of HUD insets.
-	crosshair.position = (get_viewport().get_visible_rect().size / 2 - rect.position) / factor - crosshair.size / 2
+		control.scale = Vector2.ONE
+		control.size = rect.size
+	# The world still fills the canvas and aiming stays at the camera centre.
+	crosshair.position = get_viewport().get_visible_rect().size / 2 - rect.position - crosshair.size / 2
 	fit_mobile_dialogs()
 
 func fit_mobile_dialogs() -> void:

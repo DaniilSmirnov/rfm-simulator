@@ -12,8 +12,9 @@
     const inset = Object.fromEntries(edges.map(edge => [edge,
       Math.max(number(vkInsets[edge]), parseFloat(css['padding' + edge[0].toUpperCase() + edge.slice(1)]) || 0)]));
     // Native close/menu buttons are overlays, not part of the hardware insets.
-    // Keep a complete band free, including clients that do not report insets.
-    if (isVKMobile()) inset.top += 88;
+    // Landscape VK uses a vertical close/menu rail at the left edge.
+    // Reserve its width for UI, leaving the full height and canvas available.
+    if (isVKMobile()) inset.left += 64;
     const visual = window.visualViewport;
     if (visual) {
       inset.left = Math.max(inset.left, visual.offsetLeft);
