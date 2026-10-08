@@ -241,8 +241,7 @@ func button_icon(button: Dictionary) -> Texture2D:
 
 func _move_stick(pos: Vector2) -> void:
 	var delta = (pos - stick_center) / STICK_RADIUS
-	if game.in_car:
-		delta.y = 0
+	# Full circular joystick: steering on X, gas and brake on separate buttons.
 	stick = delta.limit_length(1.0)
 	if stick.length() < 0.12:
 		stick = Vector2.ZERO
@@ -294,11 +293,9 @@ func _draw() -> void:
 	draw_circle(stick_center, STICK_RADIUS, Color("25352baa"))
 	draw_arc(stick_center, STICK_RADIUS, 0, TAU, 40, Color("dfb270"), 3, true)
 	if game.in_car:
-		draw_line(stick_center + Vector2(-42, 0), stick_center + Vector2(42, 0), Color("dfb27088"), 2)
-		draw_string(font, stick_center + Vector2(-54, 6), "‹", HORIZONTAL_ALIGNMENT_LEFT, 24, 24, Color("f3e8cd"))
-		draw_string(font, stick_center + Vector2(40, 6), "›", HORIZONTAL_ALIGNMENT_LEFT, 24, 24, Color("f3e8cd"))
+		# Full-circle driving stick.
 	draw_circle(stick_center + stick * 48, 28, Color("e3b16bdd"))
-	var text = "РУЛЬ" if game.in_car else "ИДТИ"
+	var text = "ДЖОЙСТИК" if game.in_car else "ИДТИ"
 	draw_string(font, stick_center + Vector2(-42, 94), text, HORIZONTAL_ALIGNMENT_CENTER, 84, 18, Color("f3e8cd"))
 	if not map_open and not gear_open and not world_blocked():
 		draw_circle(look_center, LOOK_RADIUS, Color("25352baa"))
