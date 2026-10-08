@@ -94,6 +94,8 @@ func flag_count(owner: String = "") -> int:
 	return personal_flags.get(key, []).size()
 
 func valid_furniture_spot(spot: Vector3, kind: String, ignored_owner: String = "") -> bool:
+	if stage.desert and not stage.canyon.camp_supported(stage, spot):
+		return false
 	if spectators != null and spectators.occupied(spot):
 		return false
 	if stage.road_distance(spot) < 6.0:
@@ -512,6 +514,15 @@ func _build_environment() -> void:
 		env.ambient_light_energy = 0.27
 		env.fog_light_color = Color("c8dae6")
 		env.fog_density = 0.0012
+	elif stage.desert:
+		sky_mat.sky_top_color = Color("5987ab")
+		sky_mat.sky_horizon_color = Color("e9c69a")
+		sky_mat.ground_bottom_color = Color("a95c3a")
+		sky_mat.ground_horizon_color = Color("e9c69a")
+		env.ambient_light_color = Color("efccaa")
+		env.ambient_light_energy = 0.42
+		env.fog_light_color = Color("d6a479")
+		env.fog_density = 0.0008
 	elif stage.urban:
 		sky_mat.sky_top_color = Color("7e9eae")
 		sky_mat.sky_horizon_color = Color("d7d0bd")
@@ -1143,7 +1154,7 @@ func _walk_step(delta: float) -> void:
 	var old_floor = walker.y - jump_height
 	var floor_height = stage.city.walking_floor(next, walker.y) if stage.urban and stage.city.has_method("walking_floor") else stage.ground(next)
 	next.y = floor_height if jump_height <= 0 and floor_height >= old_floor - 0.45 else walker.y
-	var hit = (stage.urban and not stage.city.hit(walker, next, 0.3).is_empty()) or not stage.rock_hit(walker, next, 0.3).is_empty() or stage.obstacle_hit(walker, next, 0.3, true) >= 0 or contact_blocked(walker, next, false)
+	var hit = (stage.desert and stage.canyon.walk_blocked(stage, next, walker.y)) or (stage.urban and not stage.city.hit(walker, next, 0.3).is_empty()) or not stage.rock_hit(walker, next, 0.3).is_empty() or stage.obstacle_hit(walker, next, 0.3, true) >= 0 or contact_blocked(walker, next, false)
 	if not hit:
 		walker = next
 	else:

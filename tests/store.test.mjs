@@ -1,10 +1,10 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {catalog,canUseContent,canUseStage,validateRoomSelection,vkEntitlements} from '../server/store.mjs';
-test('catalog has stable unique SKUs; VK has one free stage and three free cars',()=>{
+test('catalog has stable unique SKUs; VK has two free stages and three free cars',()=>{
  assert.equal(new Set(catalog.map(p=>p.sku)).size,catalog.length);
- assert.equal(catalog.length,13);
- for(let i=0;i<3;i++) assert.equal(canUseContent('stage',i),i===0);
+ assert.equal(catalog.length,14);
+ for(let i=0;i<4;i++) assert.equal(canUseContent('stage',i),i===0 || i===3);
  for(let i=0;i<10;i++) assert.equal(canUseContent('car',i),i<3);
  assert.ok(catalog.every(p=>!p.purchase_enabled));
 });

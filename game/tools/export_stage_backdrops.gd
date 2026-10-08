@@ -22,6 +22,9 @@ func run() -> void:
 		game.select_stage(i)
 		var target = game.stage.at(435 if i == 2 else (420 if i == 1 else 280))
 		camera.position = target + (Vector3(70, 38, 65) if i == 2 else Vector3(40, 22, 45))
+		if game.stage.desert:
+			camera.position = Vector3(170, 155, -180)
+			target = Vector3(0, 34, -422)
 		camera.look_at(target + Vector3(0, 4, -18))
 		viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
 		await process_frame

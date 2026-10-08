@@ -19,9 +19,10 @@ func run() -> void:
 	for i in range(10):
 		game.select_player_car(i)
 		check(game.lobby_ui.images[0].texture != null, "every car has a thumbnail")
-	for i in range(3):
+	for i in range(game.Stage.STAGES.size()):
 		game.select_stage(i)
 		check(game.lobby_ui.images[1].texture != null and game.stage.get_child_count() == 0, "stage selection only loads thumbnail")
+	game.select_stage(2) # Keep the locked-content check on the paid village stage.
 	game.platform_service.catalog = JSON.parse_string(FileAccess.get_file_as_string("res://data/store_catalog.json"))
 	game.platform_service.entitlements = {"mode": "restricted", "skus": []}
 	await game.start_game()

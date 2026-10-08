@@ -19,6 +19,8 @@ func rebuild(cooperative: bool = false) -> void:
 	actor_targets.clear()
 	var stage = game.stage
 	for i in range(stage.clearings.size()):
+		if stage.desert and i < stage.canyon.mesas.size():
+			continue # Summits are reached on foot; do not spawn parked NPC cars there.
 		if cooperative:
 			await get_tree().process_frame
 		var clearing = stage.clearings[i]
@@ -45,7 +47,7 @@ func rebuild(cooperative: bool = false) -> void:
 		if stage.urban:
 			continue # City spectators use the existing street parking areas.
 		var center = stage.at(s) + stage.side(s) * (7.2 if i % 2 == 0 else -7.2)
-		_add_group(center, s, i + 4, 1)
+		_add_group(center, s, i + stage.clearings.size(), 1)
 	update(clock, 0.0, false)
 
 func grounded(pos: Vector3) -> Vector3:
