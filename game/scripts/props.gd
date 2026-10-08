@@ -204,7 +204,7 @@ static func animate_wheels(car_root: Node3D) -> void:
 		var radius = wheel.get_meta("rolling_wheel_radius")
 		if radius is String:
 			radius = 0.4
-		wheel.rotate_object_local(Vector3.UP, signed_distance / maxf(float(radius), 0.1))
+		wheel.rotate_object_local(wheel.get_meta("rolling_wheel_axis", Vector3.UP), signed_distance / maxf(float(radius), 0.1))
 
 static func car(color: Color, rally: bool = false, variant: int = 0) -> Node3D:
 	if rally:
