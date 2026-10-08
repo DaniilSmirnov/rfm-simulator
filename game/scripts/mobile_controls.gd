@@ -14,7 +14,7 @@ var gear_rect = Rect2()
 var button_styles: Array[StyleBoxFlat] = []
 var stick_center = Vector2.ZERO
 const STICK_RADIUS = 62.0
-const LOOK_RADIUS = 44.0
+const LOOK_RADIUS = STICK_RADIUS
 var look_center = Vector2.ZERO
 var look = Vector2.ZERO
 var icons: Dictionary = {}
@@ -72,8 +72,7 @@ func _layout() -> void:
 		stick_center = Vector2(edge + 84, size.y - edge - 80)
 	if not active() or not landscape():
 		return
-	look_center = Vector2(size.x - edge - 48, size.y - edge - (208 if game.in_car else 238))
-	var primary = Vector2(size.x - edge - 120, size.y - edge - 136)
+	look_center = Vector2(size.x - edge - 84, size.y - edge - 80)
 	var gear: Array[Array] = []
 	if not world_blocked():
 		if game.placement_kind != "":
@@ -82,20 +81,20 @@ func _layout() -> void:
 				add_button(actions[i][0], actions[i][1], false, Rect2(Vector2(size.x / 2 - 158 + i * 108, size.y - edge - 64), Vector2(100, 64)))
 		elif game.in_car:
 			# Two large pedals under the right thumb; reverse is a separate hold.
-			add_button("Выйти", "interact", false, Rect2(Vector2(size.x - edge - 184, size.y - edge - 252), Vector2(88, 64)))
-			add_button("Назад", "back", true, Rect2(Vector2(size.x - edge - 184, size.y - edge - 180), Vector2(88, 56)))
-			add_button("Тормоз", "brake", true, Rect2(Vector2(size.x - edge - 184, size.y - edge - 112), Vector2(88, 112)))
-			add_button("Газ", "forward", true, Rect2(Vector2(size.x - edge - 88, size.y - edge - 112), Vector2(88, 112)))
+			add_button("Выйти", "interact", false, Rect2(Vector2(size.x - edge - 280, size.y - edge - 188), Vector2(88, 64)))
+			add_button("Назад", "back", true, Rect2(Vector2(size.x - edge - 280, size.y - edge - 256), Vector2(88, 56)))
+			add_button("Тормоз", "brake", true, Rect2(Vector2(size.x - edge - 184, size.y - edge - 256), Vector2(88, 112)))
+			add_button("Газ", "forward", true, Rect2(Vector2(size.x - edge - 88, size.y - edge - 256), Vector2(88, 112)))
 			gear = [["Вернуть", "recover"]]
 		else:
 			var target = game.interaction.current()
 			var label = "Действие"
 			if not target.is_empty():
 				label = str(target.label).replace("Вернуть коробку в багажник", "Вернуть").replace("Собрать казан с подставкой", "Убрать казан").replace("Потушить и собрать костёр", "Убрать костёр").replace("Сесть в машину", "В машину").replace("Сесть на стул", "На стул").replace("Встать со стула", "Встать").replace("Собрать гриб", "Собрать").replace("Собрать ягоды", "Собрать").replace("Собрать виноград", "Виноград").replace("Насадить гриб", "Насадить").replace("Съесть шашлык", "Шашлык").replace("Съесть гриб", "Есть гриб").replace("Выпить пиво", "Пиво").replace("Потушить и собрать мангал", "Убрать мангал").replace("Поставить казан на костёр", "На костёр").replace("Добавить ингредиенты и готовить плов", "Готовить плов").replace("Съесть плов", "Плов").replace("Собрать ", "Убрать ")
-			add_button(label, "interact", false, Rect2(Vector2(size.x - edge - 96, size.y - edge - 100), Vector2(96, 100)))
+			add_button(label, "interact", false, Rect2(Vector2(size.x - edge - 96, size.y - edge - 256), Vector2(96, 100)))
 			if not game.seated and game.beers < 30:
-				add_button("Бег", "sprint", true, Rect2(Vector2(size.x - edge - 172, size.y - edge - 72), Vector2(64, 72)))
-				add_button("Прыжок", "jump", false, Rect2(Vector2(size.x - edge - 96, size.y - edge - 176), Vector2(96, 64)))
+				add_button("Бег", "sprint", true, Rect2(Vector2(size.x - edge - 280, size.y - edge - 256), Vector2(64, 72)))
+				add_button("Прыжок", "jump", false, Rect2(Vector2(size.x - edge - 204, size.y - edge - 256), Vector2(96, 64)))
 			gear = []
 			if not game.packing.active():
 				gear.append(["Стол", "table"])
@@ -108,7 +107,7 @@ func _layout() -> void:
 			if game.foraging.can_eat("berries"):
 				gear.append(["Виноград" if game.stage.urban else "Ягоды", "eat_berries"])
 			if game.tow_target != null or game.nearby_tow_racer():
-				add_button("Трос", "tow", true, Rect2(primary + Vector2(-80, -26), Vector2(68, 68)))
+				add_button("Трос", "tow", true, Rect2(Vector2(size.x - edge - 360, size.y - edge - 256), Vector2(68, 68)))
 		if not gear.is_empty():
 			add_button("Лагерь", "gear", false, Rect2(Vector2(size.x - edge - 216, edge), Vector2(64, 56)))
 		if gear_open and game.placement_kind == "":
@@ -293,8 +292,8 @@ func _draw() -> void:
 	if not map_open and not gear_open and not world_blocked():
 		draw_circle(look_center, LOOK_RADIUS, Color("25352baa"))
 		draw_arc(look_center, LOOK_RADIUS, 0, TAU, 40, Color("dfb270"), 3, true)
-		draw_circle(look_center + look * 28, 22, Color("e3b16bdd"))
-		draw_texture_rect(icons["eye"], Rect2(look_center + look * 28 - Vector2(14, 14), Vector2(28, 28)), false, Color("22342b"))
+		draw_circle(look_center + look * 48, 28, Color("e3b16bdd"))
+		draw_texture_rect(icons["eye"], Rect2(look_center + look * 48 - Vector2(14, 14), Vector2(28, 28)), false, Color("22342b"))
 	for button in buttons:
 		var pressed = false
 		for finger in fingers.values():
