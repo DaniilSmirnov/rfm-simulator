@@ -54,7 +54,17 @@ var racer_targets: Dictionary = {}
 var last_ui_size = Vector2.ZERO
 var last_mobile = false
 
+# In browser builds the Worker serves /api/rooms on the same origin as /vk/.
+# Never attempt to connect to the user's 127.0.0.1 or downgrade HTTPS to HTTP.
+# Native development still uses the localhost Worker unless overridden.
+static func default_server(is_web: bool) -> String:
+	return "" if is_web else "http://127.0.0.1:8787"
+
+func room_endpoint(kind: String) -> String:
+	return server + ("/api/rooms" if kind == "create" else "/api/rooms/%s/%s" % [room_id, kind])
+
 func _ready() -> void:
+	server = default_server(OS.has_feature("web"))
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--room-server="):
 			server = arg.trim_prefix("--room-server=").trim_suffix("/")
@@ -147,8 +157,7 @@ func _request(kind: String, body: Dictionary) -> void:
 	request_kind = kind
 	request_sent_at = Time.get_ticks_usec() / 1000000.0
 	busy = true
-	var path = "/api/rooms" if kind == "create" else "/api/rooms/%s/%s" % [room_id, kind]
-	var err = http.request(server + path, ["Content-Type: application/json"], HTTPClient.METHOD_POST, JSON.stringify(body))
+	var err = http.request(room_endpoint(kind), ["Content-Type: application/json"], HTTPClient.METHOD_POST, JSON.stringify(body))
 	if err != OK:
 		_response(HTTPRequest.RESULT_CANT_CONNECT, 0, PackedStringArray(), PackedByteArray())
 
@@ -193,6 +202,9 @@ func _response(result: int, code: int, _headers: PackedStringArray, bytes: Packe
 			if game.invite_after_room_create:
 				game.invite_after_room_create = false
 				game.invite_status.text = "Не удалось создать комнату: " + message
+				game.invite_status.show()
+				game.invite_button.disabled = false
+				game.toast(game.invite_status.text)
 			game.lobby_ui.refresh()
 		return
 	errors = 0
