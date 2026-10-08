@@ -20,6 +20,7 @@ run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_rolli
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_cargo_selection_order.gd']);
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_camp_cooking.gd']);
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_trunk.gd']);
+run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_niva_integration.gd']);
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_packing.gd']);
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_course_schedule.gd']);
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_navigation_budget.gd']);
