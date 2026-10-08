@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createHash, webcrypto } from 'node:crypto';
-import { accountStore, paymentCallback, paymentCatalog, VkPayments } from '../server/payments-vk.mjs';
+import { accountStore, paymentCallback, paymentCatalog, VkPayments, PAYMENT_HANDLER_VERSION } from '../server/payments-vk.mjs';
 import worker from '../server/worker.mjs';
 import { authenticateLaunch } from '../server/auth-vk.mjs';
 globalThis.crypto ||= webcrypto;
@@ -103,4 +103,26 @@ test('Worker restores account rights on login and gates rooms using server owner
  assert.equal((await api('/api/rooms',{stage:1,car_model:3})).status,403);
  const store=await (await api('/api/vk/store')).json();assert.deepEqual(store.entitlements.skus,['stage_02']);
  assert.equal((await (await api('/api/vk/payments/prepare',{sku:'stage_02'})).json()).owned,true);
+});
+
+
+test('VK reported get_item_test payload succeeds at the Worker callback without granting rights',async()=>{
+ const {env,data}=setup();env.VK_PAYMENTS_TEST_USERS='*';
+ const fields={app_id:'54809523',item:'stage_02',lang:'ru_RU',notification_type:'get_item_test',order_id:'2366798',receiver_id:'87478742',user_id:'87478742'};
+ const response=await worker.fetch(new Request('https://game.test/api/vk/payments/callback',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:signedCallback(fields)}),env);
+ assert.equal(response.status,200);
+ assert.equal(response.headers.get('X-Rally-Payments-Handler'),PAYMENT_HANDLER_VERSION);
+ assert.deepEqual(await response.json(),{response:{item_id:2,title:'Зимний Турини (тест)',photo_url:'',price:1}});
+ assert.equal(data.size,0);
+});
+test('unsupported signed callback reports actual type and deployment marker without interpreting live as test',async()=>{
+ const {env}=setup();
+ for(const type of ['get_item','order_status_change','get_item_test_test','test_get_item','unrecognized']) {
+  const response=await worker.fetch(new Request('https://game.test/api/vk/payments/callback',{method:'POST',body:signedCallback({notification_type:type,item:'stage_02'})}),env);
+  const body=await response.json();assert.equal(body.error.error_code,20);assert.equal(body.error.critical,true);
+  assert.ok(body.error.error_msg.includes('notification_type='+JSON.stringify(type)));
+  assert.ok(body.error.error_msg.includes(PAYMENT_HANDLER_VERSION));
+  assert.ok(!body.error.error_msg.includes(env.VK_APP_SECRET));
+  assert.equal(response.headers.get('X-Rally-Payments-Handler'),PAYMENT_HANDLER_VERSION);
+ }
 });
