@@ -11,9 +11,10 @@ function setup() {
     return Response.json({ token: 'private', player: 'player', room: 'ABC123', host: true });
   }, addEventListener: (name, fn) => { events[name] = fn; } };
   const beacons = [];
-  runInNewContext(source, { window, location: { href: 'https://game.test/', origin: 'https://game.test' }, URL, Blob,
+  const document = { hidden: false, addEventListener: (name, fn) => { events[name] = fn; } };
+  runInNewContext(source, { window, document, location: { href: 'https://game.test/', origin: 'https://game.test' }, URL, Blob,
     navigator: { sendBeacon: (url, body) => beacons.push({ url, body }) }, setInterval: fn => { tick = fn; } });
-  return { window, requests, events, beacons, tick: () => tick() };
+  return { window, document, requests, events, beacons, tick: () => tick() };
 }
 const settle = () => new Promise(resolve => setTimeout(resolve, 20));
 test('room handshake enables background heartbeat and navigation leave', async () => {
@@ -48,4 +49,19 @@ test('VK heartbeat and leave use the current authorized transport', async () => 
   assert.equal(calls[1].input,'/api/rooms/ABC123/leave');
   assert.equal(calls[1].init.keepalive,true);
   assert.equal(s.beacons.length,0);
+});
+
+test('visibility heartbeat marks host background and foreground without leaving the room', async () => {
+  const s = setup();
+  await s.window.fetch('https://game.test/api/rooms', { method: 'POST' });
+  await settle();
+  s.document.hidden = true;
+  s.events.visibilitychange();
+  assert.equal(JSON.parse(s.requests.at(-1).init.body).background, true);
+  s.document.hidden = false;
+  s.events.visibilitychange();
+  assert.equal(JSON.parse(s.requests.at(-1).init.body).background, false);
+  await s.tick();
+  assert.equal(JSON.parse(s.requests.at(-1).init.body).background, false);
+  assert.equal(s.beacons.length, 0);
 });
