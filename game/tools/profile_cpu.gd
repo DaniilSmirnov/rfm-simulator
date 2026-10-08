@@ -20,6 +20,9 @@ func run():
    racer.node.position = game.race_at(racer.s)
    var direction = game.race_direction(racer.s)
    racer.node.rotation.y = atan2(-direction.x, -direction.z)
+ if args.has("offroad"):
+  game.car.position = game.stage.at(240) + game.stage.side(240) * 35.0
+  game.car.position.y = game.stage.ground(game.car.position)
  print("CPU_PROFILE setup racers=",game.racers.size())
  print("CPU_PROFILE setup stage=",game.selected_stage," max_fps=",Engine.max_fps," samples=300 dt=1/60 headless=true")
  for mode in ["driving", "walking"]:

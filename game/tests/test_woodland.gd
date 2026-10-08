@@ -1,5 +1,9 @@
 extends SceneTree
 const Stage = preload("res://scripts/stage.gd")
+class UnboundedStage:
+	extends "res://scripts/stage.gd"
+	func _trail_near(_pos: Vector3, _trail: Dictionary, _padding: float) -> bool:
+		return true
 var failures = 0
 func check(ok: bool, title: String) -> void:
 	print(("PASS: " if ok else "FAIL: ") + title)
@@ -11,6 +15,31 @@ func run() -> void:
 	var stage = Stage.new()
 	root.add_child(stage)
 	stage.build()
+	var unbounded = UnboundedStage.new()
+	unbounded.clearings = stage.clearings
+	unbounded.trails = stage.trails
+	var random = RandomNumberGenerator.new()
+	random.seed = 101608
+	var heights_match = true
+	for sample in range(300):
+		var point = Vector3(random.randf_range(-180, 180), 0, random.randf_range(-840, 0))
+		heights_match = heights_match and absf(stage.ground(point)-unbounded.ground(point)) < 0.00001
+	for trail in stage.trails:
+		for point in trail.points:
+			for offset in [Vector3.ZERO, Vector3(1,0,1), Vector3(2.2,0,0), Vector3(4,0,0)]:
+				heights_match = heights_match and absf(stage.ground(point+offset)-unbounded.ground(point+offset)) < 0.00001
+	check(heights_match, "trail broadphase preserves terrain height in forest and around trail boundaries")
+	unbounded.free()
+	var preserved = stage.forest_chunk_slots.size() == stage.trees.size()
+	for layer in stage.forest_layers:
+		var count = 0
+		for mm in layer:
+			count += mm.instance_count
+		preserved = preserved and count == stage.trees.size() and layer.size() > 1
+	var unique: Dictionary = {}
+	for slot in stage.forest_chunk_slots:
+		unique[slot] = true
+	check(preserved and unique.size() == stage.trees.size(), "forest chunks preserve every tree once per layer and global collision IDs")
 	check(stage.trees.size() > 5000, "forest has a dense canopy with more than 5000 trees")
 	check(stage.woodland_details.get("ForestGrass", 0) > 20000, "forest floor contains more than 20000 instanced grass tufts")
 	check(stage.woodland_details.get("MushroomCaps", 0) > 300 and stage.woodland_details.get("AntHills", 0) > 30, "mushroom clusters and ant hills populate the woods")
