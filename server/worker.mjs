@@ -1,3 +1,5 @@
+import { accountStore, preparePurchase, paymentCallback, PaymentError } from './payments-vk.mjs';
+export { VkPayments } from './payments-vk.mjs';
 import { AuthError, authenticateLaunch, authenticateSession } from './auth-vk.mjs';
 import { validateRoomSelection } from './store.mjs';
 import { RoomState, RoomError } from './room-core.mjs';
@@ -51,6 +53,13 @@ export default {
     }
     if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
     if (request.method !== 'POST') return json({ error: 'Нужен POST.' }, 405);
+    if (url.pathname === '/api/vk/payments/callback') {
+      try { return json(await paymentCallback(await request.text(), env)); }
+      catch (error) {
+        const known = error instanceof PaymentError;
+        return json({error:{error_code:known ? error.code : 1,error_msg:known ? error.message : 'Платежи временно недоступны.',critical:known ? error.critical : false}});
+      }
+    }
     const origin = request.headers.get('Origin');
     if (origin && origin !== url.origin) return json({ error: 'Недопустимый источник.' }, 403);
     if (Number(request.headers.get('Content-Length')) > 65536) return json({ error: 'Слишком большое сообщение.' }, 413);
@@ -60,7 +69,17 @@ export default {
         if (raw.length > 16384) return json({ error: 'Слишком большое сообщение.' }, 413);
         let body;
         try { body = JSON.parse(raw); } catch { return json({ error: 'Некорректное сообщение.' }, 400); }
-        return json(await authenticateLaunch(body?.launch_params, env));
+        const bootstrap = await authenticateLaunch(body?.launch_params, env);
+        return json({...bootstrap,...await accountStore(env,bootstrap.profile.platform_user_id)});
+      }
+      if (url.pathname === '/api/vk/store' || url.pathname === '/api/vk/payments/prepare') {
+        const session = await authenticateSession(request, env);
+        if (url.pathname === '/api/vk/store') return json(await accountStore(env,session.user));
+        const raw = await request.text();
+        if (raw.length > 1024) return json({error:'Слишком большое сообщение.'},413);
+        let body;
+        try { body = JSON.parse(raw); } catch { return json({error:'Некорректное сообщение.'},400); }
+        return json(await preparePurchase(env,session.user,body?.sku));
       }
       // Anonymous and authenticated players share the same room namespace.
       // An explicitly supplied session must never silently downgrade to anonymous.
@@ -72,12 +91,13 @@ export default {
           let body;
           try { body = JSON.parse(raw); } catch { return json({ error: 'Некорректное сообщение.' }, 400); }
           if (!body || typeof body !== 'object' || Array.isArray(body)) return json({ error: 'Некорректное сообщение.' }, 400);
-          const denied = validateRoomSelection(body, url.pathname === '/api/rooms');
+          const denied = validateRoomSelection(body, url.pathname === '/api/rooms', (await accountStore(env,session.user)).entitlements);
           if (denied) return json({error:denied}, 403);
           request = new Request(request, { body: JSON.stringify({ ...body, car_model: body.car_model ?? 0, name: session.nickname }) });
         }
       }
     } catch (error) {
+      if (error instanceof PaymentError) return json({error:error.message},error.critical ? 403 : 503);
       if (error instanceof AuthError) return json({ error: error.message }, error.status);
       return json({ error: 'Авторизация временно недоступна.' }, 503);
     }

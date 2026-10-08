@@ -5,6 +5,10 @@ var previews: Array[SubViewport] = []
 var cameras: Array[Camera3D] = []
 var images: Array[TextureRect] = []
 var states: Array[Label] = []
+var purchase_actions: HBoxContainer
+var purchase_button: Button
+var check_purchase: Button
+var purchase_status: Label
 var return_button: Button
 var host_pause: PanelContainer
 var last_size = Vector2.ZERO
@@ -54,6 +58,27 @@ func finish(parent: Control) -> void:
 	text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	host_pause.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	host_pause.hide()
+	var actions = HBoxContainer.new()
+	purchase_actions = actions
+	parent.add_child(actions)
+	purchase_button = Button.new()
+	purchase_button.custom_minimum_size.y = 40
+	purchase_button.pressed.connect(func(): game.platform_service.buy("stage_02"))
+	purchase_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	purchase_button.add_theme_font_size_override("font_size", 14)
+	actions.add_child(purchase_button)
+	check_purchase = Button.new()
+	check_purchase.text = "ПРОВЕРИТЬ ПОКУПКУ"
+	check_purchase.custom_minimum_size.y = 40
+	check_purchase.pressed.connect(func(): game.platform_service.refresh_store())
+	check_purchase.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	check_purchase.add_theme_font_size_override("font_size", 14)
+	actions.add_child(check_purchase)
+	purchase_status = game._label(parent, "", 14)
+	purchase_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	purchase_button.hide()
+	check_purchase.hide()
+	purchase_status.hide()
 	refresh.call_deferred()
 
 func allowed(kind: String, index: int) -> bool:
@@ -62,11 +87,22 @@ func allowed(kind: String, index: int) -> bool:
 func refresh() -> void:
 	if previews.size() < 2:
 		return
+	var service = game.platform_service
+	var product = service.product("stage", game.stage_choice.selected) if service != null else {}
+	var can_buy: bool = product.get("purchase_enabled", false) and not allowed("stage", game.stage_choice.selected)
+	purchase_button.visible = can_buy and not game.playing
+	purchase_button.disabled = service.busy if service != null else true
+	purchase_button.text = "ТЕСТ: ОТКРЫТЬ СУ · %s ГОЛОС(ОВ)" % str(product.get("price", ""))
+	check_purchase.visible = service != null and service.profile.get("platform") == "vk" and (can_buy or not service.purchase_message.is_empty()) and not game.playing
+	purchase_actions.visible = purchase_button.visible or check_purchase.visible
+	check_purchase.disabled = service.busy if service != null else true
+	purchase_status.text = service.purchase_message if service != null else ""
+	purchase_status.visible = not purchase_status.text.is_empty() and not game.playing
 	var car_ok = allowed("car", game.car_choice.selected)
 	var stage_ok = allowed("stage", game.stage_choice.selected)
 	for i in range(2):
 		var ok = car_ok if i == 0 else stage_ok
-		states[i].text = "Доступно для выезда" if ok else "Закрыто · продажи ещё не открыты"
+		states[i].text = "Доступно для выезда" if ok else ("Закрыто · доступна тестовая покупка" if i == 1 and can_buy else "Закрыто · продажи ещё не открыты")
 		states[i].add_theme_color_override("font_color", Color("b2bea1") if ok else Color("ffbc83"))
 	var car_target = game.car.position + Vector3(0, 0.9, 0)
 	cameras[0].position = car_target + Vector3(4.8, 2.2, 5.6)

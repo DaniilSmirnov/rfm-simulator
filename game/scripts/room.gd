@@ -70,7 +70,7 @@ func _ready() -> void:
 func _build_ui() -> void:
 	var ui = game.menu.get_parent()
 	lobby = PanelContainer.new()
-	game.menu.get_child(0).add_child(lobby)
+	game.menu_content.add_child(lobby)
 	var box = VBoxContainer.new()
 	box.add_theme_constant_override("separation", 10)
 	lobby.add_child(box)
@@ -130,7 +130,7 @@ func _build_ui() -> void:
 
 func connect_room(id: String) -> void:
 	if game.platform_service != null and (not game.platform_service.can_use("car", game.car_choice.selected) or (id == "" and not game.platform_service.can_use("stage", game.stage_choice.selected))):
-		lobby_status.text = "Выбери доступную машину и СУ. Продажи в VK ещё не открыты."
+		lobby_status.text = "Выбери доступную машину и СУ."
 		return
 	if busy or connected:
 		return

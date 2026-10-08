@@ -23,9 +23,19 @@ func run() -> void:
 	game.select_player_car(9)
 	game.select_stage(2)
 	await capture(game, "desktop-locked")
+	game.select_player_car(0)
+	game.select_stage(1)
+	game.platform_service.profile = {"platform": "vk"}
+	game.platform_service.catalog[1].purchase_enabled = true
+	game.platform_service.catalog[1].price = 1
+	await capture(game, "desktop-test-purchase")
 	root.size = Vector2i(1280, 720)
 	game.enable_mobile()
 	await capture(game, "mobile-lobby")
+	await capture(game, "mobile-test-purchase")
+	game.platform_service.entitlements.skus = ["stage_02"]
+	game.platform_service.purchase_message = "Покупка подтверждена · СУ открыт"
+	await capture(game, "mobile-purchase-confirmed")
 	game.select_player_car(0)
 	game.select_stage(0)
 	game.start_game()

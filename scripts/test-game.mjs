@@ -5,6 +5,7 @@ const project = join(root, 'game');
 run(process.execPath, ['--test',
   join(root,'tests/platform.test.mjs'),
   join(root,'tests/auth-vk.test.mjs'),
+  join(root,'tests/payments-vk.test.mjs'),
   join(root,'tests/store.test.mjs'),
   join(root,'tests/deploy-cloudflare.test.mjs'),
   join(root,'tests/fullscreen.test.mjs'),
