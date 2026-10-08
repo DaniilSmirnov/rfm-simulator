@@ -583,7 +583,7 @@ func _mixed_forest(cooperative: bool = false) -> void:
 	var forest_rng = RandomNumberGenerator.new()
 	forest_rng.seed = 71020265
 	var tree_data: Array[Dictionary] = []
-	for i in range(3600):
+	for i in range(7000):
 		if cooperative and i % 200 == 0:
 			await get_tree().process_frame
 		var s = forest_rng.randf_range(VILLAGE_START - 52.0, VILLAGE_END + 52.0)
@@ -600,7 +600,7 @@ func _mixed_forest(cooperative: bool = false) -> void:
 			"shade": forest_rng.randf_range(-0.025, 0.045),
 		})
 		mixed_tree_count += 1
-		if mixed_tree_count >= 1050:
+		if mixed_tree_count >= 1600:
 			break
 	for layer in range(4):
 		var poses: Array = []
@@ -801,7 +801,7 @@ func _landscape() -> void:
 			Props.cylinder(root, p + Vector3(0, 3.5, 0), 0.10, 0.06, 7, Color("795e44"), 8)
 			Props.cylinder(root, p + Vector3(0, 5, 0), 1.5, 0.08, 8, Color("426345"), 10)
 	for i in range(18):
-		var p = Vector3((-1.0 if i % 2 else 1.0) * (180 + i % 3 * 25), -20, -i * 55)
+		var p = Vector3((-1.0 if i % 2 else 1.0) * (900 + i % 3 * 80), -20, -i * 55)
 		Props.cylinder(root, p, 150, 0, 100 + i % 4 * 16, Color("84917a"), 12)
 	_batch(root, Transform3D.IDENTITY)
 
