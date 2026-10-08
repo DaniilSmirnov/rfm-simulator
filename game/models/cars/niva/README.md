@@ -19,13 +19,17 @@ niva_low_poly.mtl  6ec585900a845baeda825c8b374db507a62f9fea368cb7a9a2cb0de849404
 
 **Coordinates:** forward = `-Z`, up = `+Y`, center approximately at the origin. Keep OBJ and MTL together so Godot can import their material references.
 
-## Acceptance checklist before replacing vehicle 2
+## Integration
 
-1. Confirm the committed OBJ and MTL still match the SHA-256 hashes above.
-2. Run the Godot editor import and then `godot --headless --path game --script res://tools/verify_niva_asset.gd`. The script must exit 0, confirm face counts/bounds, and find the materials file.
-3. Inspect a preview using `NivaAsset.create_preview()` from `res://scripts/niva_asset.gd`: round lamps face forward, front is `-Z`, side/rear window material is opaque, no hood cargo.
-4. Convert the rear door into a separately animated part, without rotating the rear row, side panels, roof, or spare wheel. Validate opened/closed trunk and cargo placement.
-5. Recheck wheel motion, car dimensions, camera framing, selection, multiplayer replication, and collision against the current variant 2.
-6. Only after these checks: route `RallyProps.player_car(2)` to the imported Niva and cover it with regression tests. Do not remove the procedural fallback prematurely.
+The original `niva_low_poly.obj` and `.mtl` remain as the approved reference.
+Two additional generated files provide moving-part geometry:
 
-No gameplay code is switched in this preparatory branch.
+- `niva_body_static.obj` — static shell, lights, glass and trim; excludes tailgate and rotating wheels
+- `niva_tailgate.obj` — only the upper rear door panel with opaque rear window and lower seal
+- `niva_wheels.obj` — four rubber wheels and matching hubs, split into rotating pivots at runtime
+
+`game/scripts/niva_asset.gd` creates `PlayerCar_2` with a separate `TrunkHinge/NivaTailgate_Lid` while reusing the standard inventory and auto-open behavior. The source mesh uses forward `-Z`. The body and wheels remain stationary with respect to the hinge; wheels rotate as the vehicle moves.
+
+## Verification
+
+Run Godot import, then `npm test` to execute `verify_niva_asset.gd`, `test_niva_integration.gd`, and existing `test_trunk.gd`. The tests assert that only the rear door rotates, all cargo is accessible, and wheels animate with driving. Visually inspect the rear panel's seams and alignment in a renderer before publishing a release.
