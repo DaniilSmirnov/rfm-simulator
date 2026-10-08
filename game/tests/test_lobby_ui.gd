@@ -45,6 +45,18 @@ func run() -> void:
 	game.room.world_paused = false
 	game.lobby_ui._process(0)
 	check(not game.lobby_ui.host_pause.visible, "resuming host hides banner")
+	game.enable_mobile()
+	game.playing = false
+	game.lobby_ui._process(0)
+	check(not game.mobile_top.visible and not game.mobile_bottom.visible, "main mobile menu has no empty HUD backgrounds")
+	game.playing = true
+	game.paused = true
+	game.lobby_ui._process(0)
+	check(not game.mobile_top.visible and not game.mobile_bottom.visible, "mobile pause hides gameplay HUD panels")
+	game.paused = false
+	game.info_label.text = "20 КМ/Ч"
+	game.lobby_ui._process(0)
+	check(game.mobile_top.visible and game.mobile_bottom.visible, "resuming restores populated HUD")
 	game.room.connected = false
 	game.queue_free()
 	await process_frame

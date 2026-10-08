@@ -104,3 +104,7 @@ func _process(_delta: float) -> void:
 	if game.room != null:
 		host_pause.visible = game.room.connected and not game.room.is_host and game.room.world_paused and not game.paused and not game.dead and not game.finished
 	return_button.visible = game.playing
+	if game.mobile_mode:
+		var active_hud = game.playing and not game.paused and not game.dead and not game.finished and not host_pause.visible
+		game.mobile_top.visible = active_hud
+		game.mobile_bottom.visible = active_hud and not game.info_label.text.is_empty()
