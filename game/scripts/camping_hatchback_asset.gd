@@ -29,7 +29,7 @@ static func build() -> Node3D:
 	root.add_child(details)
 	var roof = Node3D.new()
 	roof.name = "RoofHatchback"
-	details.add_child(roof)
+	root.add_child(roof)
 	for part in PARTS:
 		var mesh: Mesh = load(ASSET_ROOT + part + ".obj")
 		if mesh == null:
