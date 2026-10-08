@@ -59,6 +59,9 @@ try {
   const deadline=Date.now()+90000;
   while((!profile||!access)&&!failure&&Date.now()<deadline)await page.waitForTimeout(250);
   assert.ok(!failure,failure);
+  const bounds=await page.locator('#canvas').boundingBox();
+  const viewport=page.viewportSize();
+  assert.deepEqual(bounds,{x:0,y:0,width:viewport.width,height:viewport.height},'game canvas must fill the browser viewport');
   assert.ok(profile,'Godot profile roundtrip timed out: '+logs.slice(-20).join('\n'));
   assert.equal(profile.platform,target==='dist'?'standalone':isVk?'vk':'vk-prototype');
   assert.equal(profile.verified,isVk);
