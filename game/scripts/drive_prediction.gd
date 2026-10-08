@@ -65,66 +65,7 @@ func emit_event(event: Dictionary) -> void:
 		events.append(event)
 
 func step(c: Dictionary, stage, model: int) -> void:
-	if c.get("recover", false) and not context.get("racing", false):
-		recovery_ack = int(c.seq)
-		node.position = stage.at(stage.road_s(node.position))
-		var direction = stage.direction(stage.road_s(node.position))
-		yaw = atan2(-direction.x, -direction.z)
-		motion = Motion.new()
-		visual_offset = Vector3.ZERO
-		visual_yaw = 0.0
-	var dt = motion.handling.STEP
-	for tick in range(int(c.ticks)):
-		if condition <= 0:
-			break
-		var previous = node.position
-		var old_yaw = yaw
-		var offroad = stage.road_distance(previous) > 4.1
-		yaw = motion.handling.advance(motion, yaw, c.throttle, c.steer, c.brake, stage.grip(previous), 7.0 if offroad else 19.0, model, dt)
-		var forward = Vector3(-sin(yaw), 0, -cos(yaw))
-		var next = previous + motion.velocity * dt
-		next.x = clampf(next.x, -185, 185)
-		next.z = clampf(next.z, -stage.LENGTH + 5, 10)
-		impact_timer = maxf(0, impact_timer - dt)
-		var rock = stage.rock_hit(previous, next, 0.85)
-		if not rock.is_empty():
-			next = rock.position
-			var closing = motion.rock_impulse(rock.normal, yaw)
-			if closing > 1 and impact_timer <= 0:
-				condition = maxf(0, condition - minf(14, closing * 0.65))
-				impact_timer = 0.4
-				emit_event({"kind": "impact", "speed": closing})
-		if stage.urban:
-			var city = stage.city.hit(previous, next, 0.85)
-			if not city.is_empty():
-				next = city.position
-				emit_event({"kind": "city", "hit": city, "velocity": motion.velocity})
-				var closing = motion.rock_impulse(city.normal, yaw)
-				if closing > 1 and impact_timer <= 0:
-					condition = maxf(0, condition - minf(20, closing * 0.85))
-					impact_timer = 0.4
-					emit_event({"kind": "impact", "speed": closing})
-		var tree = stage.obstacle_hit(previous, next, 0.95, true)
-		var blocked = tree >= 0
-		if blocked and motion.velocity.length() > 5 and not stage.fallen.has(tree):
-			emit_event({"kind": "tree", "index": tree, "velocity": motion.velocity})
-		for contact in context.get("contacts", []):
-			var other: Vector3 = contact.position
-			var radius = 1.55 if contact.get("person", false) else 2.5
-			if Motion.swept_hit(previous + Vector3(0, 0.7, 0), next + Vector3(0, 0.7, 0), other + Vector3(0, 0.7, 0), radius) and next.distance_to(other) <= previous.distance_to(other):
-				blocked = true
-				if contact.get("person", false) and absf(motion.velocity.dot(forward)) > 5:
-					emit_event({"kind": "person"})
-		if blocked:
-			condition = maxf(0, condition - motion.velocity.length() * 1.4)
-			emit_event({"kind": "impact", "speed": motion.velocity.length()})
-			motion.velocity *= -0.25
-		else:
-			node.position = next
-		var speed = motion.velocity.dot(forward)
-		motion.suspension(node, stage, dt, yaw, (yaw - old_yaw) / dt * speed)
-		if offroad and absf(speed) > 5:
-			condition = maxf(0, condition - dt * 0.15)
+	preload("res://scripts/vehicle_simulation.gd").advance(self, c, stage, model)
 
 func predict(ticks: int, throttle: float, steer: float, brake: bool, stage, model: int, recover: bool = false) -> void:
 	if ticks <= 0 or pending.size() >= LIMIT:

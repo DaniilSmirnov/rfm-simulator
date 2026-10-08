@@ -28,11 +28,34 @@ func run() -> void:
 	guest.room.connected = true
 	check(guest.room.submit("table") and guest.camp == null, "guest camp action queues without changing local world")
 	check(not guest.room.submit("beer"), "beer animation remains local")
+	for index in range(7): guest.room.submit("flag")
+	var queued_sequence = guest.room.sequence
+	check(not guest.room.submit("flag") and guest.room.commands.size() == 8 and guest.room.sequence == queued_sequence, "full queue rejects without inventing a sequence or local success")
+	guest.room.commands.clear()
 	var cmd = {"id": "guest:1", "action": "table", "state": {"in_car": false, "pos": host.room.a(host.stage.clearings[0]), "car": host.room.a(guest.car.position), "yaw": 0.0}}
 	var car_before = host.car.position
 	cmd.placement = {"pos": host.room.a(host.stage.clearings[0] + Vector3(0, 0, -2.5)), "yaw": 0}
 	host.cargo.held["guest"] = {"kind": "table", "owner": "guest", "returning": false}
-	host.room._apply_command(cmd)
+	var actor_before = [host.car.transform, host.in_car, host.walker, host.view_yaw, host.beers, host.eat_time, host.drink_time]
+	var command_actor_state = guest.room.local_state()
+	command_actor_state.in_car = false
+	command_actor_state.drive_enabled = false
+	command_actor_state.pos = cmd.state.pos
+	var reply = {"players": [{"id": "guest", "name": "Guest", "slot": 1, "car_model": 0, "state": command_actor_state}], "commands": [cmd], "world": null}
+	host.room.request_kind = "sync"
+	host.paused = true
+	host.room._response(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), JSON.stringify(reply).to_utf8_buffer())
+	check(host.camp == null and host.room.acknowledgements.is_empty() and host.room.processed.is_empty(), "paused host defers commands without acknowledging or losing them")
+	host.paused = false
+	host.room._response(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), JSON.stringify(reply).to_utf8_buffer())
+	check(host.room.command_results[cmd.id].status == "applied", "resume executes the deferred command and reports application")
+	host.cargo.held["guest"] = {"kind": "table", "owner": "guest", "returning": false}
+	host.room._response(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), JSON.stringify(reply).to_utf8_buffer())
+	check(host.cargo.held.has("guest"), "retry does not consume guest equipment a second time")
+	reply.commands = []
+	host.room._response(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), JSON.stringify(reply).to_utf8_buffer())
+	check(host.room.processed.is_empty() and host.room.command_results.is_empty(), "acknowledged command bookkeeping is released")
+	check(actor_before == [host.car.transform, host.in_car, host.walker, host.view_yaw, host.beers, host.eat_time, host.drink_time], "guest action never mutates host actor fields")
 	check(host.camp != null and host.car.position == car_before and host.in_car, "host executes guest placement and restores its player")
 	guest.room.apply_world(host.room.world_state())
 	check(guest.camp != null and guest.camp.position.distance_to(host.camp.position) < 0.02, "shared table has identical position")

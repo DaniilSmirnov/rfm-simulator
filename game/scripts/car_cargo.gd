@@ -4,35 +4,35 @@ const KINDS = Props.CARGO_KINDS
 var game: Node3D
 var opened: Dictionary = {}
 var held: Dictionary = {}
-var context: Dictionary = {}
 var hand_box: Node3D
 var hand_kind = ""
 
-func actor() -> String:
-	return str(context.get("owner", game.chair_owner()))
+func actor(context = null) -> String:
+	return game.actor(context).owner
 
-func available() -> bool:
-	return game.playing and not game.in_car and not game.paused and not game.dead and not game.finished and game.beers < 30 and (not context.is_empty() or (game.drink_time < 0 and game.eat_time < 0))
+func available(context = null) -> bool:
+	var who = game.actor(context)
+	return game.session.can_act() and who.can_act() and (who.remote or (who.drink_time < 0 and who.eat_time < 0))
 
-func poses() -> Dictionary:
+func poses(context = null) -> Dictionary:
 	var result = {}
 	var local_owner = game.chair_owner()
-	result[local_owner] = {"pos": context.get("host_car", game.car.position), "heading": game.heading, "variant": game.selected_car}
+	result[local_owner] = {"pos": game.car.position, "heading": game.heading, "variant": game.selected_car}
 	for owner in game.room.peers:
 		var peer = game.room.peers[owner]
 		if peer.state != null and peer.has("car"):
 			result[owner] = {"pos": game.room.v(peer.state.car), "heading": float(peer.state.heading), "variant": int(peer.car.get_meta("variant", 0))}
-	if not context.is_empty():
-		result[actor()] = {"pos": context.car, "heading": context.heading, "variant": context.variant}
+	if context != null:
+		result[context.owner] = {"pos": context.car_position, "heading": context.heading, "variant": context.variant}
 	return result
 
 func point(pose: Dictionary) -> Vector3:
 	var p = Props.trunk_profile(int(pose.variant))
 	return pose.pos + Vector3(0, p.floor + 0.42, p.rear + 0.25).rotated(Vector3.UP, pose.heading)
 
-func near(owner: String) -> bool:
-	var cars = poses()
-	return cars.has(owner) and game.walker.distance_to(point(cars[owner])) < 3.3
+func near(owner: String, context = null) -> bool:
+	var cars = poses(context)
+	return cars.has(owner) and game.actor(context).position.distance_to(point(cars[owner])) < 3.3
 
 # The lid opens in a broad proximity zone; only its rear access area reserves F.
 # Side doors remain usable even when the lid is open for a nearby spectator.
@@ -63,26 +63,29 @@ func boxes(owner: String) -> Array:
 		result.append(stored(kind, owner))
 	return result
 
-func target_owner(spot: Vector3) -> String:
-	for owner in poses():
-		if point(poses()[owner]).distance_to(spot) < 0.6:
+func target_owner(spot: Vector3, context = null) -> String:
+	var cars = poses(context)
+	for owner in cars:
+		if point(cars[owner]).distance_to(spot) < 0.6:
 			return str(owner)
 	return ""
 
 # Derive lid state from people near the rear, independently of gaze and car model.
 # A wider closing radius prevents repeated opening/closing at the edge.
-func refresh_opened() -> void:
-	var cars = poses()
+func refresh_opened(context = null) -> void:
+	var cars = poses(context)
 	var visitors: Array = []
 	if game.playing and not game.dead and not game.finished:
 		if not game.in_car and game.beers < 30:
 			visitors.append(game.walker)
 		for id in game.room.peers:
-			if not context.is_empty() and id == actor():
+			if context != null and id == context.owner:
 				continue
 			var peer = game.room.peers[id]
 			if peer.state != null and peer.state.has("pos") and not peer.state.in_car and int(peer.state.get("beers", 0)) < 30:
 				visitors.append(game.room.v(peer.state.pos))
+	if context != null and context.can_act():
+		visitors.append(context.position)
 	for owner in opened.keys():
 		if not cars.has(owner):
 			opened.erase(owner)
@@ -90,8 +93,8 @@ func refresh_opened() -> void:
 		var moving = absf(game.speed) > 1.0 if owner == game.chair_owner() else false
 		if game.room.peers.has(owner) and game.room.peers[owner].state != null:
 			moving = absf(float(game.room.peers[owner].state.get("speed", 0))) > 1.0
-		if not context.is_empty() and owner == actor():
-			moving = absf(float(context.get("speed", 0))) > 1.0
+		if context != null and owner == context.owner:
+			moving = absf(float(context.speed)) > 1.0
 		var radius = 4.1 if opened.get(owner, false) else 3.3
 		var present = false
 		if not moving:
@@ -102,39 +105,39 @@ func refresh_opened() -> void:
 		opened[owner] = present
 
 # Compatibility with queued commands from older clients; proximity owns the lid.
-func toggle(spot: Vector3) -> bool:
-	refresh_opened()
-	var owner = target_owner(spot)
-	return available() and owner != "" and near(owner) and opened.get(owner, false)
+func toggle(spot: Vector3, context = null) -> bool:
+	refresh_opened(context)
+	var owner = target_owner(spot, context)
+	return available(context) and owner != "" and near(owner, context) and opened.get(owner, false)
 
-func take(kind: String) -> bool:
-	refresh_opened()
-	if kind not in KINDS or not available() or game.packing.active():
+func take(kind: String, context = null) -> bool:
+	refresh_opened(context)
+	if kind not in KINDS or not available(context) or game.packing.active():
 		return false
-	var owner = actor()
+	var owner = actor(context)
 	if held.has(owner):
 		return held[owner].kind == kind and not held[owner].returning
 	# Moving an existing item does not produce another box or duplicate equipment.
 	for item in game.packing.items():
-		if (item.kind == kind or (kind == "chairs" and item.kind == "chair")) and owner_of(item) == owner and game.walker.distance_to(item.node.global_position) < 3.5:
-			if game.room.submit("take_gear", {"resource_id": KINDS.find(kind)}):
-				return true
+		if (item.kind == kind or (kind == "chairs" and item.kind == "chair")) and owner_of(item) == owner and game.actor(context).position.distance_to(item.node.global_position) < 3.5:
+			if context == null and game.room.routes_commands():
+				return game.room.submit("take_gear", {"resource_id": KINDS.find(kind)})
 			held[owner] = {"kind": kind, "owner": owner, "returning": false}
 			return true
-	if not opened.get(owner, false) or not near(owner) or not stored(kind, owner):
+	if not opened.get(owner, false) or not near(owner, context) or not stored(kind, owner):
 		game.toast("Подойди к задней части своей машины — багажник откроется сам.")
 		return false
 	if (kind == "table" and game.camp != null) or (kind == "grill" and game.grill != null) or (kind == "firewood" and game.camp_cooking.fire != null) or (kind == "cauldron" and game.camp_cooking.pot != null):
 		game.toast("Общий предмет уже установлен. Возьми свой стул.")
 		return false
-	if game.room.submit("take_gear", {"resource_id": KINDS.find(kind)}):
-		return true
+	if context == null and game.room.routes_commands():
+		return game.room.submit("take_gear", {"resource_id": KINDS.find(kind)})
 	held[owner] = {"kind": kind, "owner": owner, "returning": false}
 	return true
 
-func deploy(kind: String, spot: Vector3, yaw: float) -> bool:
-	var owner = actor()
-	if not available() or game.packing.active() or not held.has(owner) or held[owner].kind != kind or held[owner].returning or game.walker.distance_to(spot) > 5:
+func deploy(kind: String, spot: Vector3, yaw: float, context = null) -> bool:
+	var owner = actor(context)
+	if not available(context) or game.packing.active() or not held.has(owner) or held[owner].kind != kind or held[owner].returning or game.actor(context).position.distance_to(spot) > 5:
 		return false
 	var existing = game.camp if kind == "table" else (game.grill if kind == "grill" else (game.camp_cooking.fire if kind == "firewood" else (game.camp_cooking.pot if kind == "cauldron" else null)))
 	if existing != null and str(existing.get_meta("gear_owner", owner)) != owner:
@@ -142,19 +145,19 @@ func deploy(kind: String, spot: Vector3, yaw: float) -> bool:
 		return false
 	var placed = false
 	match kind:
-		"table": placed = game.place_table(spot, yaw)
-		"chairs": placed = game.place_chairs(spot, yaw, owner)
-		"grill": placed = game.start_grill(spot, yaw)
-		"firewood": placed = game.camp_cooking.deploy_fire(spot, yaw)
-		"cauldron": placed = game.camp_cooking.place_pot(spot, yaw)
+		"table": placed = game.place_table(spot, yaw, context)
+		"chairs": placed = game.place_chairs(spot, yaw, owner, context)
+		"grill": placed = game.start_grill(spot, yaw, false, context)
+		"firewood": placed = game.camp_cooking.deploy_fire(spot, yaw, context)
+		"cauldron": placed = game.camp_cooking.place_pot(spot, yaw, context)
 	if placed:
 		var node = game.camp if kind == "table" else (game.grill if kind == "grill" else (game.camp_cooking.fire if kind == "firewood" else (game.camp_cooking.pot if kind == "cauldron" else game.personal_chairs[owner])))
 		node.set_meta("gear_owner", owner)
 		held.erase(owner)
 	return placed
 
-func pick_up(item: Dictionary) -> bool:
-	var owner = actor()
+func pick_up(item: Dictionary, context = null) -> bool:
+	var owner = actor(context)
 	if held.has(owner):
 		game.toast("Сначала верни предмет в открытый багажник.")
 		return false
@@ -162,22 +165,22 @@ func pick_up(item: Dictionary) -> bool:
 	held[owner] = {"kind": kind, "owner": owner_of(item), "returning": true}
 	return true
 
-func return_item(spot: Vector3) -> bool:
-	refresh_opened()
-	if not available() or not held.has(actor()):
+func return_item(spot: Vector3, context = null) -> bool:
+	refresh_opened(context)
+	if not available(context) or not held.has(actor(context)):
 		return false
-	var carry = held[actor()]
+	var carry = held[actor(context)]
 	# If the owner left the room, another car can take abandoned equipment home.
-	var cars = poses()
-	var owner = str(carry.owner) if cars.has(carry.owner) else actor()
+	var cars = poses(context)
+	var owner = str(carry.owner) if cars.has(carry.owner) else actor(context)
 	# Validate the carried item's destination directly. Nearby trunks can overlap;
 	# selecting the first car at this point may select the carrier's car instead.
-	if not cars.has(owner) or point(cars[owner]).distance_to(spot) >= 0.6 or not opened.get(owner, false) or not near(owner):
+	if not cars.has(owner) or point(cars[owner]).distance_to(spot) >= 0.6 or not opened.get(owner, false) or not near(owner, context):
 		game.toast("Подойди к багажнику машины владельца и верни коробку через F.")
 		return false
-	if game.room.submit("return_gear", {"pos": game.room.a(spot), "yaw": 0.0}):
-		return true
-	held.erase(actor())
+	if context == null and game.room.routes_commands():
+		return game.room.submit("return_gear", {"pos": game.room.a(spot), "yaw": 0.0})
+	held.erase(actor(context))
 	game.toast("Коробка снова в багажнике.")
 	return true
 

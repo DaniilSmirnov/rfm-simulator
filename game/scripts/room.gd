@@ -23,7 +23,11 @@ var last_world_time = -1.0
 var racer_motion: Dictionary = {}
 const Props = preload("res://scripts/props.gd")
 const SHARED_ACTIONS = ["table", "chairs", "grill", "flag", "eat", "rally", "collect", "mount_mushroom", "eat_mushroom", "eat_berries", "pack", "take_gear", "return_gear", "trunk", "firewood", "cauldron", "plov_cook", "eat_plov"]
+var ui_service = preload("res://scripts/room_ui.gd").new()
+var codec = preload("res://scripts/world_snapshot.gd").new()
+var executor = preload("res://scripts/command_executor.gd").new()
 var game: Node3D
+var transport: Node
 var http: HTTPRequest
 var server = "http://127.0.0.1:8787"
 var room_id = ""
@@ -39,8 +43,13 @@ var sequence = 0
 var commands: Array = []
 var acknowledgements: Array = []
 var processed: Dictionary = {}
+var command_results: Dictionary = {}
+var seen_results: Dictionary = {}
+const WorldProtocol = preload("res://scripts/world_protocol.gd")
 var peers: Dictionary = {}
-var world_paused = false
+var world_paused: bool:
+	get: return game.session.pause_causes.has("host")
+	set(value): game.session.set_pause("host", value)
 var tow_owner = ""
 var last_notice = ""
 var lobby: PanelContainer
@@ -55,78 +64,22 @@ var last_ui_size = Vector2.ZERO
 var last_mobile = false
 
 func _ready() -> void:
+	executor.game = game
+	codec.game = game
+	codec.room = self
+	ui_service.game = game
+	ui_service.room = self
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--room-server="):
 			server = arg.trim_prefix("--room-server=").trim_suffix("/")
-	http = HTTPRequest.new()
-	http.timeout = 8
-	# Browser fetch already decompresses response bodies.
-	http.accept_gzip = not OS.has_feature("web")
-	http.body_size_limit = 131072
-	add_child(http)
-	http.request_completed.connect(_response)
+	transport = preload("res://scripts/room_transport.gd").new()
+	transport.completed.connect(_response)
+	add_child(transport)
+	http = transport.http
 	_build_ui()
 
 func _build_ui() -> void:
-	var ui = game.menu.get_parent()
-	lobby = PanelContainer.new()
-	game.menu_content.add_child(lobby)
-	var box = VBoxContainer.new()
-	box.add_theme_constant_override("separation", 10)
-	lobby.add_child(box)
-	game._label(box, "НАЧАТЬ ВЫЕЗД", 16, Color("dfb270"))
-	name_input = LineEdit.new()
-	name_input.placeholder_text = "Твой ник"
-	name_input.max_length = 24
-	name_input.text = "Овощ"
-	name_input.custom_minimum_size.y = 48
-	name_input.add_theme_font_size_override("font_size", 22)
-	var fields = HBoxContainer.new()
-	fields.add_theme_constant_override("separation", 12)
-	box.add_child(fields)
-	name_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	fields.add_child(name_input)
-	id_input = LineEdit.new()
-	id_input.placeholder_text = "ID комнаты · 6 символов"
-	id_input.max_length = 6
-	id_input.custom_minimum_size.y = 48
-	id_input.add_theme_font_size_override("font_size", 22)
-	id_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	fields.add_child(id_input)
-	var row = HBoxContainer.new()
-	row.add_theme_constant_override("separation", 12)
-	box.add_child(row)
-	create_button = Button.new()
-	create_button.text = "СОЗДАТЬ ВЫЕЗД"
-	create_button.add_theme_color_override("font_color", Color("25352b"))
-	create_button.add_theme_stylebox_override("normal", game._panel(Color("e3b16b")))
-	create_button.add_theme_stylebox_override("hover", game._panel(Color("f1c687")))
-	create_button.add_theme_stylebox_override("pressed", game._panel(Color("c78f4a")))
-	join_button = Button.new()
-	join_button.text = "ВОЙТИ ПО ID"
-	for button in [create_button, join_button]:
-		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		button.custom_minimum_size.y = 48
-		button.add_theme_font_size_override("font_size", 22)
-		row.add_child(button)
-	create_button.pressed.connect(func(): connect_room(""))
-	join_button.pressed.connect(func():
-		if id_input.text.strip_edges() == "":
-			lobby_status.text = "Введи ID комнаты."
-		else:
-			connect_room(id_input.text.strip_edges().to_upper())
-	)
-	lobby_status = game._label(box, "До 8 игроков. Общий лагерь и ралли.\nСоздатель должен оставаться в комнате.", 18)
-	lobby_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	id_input.text_changed.connect(func(_text): game.lobby_ui.refresh())
-	game.lobby_ui.refresh.call_deferred()
-	room_label = game._label(ui, "", 18, Color("ffe4a5"))
-	room_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-	room_label.offset_left = 36
-	room_label.offset_right = -180
-	room_label.offset_top = -45
-	room_label.offset_bottom = -8
-	room_label.hide()
+	ui_service._build_ui()
 
 func connect_room(id: String) -> void:
 	if game.platform_service != null and (not game.platform_service.can_use("car", game.car_choice.selected) or (id == "" and not game.platform_service.can_use("stage", game.stage_choice.selected))):
@@ -148,9 +101,7 @@ func _request(kind: String, body: Dictionary) -> void:
 	request_sent_at = Time.get_ticks_usec() / 1000000.0
 	busy = true
 	var path = "/api/rooms" if kind == "create" else "/api/rooms/%s/%s" % [room_id, kind]
-	var err = http.request(server + path, ["Content-Type: application/json"], HTTPClient.METHOD_POST, JSON.stringify(body))
-	if err != OK:
-		_response(HTTPRequest.RESULT_CANT_CONNECT, 0, PackedStringArray(), PackedByteArray())
+	transport.send(server + path, body)
 
 func _response(result: int, code: int, _headers: PackedStringArray, bytes: PackedByteArray) -> void:
 	busy = false
@@ -178,6 +129,12 @@ func _response(result: int, code: int, _headers: PackedStringArray, bytes: Packe
 		update_server_clock(float(data.server_time))
 	if request_kind in ["create", "join"]:
 		prediction = Prediction.new()
+		processed.clear()
+		command_results.clear()
+		acknowledgements.clear()
+		commands.clear()
+		seen_results.clear()
+		sequence = 0
 		prediction_enabled = false
 		input_clock = 0.0
 		host_drives.clear()
@@ -204,6 +161,13 @@ func _response(result: int, code: int, _headers: PackedStringArray, bytes: Packe
 		game.toast("Комната %s · %s. Передай ID друзьям!" % [room_id, game.car.get_meta("model")])
 		print("ROOM_CONNECTED ", room_id, " host=", is_host)
 	else:
+		# Validate before prediction, peers or scene reconciliation consume nested data.
+		if not is_host and data.world is Dictionary:
+			var validation_error = WorldProtocol.validate(data.world, false)
+			if validation_error != "":
+				reject_snapshot(validation_error)
+				return
+			world_paused = bool(data.world.get("paused", false))
 		if not is_host and data.world is Dictionary:
 			var drive_stamp = float(data.get("world_time", -1))
 			if drive_stamp > authority_stamp:
@@ -213,12 +177,33 @@ func _response(result: int, code: int, _headers: PackedStringArray, bytes: Packe
 		if is_host:
 			for command in data.commands:
 				if not processed.has(command.id):
-					_apply_command(command)
+					var outcome = _apply_command(command)
+					if outcome.status == "deferred":
+						continue
 					processed[command.id] = true
+					command_results[command.id] = {"id": command.id, "status": outcome.status, "reason": outcome.reason}
 				if command.id not in acknowledgements:
 					acknowledgements.append(command.id)
+			# Only unacknowledged commands need retry protection.
+			var present = {}
+			for command in data.commands:
+				present[command.id] = true
+			for id in processed.keys():
+				if not present.has(id):
+					processed.erase(id)
+					command_results.erase(id)
+			acknowledgements = acknowledgements.filter(func(id): return present.has(id))
 		else:
 			commands = commands.filter(func(c): return c.seq > int(data.accepted))
+			for outcome in data.get("results", []):
+				if not seen_results.has(outcome.id):
+					seen_results[outcome.id] = true
+					if outcome.status == "rejected":
+						game.toast(str(outcome.get("reason", "Действие недоступно.")))
+			var present_results = {}
+			for outcome in data.get("results", []): present_results[outcome.id] = true
+			for id in seen_results.keys():
+				if not present_results.has(id): seen_results.erase(id)
 			if data.world is Dictionary:
 				var stamp = float(data.get("world_time", -1))
 				if stamp < 0 or stamp > last_world_time:
@@ -273,11 +258,12 @@ func _process(delta: float) -> void:
 		if is_host:
 			body.world = world_state()
 			body.ack = acknowledgements
+			body.results = command_results.values()
 		_request("sync", body)
 	diagnostic_clock += delta
 	if diagnostic_clock >= 5.0:
 		diagnostic_clock = 0.0
-		print("[RFM network] RTT=%.0fms jitter=%.0fms peers=%d" % [round_trip_ms, network_jitter_ms, peers.size()])
+		print("[RFM network] RTT=%.0fms jitter=%.0fms peers=%d send=%dB receive=%dB max_send=%dB" % [round_trip_ms, network_jitter_ms, peers.size(), transport.request_bytes, transport.response_bytes, transport.maximum_request_bytes])
 	game.cargo.refresh_opened()
 	for peer in peers.values():
 		if peer.state == null:
@@ -477,254 +463,42 @@ func _update_peers(players: Array) -> void:
 			peers.erase(id)
 			host_drives.erase(id)
 			drive_budgets.erase(id)
+			game.impact_serials.erase(id)
+			game.foraging.inventories.erase(id)
+			game.foraging.effects.erase(id)
 	game.cargo.release_departed()
 
 func submit(action: String, placement: Dictionary = {}) -> bool:
 	if not connected or is_host or action not in SHARED_ACTIONS:
 		return false
-	if commands.size() < 8:
-		sequence += 1
-		commands.append({"seq": sequence, "action": action, "placement": placement})
-		clock = SYNC_INTERVAL
+	if commands.size() >= 8:
+		game.toast("Очередь действий заполнена. Подожди подтверждения сервера.")
+		return false
+	sequence += 1
+	commands.append({"seq": sequence, "action": action, "placement": placement})
+	clock = SYNC_INTERVAL
 	return true
 
-func _apply_command(c: Dictionary) -> void:
-	acknowledgements = acknowledgements.slice(-64)
-	if game.paused or game.dead or game.finished:
-		return
-	var old = {"in_car": game.in_car, "walker": game.walker, "car": game.car.position, "yaw": game.view_yaw, "beers": game.beers}
-	game.in_car = c.state.in_car
-	game.walker = v(c.state.pos)
-	game.car.position = v(c.state.car)
-	game.view_yaw = c.state.yaw
-	game.beers = int(c.state.get("beers", 0))
-	var placement = c.get("placement", {})
-	var spot = v(placement.pos) if placement.has("pos") else Vector3.INF
-	var yaw = float(placement.get("yaw", 0.0))
-	if spot != Vector3.INF and (spot.distance_to(game.walker) > 5.0 or int(c.state.get("beers", 0)) >= 30):
-		game.in_car = old.in_car
-		game.walker = old.walker
-		game.car.position = old.car
-		game.view_yaw = old.yaw
-		game.beers = old.beers
-		return
-	var actor = str(c.get("player", "guest"))
-	var variant = int(peers[actor].car.get_meta("variant", 0)) if peers.has(actor) and peers[actor].has("car") else 0
-	game.cargo.context = {"owner": actor, "car": v(c.state.car), "heading": float(c.state.get("heading", 0.0)), "variant": variant, "host_car": old.car, "speed": float(c.state.get("speed", 0))}
-	match c.action:
-		"trunk":
-			if spot != Vector3.INF:
-				game.cargo.toggle(spot)
-		"take_gear":
-			var index = int(placement.get("resource_id", -1))
-			if index >= 0 and index < game.cargo.KINDS.size():
-				game.cargo.take(game.cargo.KINDS[index])
-		"return_gear":
-			if spot != Vector3.INF:
-				game.cargo.return_item(spot)
-		"pack":
-			if spot != Vector3.INF:
-				game.packing.pack(spot, true)
-		"table", "chairs", "grill", "firewood", "cauldron":
-			if spot != Vector3.INF:
-				game.cargo.deploy(str(c.action), spot, yaw)
-		"flag":
-			if not game.packing.active():
-				game.place_flag(spot, yaw, str(c.get("player", "guest")))
-		"plov_cook": game.camp_cooking.start()
-		"eat_plov": game.camp_cooking.consume()
-		"eat": game.commit_meat(int(placement.get("source", -2)))
-		"collect": game.foraging.collect(int(placement.get("resource_id", -1)), str(c.get("player", "guest")))
-		"mount_mushroom": game.foraging.mount(int(placement.get("source", -2)), str(c.get("player", "guest")))
-		"eat_mushroom": game.foraging.consume("mushroom", str(c.get("player", "guest")), int(placement.get("source", -2)))
-		"eat_berries": game.foraging.consume("berries", str(c.get("player", "guest")))
-		"rally": game.start_rally()
-	game.cargo.context = {}
-	game.in_car = old.in_car
-	game.walker = old.walker
-	game.car.position = old.car
-	game.view_yaw = old.yaw
-	game.beers = old.beers
+func routes_commands() -> bool:
+	return connected and not is_host
+
+func _apply_command(command: Dictionary) -> Dictionary:
+	var owner = str(command.get("player", "guest"))
+	var model = int(peers[owner].car.get_meta("variant", 0)) if peers.has(owner) and peers[owner].has("car") else 0
+	return executor.execute(command, model)
 
 func world_state() -> Dictionary:
-	var chair_poses = {}
-	for owner in game.personal_chairs:
-		var chair = game.personal_chairs[owner]
-		chair_poses[owner] = {"pos": a(chair.position), "yaw": chair.rotation.y}
-	var flag_poses = {}
-	for owner in game.personal_flags:
-		flag_poses[owner] = []
-		for flag in game.personal_flags[owner]:
-			flag_poses[owner].append({"pos": a(flag.position), "yaw": flag.rotation.y})
-	var racers = []
-	for r in game.racers:
-		racers.append({"id": r.id, "role": r.get("role", "racer"), "zero_index": r.get("zero_index", 0), "variant": r.variant, "pos": a(r.node.position), "yaw": r.node.rotation.y, "tilt": a(r.node.rotation), "state": r.state, "recovery_progress": r.get("recovery_progress", 0), "recovery_helpers": r.get("recovery_helpers", 0)})
-	var driving = {}
-	for id in host_drives:
-		driving[id] = host_drives[id].snapshot()
-	return {"drive_protocol": 1, "driving": driving, "camp_cooking": game.camp_cooking.snapshot(), "cargo": game.cargo.snapshot(), "foraging": game.foraging.snapshot(), "course": game.course.snapshot(), "city_lamps": game.stage.city.snapshot() if game.stage.urban else [], "chair_poses": chair_poses, "flag_poses": flag_poses, "table_yaw": game.camp.rotation.y if game.camp != null else 0.0, "grill_pose": {"pos": a(game.grill.position), "yaw": game.grill.rotation.y} if game.grill != null else null, "fallen": game.stage.tree_snapshot(), "stones": stone_state(), "impacts": game.impact_serials, "camp": a(game.camp.position) if game.camp != null else null, "chairs": game.has_chairs, "cooking": game.cooking, "cook_time": game.cook_time, "grill_servings": game.grill_servings, "npc_servings": game.spectators.snapshot(), "npc_people": game.spectators.actor_snapshot(), "marshals": game.stage.officials.snapshot(), "eaten": game.eaten, "racing": game.racing, "passed": game.passed, "helped": game.helped, "elapsed": game.elapsed, "paused": game.paused, "dead": game.dead, "finished": game.finished, "title": game.menu_title.text, "text": game.menu_text.text, "racers": racers, "tow": game.tow_target.get_meta("room_id") if game.tow_target != null else -1, "tow_progress": game.tow_progress, "tow_owner": tow_owner, "recovery_links": game.recovery_links, "recovery_helpers": game.recovery_helpers, "notice": game.toast_label.text, "notice_time": game.toast_time}
+	return codec.world_state()
 
 func stone_state() -> Array:
-	var result = []
-	for stone in game.stones:
-		result.append({"id": stone.id, "pos": a(stone.node.position), "velocity": a(stone.velocity), "bounces": int(stone.get("bounces", 0))})
-	return result
+	return codec.stone_state()
 
 var last_impact = 0
 func apply_stones(w: Dictionary, sample_time: float = -1.0) -> void:
-	var age = clampf(server_clock() - sample_time, 0, 0.15) if sample_time >= 0 else 0.0
-	var count = int(w.get("impacts", {}).get(player_id, 0))
-	if count > last_impact:
-		game.impact_shake = 0.8
-		if game.in_car:
-			if not prediction_enabled or not prediction.active:
-				game.condition = maxf(0, game.condition - (count - last_impact) * 0.8)
-		game.toast("Гравий из-под колёс! Отойди дальше от края СУ.")
-	last_impact = count
-	var present = {}
-	for remote in w.get("stones", []):
-		var velocity = v(remote.velocity) + Vector3(0, -9.8 * age, 0)
-		var position = v(remote.pos) + v(remote.velocity) * age + Vector3(0, -4.9 * age * age, 0)
-		present[remote.id] = true
-		var found = false
-		for stone in game.stones:
-			if stone.id == remote.id:
-				stone.node.position = stone.node.position.lerp(position, 0.35) if stone.node.position.distance_to(position) < 3 else position
-				stone.velocity = velocity
-				stone.bounces = int(remote.get("bounces", 0))
-				stone.node.show()
-				found = true
-		if not found:
-			var node = Props.box(game, position, Vector3.ONE * 0.10, Color("9b9079"))
-			game.stones.append({"id": remote.id, "node": node, "velocity": velocity, "bounces": int(remote.get("bounces", 0))})
-	for stone in game.stones.duplicate():
-		if not present.has(stone.id):
-			stone.node.queue_free()
-			game.stones.erase(stone)
+	codec.apply_stones(w, sample_time)
 
 func apply_world(w: Dictionary, sample_time: float = -1.0) -> void:
-	if sample_time < 0:
-		sample_time = server_clock()
-	if game.stage.urban:
-		game.stage.city.apply_snapshot(w.get("city_lamps", []))
-		for item in w.get("city_lamps", []):
-			game.lamp_requests.erase(int(item.id))
-	game.stage.apply_trees(w.get("fallen", []))
-	for f in w.get("fallen", []):
-		game.tree_requests.erase(int(f.id))
-	apply_stones(w, sample_time)
-	world_paused = w.paused
-	if w.get("notice_time", 0) > 0 and w.get("notice", "") != last_notice:
-		last_notice = w.notice
-		game.toast(last_notice)
-	# Full snapshots reconcile removals as well as additions.
-	if w.camp == null and game.camp != null:
-		game.packing.remove({"kind": "table", "node": game.camp})
-	if w.has("chair_poses"):
-		for owner in game.personal_chairs.keys():
-			if not w.chair_poses.has(owner):
-				game.packing.remove({"kind": "chair", "owner": owner, "node": game.personal_chairs[owner]})
-	if w.has("flag_poses"):
-		for owner in game.personal_flags.keys():
-			if not w.flag_poses.has(owner):
-				for node in game.personal_flags[owner].duplicate():
-					game.packing.remove({"kind": "flag", "owner": owner, "node": node})
-	if not w.cooking and game.grill != null:
-		game.packing.remove({"kind": "grill", "node": game.grill})
-	if w.camp != null:
-		if game.camp == null:
-			game.camp = Node3D.new()
-			game.add_child(game.camp)
-			Props.table(game.camp)
-		game.camp.position = v(w.camp)
-		game.camp.rotation.y = float(w.get("table_yaw", 0.0))
-	if w.has("flag_poses"):
-		for owner in w.flag_poses:
-			var poses = w.flag_poses[owner]
-			var existing: Array = game.personal_flags.get(owner, [])
-			while existing.size() > poses.size():
-				var old_flag = existing.pop_back()
-				old_flag.queue_free()
-			for i in range(poses.size()):
-				var pose = poses[i]
-				if i >= existing.size():
-					game.place_flag(v(pose.pos), float(pose.yaw), str(owner), true)
-					existing = game.personal_flags.get(owner, [])
-				else:
-					existing[i].position = v(pose.pos)
-					existing[i].rotation.y = float(pose.yaw)
-			game.personal_flags[owner] = existing
-	if w.has("chair_poses"):
-		for owner in w.chair_poses:
-			var pose = w.chair_poses[owner]
-			game.apply_chair(owner, v(pose.pos), float(pose.yaw))
-	else:
-		if w.chairs and not game.has_chairs and game.camp != null:
-			game.apply_chair("legacy", game.camp.position + Vector3(-1.6, 0, 0.7), 0.0)
-	game.has_chairs = w.chairs
-	if w.cooking:
-		var grill_pose = w.get("grill_pose", null)
-		var spot = v(grill_pose.pos) if grill_pose != null else game.camp.position + Vector3(0.3, 0, -2.4)
-		var yaw = float(grill_pose.yaw) if grill_pose != null else 0.0
-		game.start_grill(spot, yaw, true)
-	game.cook_time = w.cook_time
-	game.grill_servings = int(w.get("grill_servings", Props.FOOD_PORTIONS))
-	if game.grill != null:
-		Props.set_grill_servings(game.grill, game.grill_servings)
-	game.spectators.apply_snapshot(w.get("npc_servings", []))
-	game.spectators.apply_actor_snapshot(w.get("npc_people", []))
-	game.stage.officials.apply_snapshot(w.get("marshals", []))
-	game.foraging.apply_snapshot(w.get("foraging", {}))
-	game.eaten = w.eaten
-	game.course.apply_snapshot(w.get("course", {}))
-	game.cargo.apply_snapshot(w.get("cargo", {}))
-	game.racing = w.racing
-	game.passed = w.passed
-	game.helped = w.helped
-	game.elapsed = w.elapsed
-	game.camp_cooking.apply_snapshot(w.get("camp_cooking", {}))
-	var present = {}
-	for r in w.racers:
-		present[r.id] = true
-		var exists = false
-		for local in game.racers:
-			if local.id == r.id:
-				local.state = r.state
-				local.recovery_progress = float(r.get("recovery_progress", 0))
-				local.recovery_helpers = int(r.get("recovery_helpers", 0))
-				exists = true
-				break
-		if not exists:
-			var role = str(r.get("role", "racer"))
-			var node = Props.car(Color.WHITE, true, int(r.variant)) if role == "racer" else Props.course_car(role, int(r.get("zero_index", 0)))
-			game.add_child(node)
-			node.position = v(r.pos)
-			node.set_meta("room_id", r.id)
-			game.racers.append({"id": r.id, "role": role, "zero_index": int(r.get("zero_index", 0)), "node": node, "state": r.state, "variant": r.variant})
-		if not racer_motion.has(r.id):
-			racer_motion[r.id] = SnapshotMotion.new()
-		var tilt = v(r.get("tilt", [0, r.yaw, 0]))
-		tilt.y = r.yaw
-		racer_motion[r.id].push(sample_time, v(r.pos), tilt)
-		racer_targets[r.id] = r
-	for local in game.racers.duplicate():
-		if not present.has(local.id):
-			local.node.queue_free()
-			game.racers.erase(local)
-			racer_targets.erase(local.id)
-			racer_motion.erase(local.id)
-	game._cancel_tow()
-	for local in game.racers:
-		if local.id == w.tow:
-			game.tow_target = local.node
-	game.tow_progress = w.tow_progress
-	game.recovery_links = w.get("recovery_links", []).duplicate(true)
-	game.recovery_helpers = int(w.get("recovery_helpers", 0))
-	game.draw_recovery_ropes()
-	if (w.dead or w.finished) and not game.dead and not game.finished:
-		game.dead = w.dead
-		game.finished = w.finished
-		game._show_result(w.title, w.text)
+	codec.apply_world(w, sample_time)
 
 func update_tow(delta: float) -> void:
 	var players = {player_id: local_state()}
@@ -819,7 +593,7 @@ func drive_context(owner: String) -> Dictionary:
 		contacts.append({"position": person.avatar.position})
 	for racer in game.racers:
 		contacts.append({"position": racer.node.position})
-	if owner != player_id:
+	if owner != game.chair_owner():
 		contacts.append({"position": game.car.position})
 		if not game.in_car:
 			contacts.append({"position": game.walker, "person": true})
@@ -832,7 +606,7 @@ func drive_context(owner: String) -> Dictionary:
 			contacts.append({"position": v(peer.state.pos), "person": true})
 	return {"contacts": contacts, "racing": game.racing}
 
-func apply_drive_events(solver, authoritative: bool) -> void:
+func apply_drive_events(solver, authoritative: bool, feedback: bool = false) -> void:
 	for event in solver.events:
 		match event.kind:
 			"tree": game.knock_tree(event.index, event.velocity)
@@ -841,7 +615,7 @@ func apply_drive_events(solver, authoritative: bool) -> void:
 				if authoritative:
 					game.die("Легковушка сбила участника вашей компании.")
 			"impact":
-				if not authoritative:
+				if feedback or not authoritative:
 					game.impact_shake = minf(0.8, float(event.speed) * 0.055)
 					game.toast("Удар! Сбавь скорость.")
 	solver.events.clear()
@@ -877,3 +651,7 @@ func smooth_car_visuals() -> void:
 	for id in visual_children.keys():
 		if not present.has(id):
 			visual_children.erase(id)
+
+func reject_snapshot(error: String) -> void:
+	print("[RFM network] Invalid world snapshot: ", error)
+	disconnect_room("Версии игры не совпадают или получены некорректные данные. Обновите страницу.")

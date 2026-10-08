@@ -1,0 +1,112 @@
+[
+  {
+    "name": "Компактный седан",
+    "color": "111a2b",
+    "length": 4.26,
+    "width": 1.7,
+    "height": 1.5,
+    "rear": 0.95,
+    "glass": 0.36,
+    "lights": "wide",
+    "grille": 0.65
+  },
+  {
+    "name": "Городской седан",
+    "color": "a8bdc2",
+    "length": 4.41,
+    "width": 1.77,
+    "height": 1.49,
+    "rear": 1.05,
+    "glass": 0.48,
+    "lights": "slim",
+    "grille": 0.94
+  },
+  {
+    "name": "Лесной внедорожник",
+    "color": "627746",
+    "length": 3.74,
+    "width": 1.68,
+    "height": 1.74,
+    "rear": 1.5,
+    "glass": 0.14,
+    "lights": "round",
+    "grille": 0.86
+  },
+  {
+    "name": "Классический седан",
+    "color": "e6dfc7",
+    "length": 4.12,
+    "width": 1.64,
+    "height": 1.45,
+    "rear": 0.95,
+    "glass": 0.19,
+    "lights": "square",
+    "grille": 0.55
+  },
+  {
+    "name": "Лёгкий седан",
+    "color": "8dabb9",
+    "length": 4.37,
+    "width": 1.72,
+    "height": 1.46,
+    "rear": 1.0,
+    "glass": 0.52,
+    "lights": "wide",
+    "grille": 0.8
+  },
+  {
+    "name": "Дорожный седан",
+    "color": "a74d43",
+    "length": 4.4,
+    "width": 1.74,
+    "height": 1.47,
+    "rear": 0.93,
+    "glass": 0.43,
+    "lights": "slim",
+    "grille": 0.56
+  },
+  {
+    "name": "Семейный седан",
+    "color": "c6c9b9",
+    "length": 4.35,
+    "width": 1.73,
+    "height": 1.53,
+    "rear": 0.87,
+    "glass": 0.27,
+    "lights": "square",
+    "grille": 0.9
+  },
+  {
+    "name": "Туристический кроссовер",
+    "color": "a58058",
+    "length": 4.34,
+    "width": 1.82,
+    "height": 1.7,
+    "rear": 1.63,
+    "glass": 0.28,
+    "lights": "square",
+    "grille": 1.05
+  },
+  {
+    "name": "Походный хэтчбек",
+    "color": "283f87",
+    "length": 4.17,
+    "width": 1.68,
+    "height": 1.47,
+    "rear": 0.98,
+    "glass": 0.3,
+    "lights": "square",
+    "grille": 0.75
+  },
+  {
+    "name": "Спортивный седан",
+    "color": "c92530",
+    "length": 4.68,
+    "width": 1.88,
+    "height": 1.46,
+    "rear": 1.0,
+    "glass": 0.4,
+    "lights": "slim",
+    "grille": 0.8
+  }
+]

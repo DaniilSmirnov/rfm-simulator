@@ -1,12 +1,32 @@
 extends Node3D
+var presentation = preload("res://scripts/game_ui.gd").new()
+var player_state = preload("res://scripts/player_state.gd").new()
+var world = preload("res://scripts/world_state.gd").new()
+var session = preload("res://scripts/session_state.gd").new()
+const ActorContext = preload("res://scripts/actor_context.gd")
+
+var local_actor = ActorContext.new()
+
+func actor(context = null):
+	if context != null:
+		return context
+	local_actor.capture_local(self)
+	return local_actor
+
 
 var cargo = preload("res://scripts/car_cargo.gd").new()
 var camp_cooking = preload("res://scripts/camp_cooking.gd").new()
 var packing = preload("res://scripts/camp_packing.gd").new()
 var interaction = preload("res://scripts/interaction.gd").new()
-var seated = false
-var jump_height = 0.0
-var jump_velocity = 0.0
+var seated: bool:
+	get: return player_state.seated
+	set(value): player_state.seated = value
+var jump_height: float:
+	get: return player_state.jump_height
+	set(value): player_state.jump_height = value
+var jump_velocity: float:
+	get: return player_state.jump_velocity
+	set(value): player_state.jump_velocity = value
 const WALK_SPEED = 4.3
 const RUN_SPEED = 7.2
 const JUMP_SPEED = 5.5
@@ -27,8 +47,12 @@ var selected_stage = 0
 var selected_car = 0
 # Headless fixtures may construct synchronously; real clients enter a lightweight menu.
 var defer_world = DisplayServer.get_name() != "headless" and not ("--script" in OS.get_cmdline_args() or "--capture" in OS.get_cmdline_user_args() or "--smoke-test" in OS.get_cmdline_user_args())
-var world_ready = false
-var loading_world = false
+var world_ready: bool:
+	get: return session.world_ready
+	set(value): session.world_ready = value
+var loading_world: bool:
+	get: return session.loading
+	set(value): session.loading = value
 var loading_screen: Node
 
 var lobby_ui: Node
@@ -46,33 +70,69 @@ var camp: Node3D
 var grill: Node3D
 var smoke: GPUParticles3D
 var meat_prop: Node3D
-var eat_time = -1.0
-var eat_committed = false
+var eat_time: float:
+	get: return player_state.eat_time
+	set(value): player_state.eat_time = value
+var eat_committed: bool:
+	get: return player_state.eat_committed
+	set(value): player_state.eat_committed = value
 const EAT_DURATION = 3.6
 var beer_prop: Node3D
 var avatar_variant = 0
 var rope_mesh: MeshInstance3D
 var recovery_ropes: Array = []
-var recovery_links: Array = []
-var recovery_helpers = 0
+var recovery_links: Array:
+	get: return world.recovery_links
+	set(value): world.recovery_links = value
+var recovery_helpers: int:
+	get: return world.recovery_helpers
+	set(value): world.recovery_helpers = value
 const Recovery = preload("res://scripts/recovery.gd")
-var in_car = true
-var heading = 0.0
-var view_yaw = 0.0
-var view_pitch = -0.12
-var speed = 0.0
-var condition = 100.0
+var in_car: bool:
+	get: return player_state.in_car
+	set(value): player_state.in_car = value
+var heading: float:
+	get: return player_state.heading
+	set(value): player_state.heading = value
+var view_yaw: float:
+	get: return player_state.view_yaw
+	set(value): player_state.view_yaw = value
+var view_pitch: float:
+	get: return player_state.view_pitch
+	set(value): player_state.view_pitch = value
+var speed: float:
+	get: return player_state.speed
+	set(value): player_state.speed = value
+var condition: float:
+	get: return player_state.condition
+	set(value): player_state.condition = value
 var rock_impact_timer = 0.0
 var last_pothole = -1
-var walker = Vector3.ZERO
-var playing = false
-var dead = false
-var finished = false
-var paused = false
+var walker: Vector3:
+	get: return player_state.walker
+	set(value): player_state.walker = value
+var playing: bool:
+	get: return session.playing
+	set(value): session.playing = value
+var dead: bool:
+	get: return session.dead
+	set(value): session.dead = value
+var finished: bool:
+	get: return session.finished
+	set(value): session.finished = value
+var paused: bool:
+	get: return session.pause_causes.has("local")
+	set(value): session.set_pause("local", value)
 var safety_gate: CanvasLayer
-var has_chairs = false
-var personal_chairs: Dictionary = {}
-var personal_flags: Dictionary = {}
+var has_chairs: bool:
+	get: return world.has_chairs
+	set(value): world.has_chairs = value
+var personal_chairs: Dictionary:
+	get: return world.personal_chairs
+	set(value): world.personal_chairs = value
+var personal_flags: Dictionary:
+	get: return world.personal_flags
+	set(value): world.personal_flags = value
 const FLAGS_PER_PLAYER = 3
 var placement_kind = ""
 var placement_preview: Node3D
@@ -193,16 +253,24 @@ func confirm_placement() -> void:
 	soundscape.placement()
 	cancel_placement()
 
-var cooking = false
-var cook_time = 0.0
-var grill_servings = Props.FOOD_PORTIONS
+var cooking: bool:
+	get: return world.cooking
+	set(value): world.cooking = value
+var cook_time: float:
+	get: return world.cook_time
+	set(value): world.cook_time = value
+var grill_servings: int:
+	get: return world.grill_servings
+	set(value): world.grill_servings = value
 var eat_source_group = -2
 var eat_kind = "meat"
 var food_species = "edible"
 var mushroom_effect = preload("res://scripts/mushroom_effect.gd").new()
 var forage_source = -2
 var foraging = preload("res://scripts/foraging.gd").new()
-var eaten = false
+var eaten: bool:
+	get: return world.eaten
+	set(value): world.eaten = value
 var drunk_phase = 0.0
 var drunk_strength = 0.0
 const DRUNK_FADE_SECONDS = 60.0
@@ -214,23 +282,37 @@ var sobriety_label: Label
 var sobriety_bar: ProgressBar
 var tree_requests: Dictionary = {}
 var lamp_requests: Dictionary = {}
-var beers = 0
+var beers: int:
+	get: return player_state.beers
+	set(value): player_state.beers = value
 var beer_timer = 0.0
 const DRINK_DURATION = 3.3
-var drink_time = -1.0
-var drink_committed = false
+var drink_time: float:
+	get: return player_state.drink_time
+	set(value): player_state.drink_time = value
+var drink_committed: bool:
+	get: return player_state.drink_committed
+	set(value): player_state.drink_committed = value
 var can_opened = false
 var beer_audio: AudioStreamPlayer
 const RALLY_CREW_LIMIT = 10
 var rally_spawn_count = 0
 var course = preload("res://scripts/course_schedule.gd").new()
 var course_label: Label
-var racing = false
+var racing: bool:
+	get: return world.racing
+	set(value): world.racing = value
 var race_clock = 0.0
 var spawn_clock = 12.0
-var passed = 0
-var helped = 0
-var elapsed = 0.0
+var passed: int:
+	get: return world.passed
+	set(value): world.passed = value
+var helped: int:
+	get: return world.helped
+	set(value): world.helped = value
+var elapsed: float:
+	get: return world.elapsed
+	set(value): world.elapsed = value
 var toast_time = 0.0
 var tow_target: Node3D
 var tow_progress = 0.0
@@ -399,6 +481,7 @@ var impact_shake = 0.0
 var stone_clock = 0.0
 
 func _ready() -> void:
+	presentation.game = self
 	print("[RFM] Подготовка игрового мира")
 	foraging.game = self
 	interaction.game = self
@@ -536,187 +619,13 @@ func _build_environment() -> void:
 	add_child(sun)
 
 func _panel(color: Color) -> StyleBoxFlat:
-	var p = StyleBoxFlat.new()
-	p.bg_color = color
-	p.set_corner_radius_all(12)
-	p.content_margin_left = 20
-	p.content_margin_right = 20
-	p.content_margin_top = 14
-	p.content_margin_bottom = 14
-	return p
+	return presentation._panel(color)
 
 func _label(parent: Node, text: String, font_size: int, color: Color = Color("f2e8d0")) -> Label:
-	var l = Label.new()
-	l.text = text
-	l.add_theme_font_size_override("font_size", font_size)
-	l.add_theme_color_override("font_color", color)
-	parent.add_child(l)
-	return l
+	return presentation._label(parent, text, font_size, color)
 
 func _build_ui() -> void:
-	var canvas = CanvasLayer.new()
-	add_child(canvas)
-	var ui = Control.new()
-	mobile_ui = ui
-	canvas.add_child(ui)
-	ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	crosshair = _label(ui, "·", 24, Color("fff0cb"))
-	crosshair.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-	crosshair.offset_left = -16
-	crosshair.offset_right = 16
-	crosshair.offset_top = -16
-	crosshair.offset_bottom = 16
-	crosshair.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	crosshair.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	crosshair.hide()
-	var top = PanelContainer.new()
-	mobile_top = top
-	ui.add_child(top)
-	top.position = Vector2(28, 24)
-	top.add_theme_stylebox_override("panel", _panel(Color("25352be8")))
-	var vb = VBoxContainer.new()
-	top.add_child(vb)
-	title_label = _label(vb, "Rally Fans Simulator", 22)
-	stage_caption = _label(vb, Stage.STAGES[selected_stage], 12, Color("b2bea1"))
-	fps_label = _label(vb, "v%s · — FPS" % ProjectSettings.get_setting("application/config/version"), 12, Color("b2bea1"))
-	fps_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	course_label = _label(vb, "", 16, Color("ffe4a5"))
-	course_label.hide()
-	var sidebar = PanelContainer.new()
-	mobile_sidebar = sidebar
-	ui.add_child(sidebar)
-	sidebar.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-	sidebar.offset_left = -332
-	sidebar.offset_right = -28
-	sidebar.offset_top = 24
-	sidebar.offset_bottom = 390
-	sidebar.hide()
-	hud_panels.append(sidebar)
-	sidebar.add_theme_stylebox_override("panel", _panel(Color("25352be8")))
-	var sv = VBoxContainer.new()
-	sv.add_theme_constant_override("separation", 12)
-	sidebar.add_child(sv)
-	_label(sv, "ПЛАН НА ВЫЕЗД", 15, Color("e4b56b"))
-	quest_label = _label(sv, "", 16)
-	minimap = MiniMap.new()
-	minimap.game = self
-	minimap.custom_minimum_size = Vector2(264, 205)
-	sv.add_child(minimap)
-	status_label = _label(sv, "", 13, Color("b2bea1"))
-	var bottom = PanelContainer.new()
-	mobile_bottom = bottom
-	ui.add_child(bottom)
-	bottom.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-	bottom.offset_left = 28
-	bottom.offset_right = -28
-	bottom.offset_top = -136
-	bottom.offset_bottom = -24
-	bottom.hide()
-	hud_panels.append(bottom)
-	bottom.add_theme_stylebox_override("panel", _panel(Color("25352bf2")))
-	var bv = VBoxContainer.new()
-	bottom.add_child(bv)
-	info_label = _label(bv, "", 24, Color("e4b56b"))
-	hint_label = _label(bv, "", 15)
-	hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	toast_label = _label(ui, "", 21, Color("fff0cb"))
-	toast_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
-	toast_label.offset_left = -530
-	toast_label.offset_right = 530
-	toast_label.offset_top = -204
-	toast_label.offset_bottom = -150
-	toast_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	toast_label.add_theme_color_override("font_shadow_color", Color("182820"))
-	toast_label.add_theme_constant_override("shadow_offset_x", 2)
-	toast_label.add_theme_constant_override("shadow_offset_y", 2)
-	sobriety_panel = PanelContainer.new()
-	ui.add_child(sobriety_panel)
-	sobriety_panel.anchor_left = 0.25
-	sobriety_panel.anchor_right = 0.75
-	sobriety_panel.offset_top = 150
-	sobriety_panel.offset_bottom = 245
-	sobriety_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	sobriety_panel.add_theme_stylebox_override("panel", _panel(Color("25352bf2")))
-	var recovery_box = VBoxContainer.new()
-	recovery_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	sobriety_panel.add_child(recovery_box)
-	sobriety_label = _label(recovery_box, "", 22, Color("fff0cb"))
-	sobriety_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	sobriety_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	sobriety_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	sobriety_bar = ProgressBar.new()
-	sobriety_bar.max_value = SOBER_SECONDS
-	sobriety_bar.custom_minimum_size.y = 24
-	sobriety_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var recovery_fill = StyleBoxFlat.new()
-	recovery_fill.bg_color = Color("ee531b")
-	sobriety_bar.add_theme_stylebox_override("fill", recovery_fill)
-	recovery_box.add_child(sobriety_bar)
-	sobriety_panel.hide()
-	menu = PanelContainer.new()
-	ui.add_child(menu)
-	menu.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-	menu.offset_left = -350
-	menu.offset_right = 350
-	menu.offset_top = -270
-	menu.offset_bottom = 270
-	menu.add_theme_stylebox_override("panel", _panel(Color("23342bf5")))
-	var mv = VBoxContainer.new()
-	menu_content = mv
-	mv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	mv.add_theme_constant_override("separation", 12)
-	menu.add_child(mv)
-	_label(mv, "ПЕРЕВАЛ. РАЛЛИ. ШАШЛЫК.", 14, Color("dfb270"))
-	menu_title = _label(mv, "", 34)
-	menu_text = _label(mv, "", 17)
-	menu_title.hide()
-	menu_text.hide()
-	selection_controls = VBoxContainer.new()
-	selection_controls.add_theme_constant_override("separation", 8)
-	mv.add_child(selection_controls)
-	lobby_ui = preload("res://scripts/lobby_ui.gd").new()
-	lobby_ui.game = self
-	add_child(lobby_ui)
-	var cards = HBoxContainer.new()
-	cards.add_theme_constant_override("separation", 16)
-	selection_controls.add_child(cards)
-	for kind in ["МАШИНА", "СПЕЦУЧАСТОК"]:
-		var card = VBoxContainer.new()
-		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		cards.add_child(card)
-		_label(card, kind, 14, Color("dfb270"))
-		lobby_ui.add_preview(card, kind)
-		var row = HBoxContainer.new()
-		card.add_child(row)
-		var choice = preload("res://scripts/menu_choice.gd").new()
-		choice.custom_minimum_size.y = 40
-		choice.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		choice.add_theme_font_size_override("font_size", 18)
-		row.add_child(choice)
-		if kind == "МАШИНА":
-			car_choice = choice
-			for model in Props.PLAYER_MODELS:
-				choice.add_item(model.name)
-			choice.item_selected.connect(select_player_car)
-		else:
-			stage_choice = choice
-			for title in Stage.STAGES:
-				choice.add_item(title.get_slice("·", 0).strip_edges())
-			choice.item_selected.connect(select_stage)
-	stage_choice.tooltip_text = "В комнате СУ выбирает создатель. Все участники играют на одной трассе."
-	start_button = Button.new()
-	start_button.text = "ПОЕХАЛИ"
-	start_button.custom_minimum_size.y = 54
-	start_button.add_theme_font_size_override("font_size", 20)
-	start_button.add_theme_color_override("font_color", Color("25352b"))
-	start_button.add_theme_stylebox_override("normal", _panel(Color("e3b16b")))
-	start_button.add_theme_stylebox_override("hover", _panel(Color("f1c687")))
-	start_button.add_theme_stylebox_override("pressed", _panel(Color("c78f4a")))
-	start_button.pressed.connect(_menu_action)
-	mv.add_child(start_button)
-	start_button.hide()
-	lobby_ui.finish(mv)
+	presentation._build_ui()
 
 func _setup_audio() -> void:
 	engine_audio = AudioStreamPlayer.new()
@@ -883,7 +792,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		eat_foraged("berries")
 		return
 	for shared_action in room.SHARED_ACTIONS:
-		if shared_action not in ["eat", "eat_plov", "plov_cook", "pack", "trunk", "take_gear", "return_gear"] and event.is_action_pressed(shared_action) and room.submit(shared_action):
+		if shared_action not in ["eat", "eat_plov", "plov_cook", "pack", "trunk", "take_gear", "return_gear"] and event.is_action_pressed(shared_action) and room.routes_commands():
+			room.submit(shared_action)
 			return
 	if event.is_action_pressed("interact"):
 		_toggle_car()
@@ -934,7 +844,7 @@ func _process(delta: float) -> void:
 	if soundscape != null:
 		soundscape.update(delta)
 	camp_cooking.animate_flames(Time.get_ticks_msec() / 1000.0)
-	if not playing or paused or dead or finished or (room.connected and not room.is_host and room.world_paused):
+	if not session.simulating():
 		return
 	if not room.connected or room.is_host:
 		elapsed += delta
@@ -990,7 +900,7 @@ func _process(delta: float) -> void:
 		get_tree().quit()
 
 func _update_sobriety(delta: float) -> void:
-	if not playing or paused or dead or finished or (room.connected and not room.is_host and room.world_paused):
+	if not session.simulating():
 		return
 	if beers < 30:
 		sober_remaining = 0.0
@@ -1017,73 +927,33 @@ func _update_intoxication(delta: float) -> void:
 func player_position() -> Vector3:
 	return car.position if in_car else walker
 
+var local_drive = preload("res://scripts/drive_prediction.gd").new()
+
 func _drive(delta: float) -> void:
 	if room.connected and room.predict_drive(delta):
 		return
-	# Carry fractional ticks across render frames; cap long stalls at one second.
 	vehicle_motion.drive_clock += clampf(delta, 0, 1.0)
 	var dt: float = vehicle_motion.handling.STEP
-	var steps = int(floor((vehicle_motion.drive_clock + 0.000001) / dt))
-	vehicle_motion.drive_clock = maxf(0, vehicle_motion.drive_clock - steps * dt)
-	var initial_forward = Vector3(-sin(heading), 0, -cos(heading))
-	var initial_speed: float = vehicle_motion.velocity.dot(initial_forward)
-	# Support explicit resets/recovery without discarding tangential momentum.
+	var ticks = int(floor((vehicle_motion.drive_clock + 0.000001) / dt))
+	vehicle_motion.drive_clock = maxf(0, vehicle_motion.drive_clock - ticks * dt)
+	var forward = Vector3(-sin(heading), 0, -cos(heading))
+	var initial_speed: float = vehicle_motion.velocity.dot(forward)
 	if absf(speed - initial_speed) > 3:
-		vehicle_motion.velocity += initial_forward * (speed - initial_speed)
-	for step in range(steps):
-		var throttle = Input.get_axis("back", "forward")
-		var steer = Input.get_axis("left", "right")
-		var offroad = stage.road_distance(car.position) > 4.1
-		var max_speed = 7.0 if offroad else 19.0
-		var braking = Input.is_action_pressed("brake")
-		var previous_heading = heading
-		heading = vehicle_motion.handling.advance(vehicle_motion, heading, throttle, steer, braking, stage.grip(car.position), max_speed, selected_car, dt)
-		var forward = Vector3(-sin(heading), 0, -cos(heading))
-		speed = vehicle_motion.velocity.dot(forward)
-		rock_impact_timer = maxf(0.0, rock_impact_timer - dt)
-		var previous = car.position
-		var next = previous + vehicle_motion.velocity * dt
-		next.x = clampf(next.x, -185, 185)
-		next.z = clampf(next.z, -Stage.LENGTH + 5, 10)
-		var rock_hit = stage.rock_hit(previous, next, 0.85)
-		if not rock_hit.is_empty():
-			next = rock_hit.position
-			var closing = vehicle_motion.rock_impulse(rock_hit.normal, heading)
-			speed = vehicle_motion.velocity.dot(forward)
-			if closing > 1.0 and rock_impact_timer <= 0:
-				condition = maxf(0, condition - minf(14.0, closing * 0.65))
-				impact_shake = minf(0.8, closing * 0.055)
-				rock_impact_timer = 0.4
-				toast("Удар о камень! Можно отъехать назад.")
-		if stage.urban:
-			var city_hit = stage.city.hit(previous, next, 0.85)
-			if not city_hit.is_empty():
-				next = city_hit.position
-				var impact_speed = vehicle_motion.velocity.length()
-				knock_city(city_hit, vehicle_motion.velocity)
-				var closing = vehicle_motion.rock_impulse(city_hit.normal, heading)
-				speed = vehicle_motion.velocity.dot(forward)
-				if closing > 1 and rock_impact_timer <= 0:
-					condition = maxf(0, condition - minf(20.0, closing * 0.85))
-					impact_shake = minf(0.8, impact_speed * 0.055)
-					rock_impact_timer = 0.4
-					toast("Столкновение с городским объектом!")
-		var tree_index = stage.obstacle_hit(previous, next, 0.95, true)
-		var hit = tree_index >= 0
-		if hit and vehicle_motion.velocity.length() > 5 and not stage.fallen.has(tree_index):
-			knock_tree(tree_index, vehicle_motion.velocity)
-		if contact_blocked(previous, next, true):
-			hit = true
-		if hit:
-			condition = maxf(0, condition - vehicle_motion.velocity.length() * 1.4)
-			vehicle_motion.velocity *= -0.25
-			speed = vehicle_motion.velocity.dot(forward)
-			toast("Удар! Сбавь скорость.")
-		else:
-			car.position = next
-		vehicle_motion.suspension(car, stage, dt, heading, (heading - previous_heading) / dt * speed)
-		if offroad and absf(speed) > 5:
-			condition = maxf(0, condition - dt * 0.15)
+		vehicle_motion.velocity += forward * (speed - initial_speed)
+	local_drive.node.position = car.position
+	local_drive.yaw = heading
+	local_drive.motion = vehicle_motion
+	local_drive.condition = condition
+	local_drive.impact_timer = rock_impact_timer
+	local_drive.context = room.drive_context(chair_owner())
+	local_drive.events.clear()
+	local_drive.step({"ticks": ticks, "throttle": Input.get_axis("back", "forward"), "steer": Input.get_axis("left", "right"), "brake": Input.is_action_pressed("brake")}, stage, selected_car)
+	car.transform = local_drive.node.transform
+	heading = local_drive.yaw
+	condition = local_drive.condition
+	rock_impact_timer = local_drive.impact_timer
+	speed = vehicle_motion.velocity.dot(Vector3(-sin(heading), 0, -cos(heading)))
+	room.apply_drive_events(local_drive, true, true)
 	if condition <= 0:
 		die("Легковушка сдалась раньше тебя.\nРазбитый СУ победил подвеску.")
 
@@ -1213,35 +1083,38 @@ func _toggle_car() -> void:
 	else:
 		toast("Подойди к своей машине, чтобы сесть.")
 
-func near_camp() -> bool:
-	return camp != null and player_position().distance_to(camp.position) < 7
+func near_camp(context = null) -> bool:
+	var who = actor(context)
+	return camp != null and who.position.distance_to(camp.position) < 7
 
 func nearby_drink_source() -> bool:
 	return near_camp() or (spectators != null and spectators.nearby_table(player_position()) >= 0)
 
-func food_source_group() -> int:
-	if not in_car and near_camp() and grill != null:
+func food_source_group(context = null) -> int:
+	var who = actor(context)
+	if not who.in_car and near_camp(who) and grill != null:
 		return -1 if cook_time >= 35 and grill_servings > 0 else -2
-	if not in_car and spectators != null:
-		return spectators.nearby_grill(player_position())
+	if not who.in_car and spectators != null:
+		return spectators.nearby_grill(who.position)
 	return -2
 
 func can_eat_meat() -> bool:
 	return playing and not paused and not dead and not finished and not in_car and eat_time < 0 and drink_time < 0 and food_source_group() != -2
 
-func place_table(spot: Vector3 = Vector3.INF, yaw: float = 0.0) -> bool:
-	if in_car:
+func place_table(spot: Vector3 = Vector3.INF, yaw: float = 0.0, context = null) -> bool:
+	var who = actor(context)
+	if who.in_car:
 		return false
 	var moving = spot != Vector3.INF
 	if camp != null and not moving:
 		return false
 	if not moving:
-		spot = walker + Vector3(-sin(view_yaw), 0, -cos(view_yaw)) * 2.5
+		spot = who.position + Vector3(-sin(who.yaw), 0, -cos(who.yaw)) * 2.5
 	if not valid_furniture_spot(spot, "table"):
 		return false
 	if camp == null:
 		camp = Node3D.new()
-		camp.set_meta("gear_owner", cargo.actor())
+		camp.set_meta("gear_owner", who.owner)
 		add_child(camp)
 		Props.table(camp)
 	camp.position = spot
@@ -1250,15 +1123,16 @@ func place_table(spot: Vector3 = Vector3.INF, yaw: float = 0.0) -> bool:
 	toast("Стол установлен.")
 	return true
 
-func place_chairs(spot: Vector3 = Vector3.INF, yaw: float = 0.0, owner: String = "") -> bool:
-	if in_car:
+func place_chairs(spot: Vector3 = Vector3.INF, yaw: float = 0.0, owner: String = "", context = null) -> bool:
+	var who = actor(context)
+	if who.in_car:
 		return false
 	if owner == "":
-		owner = chair_owner()
+		owner = who.owner
 	if spot == Vector3.INF:
 		if personal_chairs.has(owner):
 			return false
-		spot = camp.position + Vector3(-1.6, 0, 0.7) if near_camp() else walker + Vector3(-sin(view_yaw), 0, -cos(view_yaw)) * 2.5
+		spot = camp.position + Vector3(-1.6, 0, 0.7) if near_camp(who) else who.position + Vector3(-sin(who.yaw), 0, -cos(who.yaw)) * 2.5
 	if not valid_furniture_spot(spot, "chairs", owner):
 		return false
 	apply_chair(owner, spot, yaw)
@@ -1276,11 +1150,12 @@ func apply_chair(owner: String, spot: Vector3, yaw: float) -> void:
 	personal_chairs[owner].rotation.y = yaw
 	has_chairs = not personal_chairs.is_empty()
 
-func place_flag(spot: Vector3 = Vector3.INF, yaw: float = 0.0, owner: String = "", replicated: bool = false) -> bool:
+func place_flag(spot: Vector3 = Vector3.INF, yaw: float = 0.0, owner: String = "", replicated: bool = false, context = null) -> bool:
+	var who = actor(context)
 	var moving = spot != Vector3.INF
 	if owner == "":
-		owner = flag_owner()
-	if not replicated and (in_car or not moving or flag_count(owner) >= FLAGS_PER_PLAYER):
+		owner = who.owner
+	if not replicated and (who.in_car or not moving or flag_count(owner) >= FLAGS_PER_PLAYER):
 		return false
 	if not valid_furniture_spot(spot, "flag"):
 		return false
@@ -1291,14 +1166,15 @@ func place_flag(spot: Vector3 = Vector3.INF, yaw: float = 0.0, owner: String = "
 	personal_flags[owner] = flags
 	return true
 
-func start_grill(spot: Vector3 = Vector3.INF, yaw: float = 0.0, replicated: bool = false) -> bool:
+func start_grill(spot: Vector3 = Vector3.INF, yaw: float = 0.0, replicated: bool = false, context = null) -> bool:
+	var who = actor(context)
 	var moving = spot != Vector3.INF
-	if not replicated and in_car:
+	if not replicated and who.in_car:
 		return false
 	if cooking and not moving:
 		return false
 	if not moving:
-		spot = camp.position + Vector3(0.3, 0, -2.4) if camp != null else walker + Vector3(-sin(view_yaw), 0, -cos(view_yaw)) * 2.5
+		spot = camp.position + Vector3(0.3, 0, -2.4) if camp != null else who.position + Vector3(-sin(who.yaw), 0, -cos(who.yaw)) * 2.5
 	if not replicated and not valid_furniture_spot(spot, "grill"):
 		return false
 	if grill != null:
@@ -1308,7 +1184,7 @@ func start_grill(spot: Vector3 = Vector3.INF, yaw: float = 0.0, replicated: bool
 		fire_audio.position = grill.position
 		return true
 	grill = Props.grill(self)
-	grill.set_meta("gear_owner", cargo.actor())
+	grill.set_meta("gear_owner", who.owner)
 	grill_servings = Props.FOOD_PORTIONS
 	grill.position = spot
 	grill.position.y = stage.ground(spot)
@@ -1536,22 +1412,24 @@ func eat_foraged(kind: String, source: int = -2) -> bool:
 	toast("Едим ягоды." if kind == "berries" else "Едим гриб с шампура.")
 	return true
 
-func commit_meat(source_group: int = -2) -> bool:
-	if in_car:
+func commit_meat(source_group: int = -2, context = null) -> bool:
+	var who = actor(context)
+	if who.in_car:
 		return false
 	var source = source_group
 	if source == -2:
-		source = eat_source_group if eat_source_group != -2 else food_source_group()
+		source = eat_source_group if not who.remote and eat_source_group != -2 else food_source_group(who)
 	if source == -1:
-		if grill == null or (not near_camp() and player_position().distance_to(grill.position) > 4) or cook_time < 35 or grill_servings <= 0:
+		if grill == null or (not near_camp(who) and who.position.distance_to(grill.position) > 4) or cook_time < 35 or grill_servings <= 0:
 			return false
 		grill_servings -= 1
 		Props.set_grill_servings(grill, grill_servings)
-	elif spectators == null or source < 0 or source >= spectators.groups.size() or player_position().distance_to(spectators.groups[source].grill.position) > 4 or not spectators.consume_serving(source):
+	elif spectators == null or source < 0 or source >= spectators.groups.size() or who.position.distance_to(spectators.groups[source].grill.position) > 4 or not spectators.consume_serving(source):
 		return false
 	eaten = true
 	toast("Шашлык удался. Осталось %d шампуров." % grill_servings if source == -1 else "У NPC нашлась порция шашлыка. Приятного аппетита!")
-	eat_source_group = -2
+	if not who.remote:
+		eat_source_group = -2
 	return true
 
 func _update_eating(delta: float) -> void:
@@ -1572,8 +1450,8 @@ func _update_eating(delta: float) -> void:
 			else:
 				foraging.consume(eat_kind, "", forage_source)
 		else:
-			room.submit("eat" if eat_kind == "meat" else "eat_" + eat_kind, {"source": eat_source_group if eat_kind == "meat" else forage_source})
-	if eat_time >= EAT_DURATION:
+			eat_committed = room.submit("eat" if eat_kind == "meat" else "eat_" + eat_kind, {"source": eat_source_group if eat_kind == "meat" else forage_source})
+	if eat_time >= EAT_DURATION and eat_committed:
 		_cancel_eat()
 
 func _cancel_eat() -> void:
@@ -1918,113 +1796,10 @@ var hud_target_frame = -1
 var minimap_redraw_at = 0
 
 func _set_hud_text(label: Label, value: String) -> void:
-	if label.text != value:
-		label.text = value
+	presentation._set_hud_text(label, value)
 
 func _update_hud() -> void:
-	# Resolve once after camera/world movement; actions still resolve a fresh target.
-	var target = interaction.current()
-	hud_target = target
-	hud_target_frame = Engine.get_process_frames()
-	crosshair.visible = playing and not in_car and not paused and not dead and not finished and placement_kind == ""
-	_set_hud_text(crosshair, "+" if not target.is_empty() else "·")
-	var now = Time.get_ticks_msec()
-	if minimap.is_visible_in_tree() and now >= minimap_redraw_at:
-		minimap.queue_redraw()
-		minimap_redraw_at = now + 100
-	var near_tow = nearby_tow_racer() if tow_target == null else false
-	var remaining_items = packing.remaining() if packing.active() else -1
-	var bag = foraging.stock() if not in_car else {}
-	var pot = camp_cooking.pot != null
-	var state: Array = [mobile_mode, in_car, playing, paused, dead, finished,
-		int(absf(speed) * 3.6), int(condition),
-		stage.road_distance(car.position) > 4 if in_car and not mobile_mode else false,
-		course.phase, course.pass_index, course.zero_index,
-		ceili(course.remaining) if course.phase in ["countdown", "intermission"] else 0,
-		int(elapsed) if not mobile_mode else 0, camp != null, has_chairs, eaten, passed, helped, beers,
-		cook_time >= 35, int(cook_time / 35 * 100) if cooking and cook_time < 35 else 0,
-		cooking, grill_servings, drink_time >= 0, drink_time >= 1.25, eat_time >= 0, eat_kind,
-		tow_target != null, int(tow_progress * 100), recovery_helpers, near_tow,
-		remaining_items, seated, stage.urban, bag.get("mushrooms", 0), bag.get("berries", 0),
-		foraging.can_eat("berries"), pot, camp_cooking.phase if pot else "",
-		camp_cooking.servings if pot else 0,
-		int(camp_cooking.cook_time / camp_cooking.COOK_SECONDS * 100) if pot else 0,
-		int(camp_cooking.cook_time / 45 * 100) if pot and mobile_mode else 0,
-		target.get("label", ""), toast_label.text if mobile_mode and toast_time > 0 else "",
-		toast_time > 0 if mobile_mode else false, sober_remaining if beers >= 30 else 0]
-	if state == hud_state:
-		return
-	hud_state = state
-	hud_revision += 1
-	var course_text = ""
-	var quest_text = ""
-	var status_text = ""
-	var info_text = ""
-	var hint_text = ""
-	sobriety_panel.visible = beers >= 30 and playing and not dead and not finished
-	if sobriety_panel.visible:
-		var seconds = ceili(sober_remaining if sober_remaining > 0 else SOBER_SECONDS)
-		_set_hud_text(sobriety_label, "ПРОТРЕЗВЛЕНИЕ · ВСТАНЕШЬ ЧЕРЕЗ %02d:%02d" % [seconds / 60, seconds % 60])
-		sobriety_bar.value = SOBER_SECONDS - (sober_remaining if sober_remaining > 0 else SOBER_SECONDS)
-	course_text = course.caption()
-	quest_text = "%s Выбрать место для лагеря\n%s Разложить стол\n%s Поставить стулья\n%s Пожарить и съесть шашлык\n%s Посмотреть %d экипажей" % ["[x]" if camp != null else "[ ]", "[x]" if camp != null else "[ ]", "[x]" if has_chairs else "[ ]", "[x]" if eaten else "[ ]", "[x]" if passed >= RALLY_CREW_LIMIT else "[ ]", RALLY_CREW_LIMIT]
-	if packing.active():
-		quest_text = "Оба прохода завершены\nВернуть вещи в багажники: осталось %d\nБагажник открывается при подходе\nF — взять предмет / вернуть коробку\nЗатем все возвращаются в свои машины" % remaining_items
-	status_text = "ПРОХОД %d/2 · ЭКИПАЖИ %d/%d · ПОМОЩЬ %d\nПИВО %d · ВЫЕЗД %02d:%02d" % [course.pass_index, passed, RALLY_CREW_LIMIT, helped, beers, int(elapsed) / 60, int(elapsed) % 60]
-	if in_car:
-		info_text = "%02d КМ/Ч    ·    ЛЕГКОВУШКА %d%%    ·    %s" % [int(absf(speed) * 3.6), int(condition), "ОБОЧИНА" if stage.road_distance(car.position) > 4 else "ГРАВИЙ / КОЛЕЯ"]
-		hint_text = "WASD / стрелки — газ и руль   ·   Space — тормоз   ·   F — выйти   ·   Home — вернуть на СУ"
-	else:
-		var cook_status = "ШАШЛЫК ГОТОВ" if cook_time >= 35 else ("ШАШЛЫК %d%%" % int(cook_time / 35 * 100) if cooking else "МАНГАЛ НЕ РАЗОЖЖЁН")
-		info_text = "ЗРИТЕЛЬ    ·    %s · ШАМПУРЫ %d/10    ·    %s" % [cook_status, grill_servings, course.caption()]
-		hint_text = "WASD — идти   ·   Shift — бег   ·   Space — прыжок   ·   мышь — смотреть   ·   F — действие   ·   Z — стол   ·   C — стулья   ·   G — мангал   ·   R — статус СУ"
-		if drink_time >= 0:
-			info_text = "ОТКРЫВАЕМ БАНКУ" if drink_time < 1.25 else "ЗА ХОРОШИЙ ВЫЕЗД!"
-		if eat_time >= 0:
-			info_text = "ЕДИМ ПЛОВ" if eat_kind == "plov" else ("ЕДИМ ЯГОДЫ" if eat_kind == "berries" else ("ЕДИМ ГРИБЫ" if eat_kind == "mushroom" else "ЕДИМ ШАШЛЫК"))
-		if beers >= 30:
-			info_text = "ТЫ ЛЕЖИШЬ · ОТДОХНИ ДО ВОССТАНОВЛЕНИЯ"
-		if tow_target != null:
-			info_text = "ПОМОЩЬ %d%% · УЧАСТНИКОВ %d" % [int(tow_progress * 100), recovery_helpers]
-	if tow_target != null:
-		info_text = "ВЫТАСКИВАЕМ ЭКИПАЖ   ·   %d%%   ·   УДЕРЖИВАЙ T" % int(tow_progress * 100)
-	elif near_tow:
-		hint_text += "   ·   Иди в машину, чтобы толкать · T — тяни пешком со стороны дороги"
-	if not in_car:
-		status_text += ("\nГРИБЫ %d · ЯГОДЫ/ВИНОГРАД %d" if stage.urban else "\nГРИБЫ %d · ЯГОДЫ %d") % [bag.mushrooms, bag.berries]
-		if not target.is_empty():
-			hint_text = "F — " + target.label + ("" if packing.active() else "   ·   Z/C/G/V — поставить предмет")
-		elif seated:
-			hint_text = "F — встать со стула"
-		if foraging.can_eat("berries"):
-			hint_text += " · K — съесть ягоды"
-	if camp_cooking.pot != null:
-		status_text += "\nПЛОВ %s · %d/10" % [("ГОТОВ" if camp_cooking.phase == "ready" else ("ГОТОВИМ %d%%" % int(camp_cooking.cook_time / camp_cooking.COOK_SECONDS * 100) if camp_cooking.phase == "cooking" else "КАЗАН ПУСТ")), camp_cooking.servings]
-	if packing.active() and remaining_items == 0:
-		hint_text = "Лагерь собран. Садитесь в свои машины через F; ждём всех друзей." if in_car else "Лагерь собран. Подойди к своей машине и нажми F."
-	if mobile_mode:
-		course_text = course.caption().replace("ПРОХОД ", "СУ ").replace(" · ПРЯМО", "").replace(" · ОБРАТНО", "").replace("ДО ОТКРЫТИЯ СУ", "СТАРТ ЧЕРЕЗ")
-		if in_car and tow_target == null:
-			info_text = "%02d КМ/Ч · МАШИНА %d%%" % [int(absf(speed) * 3.6), int(condition)]
-		elif not in_car and drink_time < 0 and eat_time < 0 and beers < 30 and tow_target == null:
-			if packing.active():
-				info_text = "ВЕРНУТЬ ВЕЩИ В БАГАЖНИК · ОСТАЛОСЬ %d" % remaining_items
-			else:
-				var cook_status = "ГОТОВ" if cook_time >= 35 else ("%d%%" % int(cook_time / 35 * 100) if cooking else "НЕТ ОГНЯ")
-				info_text = "ШАШЛЫК %s · %d/10 · ПИВО %d" % [cook_status, grill_servings, beers]
-				if camp_cooking.pot != null:
-					info_text += " · ПЛОВ %d/10" % camp_cooking.servings if camp_cooking.phase == "ready" else (" · ПЛОВ %d%%" % int(camp_cooking.cook_time / 45 * 100) if camp_cooking.phase == "cooking" else " · КАЗАН ПУСТ")
-		else:
-			info_text = info_text.replace("УДЕРЖИВАЙ T", "УДЕРЖИВАЙ ТРОС")
-		if toast_time > 0:
-			info_text += "\n" + toast_label.text
-		elif not in_car and not target.is_empty():
-			info_text += "\n" + target.label
-	_set_hud_text(course_label, course_text)
-	_set_hud_text(quest_label, quest_text)
-	_set_hud_text(status_label, status_text)
-	_set_hud_text(info_label, info_text)
-	_set_hud_text(hint_label, hint_text)
+	presentation._update_hud()
 
 func _check_finish() -> void:
 	cargo.release_departed()

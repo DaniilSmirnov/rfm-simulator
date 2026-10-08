@@ -20,7 +20,9 @@
     "dev:vk": "wrangler dev",
     "deploy:vk": "node scripts/deploy-cloudflare.mjs",
     "test:vk": "node --test tests/platform.test.mjs tests/auth-vk.test.mjs tests/payments-vk.test.mjs tests/store.test.mjs tests/room-session.test.mjs tests/deploy-cloudflare.test.mjs tests/fullscreen.test.mjs",
-    "build:standalone": "node scripts/build-web.mjs --target=standalone"
+    "build:standalone": "node scripts/build-web.mjs --target=standalone",
+    "test:unit": "node scripts/test-game.mjs --suite=unit",
+    "test:integration": "node scripts/test-game.mjs --suite=integration"
   },
   "devDependencies": {
     "wrangler": "4.147.0"

@@ -71,15 +71,16 @@ static func build() -> Node3D:
 		# Wheel arches and wheels with separate low-poly alloy hubs.
 		for index in range(2):
 			var z = -1.35 if index == 0 else 1.40
-			var tire = P.cylinder(root, Vector3(side * 0.89, 0.37, z), 0.37, 0.37, 0.29, RUBBER, 16)
+			var wheel = P.wheel_mount(root, Vector3(side * 0.89, 0.37, z), 0.37)
+			var tire = P.cylinder(wheel, Vector3.ZERO, 0.37, 0.37, 0.29, RUBBER, 16)
 			tire.rotation.z = PI / 2
 			tire.name = "WheelTire"
-			var rim = P.cylinder(root, Vector3(side * 1.05, 0.37, z), 0.255, 0.255, 0.04, CHROME, 12)
+			var rim = P.cylinder(wheel, Vector3(side * 0.16, 0, 0), 0.255, 0.255, 0.04, CHROME, 12)
 			rim.rotation.z = PI / 2
 			rim.name = "WheelRim"
 			for spoke in range(6):
 				var angle = spoke * TAU / 6.0
-				P.car_beam(root, Vector3(side * 1.08, 0.37, z), Vector3(side * 1.08, 0.37 + cos(angle) * 0.21, z + sin(angle) * 0.21), 0.036, PAINT_SHADE)
+				P.car_beam(wheel, Vector3(side * 0.19, 0, 0), Vector3(side * 0.19, cos(angle) * 0.21, sin(angle) * 0.21), 0.036, PAINT_SHADE)
 		# Granta-inspired swept headlamps, but no badge or trademarks.
 		P.quad_panel(root, PackedVector3Array([
 			Vector3(side * 0.35, 0.74, -2.143), Vector3(side * 0.77, 0.75, -2.105),

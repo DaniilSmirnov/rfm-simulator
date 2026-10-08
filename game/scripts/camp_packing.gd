@@ -54,8 +54,9 @@ func remove(item: Dictionary) -> void:
 				game.personal_flags.erase(item.owner)
 	item.node.queue_free()
 
-func pack(spot: Vector3, remote: bool = false) -> bool:
-	if not active() or not game.playing or game.paused or game.dead or game.finished or game.in_car or game.beers >= 30 or (not remote and (game.eat_time >= 0 or game.drink_time >= 0)) or game.walker.distance_to(spot) > 3.5:
+func pack(spot: Vector3, remote: bool = false, context = null) -> bool:
+	var who = game.actor(context)
+	if not active() or not game.session.can_act() or not who.can_act() or (not remote and (game.eat_time >= 0 or game.drink_time >= 0)) or who.position.distance_to(spot) > 3.5:
 		return false
 	for item in items():
 		# The position identifies the exact item: retries cannot pack a different flag.
@@ -65,9 +66,9 @@ func pack(spot: Vector3, remote: bool = false) -> bool:
 		if item.kind == "firewood" and game.camp_cooking.pot != null:
 			game.toast("Сначала собери казан и подставку.")
 			return false
-		if game.room.submit("pack", {"pos": spot_array(spot), "yaw": 0.0}):
-			return true
-		if item.kind != "flag" and not game.cargo.pick_up(item):
+		if context == null and game.room.routes_commands():
+			return game.room.submit("pack", {"pos": spot_array(spot), "yaw": 0.0})
+		if item.kind != "flag" and not game.cargo.pick_up(item, context):
 			return false
 		remove(item)
 		game.toast("Флаг собран." if item.kind == "flag" else "Предмет в руках. Верни его в открытый багажник через F.")

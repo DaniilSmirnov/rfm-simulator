@@ -1,0 +1,963 @@
+{
+  "version": 1,
+  "definitions": {
+    "pose": {
+      "type": "object",
+      "fields": {
+        "pos": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "min": -3000,
+            "max": 3000
+          },
+          "min": 3,
+          "max": 3
+        },
+        "yaw": {
+          "type": "number",
+          "min": -100000,
+          "max": 100000
+        }
+      },
+      "required": [
+        "pos",
+        "yaw"
+      ],
+      "max": 128
+    },
+    "drive": {
+      "type": "object",
+      "fields": {
+        "yaw": {
+          "type": "number",
+          "min": -100000,
+          "max": 100000
+        },
+        "vertical": {
+          "type": "number",
+          "min": -100000,
+          "max": 100000
+        },
+        "pitch": {
+          "type": "number",
+          "min": -100000,
+          "max": 100000
+        },
+        "roll": {
+          "type": "number",
+          "min": -100000,
+          "max": 100000
+        },
+        "steering": {
+          "type": "number",
+          "min": -100000,
+          "max": 100000
+        },
+        "yaw_rate": {
+          "type": "number",
+          "min": -100000,
+          "max": 100000
+        },
+        "longitudinal": {
+          "type": "number",
+          "min": -100000,
+          "max": 100000
+        },
+        "condition": {
+          "type": "number",
+          "min": -100000,
+          "max": 100000
+        },
+        "impact_timer": {
+          "type": "number",
+          "min": -100000,
+          "max": 100000
+        },
+        "pos": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "min": -3000,
+            "max": 3000
+          },
+          "min": 3,
+          "max": 3
+        },
+        "velocity": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "min": -3000,
+            "max": 3000
+          },
+          "min": 3,
+          "max": 3
+        },
+        "initialized": {
+          "type": "boolean"
+        },
+        "grounded": {
+          "type": "boolean"
+        },
+        "ack": {
+          "type": "integer",
+          "min": 0,
+          "max": 100000
+        },
+        "recovery_ack": {
+          "type": "integer",
+          "min": 0,
+          "max": 100000
+        }
+      },
+      "required": [
+        "pos",
+        "velocity",
+        "yaw",
+        "vertical",
+        "pitch",
+        "roll",
+        "steering",
+        "yaw_rate",
+        "longitudinal",
+        "grounded",
+        "ack"
+      ],
+      "max": 128
+    },
+    "person": {
+      "type": "object",
+      "fields": {
+        "id": {
+          "type": "integer",
+          "min": 0,
+          "max": 100000
+        },
+        "pos": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "min": -3000,
+            "max": 3000
+          },
+          "min": 3,
+          "max": 3
+        },
+        "yaw": {
+          "type": "number",
+          "min": -100000,
+          "max": 100000
+        },
+        "action": {
+          "type": "string",
+          "max": 256
+        },
+        "helper": {
+          "type": "integer",
+          "min": -1,
+          "max": 100000
+        },
+        "time": {
+          "type": "number",
+          "min": -1,
+          "max": 100000
+        }
+      },
+      "required": [
+        "id",
+        "pos",
+        "yaw",
+        "action",
+        "helper"
+      ],
+      "max": 128
+    },
+    "cargo": {
+      "type": "object",
+      "fields": {
+        "opened": {
+          "type": "map",
+          "items": {
+            "type": "boolean"
+          },
+          "max": 32
+        },
+        "held": {
+          "type": "map",
+          "items": {
+            "type": "object",
+            "fields": {
+              "kind": {
+                "type": "enum",
+                "values": [
+                  "table",
+                  "chairs",
+                  "grill",
+                  "firewood",
+                  "cauldron"
+                ]
+              },
+              "owner": {
+                "type": "string",
+                "max": 256
+              },
+              "returning": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "kind",
+              "owner",
+              "returning"
+            ],
+            "max": 128
+          },
+          "max": 32
+        },
+        "table_owner": {
+          "type": "string",
+          "max": 256
+        },
+        "grill_owner": {
+          "type": "string",
+          "max": 256
+        }
+      },
+      "required": [],
+      "max": 128
+    },
+    "foraging": {
+      "type": "object",
+      "fields": {
+        "harvested": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "min": 0,
+            "max": 9999
+          },
+          "max": 10000
+        },
+        "inventories": {
+          "type": "map",
+          "items": {
+            "type": "object",
+            "fields": {
+              "mushrooms": {
+                "type": "integer",
+                "min": 0,
+                "max": 100000
+              },
+              "berries": {
+                "type": "integer",
+                "min": 0,
+                "max": 100000
+              },
+              "mushroom_types": {
+                "type": "array",
+                "items": {
+                  "type": "enum",
+                  "values": [
+                    "edible",
+                    "fly_agaric",
+                    "toadstool"
+                  ]
+                },
+                "max": 10000
+              }
+            },
+            "required": [
+              "mushrooms",
+              "berries"
+            ],
+            "max": 128
+          },
+          "max": 32
+        },
+        "skewers": {
+          "type": "map",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "fields": {
+                "ready_at": {
+                  "type": "number",
+                  "min": 0,
+                  "max": 100000
+                },
+                "species": {
+                  "type": "enum",
+                  "values": [
+                    "edible",
+                    "fly_agaric",
+                    "toadstool"
+                  ]
+                }
+              },
+              "required": [
+                "ready_at"
+              ],
+              "max": 128
+            },
+            "max": 10
+          },
+          "max": 32
+        },
+        "effects": {
+          "type": "map",
+          "items": {
+            "type": "object",
+            "fields": {
+              "serial": {
+                "type": "integer",
+                "min": 0,
+                "max": 100000
+              },
+              "remaining": {
+                "type": "number",
+                "min": 0,
+                "max": 10
+              }
+            },
+            "required": [
+              "serial",
+              "remaining"
+            ],
+            "max": 128
+          },
+          "max": 32
+        }
+      },
+      "required": [],
+      "max": 128
+    },
+    "camp_cooking": {
+      "type": "anyOf",
+      "rules": [
+        {
+          "type": "object",
+          "fields": {},
+          "required": [],
+          "max": 0
+        },
+        {
+          "type": "object",
+          "fields": {
+            "fire": {
+              "type": "boolean"
+            },
+            "pos": {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "min": -3000,
+                "max": 3000
+              },
+              "min": 3,
+              "max": 3
+            },
+            "yaw": {
+              "type": "number",
+              "min": -100000,
+              "max": 100000
+            },
+            "fire_owner": {
+              "type": "string",
+              "max": 256
+            },
+            "pot": {
+              "type": "boolean"
+            },
+            "pot_pos": {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "min": -3000,
+                "max": 3000
+              },
+              "max": 3
+            },
+            "pot_yaw": {
+              "type": "number",
+              "min": -100000,
+              "max": 100000
+            },
+            "pot_owner": {
+              "type": "string",
+              "max": 256
+            },
+            "phase": {
+              "type": "enum",
+              "values": [
+                "none",
+                "empty",
+                "cooking",
+                "ready",
+                "exhausted"
+              ]
+            },
+            "cook_time": {
+              "type": "number",
+              "min": 0,
+              "max": 45
+            },
+            "servings": {
+              "type": "integer",
+              "min": 0,
+              "max": 10
+            }
+          },
+          "required": [
+            "fire",
+            "pos",
+            "pot",
+            "phase",
+            "cook_time",
+            "servings"
+          ],
+          "max": 128
+        }
+      ]
+    },
+    "course": {
+      "type": "object",
+      "fields": {
+        "pass_index": {
+          "type": "integer",
+          "min": 1,
+          "max": 2
+        },
+        "phase": {
+          "type": "enum",
+          "values": [
+            "countdown",
+            "opening_police",
+            "zero",
+            "racing",
+            "closing_police",
+            "intermission",
+            "complete"
+          ]
+        },
+        "remaining": {
+          "type": "number",
+          "min": 0,
+          "max": 100000
+        },
+        "zero_index": {
+          "type": "integer",
+          "min": 0,
+          "max": 3
+        },
+        "active_id": {
+          "type": "integer",
+          "min": -1,
+          "max": 100000
+        }
+      },
+      "required": [],
+      "max": 128
+    },
+    "racer": {
+      "type": "object",
+      "fields": {
+        "id": {
+          "type": "integer",
+          "min": 0,
+          "max": 100000
+        },
+        "role": {
+          "type": "enum",
+          "values": [
+            "racer",
+            "zero",
+            "opening_police",
+            "closing_police"
+          ]
+        },
+        "zero_index": {
+          "type": "integer",
+          "min": 0,
+          "max": 3
+        },
+        "variant": {
+          "type": "integer",
+          "min": 0,
+          "max": 9
+        },
+        "pos": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "min": -3000,
+            "max": 3000
+          },
+          "min": 3,
+          "max": 3
+        },
+        "yaw": {
+          "type": "number",
+          "min": -100000,
+          "max": 100000
+        },
+        "tilt": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "min": -3000,
+            "max": 3000
+          },
+          "min": 3,
+          "max": 3
+        },
+        "state": {
+          "type": "enum",
+          "values": [
+            "racing",
+            "offroad",
+            "stranded",
+            "stopped",
+            "rock_bounce"
+          ]
+        },
+        "recovery_progress": {
+          "type": "number",
+          "min": 0,
+          "max": 1
+        },
+        "recovery_helpers": {
+          "type": "integer",
+          "min": 0,
+          "max": 128
+        }
+      },
+      "required": [
+        "id",
+        "variant",
+        "pos",
+        "yaw",
+        "state"
+      ],
+      "max": 128
+    },
+    "world": {
+      "type": "object",
+      "fields": {
+        "world_protocol": {
+          "type": "enum",
+          "values": [
+            1
+          ]
+        },
+        "generation_version": {
+          "type": "enum",
+          "values": [
+            1
+          ]
+        },
+        "drive_protocol": {
+          "type": "enum",
+          "values": [
+            0,
+            1
+          ]
+        },
+        "driving": {
+          "type": "map",
+          "items": {
+            "type": "ref",
+            "name": "drive"
+          },
+          "max": 8
+        },
+        "camp_cooking": {
+          "type": "ref",
+          "name": "camp_cooking"
+        },
+        "cargo": {
+          "type": "ref",
+          "name": "cargo"
+        },
+        "foraging": {
+          "type": "ref",
+          "name": "foraging"
+        },
+        "course": {
+          "type": "ref",
+          "name": "course"
+        },
+        "city_lamps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "fields": {
+              "id": {
+                "type": "integer",
+                "min": 0,
+                "max": 511
+              },
+              "pos": {
+                "type": "array",
+                "items": {
+                  "type": "number",
+                  "min": -3000,
+                  "max": 3000
+                },
+                "min": 3,
+                "max": 3
+              },
+              "rot": {
+                "type": "array",
+                "items": {
+                  "type": "number",
+                  "min": -3000,
+                  "max": 3000
+                },
+                "min": 3,
+                "max": 3
+              }
+            },
+            "required": [
+              "id",
+              "pos",
+              "rot"
+            ],
+            "max": 128
+          },
+          "max": 512
+        },
+        "chair_poses": {
+          "type": "map",
+          "items": {
+            "type": "ref",
+            "name": "pose"
+          },
+          "max": 32
+        },
+        "flag_poses": {
+          "type": "map",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "ref",
+              "name": "pose"
+            },
+            "max": 3
+          },
+          "max": 32
+        },
+        "table_yaw": {
+          "type": "number",
+          "min": -100000,
+          "max": 100000
+        },
+        "grill_pose": {
+          "type": "nullable",
+          "items": {
+            "type": "ref",
+            "name": "pose"
+          }
+        },
+        "fallen": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "fields": {
+              "id": {
+                "type": "integer",
+                "min": 0,
+                "max": 19999
+              },
+              "dir": {
+                "type": "array",
+                "items": {
+                  "type": "number",
+                  "min": -3000,
+                  "max": 3000
+                },
+                "min": 3,
+                "max": 3
+              },
+              "age": {
+                "type": "number",
+                "min": 0,
+                "max": 100000
+              }
+            },
+            "required": [
+              "id",
+              "dir",
+              "age"
+            ],
+            "max": 128
+          },
+          "max": 20000
+        },
+        "stones": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "fields": {
+              "id": {
+                "type": "integer",
+                "min": 0,
+                "max": 1000000000
+              },
+              "pos": {
+                "type": "array",
+                "items": {
+                  "type": "number",
+                  "min": -3000,
+                  "max": 3000
+                },
+                "min": 3,
+                "max": 3
+              },
+              "velocity": {
+                "type": "array",
+                "items": {
+                  "type": "number",
+                  "min": -3000,
+                  "max": 3000
+                },
+                "min": 3,
+                "max": 3
+              },
+              "bounces": {
+                "type": "integer",
+                "min": 0,
+                "max": 100
+              }
+            },
+            "required": [
+              "id",
+              "pos",
+              "velocity",
+              "bounces"
+            ],
+            "max": 128
+          },
+          "max": 256
+        },
+        "impacts": {
+          "type": "map",
+          "items": {
+            "type": "integer",
+            "min": 0,
+            "max": 100000
+          },
+          "max": 32
+        },
+        "camp": {
+          "type": "nullable",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "min": -3000,
+              "max": 3000
+            },
+            "min": 3,
+            "max": 3
+          }
+        },
+        "chairs": {
+          "type": "boolean"
+        },
+        "cooking": {
+          "type": "boolean"
+        },
+        "cook_time": {
+          "type": "number",
+          "min": 0,
+          "max": 100000
+        },
+        "grill_servings": {
+          "type": "integer",
+          "min": 0,
+          "max": 10
+        },
+        "npc_servings": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "min": 0,
+            "max": 10
+          },
+          "max": 128
+        },
+        "npc_people": {
+          "type": "array",
+          "items": {
+            "type": "ref",
+            "name": "person"
+          },
+          "max": 256
+        },
+        "marshals": {
+          "type": "array",
+          "items": {
+            "type": "ref",
+            "name": "person"
+          },
+          "max": 128
+        },
+        "eaten": {
+          "type": "boolean"
+        },
+        "racing": {
+          "type": "boolean"
+        },
+        "passed": {
+          "type": "integer",
+          "min": 0,
+          "max": 100000
+        },
+        "helped": {
+          "type": "integer",
+          "min": 0,
+          "max": 100000
+        },
+        "elapsed": {
+          "type": "number",
+          "min": 0,
+          "max": 100000
+        },
+        "paused": {
+          "type": "boolean"
+        },
+        "dead": {
+          "type": "boolean"
+        },
+        "finished": {
+          "type": "boolean"
+        },
+        "title": {
+          "type": "string",
+          "max": 256
+        },
+        "text": {
+          "type": "string",
+          "max": 4096
+        },
+        "racers": {
+          "type": "array",
+          "items": {
+            "type": "ref",
+            "name": "racer"
+          },
+          "max": 32
+        },
+        "tow": {
+          "type": "integer",
+          "min": -1,
+          "max": 100000
+        },
+        "tow_progress": {
+          "type": "number",
+          "min": 0,
+          "max": 1
+        },
+        "tow_owner": {
+          "type": "string",
+          "max": 256
+        },
+        "recovery_links": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "fields": {
+              "player": {
+                "type": "string",
+                "max": 256
+              },
+              "racer": {
+                "type": "integer",
+                "min": 0,
+                "max": 100000
+              },
+              "pos": {
+                "type": "array",
+                "items": {
+                  "type": "number",
+                  "min": -3000,
+                  "max": 3000
+                },
+                "min": 3,
+                "max": 3
+              }
+            },
+            "required": [
+              "player",
+              "racer",
+              "pos"
+            ],
+            "max": 3
+          },
+          "max": 128
+        },
+        "recovery_helpers": {
+          "type": "integer",
+          "min": 0,
+          "max": 128
+        },
+        "notice": {
+          "type": "string",
+          "max": 1024
+        },
+        "notice_time": {
+          "type": "number",
+          "min": 0,
+          "max": 100000
+        }
+      },
+      "required": [
+        "world_protocol",
+        "generation_version",
+        "drive_protocol",
+        "driving",
+        "camp_cooking",
+        "cargo",
+        "foraging",
+        "course",
+        "city_lamps",
+        "chair_poses",
+        "flag_poses",
+        "table_yaw",
+        "grill_pose",
+        "fallen",
+        "stones",
+        "impacts",
+        "camp",
+        "chairs",
+        "cooking",
+        "cook_time",
+        "grill_servings",
+        "npc_servings",
+        "npc_people",
+        "marshals",
+        "eaten",
+        "racing",
+        "passed",
+        "helped",
+        "elapsed",
+        "paused",
+        "dead",
+        "finished",
+        "title",
+        "text",
+        "racers",
+        "tow",
+        "tow_progress",
+        "tow_owner",
+        "recovery_links",
+        "recovery_helpers",
+        "notice",
+        "notice_time"
+      ],
+      "max": 128
+    }
+  }
+}

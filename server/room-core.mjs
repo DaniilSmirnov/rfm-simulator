@@ -1,3 +1,4 @@
+import { validateWorld } from './world-protocol.mjs';
 export const MAX_PLAYERS = 8;
 const COMMANDS = new Set(['table', 'chairs', 'grill', 'flag', 'eat', 'rally', 'collect', 'mount_mushroom', 'eat_mushroom', 'eat_berries', 'pack', 'trunk', 'take_gear', 'return_gear', 'firewood', 'cauldron', 'plov_cook', 'eat_plov']);
 const vec = value => Array.isArray(value) && value.length === 3 && value.every(n => Number.isFinite(n) && Math.abs(n) < 3000);
@@ -7,7 +8,7 @@ export class RoomError extends Error {
 }
 export class RoomState {
   constructor(data = null) {
-    this.data = data ?? { players: {}, host: '', world: null, commands: [], closed: false };
+    this.data = data ?? { players: {}, host: '', world: null, commands: [], results: [], closed: false };
   }
   expire(now) {
     const d = this.data;
@@ -38,6 +39,10 @@ export class RoomState {
   sync(body, now) {
     if (this.data.closed) throw new RoomError(410, 'Создатель вышел. Комната закрыта.');
     const p = this.member(body.token);
+    if (p.id === this.data.host && body.world != null) {
+      const error = validateWorld(body.world);
+      if (error) throw new RoomError(400, `Некорректный снимок мира: ${error}. Обновите игру.`);
+    }
     const s = body.state;
     if (!s || !vec(s.pos) || !vec(s.car) || !number(s.heading) || !number(s.yaw) || !number(s.pitch) || typeof s.in_car !== 'boolean') throw new RoomError(400, 'Некорректное состояние игрока.');
     const drive_inputs = (Array.isArray(s.drive_inputs) ? s.drive_inputs.slice(0, 96) : []).filter(c =>
@@ -49,11 +54,20 @@ export class RoomState {
     p.state_time = now;
     if (p.id === this.data.host) {
       if (body.world && typeof body.world === 'object' && !Array.isArray(body.world)) { this.data.world = body.world; this.data.world_time = now; }
+      this.data.results ??= [];
+      const outcomes = Array.isArray(body.results) ? body.results.slice(0, 64) : [];
+      for (const outcome of outcomes) {
+        const command = this.data.commands.find(c => c.id === outcome?.id);
+        if (!command || !['applied', 'rejected'].includes(outcome.status)) continue;
+        this.data.results = this.data.results.filter(r => r.id !== command.id);
+        this.data.results.push({id:command.id, player:command.player, status:outcome.status, reason:String(outcome.reason ?? '').slice(0, 256)});
+      }
+      this.data.results = this.data.results.slice(-64);
       const ack = new Set(Array.isArray(body.ack) ? body.ack.slice(0, 64) : []);
       this.data.commands = this.data.commands.filter(c => !ack.has(c.id));
     } else {
       for (const c of (Array.isArray(body.commands) ? body.commands.slice(0, 8) : [])) {
-        if (!Number.isSafeInteger(c.seq) || c.seq <= p.seq || !COMMANDS.has(c.action)) continue;
+        if (!c || typeof c !== 'object' || !Number.isSafeInteger(c.seq) || c.seq <= p.seq || !COMMANDS.has(c.action)) continue;
         if (this.data.commands.length >= 64) throw new RoomError(429, 'Подожди выполнения предыдущих действий.');
         const placement = {};
         if (c.placement && vec(c.placement.pos) && number(c.placement.yaw) && Math.hypot(...c.placement.pos.map((v, i) => v - p.state.pos[i])) <= 5) {
@@ -73,7 +87,7 @@ export class RoomState {
           ? {...this.data.world, paused: true}
           : this.data.world)
       : this.data.world;
-    return { server_time: now, world_time: this.data.world_time ?? 0, stage: this.data.stage ?? 0, host: this.data.host, world, accepted: p.seq,
+    return { server_time: now, world_time: this.data.world_time ?? 0, stage: this.data.stage ?? 0, host: this.data.host, world, accepted: p.seq, results:(this.data.results ?? []).filter(r => r.player === p.id),
       players: Object.values(this.data.players).map(({ id, name, slot, car_model, state_time, state }) => ({ id, name, slot, car_model: car_model ?? slot, state_time: state_time ?? 0, state })),
       commands: p.id === this.data.host ? this.data.commands : [] };
   }

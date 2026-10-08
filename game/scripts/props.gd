@@ -170,8 +170,16 @@ static func player_avatar(variant: int = 0) -> Node3D:
 	return root
 
 
-# Roll wheel and hub meshes according to signed longitudinal travel.
-# Cache references once per car; skip teleports to prevent large visual jumps.
+# A model-owned wheel pivot rotates its tyre, rim and spokes together.
+static func wheel_mount(parent: Node3D, position: Vector3, radius: float) -> Node3D:
+	var mount = Node3D.new()
+	parent.add_child(mount)
+	mount.position = position
+	mount.set_meta("rolling_wheel_radius", radius)
+	mount.set_meta("rolling_wheel_axis", Vector3.RIGHT)
+	return mount
+
+# Roll wheel meshes and pivots according to signed travel; skip teleports.
 static func animate_wheels(car_root: Node3D) -> void:
 	if car_root == null:
 		return
@@ -235,18 +243,7 @@ static func car(color: Color, rally: bool = false, variant: int = 0) -> Node3D:
 	return root
 
 # Player fleet. Shapes are stylized original meshes, with recognizable proportions.
-const PLAYER_MODELS = [
-	{"name": "Компактный седан", "color": "111a2b", "length": 4.26, "width": 1.70, "height": 1.50, "rear": 0.95, "glass": 0.36, "lights": "wide", "grille": 0.65},
-	{"name": "Городской седан", "color": "a8bdc2", "length": 4.41, "width": 1.77, "height": 1.49, "rear": 1.05, "glass": 0.48, "lights": "slim", "grille": 0.94},
-	{"name": "Лесной внедорожник", "color": "627746", "length": 3.74, "width": 1.68, "height": 1.74, "rear": 1.50, "glass": 0.14, "lights": "round", "grille": 0.86},
-	{"name": "Классический седан", "color": "e6dfc7", "length": 4.12, "width": 1.64, "height": 1.45, "rear": 0.95, "glass": 0.19, "lights": "square", "grille": 0.55},
-	{"name": "Лёгкий седан", "color": "8dabb9", "length": 4.37, "width": 1.72, "height": 1.46, "rear": 1.00, "glass": 0.52, "lights": "wide", "grille": 0.80},
-	{"name": "Дорожный седан", "color": "a74d43", "length": 4.40, "width": 1.74, "height": 1.47, "rear": 0.93, "glass": 0.43, "lights": "slim", "grille": 0.56},
-	{"name": "Семейный седан", "color": "c6c9b9", "length": 4.35, "width": 1.73, "height": 1.53, "rear": 0.87, "glass": 0.27, "lights": "square", "grille": 0.90},
-	{"name": "Туристический кроссовер", "color": "a58058", "length": 4.34, "width": 1.82, "height": 1.70, "rear": 1.63, "glass": 0.28, "lights": "square", "grille": 1.05},
-	{"name": "Походный хэтчбек", "color": "283f87", "length": 4.17, "width": 1.68, "height": 1.47, "rear": 0.98, "glass": 0.30, "lights": "square", "grille": 0.75},
-	{"name": "Спортивный седан", "color": "c92530", "length": 4.68, "width": 1.88, "height": 1.46, "rear": 1.00, "glass": 0.40, "lights": "slim", "grille": 0.80},
-]
+static var PLAYER_MODELS: Array = JSON.parse_string(FileAccess.get_file_as_string("res://data/player_models.json"))
 
 # A closed faceted shell with bevelled cross-sections. Each model has its own
 # bonnet, roof, windscreen, rear deck and wheelbase instead of stacked boxes.
