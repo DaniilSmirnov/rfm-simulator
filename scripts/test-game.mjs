@@ -74,3 +74,5 @@ run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_drive
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_soundscape.gd']);
 
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_road_surface.gd']);
+
+run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_gravel_relief.gd']);
