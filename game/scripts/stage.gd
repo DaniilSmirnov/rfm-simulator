@@ -1,6 +1,22 @@
 extends Node3D
 class_name RallyStage
 
+const NATURE_TREE_MESHES = [
+	preload("res://models/nature/tree_trunk.tres"),
+	preload("res://models/nature/tree_crown_lower.tres"),
+	preload("res://models/nature/tree_crown_middle.tres"),
+	preload("res://models/nature/tree_crown_top.tres")
+]
+const NATURE_GRASS = preload("res://models/nature/grass.obj")
+const NATURE_STONE = preload("res://models/nature/stone.tres")
+const NATURE_BOULDER = preload("res://models/nature/boulder.tres")
+const NATURE_BUSH = preload("res://models/nature/bush.tres")
+const NATURE_BUSH_STEM = preload("res://models/nature/bush_stem.tres")
+const NATURE_BERRY = preload("res://models/nature/berry.tres")
+const NATURE_MUSHROOM_CAP = preload("res://models/nature/mushroom_cap.tres")
+const NATURE_MUSHROOM_STEM = preload("res://models/nature/mushroom_stem.tres")
+
+
 var officials: Node3D
 const Officials = preload("res://scripts/course_officials.gd")
 
@@ -376,13 +392,7 @@ func _build_road() -> void:
 # Four instanced draw calls for the forest instead of thousands of nodes.
 # Collision positions remain in `trees`, matching the original gameplay.
 func shared_tree_mesh(layer: int) -> CylinderMesh:
-	var mesh = CylinderMesh.new()
-	mesh.bottom_radius = 1.0
-	mesh.top_radius = 0.65 if layer == 0 else 0.0
-	mesh.height = 1.0
-	mesh.radial_segments = 5 if layer == 0 else 6
-	mesh.rings = 1
-	return mesh
+	return NATURE_TREE_MESHES[layer]
 
 func shared_tree_pose(position: Vector3, height_value: float, layer: int, basis: Basis = Basis.IDENTITY) -> Transform3D:
 	var radius = 0.2 if layer == 0 else height_value * (0.28 - (layer - 1) * 0.055)
@@ -401,10 +411,7 @@ func shared_grass_color(value: float) -> Color:
 	return Color("4f6634").lerp(Color("91905a"), clampf(value, 0.0, 1.0) * 0.7)
 
 func shared_stone_mesh() -> SphereMesh:
-	var mesh = SphereMesh.new()
-	mesh.radial_segments = 5
-	mesh.rings = 2
-	return mesh
+	return NATURE_STONE
 
 func shared_stone_pose(position: Vector3, radius: float, yaw: float = 0.0) -> Transform3D:
 	return Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3(radius * 2.0, radius, radius * 1.7)), position)
@@ -706,16 +713,8 @@ func _detail_batch(name: String, mesh: Mesh, poses: Array, colors: Array, indice
 	add_child(node)
 	woodland_details[name] = poses.size()
 
-func _grass_mesh() -> ArrayMesh:
-	var st = SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for i in range(5):
-		var yaw = i * TAU / 5
-		var base = Vector3(0.10, 0, 0).rotated(Vector3.UP, yaw)
-		for v in [base + Vector3(-0.09, 0, 0).rotated(Vector3.UP, yaw), base + Vector3(0.09, 0, 0).rotated(Vector3.UP, yaw), base + Vector3(0.12, 0.75 + (i % 2) * 0.25, 0).rotated(Vector3.UP, yaw)]:
-			st.add_vertex(v)
-	st.generate_normals()
-	return st.commit()
+func _grass_mesh() -> Mesh:
+	return NATURE_GRASS
 
 func _build_woodland_details(cooperative: bool = false) -> void:
 	var detail_rng = RandomNumberGenerator.new()
@@ -815,21 +814,12 @@ func _build_woodland_details(cooperative: bool = false) -> void:
 			for fruit_index in range(berry_begin, berry_poses.size()):
 				fruit_indices.append(fruit_index)
 			collectibles.append({"kind": "berries", "pos": Vector3(p.x, ground(p), p.z), "quantity": 3, "parts": {"ForestBerries": fruit_indices}})
-	var leaves = SphereMesh.new()
-	leaves.radial_segments = 6
-	leaves.rings = 2
+	var leaves = NATURE_BUSH
 	_detail_batch("ForestBushes", leaves, bush_poses, bush_colors)
 	_detail_batch("ForestBerryBushes", leaves, berry_bush_poses, berry_bush_colors)
-	var berry_mesh = SphereMesh.new()
-	berry_mesh.radial_segments = 5
-	berry_mesh.rings = 2
+	var berry_mesh = NATURE_BERRY
 	_detail_batch("ForestBerries", berry_mesh, berry_poses, berry_colors)
-	var bush_stem_mesh = CylinderMesh.new()
-	bush_stem_mesh.height = 1
-	bush_stem_mesh.bottom_radius = 1
-	bush_stem_mesh.top_radius = 0.5
-	bush_stem_mesh.radial_segments = 4
-	bush_stem_mesh.rings = 1
+	var bush_stem_mesh = NATURE_BUSH_STEM
 	_detail_batch("ForestBushStems", bush_stem_mesh, bush_stem_poses, bush_stem_colors)
 	for i in range(300):
 		if cooperative and i % 400 == 0:
@@ -870,22 +860,13 @@ func _build_woodland_details(cooperative: bool = false) -> void:
 			var twig = p + Vector3(detail_rng.randf_range(-0.25, 0.25), height * 0.55, detail_rng.randf_range(-0.25, 0.25))
 			twig_poses.append(Transform3D(Basis.from_euler(Vector3(0.9, detail_rng.randf() * TAU, 0.7)).scaled(Vector3(0.02, radius * 0.65, 0.02)), twig))
 			twig_colors.append(Color("493c2b"))
-	var boulder = SphereMesh.new()
-	boulder.radial_segments = 7
-	boulder.rings = 3
+	var boulder = NATURE_BOULDER
 	_detail_batch("ForestBoulders", boulder, boulder_poses, boulder_colors)
 	_detail_batch("ForestPebbles", shared_stone_mesh(), stone_poses, stone_colors)
 	_detail_batch("ForestGrass", _grass_mesh(), grass_poses, grass_colors)
-	var stem = CylinderMesh.new()
-	stem.height = 1
-	stem.bottom_radius = 1
-	stem.top_radius = 0.7
-	stem.radial_segments = 5
-	stem.rings = 1
+	var stem = NATURE_MUSHROOM_STEM
 	_detail_batch("MushroomStems", stem, stem_poses, stem_colors)
-	var cap = SphereMesh.new()
-	cap.radial_segments = 12
-	cap.rings = 6
+	var cap = NATURE_MUSHROOM_CAP
 	_detail_batch("MushroomCaps", cap, cap_poses, cap_colors)
 	for species in poison_caps:
 		var colors: Array = []
