@@ -505,7 +505,7 @@ func _thuja_forest(cooperative: bool = false) -> void:
 					blocked = blocked or stage.flat(p).distance_to(stage.flat(spot)) < 10.0
 				for obstacle in obstacles:
 					blocked = blocked or stage.flat(p).distance_to(stage.flat(_relative_pose(obstacle.body).origin)) < 7.0
-				if blocked or paved_at(p, 2.0):
+				if blocked or paved_at(p, 2.0) or stage.road_distance(p) < 8.0:
 					continue
 				p.y = stage.terrain_surface_height(p) - 0.03
 				tree_positions.append(p)
@@ -530,7 +530,7 @@ func _thuja_forest(cooperative: bool = false) -> void:
 			var blocked = false
 			for spot in stage.clearings:
 				blocked = blocked or stage.flat(p).distance_to(stage.flat(spot)) < 10.0
-			if blocked or paved_at(p, 2.0):
+			if blocked or paved_at(p, 2.0) or stage.road_distance(p) < 8.0:
 				continue
 			p.y = stage.terrain_surface_height(p) - 0.03
 			tree_positions.append(p)
@@ -795,6 +795,8 @@ func _landscape() -> void:
 	for s in range(40, 820, 32):
 		for side_value in [-1.0, 1.0]:
 			var p = stage.village_main_at(s) + stage.village_main_side(s) * side_value * 100
+			if paved_at(p, 2.0) or stage.road_distance(p) < 8.0:
+				continue
 			p.y = stage.ground(p)
 			Props.cylinder(root, p + Vector3(0, 3.5, 0), 0.10, 0.06, 7, Color("795e44"), 8)
 			Props.cylinder(root, p + Vector3(0, 5, 0), 1.5, 0.08, 8, Color("426345"), 10)
@@ -806,7 +808,7 @@ func _landscape() -> void:
 # Use each paved area's real local frame: cross streets are rotated relative
 # to the route, so a station-only test misses their far ends.
 func paved_at(p: Vector3, padding: float = 0.0) -> bool:
-	var nearest = stage.urban_nearest(p)
+	var nearest = stage.village_main_nearest(p)
 	if nearest.s >= VILLAGE_START - padding and nearest.s <= VILLAGE_END + padding and nearest.distance <= 6.65 + padding:
 		return true
 	for area in paved_areas:

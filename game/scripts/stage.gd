@@ -104,9 +104,13 @@ func side(s: float) -> Vector3:
 	return direction(s).cross(Vector3.UP).normalized()
 
 func road_s(pos: Vector3) -> float:
+	if urban:
+		return float(urban_nearest(pos).s)
 	return clampf(-pos.z, 0, LENGTH)
 
 func road_distance(pos: Vector3) -> float:
+	if urban:
+		return float(urban_nearest(pos).distance)
 	var p = at(road_s(pos))
 	return Vector2(pos.x - p.x, pos.z - p.z).length()
 
@@ -129,9 +133,13 @@ func grip(pos: Vector3) -> float:
 
 func ground(pos: Vector3) -> float:
 	if urban:
-		var s = road_s(pos)
+		var paved_height = village_paved_height(pos)
+		if paved_height != INF:
+			return paved_height
+		var nearest = urban_nearest(pos)
+		var s: float = nearest.s
 		var p = at(s)
-		var distance = road_distance(pos)
+		var distance: float = nearest.distance
 		if village(s):
 			var junction = absf(s - 370.0) <= 3.0 or absf(s - 500.0) <= 3.0
 			return (p.y + roughness(s) * (1.0 - smoothstep(3.0, 8.0, distance)) + sin(pos.x * 0.12 + pos.z * 0.085) * 0.48 * smoothstep(5.0, 13.0, distance)) if village_forest_detour(s) else (2.36 if not junction and distance > 3.75 and distance < 6.45 else 2.0)
@@ -939,18 +947,10 @@ func village(s: float) -> bool:
 # The first village side street branches through the woods past the cemetery
 # and joins the second side street. All stations remain ordered start-to-finish.
 func village_forest_detour(s: float) -> bool:
-	return urban and s > 380.0 and s < 490.0
+	return urban and s > 382.0 and s < 488.0
 
 func village_forest_offset(s: float) -> float:
-	if s <= 370.0 or s >= 500.0:
-		return 0.0
-	var stations = [370.0, 385.0, 402.0, 418.0, 438.0, 453.0, 469.0, 487.0, 500.0]
-	var offsets = [0.0, 25.0, 49.0, 59.0, 60.0, 59.0, 53.0, 23.0, 0.0]
-	for i in range(stations.size() - 1):
-		if s <= stations[i + 1]:
-			var t = smoothstep(stations[i], stations[i + 1], s)
-			return lerpf(offsets[i], offsets[i + 1], t)
-	return 0.0
+	return (urban_at(s) - village_main_at(s)).dot(village_main_side(s))
 
 # Village buildings and the original cobblestone main road must not follow
 # the rally-only forest bypass. Keep their historical straight village axis.
@@ -967,12 +967,61 @@ func village_main_direction(s: float) -> Vector3:
 func village_main_side(s: float) -> Vector3:
 	return village_main_direction(s).cross(Vector3.UP).normalized()
 
+# Follow each cobbled side lane to its outer end before entering the woods.
+# The church and cemetery remain together inside the loop.
 func urban_at(s: float) -> Vector3:
-	var village_blend = smoothstep(260.0, 300.0, s) * (1.0 - smoothstep(570.0, 610.0, s))
-	var country_x = sin(s / 85.0) * 34.0 + sin(s / 43.0) * 10.0
-	var village_x = sin((s - 300.0) / 100.0) * 14.0
-	var height = 2.0 + (1.0 - village_blend) * (7.0 + sin(s / 95.0) * 3.0 + s * 0.004)
-	return Vector3(lerpf(country_x, village_x, village_blend) + village_forest_offset(s), height + (sin(s * 0.12) * 0.55 + sin(s * 0.037) * 0.75) * smoothstep(378.0, 407.0, s) * (1.0 - smoothstep(465.0, 495.0, s)), -s)
+	if s <= 370.0 or s >= 500.0:
+		return village_main_at(s)
+	var first = village_main_at(370.0)
+	var last = village_main_at(500.0)
+	var first_side = village_main_side(370.0)
+	var last_side = village_main_side(500.0)
+	var stations = [370.0, 382.0, 402.0, 418.0, 435.0, 454.0, 474.0, 488.0, 500.0]
+	var route = [
+		first, first + first_side * 47.0, first + first_side * 115.0,
+		village_main_at(410.0) + village_main_side(410.0) * 117.0,
+		village_main_at(435.0) + village_main_side(435.0) * 115.0,
+		village_main_at(460.0) + village_main_side(460.0) * 118.0,
+		last + last_side * 115.0, last + last_side * 47.0, last
+	]
+	for i in range(stations.size() - 1):
+		if s <= stations[i + 1]:
+			var t = smoothstep(stations[i], stations[i + 1], s)
+			var p: Vector3 = route[i].lerp(route[i + 1], t)
+			p.y += (sin(s * 0.12) * 0.55 + sin(s * 0.037) * 0.75) * smoothstep(402.0, 418.0, s) * (1.0 - smoothstep(454.0, 474.0, s))
+			return p
+	return last
+
+# Historic main-road station is independent of the rally-only bypass.
+func village_main_nearest(pos: Vector3) -> Dictionary:
+	var best = INF
+	var station = 300.0
+	var p = flat(pos)
+	var start = clampf(-pos.z - 8.0, 290.0, 578.0)
+	for i in range(9):
+		var s = start + i * 2.0
+		var a = flat(village_main_at(s))
+		var segment = flat(village_main_at(s + 2.0)) - a
+		var ratio = clampf((p - a).dot(segment) / maxf(segment.length_squared(), 0.000001), 0.0, 1.0)
+		var distance = p.distance_squared_to(a + segment * ratio)
+		if distance < best:
+			best = distance
+			station = s + ratio * 2.0
+	return {"s": station, "distance": sqrt(best)}
+
+# Contact heights are the tops of the explicitly authored paving meshes.
+func village_paved_height(pos: Vector3) -> float:
+	var nearest = village_main_nearest(pos)
+	var on_main = nearest.s >= 300.0 and nearest.s <= 570.0
+	if on_main and nearest.distance <= 3.75:
+		return 2.0875
+	for station in [370.0, 500.0]:
+		var offset = pos - village_main_at(station)
+		if absf(offset.dot(village_main_side(station))) <= 46.5 and absf(offset.dot(village_main_direction(station))) <= 2.5:
+			return 2.0775
+	if on_main and nearest.distance > 3.75 and nearest.distance < 6.45:
+		return 2.36
+	return INF
 
 func urban_nearest(pos: Vector3) -> Dictionary:
 	var best = INF

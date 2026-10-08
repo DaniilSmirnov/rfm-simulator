@@ -30,10 +30,25 @@ func run() -> void:
 	var church_center = stage.village_main_at(435.0) + stage.village_main_side(435.0) * 43.0
 	var cemetery_lateral = (stage.city.cemetery_center - stage.village_main_at(435.0)).dot(stage.village_main_side(435.0))
 	var detour_lateral = (stage.at(435.0) - stage.village_main_at(435.0)).dot(stage.village_main_side(435.0))
-	var cemetery_edge_gap = cemetery_lateral - detour_lateral - 16.0 - stage.WIDTH * 0.5
-	check(cemetery_lateral > 80.0 and detour_lateral > 45.0 and detour_lateral < cemetery_lateral, "cemetery stays behind church and rally cars pass on its left")
+	var cemetery_edge_gap = detour_lateral - cemetery_lateral - 16.0 - stage.WIDTH * 0.5
+	check(cemetery_lateral > 80.0 and detour_lateral > 45.0 and detour_lateral > cemetery_lateral, "church and cemetery remain together inside the outer gravel loop")
 	check(cemetery_edge_gap >= 5.0 and cemetery_edge_gap <= 10.0, "gravel road runs 5-10 m from cemetery boundary")
 	check(stage.village_main_at(435.0).distance_to(stage.at(435.0)) > 45.0, "historic cobblestone road remains separate from gravel detour")
+	var main_road_clear = true
+	var main_height_matches = true
+	for station in range(301, 570):
+		var point = stage.village_main_at(float(station))
+		main_road_clear = main_road_clear and stage.city.paved_at(point, 1.6) and not stage.city._forest_spot_allowed(point, 1.6)
+		main_height_matches = main_height_matches and is_equal_approx(stage.ground(point), 2.0875)
+	check(main_road_clear, "entire historic main road rejects trees even opposite forest bypass")
+	check(main_height_matches, "main-road wheel contact matches the top of cobblestones")
+	for lane_station in [370.0, 500.0]:
+		var end = stage.village_main_at(lane_station) + stage.village_main_side(lane_station) * 47.0
+		var route_station = 382.0 if lane_station == 370.0 else 488.0
+		check(stage.urban_at(route_station).distance_to(end) < 0.001, "gravel starts at outer side-lane endpoint")
+		for along in [10.0, 25.0, 40.0]:
+			var point = stage.village_main_at(lane_station) + stage.village_main_side(lane_station) * along
+			check(is_equal_approx(stage.ground(point), 2.0775), "side-lane wheel contact matches cobblestone top")
 	check(not stage.city._forest_spot_allowed(stage.city.cemetery_center), "mixed forest generation preserves the cemetery clearing")
 	check(stage.city.side_lane_house_count >= 8, "both secondary village streets have additional houses")
 	check(stage.city.village_sign_count == 2, "village has name signs at both entrance and exit")
@@ -48,7 +63,7 @@ func run() -> void:
 	check(trees_clear_of_paving, "all generated village trees keep clearance from paving including rotated side lanes")
 	for lane_s in [370.0, 500.0]:
 		for along in [-46.0, -25.0, 25.0, 46.0]:
-			check(stage.city.paved_at(stage.at(lane_s) + stage.side(lane_s) * along), "paving mask covers transverse lane ends")
+			check(stage.city.paved_at(stage.village_main_at(lane_s) + stage.village_main_side(lane_s) * along), "paving mask covers transverse lane ends")
 	check(stage.city.village_prop_count >= 36, "village contains benches planters bins and wine delivery props")
 	var sidewalk_coverage = true
 	for station in range(301, 570):
@@ -56,7 +71,7 @@ func run() -> void:
 			continue
 		for side_value in [-1.0, 1.0]:
 			for lateral in [3.96, 5.1, 6.35]:
-				var sample = stage.at(station + 0.5) + stage.side(station + 0.5) * side_value * lateral
+				var sample = stage.village_main_at(station + 0.5) + stage.village_main_side(station + 0.5) * side_value * lateral
 				var covered = false
 				for pose in stage.city.sidewalk_poses:
 					var local = pose.affine_inverse() * sample
@@ -64,7 +79,7 @@ func run() -> void:
 				sidewalk_coverage = sidewalk_coverage and covered
 	check(sidewalk_coverage, "sidewalks cover both edges and centers continuously around village bends")
 	check(is_equal_approx(stage.ground(stage.at(335) + stage.side(335) * 5.1), 2.36), "walking height matches the raised village sidewalk surface")
-	check(is_equal_approx(stage.ground(stage.at(370) + stage.side(370) * 5.1), 2.0), "side street junction has no raised sidewalk across its entrance")
+	check(is_equal_approx(stage.ground(stage.village_main_at(370) + stage.village_main_side(370) * 5.1), 2.0775), "side street junction has no raised sidewalk across its entrance")
 	check(village_name_labels.size() == 4, "both village signs show Ля Газ в Польен on both faces")
 	check(stage.city.thuja_count > 300, "dense thuja forest surrounds the village")
 	check(stage.woodland_details.get("VillageThujaLower", 0) == stage.city.thuja_count and stage.woodland_details.get("VillageThujaCrown", 0) == stage.city.thuja_count, "thuja forest is rendered through instanced layers")
@@ -93,7 +108,7 @@ func run() -> void:
 	check(village_details_clear, "generated village details never land on paved surfaces or occupied structures")
 	check(not stage.city.village_detail_allowed(stage.village_main_at(335.0)), "main village cobblestones reject natural detail")
 	check(not stage.city.village_detail_allowed(stage.village_main_at(435.0) + stage.village_main_side(435.0) * 5.1), "village sidewalks reject natural detail")
-	check(not stage.city.village_detail_allowed(stage.at(370.0) + stage.side(370.0) * 20.0), "transverse cobbled lanes reject natural detail")
+	check(not stage.city.village_detail_allowed(stage.village_main_at(370.0) + stage.village_main_side(370.0) * 20.0), "transverse cobbled lanes reject natural detail")
 	var parking_labels = 0
 	for label in stage.find_children("*", "Label3D", true, false):
 		if str(label.text).begins_with("P "):
