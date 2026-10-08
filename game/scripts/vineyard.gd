@@ -49,13 +49,13 @@ func build(cooperative: bool = false) -> void:
 			await get_tree().process_frame
 		for side_value in [-1.0, 1.0]:
 			var p = stage.at(s) + stage.side(s) * side_value * 14.0
-			var reserved = absf(s - 370) < 11 or absf(s - 500) < 11
+			var reserved = stage.village_forest_detour(float(s)) or absf(s - 370) < 11 or absf(s - 500) < 11
 			for parking in stage.clearings:
 				reserved = reserved or stage.flat(p).distance_to(stage.flat(parking)) < 13
 			if not reserved:
 				_house(p, atan2(stage.side(s).x * side_value, stage.side(s).z * side_value), int(s / 18) + int(side_value))
 	_side_lane_houses()
-	_church(stage.at(435) + stage.side(435) * 43)
+	_church(Vector3(43.0, stage.ground(Vector3(43, 0, -435)), -435.0))
 	_cemetery()
 	_village_sign(VILLAGE_START - 10.0, -1.0)
 	_village_sign(VILLAGE_END + 10.0, 1.0)
@@ -91,6 +91,8 @@ func _village_street(cooperative: bool = false) -> void:
 	street.name = "VillageCobblestoneStreet"
 	stage.add_child(street)
 	for s in range(300, 570):
+		if stage.village_forest_detour(float(s)):
+			continue
 		if cooperative and int(s) % 20 == 0:
 			await get_tree().process_frame
 		var p = stage.at(s)
@@ -101,6 +103,8 @@ func _village_street(cooperative: bool = false) -> void:
 			stone.rotation.y = yaw
 			village_cobblestones += 1
 	for s in range(300, 571):
+		if stage.village_forest_detour(float(s)):
+			continue
 		if cooperative and int(s) % 20 == 0:
 			await get_tree().process_frame
 		if absf(s - 370.0) <= 2.5 or absf(s - 500.0) <= 2.5:
@@ -297,10 +301,10 @@ func _cemetery() -> void:
 	root.name = "VillageCemetery"
 	stage.add_child(root)
 	var s = 435.0
-	cemetery_center = stage.at(s) + stage.side(s) * 72.0
+	cemetery_center = Vector3(115.0, 0.0, -435.0)
 	cemetery_center.y = stage.ground(cemetery_center)
 	root.position = cemetery_center
-	root.rotation.y = atan2(-stage.direction(s).x, -stage.direction(s).z)
+	root.rotation.y = 0.0
 	Props.box(root, Vector3(0, 0.015, 0), Vector3(32, 0.03, 24), Color("64794d"))
 	# Open lawn with regular rows, inspired by small North American rural cemeteries.
 	for row in range(4):
