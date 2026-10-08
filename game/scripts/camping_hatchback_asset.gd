@@ -44,7 +44,10 @@ static func build() -> Node3D:
 		mat.roughness = 0.65
 		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 		surface.material_override = mat
-		if part == "body":
+		# Rear glass, trim and lamps must be split together with the hatch panel.
+		# add_player_trunk() only clips direct MeshInstance3D children.
+		# Wheels and roof cargo stay static under CarModelDetails.
+		if part in ["body", "glass", "trim", "lights"]:
 			root.add_child(surface)
 		else:
 			details.add_child(surface)
