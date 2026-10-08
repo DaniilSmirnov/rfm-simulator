@@ -5,6 +5,7 @@ var background: TextureRect
 var images: Array[TextureRect] = []
 var states: Array[Label] = []
 var purchase_actions: HBoxContainer
+var car_purchase_button: Button
 var purchase_button: Button
 var check_purchase: Button
 var purchase_status: Label
@@ -59,10 +60,16 @@ func finish(parent: Control) -> void:
 	parent.add_child(actions)
 	purchase_button = Button.new()
 	purchase_button.custom_minimum_size.y = 40
-	purchase_button.pressed.connect(func(): game.platform_service.buy("stage_02"))
+	purchase_button.pressed.connect(func(): game.platform_service.buy(game.platform_service.product("stage", game.stage_choice.selected).get("sku", "")))
 	purchase_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	purchase_button.add_theme_font_size_override("font_size", 14)
 	actions.add_child(purchase_button)
+	car_purchase_button = Button.new()
+	car_purchase_button.custom_minimum_size.y = 40
+	car_purchase_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	car_purchase_button.add_theme_font_size_override("font_size", 14)
+	car_purchase_button.pressed.connect(func(): game.platform_service.buy(game.platform_service.product("car", game.car_choice.selected).get("sku", "")))
+	actions.add_child(car_purchase_button)
 	check_purchase = Button.new()
 	check_purchase.text = "ПРОВЕРИТЬ ПОКУПКУ"
 	check_purchase.custom_minimum_size.y = 40
@@ -72,6 +79,7 @@ func finish(parent: Control) -> void:
 	actions.add_child(check_purchase)
 	purchase_status = game._label(parent, "", 14)
 	purchase_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	car_purchase_button.hide()
 	purchase_button.hide()
 	check_purchase.hide()
 	purchase_status.hide()
@@ -86,11 +94,16 @@ func refresh() -> void:
 	var service = game.platform_service
 	var product = service.product("stage", game.stage_choice.selected) if service != null else {}
 	var can_buy: bool = product.get("purchase_enabled", false) and not allowed("stage", game.stage_choice.selected)
+	var car_product = service.product("car", game.car_choice.selected) if service != null else {}
+	var can_buy_car: bool = car_product.get("purchase_enabled", false) and not allowed("car", game.car_choice.selected)
+	car_purchase_button.visible = can_buy_car and not game.playing
+	car_purchase_button.disabled = service.busy if service != null else true
+	car_purchase_button.text = "ТЕСТ: МАШИНА · %s ГОЛОС(ОВ)" % str(car_product.get("price", ""))
 	purchase_button.visible = can_buy and not game.playing
 	purchase_button.disabled = service.busy if service != null else true
 	purchase_button.text = "ТЕСТ: ОТКРЫТЬ СУ · %s ГОЛОС(ОВ)" % str(product.get("price", ""))
-	check_purchase.visible = service != null and service.profile.get("platform") == "vk" and (can_buy or not service.purchase_message.is_empty()) and not game.playing
-	purchase_actions.visible = purchase_button.visible or check_purchase.visible
+	check_purchase.visible = service != null and service.profile.get("platform") == "vk" and (can_buy or can_buy_car or not service.purchase_message.is_empty()) and not game.playing
+	purchase_actions.visible = purchase_button.visible or car_purchase_button.visible or check_purchase.visible
 	check_purchase.disabled = service.busy if service != null else true
 	purchase_status.text = service.purchase_message if service != null else ""
 	purchase_status.visible = not purchase_status.text.is_empty() and not game.playing
@@ -99,7 +112,7 @@ func refresh() -> void:
 	for i in range(2):
 		var ok = car_ok if i == 0 else stage_ok
 		var bought = service != null and service.owns("car" if i == 0 else "stage", game.car_choice.selected if i == 0 else game.stage_choice.selected)
-		states[i].text = ("Куплено · доступно для выезда" if bought else "Доступно для выезда") if ok else ("Закрыто · доступна тестовая покупка" if i == 1 and can_buy else "Закрыто · продажи ещё не открыты")
+		states[i].text = ("Куплено · доступно для выезда" if bought else "Доступно для выезда") if ok else ("Закрыто · доступна тестовая покупка" if ((i == 1 and can_buy) or (i == 0 and can_buy_car)) else "Закрыто · продажи ещё не открыты")
 		states[i].add_theme_color_override("font_color", Color("b2bea1") if ok else Color("ffbc83"))
 	background.visible = not game.playing
 	background.texture = null if game.playing else load("res://textures/previews/backdrop_%d.webp" % game.selected_stage)

@@ -49,6 +49,12 @@ func run() -> void:
 	game.lobby_ui.refresh()
 	check(game.lobby_ui.states[1].text.contains("Куплено"), "server ownership shows purchase label")
 	check(not game.room.create_button.disabled and not game.lobby_ui.purchase_button.visible, "confirmed winter ownership unlocks host and hides purchase")
+	game.car_choice.select(3)
+	game.platform_service.catalog[6].purchase_enabled = true
+	game.platform_service.catalog[6].price = 1
+	game.lobby_ui.refresh()
+	check(game.lobby_ui.car_purchase_button.visible and game.room.create_button.disabled, "locked selected car exposes its own purchase")
+	game.car_choice.select(0)
 	game.select_stage(0)
 	game.lobby_ui.refresh()
 	check(not game.room.create_button.disabled, "free baseline enables create")
@@ -74,6 +80,7 @@ func run() -> void:
 	game.room.connected = false
 	game.select_stage(1)
 	game.platform_service.entitlements.skus = []
+	game.car_choice.select(3)
 	game.platform_service.purchase_message = "Ждём подтверждения VK. Нажмите «Проверить покупку»."
 	game.lobby_ui.refresh()
 	await process_frame
@@ -83,7 +90,7 @@ func run() -> void:
 	game.fit_mobile_dialogs()
 	await process_frame
 	check(safe.encloses(game.menu.get_global_rect()), "entire mobile main menu fits VK safe area without scrolling")
-	for control in [game.room.create_button, game.room.join_button, game.lobby_ui.purchase_button, game.lobby_ui.check_purchase, game.lobby_ui.purchase_status]:
+	for control in [game.room.create_button, game.room.join_button, game.lobby_ui.purchase_button, game.lobby_ui.car_purchase_button, game.lobby_ui.check_purchase, game.lobby_ui.purchase_status]:
 		check(game.menu.get_global_rect().encloses(control.get_global_rect()), "all menu actions and purchase status stay inside panel")
 	check(not game.menu_title.visible and not game.menu_text.visible, "mobile main menu has no duplicate heading or subtitle")
 	game.playing = true

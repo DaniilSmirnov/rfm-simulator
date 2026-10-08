@@ -138,17 +138,17 @@ test('safe viewport transport is local, independent of authorization, and same-o
  assert.equal(forwarded.length,1);
 });
 
-async function purchaseSetup(status, confirmed = false) {
+async function purchaseSetup(status, confirmed = false, sku = 'stage_02') {
  let owned = false, calls = [], orderCalls = 0;
- const store = () => ({entitlements:{mode:'restricted',skus:owned?['stage_02']:[]},catalog:[{sku:'stage_02',purchase_enabled:true,payment_mode:'test',price:1}]});
+ const store = () => ({entitlements:{mode:'restricted',skus:owned?[sku]:[]},catalog:[{sku,purchase_enabled:true,payment_mode:'test',price:1}]});
  const {context:c}=await setup('vk',{setTimeout,clearTimeout,RallyBoot:{setStage(){}},vkBridge:{send:async(method,params)=>{
-   if(method==='VKWebAppShowOrderBox') {orderCalls++;assert.deepEqual(JSON.parse(JSON.stringify(params)),{type:'item',item:'stage_02'});owned=confirmed;if(status==='throw')throw Error('mobile bridge error');return {status};}
+   if(method==='VKWebAppShowOrderBox') {orderCalls++;assert.deepEqual(JSON.parse(JSON.stringify(params)),{type:'item',item:sku});owned=confirmed;if(status==='throw')throw Error('mobile bridge error');return {status};}
    return {};
  }},fetch:async(input,init)=>{
    if(input==='/api/vk/session')return Response.json({profile:{platform:'vk',nickname:'fan',verified:true},session:{token:'private',expires_at:Date.now()/1000+3600},...store()});
    const request = new Request(input,init);calls.push(request);
    assert.equal(request.headers.get('Authorization'),'Bearer private');
-   if(new URL(request.url).pathname.endsWith('/prepare'))return Response.json({...store(),item:'stage_02',owned});
+   if(new URL(request.url).pathname.endsWith('/prepare'))return Response.json({...store(),item:sku,owned});
    return Response.json(store());
  }});
  await c.RallyPlatform.ready();
@@ -174,4 +174,14 @@ test('Bridge success alone stays pending; malformed and concurrent orders are bl
  const pending=c.RallyPlatform.buy('stage_02');
  await assert.rejects(c.RallyPlatform.buy('stage_02'),/уже выполняется/);
  const result=await pending;assert.equal(result.status,'pending');assert.deepEqual(Array.from(result.entitlements.skus),[]);assert.equal(count(),1);
+});
+
+test('additional car and stage SKU reach VK and reconcile their own rights',async()=>{
+ for(const sku of ['car_04','car_10','stage_03']) {
+  const {c,count}=await purchaseSetup('success',true,sku);
+  const result=await c.RallyPlatform.buy(sku);
+  assert.equal(result.status,'owned');assert.equal(result.purchased_sku,sku);
+  assert.deepEqual(JSON.parse(JSON.stringify(result.entitlements.skus)),[sku]);
+  assert.equal(count(),1);
+ }
 });

@@ -64,5 +64,13 @@ try {
  assert.deepEqual((await login('43')).entitlements.skus,[]);
  assert.equal((await callback({...order,user_id:'43',order_id:'9002'})).error.critical,true);
  assert.equal((await api('/api/rooms',{stage:1,car_model:0},session.session.token)).status,200);
+ for(const [i,sku] of ['stage_03','car_04'].entries()) {
+  assert.equal((await api('/api/vk/payments/prepare',{sku},session.session.token)).status,200);
+  const receipt=await callback({...order,order_id:String(9100+i),item_id:sku,item:sku});
+  assert.equal(receipt.response.order_id,9100+i);
+ }
+ session=await login();
+ assert.deepEqual(session.entitlements.skus,['car_04','stage_02','stage_03']);
+ assert.equal((await api('/api/rooms',{stage:2,car_model:3},session.session.token)).status,200);
  console.log('PASS: real SQLite-backed payment DO; concurrent duplicate callbacks, restart, login recovery and server room gating');
 } finally {await stop();await rm(persistence,{recursive:true,force:true});}

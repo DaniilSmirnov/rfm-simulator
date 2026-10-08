@@ -2,7 +2,8 @@ import { Buffer } from 'node:buffer';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { catalog } from './store.mjs';
 
-export const PAYMENT_HANDLER_VERSION = 'vk-test-callback-v4';
+export const PAYMENT_HANDLER_VERSION = 'vk-test-callback-v5';
+const paidProduct = sku => catalog.find(p => p.sku === sku && p.enabled && !p.free);
 
 export class PaymentError extends Error {
   constructor(code, message, critical = true) { super(message); this.code = code; this.critical = critical; }
@@ -15,8 +16,8 @@ export function testBuyer(env, user) {
     /^[1-9]\d{0,3}$/.test(env.VK_STAGE_02_TEST_PRICE || '') && !!env.PAYMENTS;
 }
 export function paymentCatalog(env, user) {
-  return catalog.map(p => ({...p, purchase_enabled: p.sku === 'stage_02' && testBuyer(env, user),
-    ...(p.sku === 'stage_02' && testBuyer(env, user) ? {payment_mode:'test', price:Number(env.VK_STAGE_02_TEST_PRICE)} : {})}));
+  return catalog.map(p => ({...p, purchase_enabled: !!paidProduct(p.sku) && testBuyer(env, user),
+    ...(!!paidProduct(p.sku) && testBuyer(env, user) ? {payment_mode:'test', price:Number(env.VK_STAGE_02_TEST_PRICE)} : {})}));
 }
 export async function ledger(env, action, body) {
   const object = env.PAYMENTS.get(env.PAYMENTS.idFromName(`vk:${env.VK_APP_ID}`));
@@ -30,7 +31,7 @@ export async function accountStore(env, user) {
   return {entitlements:{mode:'restricted',skus},catalog:paymentCatalog(env,user)};
 }
 export async function preparePurchase(env, user, sku) {
-  if (!testBuyer(env,user) || sku !== 'stage_02') reject('Тестовая покупка недоступна.');
+  if (!testBuyer(env,user) || !paidProduct(sku)) reject('Тестовая покупка недоступна.');
   const store = await accountStore(env,user);
   return {...store,item:sku,owned:store.entitlements.skus.includes(sku)};
 }
@@ -56,8 +57,9 @@ export async function paymentCallback(raw, env) {
   const p = verifyCallback(raw,env);
   // Item metadata is read-only; only the explicitly test order callback can grant rights.
   if (p.notification_type === 'get_item_test' || p.notification_type === 'get_item') {
-    if (p.item !== 'stage_02') reject('Товар не существует.');
-    return {response:{item_id:'stage_02',title:'Зимний Турини (тест)',photo_url:'',price:Number(env.VK_STAGE_02_TEST_PRICE)}};
+    const product = paidProduct(p.item);
+    if (!product) reject('Товар не существует.');
+    return {response:{item_id:product.sku,title:product.title + ' (тест)',photo_url:'',price:Number(env.VK_STAGE_02_TEST_PRICE)}};
   }
   if (p.notification_type !== 'order_status_change_test') {
     const received = typeof p.notification_type === 'string' ? p.notification_type.slice(0, 64) : null;
@@ -67,12 +69,13 @@ export async function paymentCallback(raw, env) {
   // VK sends the SKU as item_id and the price as item_price. Keep legacy
   // numeric-ID/amount callbacks compatible, but reject conflicting fields.
   const amount = p.item_price ?? p.amount;
-  if (!id(p.order_id) || !['stage_02', '2'].includes(p.item_id) ||
-      (p.item !== undefined && p.item !== 'stage_02') || !id(amount) ||
+  const sku = p.item_id === '2' ? 'stage_02' : p.item_id;
+  if (!id(p.order_id) || !paidProduct(sku) ||
+      (p.item !== undefined && p.item !== sku) || !id(amount) ||
       (p.amount !== undefined && (!id(p.amount) || p.amount !== amount))) {
     reject('Некорректный заказ или стоимость.');
   }
-  const receipt = await ledger(env,'grant',{mode:'test',order:p.order_id,user:p.user_id,sku:'stage_02',amount:Number(amount),expected_price:Number(env.VK_STAGE_02_TEST_PRICE)});
+  const receipt = await ledger(env,'grant',{mode:'test',order:p.order_id,user:p.user_id,sku,amount:Number(amount),expected_price:Number(env.VK_STAGE_02_TEST_PRICE)});
   return {response:receipt};
 }
 
@@ -100,7 +103,7 @@ export class VkPayments {
       const batch = await this.storage.list({prefix:'orders:test:',limit:1000,...(startAfter ? {startAfter} : {})});
       for (const [key,p] of batch) {
         const order = key.slice('orders:test:'.length);
-        if (!id(order) || !id(p.user) || p.sku !== 'stage_02' || !Number.isInteger(p.amount) || p.amount < 1 ||
+        if (!id(order) || !id(p.user) || !paidProduct(p.sku) || !Number.isInteger(p.amount) || p.amount < 1 ||
             p.receipt?.order_id !== Number(order) || !Number.isSafeInteger(p.receipt?.app_order_id)) {
           throw new Error('Invalid legacy payment receipt');
         }
@@ -125,7 +128,7 @@ export class VkPayments {
       if (new URL(request.url).pathname === '/rights') {
         return Response.json({skus:[...sql.exec('SELECT DISTINCT sku FROM payment_orders WHERE mode = ? AND user_id = ? ORDER BY sku',p.mode,p.user)].map(row=>row.sku)});
       }
-      if (new URL(request.url).pathname !== '/grant' || !id(p.order) || p.sku !== 'stage_02' || !Number.isInteger(p.amount) || p.amount < 1) reject('Некорректный заказ.');
+      if (new URL(request.url).pathname !== '/grant' || !id(p.order) || !paidProduct(p.sku) || !Number.isInteger(p.amount) || p.amount < 1) reject('Некорректный заказ.');
       const receipt = this.storage.transactionSync(() => {
         const previous = [...sql.exec('SELECT * FROM payment_orders WHERE mode = ? AND order_id = ?',p.mode,p.order)][0];
         if (previous) {
