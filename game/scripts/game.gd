@@ -1133,9 +1133,17 @@ func _walk(delta: float) -> void:
 	var next = walker + dir * delta * (1.4 if drink_time >= 0 or eat_time >= 0 else (RUN_SPEED if running() else WALK_SPEED))
 	next.x = clampf(next.x, -185, 185)
 	next.z = clampf(next.z, -Stage.LENGTH + 5, 10)
+	var old_floor = walker.y - jump_height
+	var floor_height = stage.city.walking_floor(next, walker.y) if stage.urban and stage.city.has_method("walking_floor") else stage.ground(next)
+	next.y = maxf(next.y, floor_height + jump_height)
 	var hit = (stage.urban and not stage.city.hit(walker, next, 0.3).is_empty()) or not stage.rock_hit(walker, next, 0.3).is_empty() or stage.obstacle_hit(walker, next, 0.3, true) >= 0 or contact_blocked(walker, next, false)
 	if not hit:
 		walker = next
+	else:
+		floor_height = old_floor
+	# Small steps follow the stairs; leaving a roof starts a real fall.
+	if old_floor - floor_height > 0.45:
+		jump_height += old_floor - floor_height
 	var remaining = maxf(0, delta)
 	while remaining > 0.000001:
 		var step = minf(remaining, 1.0 / 120.0)
@@ -1145,7 +1153,7 @@ func _walk(delta: float) -> void:
 			jump_height = 0
 			jump_velocity = 0
 		remaining -= step
-	walker.y = stage.ground(walker) + jump_height
+	walker.y = floor_height + jump_height
 
 func running() -> bool:
 	return not in_car and not seated and beers < 30 and not paused and not dead and not finished and drink_time < 0 and eat_time < 0 and Input.is_action_pressed("sprint") and (absf(Input.get_axis("left", "right")) + absf(Input.get_axis("forward", "back"))) > 0.01

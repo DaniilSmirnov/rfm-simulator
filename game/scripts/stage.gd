@@ -32,6 +32,7 @@ const STAGES = ["Лесной перевал · гравий", "Зимний Т�
 var variant = 0
 var winter = false
 var urban = false
+var village_church_center = Vector3.ZERO
 var points: PackedVector3Array = []
 var clearings: Array[Vector3] = []
 var trails: Array[Dictionary] = []
@@ -62,6 +63,8 @@ func _init(selected: int = 0) -> void:
 	variant = clampi(selected, 0, STAGES.size() - 1)
 	winter = variant == 1
 	urban = variant == 2
+	if urban:
+		village_church_center = village_main_at(435.0) + village_main_side(435.0) * 43.0
 	for i in range(int(LENGTH / STEP) + 1):
 		var s = i * STEP
 		if winter:
@@ -164,6 +167,10 @@ func grip(pos: Vector3) -> float:
 
 func ground(pos: Vector3) -> float:
 	if urban:
+		# Level foundation beneath the hollow church; keep terrain out of its nave.
+		var church_offset = pos - village_church_center
+		if absf(church_offset.z) < 5.6 and church_offset.x > -14.6 and church_offset.x < 10.8:
+			return 2.0
 		var paved_height = village_paved_height(pos)
 		if paved_height != INF:
 			return paved_height
