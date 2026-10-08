@@ -23,6 +23,20 @@ func run() -> void:
 	game.set_process(false)
 	game.room.set_process(false)
 	game.start_game()
+	game._update_hud()
+	var revision = game.hud_revision
+	var hud_text = game.info_label.text
+	game._update_hud()
+	check(game.hud_revision == revision and game.info_label.text == hud_text, "unchanged HUD skips string reconstruction")
+	game.speed = 0.01
+	game.course.remaining -= 0.01
+	game._update_hud()
+	check(game.hud_revision == revision, "sub-display speed and countdown changes do not rebuild HUD")
+	game.speed = 0.3
+	game._update_hud()
+	check(game.hud_revision == revision + 1 and game.info_label.text.begins_with("01"), "integer speed change updates HUD immediately")
+	game.speed = 0
+	game._update_hud()
 	check(InputMap.action_get_events("interact").any(func(e): return e is InputEventKey and e.physical_keycode == KEY_F), "F is the interaction key")
 	check(not InputMap.action_get_events("table").any(func(e): return e is InputEventKey and e.physical_keycode == KEY_F), "F never starts table placement")
 	press(game)
@@ -42,9 +56,16 @@ func run() -> void:
 	game.walker = center + Vector3(0, 0, 2)
 	game.walker.y = game.stage.ground(game.walker)
 	aim(game, center + Vector3(0, 0.9, 0))
+	game._update_hud()
+	check(game.hud_target.get("action") == "meat" and game.hint_label.text.contains("Съесть шашлык"), "HUD shares current gaze target with its hint")
+	var target_revision = game.hud_revision
+	game._update_hud()
+	check(game.hud_revision == target_revision, "stationary gaze target leaves HUD unchanged")
 	check(game.interaction.current().get("action") == "meat", "looking at cooked grill offers meat")
 	var count = game.grill_servings
 	press(game)
+	game._update_hud()
+	check(game.hud_target.is_empty() and game.info_label.text == "ЕДИМ ШАШЛЫК", "eating immediately invalidates contextual HUD")
 	check(game.eat_time == 0 and game.eat_source_group == -1, "F starts eating from selected grill")
 	game._update_eating(2.7)
 	check(game.grill_servings == count - 1, "selected serving commits after bite")

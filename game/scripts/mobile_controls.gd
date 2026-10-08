@@ -87,7 +87,7 @@ func _layout() -> void:
 			add_button("Газ", "forward", true, Rect2(Vector2(size.x - edge - 88, size.y - edge - 256), Vector2(88, 112)))
 			gear = [["Вернуть", "recover"]]
 		else:
-			var target = game.interaction.current()
+			var target = game.hud_target if game.hud_target_frame == Engine.get_process_frames() else game.interaction.current()
 			var label = "Действие"
 			if not target.is_empty():
 				label = str(target.label).replace("Вернуть коробку в багажник", "Вернуть").replace("Собрать казан с подставкой", "Убрать казан").replace("Потушить и собрать костёр", "Убрать костёр").replace("Сесть в машину", "В машину").replace("Сесть на стул", "На стул").replace("Встать со стула", "Встать").replace("Собрать гриб", "Собрать").replace("Собрать ягоды", "Собрать").replace("Собрать виноград", "Виноград").replace("Насадить гриб", "Насадить").replace("Съесть шашлык", "Шашлык").replace("Съесть гриб", "Есть гриб").replace("Выпить пиво", "Пиво").replace("Потушить и собрать мангал", "Убрать мангал").replace("Поставить казан на костёр", "На костёр").replace("Добавить ингредиенты и готовить плов", "Готовить плов").replace("Съесть плов", "Плов").replace("Собрать ", "Убрать ")

@@ -1852,71 +1852,120 @@ func toast(message: String) -> void:
 		toast_label.visible = not mobile_mode
 		toast_time = 5
 
+var hud_state: Array = []
+var hud_revision = 0
+var hud_target: Dictionary = {}
+var hud_target_frame = -1
+var minimap_redraw_at = 0
+
+func _set_hud_text(label: Label, value: String) -> void:
+	if label.text != value:
+		label.text = value
+
 func _update_hud() -> void:
+	# Resolve once after camera/world movement; actions still resolve a fresh target.
+	var target = interaction.current()
+	hud_target = target
+	hud_target_frame = Engine.get_process_frames()
+	crosshair.visible = playing and not in_car and not paused and not dead and not finished and placement_kind == ""
+	_set_hud_text(crosshair, "+" if not target.is_empty() else "·")
+	var now = Time.get_ticks_msec()
+	if minimap.is_visible_in_tree() and now >= minimap_redraw_at:
+		minimap.queue_redraw()
+		minimap_redraw_at = now + 100
+	var near_tow = nearby_tow_racer() if tow_target == null else false
+	var remaining_items = packing.remaining() if packing.active() else -1
+	var bag = foraging.stock() if not in_car else {}
+	var pot = camp_cooking.pot != null
+	var state: Array = [mobile_mode, in_car, playing, paused, dead, finished,
+		int(absf(speed) * 3.6), int(condition),
+		stage.road_distance(car.position) > 4 if in_car and not mobile_mode else false,
+		course.phase, course.pass_index, course.zero_index,
+		ceili(course.remaining) if course.phase in ["countdown", "intermission"] else 0,
+		int(elapsed) if not mobile_mode else 0, camp != null, has_chairs, eaten, passed, helped, beers,
+		cook_time >= 35, int(cook_time / 35 * 100) if cooking and cook_time < 35 else 0,
+		cooking, grill_servings, drink_time >= 0, drink_time >= 1.25, eat_time >= 0, eat_kind,
+		tow_target != null, int(tow_progress * 100), recovery_helpers, near_tow,
+		remaining_items, seated, stage.urban, bag.get("mushrooms", 0), bag.get("berries", 0),
+		foraging.can_eat("berries"), pot, camp_cooking.phase if pot else "",
+		camp_cooking.servings if pot else 0,
+		int(camp_cooking.cook_time / camp_cooking.COOK_SECONDS * 100) if pot else 0,
+		int(camp_cooking.cook_time / 45 * 100) if pot and mobile_mode else 0,
+		target.get("label", ""), toast_label.text if mobile_mode and toast_time > 0 else "",
+		toast_time > 0 if mobile_mode else false, sober_remaining if beers >= 30 else 0]
+	if state == hud_state:
+		return
+	hud_state = state
+	hud_revision += 1
+	var course_text = ""
+	var quest_text = ""
+	var status_text = ""
+	var info_text = ""
+	var hint_text = ""
 	sobriety_panel.visible = beers >= 30 and playing and not dead and not finished
 	if sobriety_panel.visible:
 		var seconds = ceili(sober_remaining if sober_remaining > 0 else SOBER_SECONDS)
-		sobriety_label.text = "ПРОТРЕЗВЛЕНИЕ · ВСТАНЕШЬ ЧЕРЕЗ %02d:%02d" % [seconds / 60, seconds % 60]
+		_set_hud_text(sobriety_label, "ПРОТРЕЗВЛЕНИЕ · ВСТАНЕШЬ ЧЕРЕЗ %02d:%02d" % [seconds / 60, seconds % 60])
 		sobriety_bar.value = SOBER_SECONDS - (sober_remaining if sober_remaining > 0 else SOBER_SECONDS)
-	course_label.text = course.caption()
-	quest_label.text = "%s Выбрать место для лагеря\n%s Разложить стол\n%s Поставить стулья\n%s Пожарить и съесть шашлык\n%s Посмотреть %d экипажей" % ["[x]" if camp != null else "[ ]", "[x]" if camp != null else "[ ]", "[x]" if has_chairs else "[ ]", "[x]" if eaten else "[ ]", "[x]" if passed >= RALLY_CREW_LIMIT else "[ ]", RALLY_CREW_LIMIT]
+	course_text = course.caption()
+	quest_text = "%s Выбрать место для лагеря\n%s Разложить стол\n%s Поставить стулья\n%s Пожарить и съесть шашлык\n%s Посмотреть %d экипажей" % ["[x]" if camp != null else "[ ]", "[x]" if camp != null else "[ ]", "[x]" if has_chairs else "[ ]", "[x]" if eaten else "[ ]", "[x]" if passed >= RALLY_CREW_LIMIT else "[ ]", RALLY_CREW_LIMIT]
 	if packing.active():
-		quest_label.text = "Оба прохода завершены\nВернуть вещи в багажники: осталось %d\nБагажник открывается при подходе\nF — взять предмет / вернуть коробку\nЗатем все возвращаются в свои машины" % packing.remaining()
-	status_label.text = "ПРОХОД %d/2 · ЭКИПАЖИ %d/%d · ПОМОЩЬ %d\nПИВО %d · ВЫЕЗД %02d:%02d" % [course.pass_index, passed, RALLY_CREW_LIMIT, helped, beers, int(elapsed) / 60, int(elapsed) % 60]
+		quest_text = "Оба прохода завершены\nВернуть вещи в багажники: осталось %d\nБагажник открывается при подходе\nF — взять предмет / вернуть коробку\nЗатем все возвращаются в свои машины" % remaining_items
+	status_text = "ПРОХОД %d/2 · ЭКИПАЖИ %d/%d · ПОМОЩЬ %d\nПИВО %d · ВЫЕЗД %02d:%02d" % [course.pass_index, passed, RALLY_CREW_LIMIT, helped, beers, int(elapsed) / 60, int(elapsed) % 60]
 	if in_car:
-		info_label.text = "%02d КМ/Ч    ·    ЛЕГКОВУШКА %d%%    ·    %s" % [int(absf(speed) * 3.6), int(condition), "ОБОЧИНА" if stage.road_distance(car.position) > 4 else "ГРАВИЙ / КОЛЕЯ"]
-		hint_label.text = "WASD / стрелки — газ и руль   ·   Space — тормоз   ·   F — выйти   ·   Home — вернуть на СУ"
+		info_text = "%02d КМ/Ч    ·    ЛЕГКОВУШКА %d%%    ·    %s" % [int(absf(speed) * 3.6), int(condition), "ОБОЧИНА" if stage.road_distance(car.position) > 4 else "ГРАВИЙ / КОЛЕЯ"]
+		hint_text = "WASD / стрелки — газ и руль   ·   Space — тормоз   ·   F — выйти   ·   Home — вернуть на СУ"
 	else:
 		var cook_status = "ШАШЛЫК ГОТОВ" if cook_time >= 35 else ("ШАШЛЫК %d%%" % int(cook_time / 35 * 100) if cooking else "МАНГАЛ НЕ РАЗОЖЖЁН")
-		info_label.text = "ЗРИТЕЛЬ    ·    %s · ШАМПУРЫ %d/10    ·    %s" % [cook_status, grill_servings, course.caption()]
-		hint_label.text = "WASD — идти   ·   Shift — бег   ·   Space — прыжок   ·   мышь — смотреть   ·   F — действие   ·   Z — стол   ·   C — стулья   ·   G — мангал   ·   R — статус СУ"
+		info_text = "ЗРИТЕЛЬ    ·    %s · ШАМПУРЫ %d/10    ·    %s" % [cook_status, grill_servings, course.caption()]
+		hint_text = "WASD — идти   ·   Shift — бег   ·   Space — прыжок   ·   мышь — смотреть   ·   F — действие   ·   Z — стол   ·   C — стулья   ·   G — мангал   ·   R — статус СУ"
 		if drink_time >= 0:
-			info_label.text = "ОТКРЫВАЕМ БАНКУ" if drink_time < 1.25 else "ЗА ХОРОШИЙ ВЫЕЗД!"
+			info_text = "ОТКРЫВАЕМ БАНКУ" if drink_time < 1.25 else "ЗА ХОРОШИЙ ВЫЕЗД!"
 		if eat_time >= 0:
-			info_label.text = "ЕДИМ ПЛОВ" if eat_kind == "plov" else ("ЕДИМ ЯГОДЫ" if eat_kind == "berries" else ("ЕДИМ ГРИБЫ" if eat_kind == "mushroom" else "ЕДИМ ШАШЛЫК"))
+			info_text = "ЕДИМ ПЛОВ" if eat_kind == "plov" else ("ЕДИМ ЯГОДЫ" if eat_kind == "berries" else ("ЕДИМ ГРИБЫ" if eat_kind == "mushroom" else "ЕДИМ ШАШЛЫК"))
 		if beers >= 30:
-			info_label.text = "ТЫ ЛЕЖИШЬ · ОТДОХНИ ДО ВОССТАНОВЛЕНИЯ"
+			info_text = "ТЫ ЛЕЖИШЬ · ОТДОХНИ ДО ВОССТАНОВЛЕНИЯ"
 		if tow_target != null:
-			info_label.text = "ПОМОЩЬ %d%% · УЧАСТНИКОВ %d" % [int(tow_progress * 100), recovery_helpers]
+			info_text = "ПОМОЩЬ %d%% · УЧАСТНИКОВ %d" % [int(tow_progress * 100), recovery_helpers]
 	if tow_target != null:
-		info_label.text = "ВЫТАСКИВАЕМ ЭКИПАЖ   ·   %d%%   ·   УДЕРЖИВАЙ T" % int(tow_progress * 100)
-	elif nearby_tow_racer():
-		hint_label.text += "   ·   Иди в машину, чтобы толкать · T — тяни пешком со стороны дороги"
+		info_text = "ВЫТАСКИВАЕМ ЭКИПАЖ   ·   %d%%   ·   УДЕРЖИВАЙ T" % int(tow_progress * 100)
+	elif near_tow:
+		hint_text += "   ·   Иди в машину, чтобы толкать · T — тяни пешком со стороны дороги"
 	if not in_car:
-		var bag = foraging.stock()
-		status_label.text += ("\nГРИБЫ %d · ЯГОДЫ/ВИНОГРАД %d" if stage.urban else "\nГРИБЫ %d · ЯГОДЫ %d") % [bag.mushrooms, bag.berries]
-		var target = interaction.current()
+		status_text += ("\nГРИБЫ %d · ЯГОДЫ/ВИНОГРАД %d" if stage.urban else "\nГРИБЫ %d · ЯГОДЫ %d") % [bag.mushrooms, bag.berries]
 		if not target.is_empty():
-			hint_label.text = "F — " + target.label + ("" if packing.active() else "   ·   Z/C/G/V — поставить предмет")
+			hint_text = "F — " + target.label + ("" if packing.active() else "   ·   Z/C/G/V — поставить предмет")
 		elif seated:
-			hint_label.text = "F — встать со стула"
+			hint_text = "F — встать со стула"
 		if foraging.can_eat("berries"):
-			hint_label.text += " · K — съесть ягоды"
+			hint_text += " · K — съесть ягоды"
 	if camp_cooking.pot != null:
-		status_label.text += "\nПЛОВ %s · %d/10" % [("ГОТОВ" if camp_cooking.phase == "ready" else ("ГОТОВИМ %d%%" % int(camp_cooking.cook_time / camp_cooking.COOK_SECONDS * 100) if camp_cooking.phase == "cooking" else "КАЗАН ПУСТ")), camp_cooking.servings]
-	if packing.active() and packing.remaining() == 0:
-		hint_label.text = "Лагерь собран. Садитесь в свои машины через F; ждём всех друзей." if in_car else "Лагерь собран. Подойди к своей машине и нажми F."
+		status_text += "\nПЛОВ %s · %d/10" % [("ГОТОВ" if camp_cooking.phase == "ready" else ("ГОТОВИМ %d%%" % int(camp_cooking.cook_time / camp_cooking.COOK_SECONDS * 100) if camp_cooking.phase == "cooking" else "КАЗАН ПУСТ")), camp_cooking.servings]
+	if packing.active() and remaining_items == 0:
+		hint_text = "Лагерь собран. Садитесь в свои машины через F; ждём всех друзей." if in_car else "Лагерь собран. Подойди к своей машине и нажми F."
 	if mobile_mode:
-		course_label.text = course.caption().replace("ПРОХОД ", "СУ ").replace(" · ПРЯМО", "").replace(" · ОБРАТНО", "").replace("ДО ОТКРЫТИЯ СУ", "СТАРТ ЧЕРЕЗ")
+		course_text = course.caption().replace("ПРОХОД ", "СУ ").replace(" · ПРЯМО", "").replace(" · ОБРАТНО", "").replace("ДО ОТКРЫТИЯ СУ", "СТАРТ ЧЕРЕЗ")
 		if in_car and tow_target == null:
-			info_label.text = "%02d КМ/Ч · МАШИНА %d%%" % [int(absf(speed) * 3.6), int(condition)]
+			info_text = "%02d КМ/Ч · МАШИНА %d%%" % [int(absf(speed) * 3.6), int(condition)]
 		elif not in_car and drink_time < 0 and eat_time < 0 and beers < 30 and tow_target == null:
 			if packing.active():
-				info_label.text = "ВЕРНУТЬ ВЕЩИ В БАГАЖНИК · ОСТАЛОСЬ %d" % packing.remaining()
+				info_text = "ВЕРНУТЬ ВЕЩИ В БАГАЖНИК · ОСТАЛОСЬ %d" % remaining_items
 			else:
 				var cook_status = "ГОТОВ" if cook_time >= 35 else ("%d%%" % int(cook_time / 35 * 100) if cooking else "НЕТ ОГНЯ")
-				info_label.text = "ШАШЛЫК %s · %d/10 · ПИВО %d" % [cook_status, grill_servings, beers]
+				info_text = "ШАШЛЫК %s · %d/10 · ПИВО %d" % [cook_status, grill_servings, beers]
 				if camp_cooking.pot != null:
-					info_label.text += " · ПЛОВ %d/10" % camp_cooking.servings if camp_cooking.phase == "ready" else (" · ПЛОВ %d%%" % int(camp_cooking.cook_time / 45 * 100) if camp_cooking.phase == "cooking" else " · КАЗАН ПУСТ")
+					info_text += " · ПЛОВ %d/10" % camp_cooking.servings if camp_cooking.phase == "ready" else (" · ПЛОВ %d%%" % int(camp_cooking.cook_time / 45 * 100) if camp_cooking.phase == "cooking" else " · КАЗАН ПУСТ")
 		else:
-			info_label.text = info_label.text.replace("УДЕРЖИВАЙ T", "УДЕРЖИВАЙ ТРОС")
+			info_text = info_text.replace("УДЕРЖИВАЙ T", "УДЕРЖИВАЙ ТРОС")
 		if toast_time > 0:
-			info_label.text += "\n" + toast_label.text
-		elif not in_car and not interaction.current().is_empty():
-			info_label.text += "\n" + interaction.current().label
-	crosshair.visible = playing and not in_car and not paused and not dead and not finished and placement_kind == ""
-	crosshair.text = "+" if not interaction.current().is_empty() else "·"
-	minimap.queue_redraw()
+			info_text += "\n" + toast_label.text
+		elif not in_car and not target.is_empty():
+			info_text += "\n" + target.label
+	_set_hud_text(course_label, course_text)
+	_set_hud_text(quest_label, quest_text)
+	_set_hud_text(status_label, status_text)
+	_set_hud_text(info_label, info_text)
+	_set_hud_text(hint_label, hint_text)
 
 func _check_finish() -> void:
 	cargo.release_departed()
