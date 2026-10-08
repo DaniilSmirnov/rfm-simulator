@@ -23,7 +23,8 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Bake OBJ and MTL with Godot
-        run: .cache/godot/Godot_v4.4.1-stable_linux.x86_64 --headless --path game --script res://tools/export_granta_obj.gd
+        run: |
+          node --input-type=module -e "import { getGodot, run } from './scripts/godot.mjs'; const godot = await getGodot(); run(godot, ['--headless', '--editor', '--path', 'game', '--import']); run(godot, ['--headless', '--path', 'game', '--script', 'res://tools/export_granta_obj.gd']);"
       - name: Commit generated model assets
         run: |
           git add game/models/cars/granta/granta_black_blue.obj game/models/cars/granta/granta_black_blue.mtl
