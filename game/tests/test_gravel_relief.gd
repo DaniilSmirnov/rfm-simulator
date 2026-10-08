@@ -39,6 +39,41 @@ func run() -> void:
 			break
 	check(airborne, "vehicle suspension launches over ramp at road speed")
 	check(finite, "ramp crossing remains numerically stable")
+	for crest in [178.0, 686.0]:
+		motion = Motion.new()
+		airborne = false
+		finite = true
+		progress = crest - 16.0
+		car.position = stage.at(progress)
+		for frame in range(900):
+			progress += 24.0 / 120.0
+			var point = stage.at(progress)
+			car.position.x = point.x
+			car.position.z = point.z
+			var direction = stage.direction(progress)
+			motion.suspension(car, stage, 1.0 / 120.0, atan2(-direction.x, -direction.z))
+			airborne = airborne or not motion.grounded
+			finite = finite and is_finite(car.position.y) and absf(motion.vertical_speed) < 30.0
+			if progress > crest + 16.0:
+				break
+		check(airborne and finite, "country crest produces stable suspension lift at speed")
+	for station in [407.0, 469.0]:
+		var offset = 0.5 if station < 440.0 else -0.5
+		var puddle = stage.at(station) + stage.side(station) * offset
+		check(stage.grip(puddle) < 0.45, "new puddle reduces grip")
+	var bank_right = stage.at(435.0) + stage.side(435.0) * 1.4
+	var bank_left = stage.at(435.0) - stage.side(435.0) * 1.4
+	check(absf(stage.ground(bank_right) - stage.ground(bank_left)) > 0.1, "gravel road has physical cross slope")
+	stage._build_road()
+	for station in [407.0, 412.0, 463.0, 469.0]:
+		var mesh = stage.get_node("GravelPuddle_%d" % int(station)).mesh
+		var arrays = mesh.surface_get_arrays(0)
+		var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		var level = vertices[0].y
+		var horizontal = true
+		for vertex in vertices:
+			horizontal = horizontal and absf(vertex.y - level) < 0.0001
+		check(horizontal and arrays[Mesh.ARRAY_NORMAL][0].y > 0.99, "water has a horizontal upward-facing surface bounded by road relief")
 	car.free()
 	stage.free()
 	print("GRAVEL RELIEF RESULT: %d failures" % failures)

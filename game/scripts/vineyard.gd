@@ -2,6 +2,9 @@ extends "res://scripts/city.gd"
 # Reuse swept solid collisions, destructible lamps and spatial mesh batches.
 const VILLAGE_START = 300.0
 const VILLAGE_END = 570.0
+var cultivated_cells: Dictionary = {}
+var crop_soil: Dictionary = {}
+var crop_heights: Dictionary = {}
 var vine_count = 0
 var lavender_count = 0
 var lavender_positions: Array[Vector3] = []
@@ -330,6 +333,101 @@ func _village_sign(s: float, side_value: float) -> void:
 	_batch(root, root.transform)
 	village_sign_count += 1
 
+# Village terrain uses 4 m triangles. Cache their vertices only while building
+# crops; thousands of nearby stems share the same terrain cell.
+func _crop_height(p: Vector3) -> float:
+	var cell = Vector2i(floori(p.x / 4.0), floori(p.z / 4.0))
+	var heights: Array[float] = []
+	for offset in [Vector2i.ZERO, Vector2i(1, 0), Vector2i(0, 1), Vector2i.ONE]:
+		var key: Vector2i = cell + offset
+		if not crop_heights.has(key):
+			crop_heights[key] = stage.terrain_vertex_height(key.x * 4.0, key.y * 4.0)
+		heights.append(crop_heights[key])
+	var u = p.x / 4.0 - cell.x
+	var v = p.z / 4.0 - cell.y
+	if u + v <= 1.0:
+		return heights[0] + (heights[1] - heights[0]) * u + (heights[2] - heights[0]) * v
+	return heights[3] + (heights[2] - heights[3]) * (1.0 - u) + (heights[1] - heights[3]) * (1.0 - v)
+
+# Soil ribbons use sampled terrain heights, including curved hills and parking
+# transitions. Keep a mesh per spatial tile rather than one draw per plant.
+func _clip_crop_polygon(polygon: Array[Vector2], a: Vector2, b: Vector2) -> Array[Vector2]:
+	var clipped: Array[Vector2] = []
+	if polygon.is_empty():
+		return clipped
+	var edge = b - a
+	var previous = polygon.back()
+	var previous_side = edge.cross(previous - a)
+	for point in polygon:
+		var side = edge.cross(point - a)
+		if (side >= 0.0) != (previous_side >= 0.0):
+			clipped.append(previous.lerp(point, previous_side / (previous_side - side)))
+		if side >= 0.0:
+			clipped.append(point)
+		previous = point
+		previous_side = side
+	return clipped
+
+func _crop_soil(pose: Transform3D) -> void:
+	var key = Vector2i(floori(pose.origin.x / 64.0), floori(pose.origin.z / 64.0))
+	if not crop_soil.has(key):
+		var builder = SurfaceTool.new()
+		builder.begin(Mesh.PRIMITIVE_TRIANGLES)
+		crop_soil[key] = builder
+	var builder: SurfaceTool = crop_soil[key]
+	var footprint: Array[Vector2] = []
+	for local in [Vector3(-0.7, 0, -3.1), Vector3(0.7, 0, -3.1), Vector3(0.7, 0, 3.1), Vector3(-0.7, 0, 3.1)]:
+		var world: Vector3 = pose * local
+		footprint.append(Vector2(world.x, world.z))
+	var bounds = Rect2(footprint[0], Vector2.ZERO)
+	for point in footprint:
+		bounds = bounds.expand(point)
+	# Clip each ribbon against the terrain triangles: sampling just the edge
+	# can bury a long overlay when it crosses a different triangle's slope.
+	for x in range(floori(bounds.position.x / 4.0), floori(bounds.end.x / 4.0) + 1):
+		for z in range(floori(bounds.position.y / 4.0), floori(bounds.end.y / 4.0) + 1):
+			var a = Vector2(x * 4.0, z * 4.0)
+			var b = a + Vector2(4, 0)
+			var c = a + Vector2(0, 4)
+			var d = a + Vector2(4, 4)
+			for triangle in [[a, b, c], [d, c, b]]:
+				var polygon = footprint.duplicate()
+				for i in range(3):
+					polygon = _clip_crop_polygon(polygon, triangle[i], triangle[(i + 1) % 3])
+				for i in range(1, polygon.size() - 1):
+					for point in [polygon[0], polygon[i], polygon[i + 1]]:
+						var world = Vector3(point.x, 0, point.y)
+						world.y = _crop_height(world) + 0.012
+						builder.add_vertex(world)
+
+func _flush_crop_soil() -> void:
+	for key in crop_soil:
+		var builder: SurfaceTool = crop_soil[key]
+		builder.index()
+		builder.generate_normals()
+		var mesh = MeshInstance3D.new()
+		mesh.name = "VineyardSoil_%d_%d" % [key.x, key.y]
+		mesh.mesh = builder.commit()
+		mesh.material_override = Props.material(Color("7e7054"))
+		stage.add_child(mesh)
+	crop_soil.clear()
+
+func _register_crop(p: Vector3) -> void:
+	var key = Vector2i(floori(p.x / 8.0), floori(p.z / 8.0))
+	if not cultivated_cells.has(key):
+		cultivated_cells[key] = []
+	cultivated_cells[key].append(p)
+
+func crop_clear(p: Vector3, clearance: float = 6.0) -> bool:
+	var key = Vector2i(floori(p.x / 8.0), floori(p.z / 8.0))
+	var reach = ceili(clearance / 8.0)
+	for x in range(-reach, reach + 1):
+		for z in range(-reach, reach + 1):
+			for plant in cultivated_cells.get(key + Vector2i(x, z), []):
+				if stage.flat(p).distance_squared_to(stage.flat(plant)) < clearance * clearance:
+					return false
+	return true
+
 func _vineyards(cooperative: bool = false) -> void:
 	if cooperative:
 		await _lavender_fields(true)
@@ -360,19 +458,22 @@ func _vineyards(cooperative: bool = false) -> void:
 						blocked = blocked or stage.flat(p).distance_to(stage.flat(parking)) < 10
 					if blocked:
 						continue
-					p.y = stage.ground(p)
-					vine_count += 1
-					var soil = Props.box(root, p + Vector3(0, 0.015, 0), Vector3(1.4, 0.03, 6.2), Color("7e7054"))
-					soil.rotation.y = atan2(-stage.village_main_direction(s).x, -stage.village_main_direction(s).z)
-					Props.cylinder(root, p + Vector3(0, 0.70, 0), 0.08, 0.04, 1.4, Color("735943"), 6)
-					Props.cylinder(root, p + Vector3(0, 1, 0), 0.04, 0.025, 2.0, Color("8b8063"), 6)
+					p.y = _crop_height(p) - 0.02
+					_register_crop(p)
 					var yaw = atan2(-stage.village_main_direction(s).x, -stage.village_main_direction(s).z)
+					var pose = Transform3D(stage.terrain_basis(p, yaw, _crop_height), p)
+					var section = Node3D.new()
+					root.add_child(section)
+					section.transform = pose
+					vine_count += 1
+					_crop_soil(pose)
+					Props.cylinder(section, Vector3(0, 0.70, 0), 0.08, 0.04, 1.4, Color("735943"), 6)
+					Props.cylinder(section, Vector3(0, 1, 0), 0.04, 0.025, 2.0, Color("8b8063"), 6)
 					for y in [0.85, 1.35, 1.80]:
-						var wire = Props.box(root, p + Vector3(0, y, 0), Vector3(0.018, 0.018, 6.2), Color("7b7d68"))
-						wire.rotation.y = yaw
+						Props.box(section, Vector3(0, y, 0), Vector3(0.018, 0.018, 6.2), Color("7b7d68"))
 					for offset in [-1.7, -0.65, 0.65, 1.7]:
-						var position = p + stage.village_main_direction(s) * offset + Vector3(0, 1.2 + sin(s + offset) * 0.15, 0)
-						leaves.append(Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3(0.85, 0.60, 1.05)), position))
+						var position = pose * Vector3(0, 1.2 + sin(s + offset) * 0.15, -offset)
+						leaves.append(Transform3D(pose.basis.scaled(Vector3(0.85, 0.60, 1.05)), position))
 						leaf_colors.append(Color("526e37").lightened(float((s + row) % 5) * 0.025))
 					var indices: Array = []
 					for cluster in [-1.0, 1.0]:
@@ -380,12 +481,16 @@ func _vineyards(cooperative: bool = false) -> void:
 							var tier = berry / 4
 							var angle = berry * 2.4
 							var radius = 0.12 - tier * 0.025
-							var position = p + stage.village_main_direction(s) * cluster * 1.0 + stage.village_main_side(s) * 0.43 + Vector3(cos(angle) * radius, 1.08 - tier * 0.105, sin(angle) * radius)
+							var position = pose * Vector3(0.43 + cos(angle) * radius, 1.08 - tier * 0.105, -cluster + sin(angle) * radius)
 							indices.append(fruit.size())
 							fruit.append(Transform3D(Basis.from_scale(Vector3.ONE * 0.12), position))
 							fruit_colors.append(Color("6b4769") if row % 3 else Color("a3b657"))
 					stage.collectibles.append({"kind": "berries", "name": "виноград", "pos": p, "quantity": 3, "parts": {"VineyardGrapes": indices}})
+					_batch(section, pose)
+					section.free()
 				_batch(root, Transform3D.IDENTITY)
+	_flush_crop_soil()
+	crop_heights.clear()
 	stage._detail_batch("VineyardLeaves", sphere, leaves, leaf_colors)
 	stage._detail_batch("VineyardGrapes", sphere, fruit, fruit_colors)
 
@@ -421,19 +526,22 @@ func _lavender_fields(cooperative: bool = false) -> void:
 					blocked = blocked or stage.flat(p).distance_to(stage.flat(parking)) < 10.0
 				if blocked:
 					continue
-				p.y = stage.terrain_surface_height(p) - 0.015
+				p.y = _crop_height(p) - 0.015
+				_register_crop(p)
 				lavender_positions.append(p)
 				lavender_count += 1
 				var yaw = atan2(-stage.village_main_direction(s).x, -stage.village_main_direction(s).z)
-				foliage.append(Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3(0.62, 0.30, 0.90)), p + Vector3(0, 0.15, 0)))
+				var basis = stage.terrain_basis(p, yaw, _crop_height)
+				foliage.append(Transform3D(basis.scaled(Vector3(0.62, 0.30, 0.90)), p + basis * Vector3(0, 0.15, 0)))
 				foliage_colors.append(Color("617660").lightened(float((station + row) % 5) * 0.015))
 				for spike in range(5):
 					var angle = spike * TAU / 5.0 + row * 0.7
-					var base = p + Vector3(cos(angle) * 0.19, 0, sin(angle) * 0.28)
+					var base = p + basis * Vector3(cos(angle) * 0.19, 0, sin(angle) * 0.28)
+					base.y = _crop_height(base) - 0.02
 					var height = 0.52 + float(posmod(station + row + spike, 5)) * 0.035
-					stems.append(Transform3D(Basis.from_scale(Vector3(0.012, height, 0.012)), base + Vector3(0, height * 0.5, 0)))
+					stems.append(Transform3D(basis.scaled(Vector3(0.012, height, 0.012)), base + basis * Vector3(0, height * 0.5, 0)))
 					stem_colors.append(Color("697b51"))
-					flowers.append(Transform3D(Basis.from_scale(Vector3(0.13, 0.26, 0.13)), base + Vector3(0, height, 0)))
+					flowers.append(Transform3D(basis.scaled(Vector3(0.13, 0.26, 0.13)), base + basis * Vector3(0, height, 0)))
 					flower_colors.append(Color("8053a6").lerp(Color("b28bc9"), float(posmod(station * 3 + row + spike, 7)) / 9.0))
 	stage._detail_batch("LavenderFoliage", leaf_mesh, foliage, foliage_colors)
 	stage._detail_batch("LavenderStems", stem_mesh, stems, stem_colors)
@@ -541,7 +649,7 @@ func _thuja_forest(cooperative: bool = false) -> void:
 					blocked = blocked or stage.flat(p).distance_to(stage.flat(spot)) < 10.0
 				for obstacle in obstacles:
 					blocked = blocked or stage.flat(p).distance_to(stage.flat(_relative_pose(obstacle.body).origin)) < 7.0
-				if blocked or paved_at(p, 2.0) or stage.road_distance(p) < 8.0:
+				if blocked or not crop_clear(p) or paved_at(p, 2.0) or stage.road_distance(p) < 8.0:
 					continue
 				p.y = stage.terrain_surface_height(p) - 0.03
 				tree_positions.append(p)
@@ -566,7 +674,7 @@ func _thuja_forest(cooperative: bool = false) -> void:
 			var blocked = false
 			for spot in stage.clearings:
 				blocked = blocked or stage.flat(p).distance_to(stage.flat(spot)) < 10.0
-			if blocked or paved_at(p, 2.0) or stage.road_distance(p) < 8.0:
+			if blocked or not crop_clear(p) or paved_at(p, 2.0) or stage.road_distance(p) < 8.0:
 				continue
 			p.y = stage.terrain_surface_height(p) - 0.03
 			tree_positions.append(p)
@@ -601,7 +709,7 @@ func _point_clear_of_obstacles(p: Vector3, padding: float = 0.0) -> bool:
 	return true
 
 func _forest_spot_allowed(p: Vector3, padding: float = 0.0) -> bool:
-	if paved_at(p, padding):
+	if not crop_clear(p, 6.0 + padding) or paved_at(p, padding):
 		return false
 	if cemetery_center != Vector3.ZERO and stage.flat(p).distance_to(stage.flat(cemetery_center)) < 20.0 + padding:
 		return false
@@ -835,7 +943,7 @@ func _landscape() -> void:
 	for s in range(40, 820, 32):
 		for side_value in [-1.0, 1.0]:
 			var p = stage.village_main_at(s) + stage.village_main_side(s) * side_value * 100
-			if paved_at(p, 2.0) or stage.road_distance(p) < 8.0:
+			if not crop_clear(p, 6.0) or paved_at(p, 2.0) or stage.road_distance(p) < 8.0:
 				continue
 			p.y = stage.ground(p)
 			Props.cylinder(root, p + Vector3(0, 3.5, 0), 0.10, 0.06, 7, Color("795e44"), 8)

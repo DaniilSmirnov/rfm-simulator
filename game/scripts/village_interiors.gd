@@ -94,7 +94,9 @@ static func church(city, root: Node3D) -> void:
 		# Inner balustrade leaves headroom for the flight above.
 		if flight < 9:
 			rail(city, root, Vector3(0, y + 2.4, -8.65 if forward else -13.75), Vector3(5.5, 0, 0.12))
-	floor_panel(city, root, Vector3(-1.0, 24.1, -11.1), 3.0, 6.7)
+	floor_panel(city, root, Vector3(-1.45, 24.1, -11.1), 3.9, 6.7)
+	# Close the outer strip beside the stairwell, with overlap at panel seams.
+	floor_panel(city, root, Vector3(2.85, 24.1, -11.1), 1.05, 6.7)
 	floor_panel(city, root, Vector3(0, 24.1, -13.7), 6.7, 1.5)
 	floor_panel(city, root, Vector3(0, 24.1, -8.5), 6.7, 1.5)
 	# Keep an opening above the last stair flight.
