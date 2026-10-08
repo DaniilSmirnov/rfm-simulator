@@ -356,3 +356,12 @@ test('long VK shortnames survive room roster without legacy 24-character truncat
   assert.equal(result.name, name);
   assert.equal(Object.values(room.data.players)[0].name, name);
 });
+
+test('canyon selection persists for guests and restored rooms', () => {
+ const r = new RoomState();
+ const h = r.add('Host', 1000, true, {stage:3});
+ const g = r.add('Guest', 1000);
+ assert.equal(h.stage,3);
+ assert.equal(g.stage,3);
+ assert.equal(new RoomState(structuredClone(r.data)).sync({token:g.token,state:state()},1200).stage,3);
+});

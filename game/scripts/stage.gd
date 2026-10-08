@@ -20,6 +20,10 @@ const NATURE_MUSHROOM_STEM = preload("res://models/nature/mushroom_stem.tres")
 var officials: Node3D
 const Officials = preload("res://scripts/course_officials.gd")
 
+const Canyon = preload("res://scripts/canyon.gd")
+var canyon: RefCounted
+var desert = false
+
 const City = preload("res://scripts/vineyard.gd")
 var city: Node3D
 const LENGTH = 840.0
@@ -28,7 +32,7 @@ const WIDTH = 7.4
 # Five side-lane rows spaced 0.8 m apart, each stone 0.76 m wide.
 const SIDE_LANE_WIDTH = 3.96
 const TREE_CELL_SIZE = 16.0
-const STAGES = ["Лесной перевал · гравий", "Зимний Турини · снег и лёд", "Виноградники · европейская деревня"]
+const STAGES = ["Лесной перевал · гравий", "Зимний Турини · снег и лёд", "Виноградники · европейская деревня", "Красный каньон · пустынный грунт"]
 var variant = 0
 var winter = false
 var urban = false
@@ -63,16 +67,24 @@ func _init(selected: int = 0) -> void:
 	variant = clampi(selected, 0, STAGES.size() - 1)
 	winter = variant == 1
 	urban = variant == 2
+	desert = variant == 3
+	if desert:
+		canyon = Canyon.new()
 	if urban:
 		village_church_center = village_main_at(435.0) + village_main_side(435.0) * 43.0
 	for i in range(int(LENGTH / STEP) + 1):
 		var s = i * STEP
-		if winter:
+		if desert:
+			points.append(canyon.route(s))
+		elif winter:
 			points.append(Vector3(sin(s / 48.0) * 58.0 + sin(s / 115.0) * 14.0, 18.0 + s * 0.085 + sin(s / 36.0) * 5.0, -s))
 		elif urban:
 			points.append(urban_at(s))
 		else:
 			points.append(Vector3(sin(s / 90.0) * 38.0 + sin(s / 38.0) * 9.0, 5.0 + s * 0.024 + sin(s / 58.0) * 3.7, -s))
+	if desert:
+		canyon.configure(self)
+		return
 	for s in [140.0, 310.0, 505.0, 690.0]:
 		if winter:
 			clearings.append(at(s) + side(s) * (13.0 if s < 500 else -13.0))
@@ -148,6 +160,8 @@ func gravel_relief(pos: Vector3, s: float) -> float:
 	return (bank + bumps + ramps + ruts + puddles) * edge * blend
 
 func grip(pos: Vector3) -> float:
+	if desert:
+		return 0.48 if road_distance(pos) > road_width(road_s(pos)) * 0.5 or (road_s(pos) > 550.0 and road_s(pos) < 670.0) else 0.74
 	if urban:
 		var nearest = urban_nearest(pos)
 		var s: float = nearest.s
@@ -171,6 +185,8 @@ func grip(pos: Vector3) -> float:
 	return 0.42 if int(road_s(pos) / STEP) % 13 == 7 else 0.78
 
 func ground(pos: Vector3) -> float:
+	if desert:
+		return canyon.ground(self, pos)
 	if urban:
 		# Level foundation beneath the hollow church; keep terrain out of its nave.
 		var church_offset = pos - village_church_center
@@ -228,6 +244,8 @@ func terrain_tile_step(cell_x: float, cell_z: float) -> float:
 	return 2.0 if variant == 0 and road_distance(Vector3(cell_x + 2.0, 0, cell_z + 2.0)) < 12.0 else 4.0
 
 func terrain_vertex_height(x: float, z: float) -> float:
+	if desert:
+		return canyon.base_ground(self, Vector3(x, 0, z)) - 0.25
 	var value = ground(Vector3(x, 0, z)) - 0.25
 	if variant != 0:
 		return value
@@ -323,7 +341,7 @@ func build_async(progress: Callable) -> void:
 	await _build_terrain(true)
 	await progress.call("Дорога", 30)
 	_build_road()
-	await progress.call("Лес и окружение", 40)
+	await progress.call("Скалы и окружение" if desert else "Лес и окружение", 40)
 	await _build_nature(true)
 	await progress.call("Объекты спецучастка", 55)
 	await _build_details(true)
@@ -331,6 +349,8 @@ func build_async(progress: Callable) -> void:
 	_build_finish()
 
 func _build_nature(cooperative: bool = false) -> void:
+	if desert:
+		return
 	var forest: Array[Dictionary] = []
 	for i in range(100 if urban else (520 if winter else 7600)):
 		if cooperative and i % 400 == 0:
@@ -366,6 +386,9 @@ func _build_nature(cooperative: bool = false) -> void:
 		rock.rotation.z = rng.randf_range(-0.3, 0.3)
 
 func _build_details(cooperative: bool = false) -> void:
+	if desert:
+		canyon.build(self)
+		return
 	if variant == 0:
 		if cooperative:
 			await _build_woodland_details(true)
@@ -380,7 +403,7 @@ func _build_details(cooperative: bool = false) -> void:
 func _build_finish() -> void:
 	for i in range(clearings.size()):
 		var c = clearings[i]
-		if urban:
+		if urban or desert:
 			# Vineyard spectator spots are ordinary roadside/courtyard places.
 			# Keep the gameplay positions, but do not build a separate parking entity.
 			continue
@@ -395,7 +418,7 @@ func _build_finish() -> void:
 		label.modulate = Color("344537")
 		label.outline_size = 0
 	# Distant angular ridges, original meshes.
-	for i in range(0 if urban else 18):
+	for i in range(0 if urban or desert else 18):
 		var p = Vector3((-1 if i % 2 == 0 else 1) * rng.randf_range(220, 340), 30, -i * 65.0)
 		RallyProps.cylinder(self, p, rng.randf_range(120, 180), 0, rng.randf_range(220, 340) if winter else rng.randf_range(130, 210), Color("c3d1db") if winter else Color("697d70"), 5)
 
@@ -431,6 +454,8 @@ func _build_terrain(cooperative: bool = false) -> void:
 					for v in [a, b, c, b, d, c]:
 						v.y = terrain_vertex_height(v.x, v.z)
 						var color = Color("b6c9d3") if winter else Color(0.32, 0.38, 0.25)
+						if desert:
+							color = Color("b56443").lerp(Color("dfac74"), (sin(v.y * 0.65) + 1.0) * 0.5)
 						if variant == 0:
 							var patch = (sin(v.x * 0.065) * sin(v.z * 0.041) + 1.0) * 0.5
 							color = Color("514a32").lerp(Color("485c36"), patch)
@@ -453,6 +478,10 @@ func draw_base_road_surface(s: float) -> bool:
 	return not village(s) or village_forest_detour(s)
 
 func road_width(s: float) -> float:
+	if desert:
+		var narrow = smoothstep(230.0, 265.0, s) * (1.0 - smoothstep(405.0, 435.0, s))
+		var wash = smoothstep(540.0, 565.0, s) * (1.0 - smoothstep(655.0, 680.0, s))
+		return WIDTH - narrow * 1.2 + wash * 1.6
 	return SIDE_LANE_WIDTH if urban and s > 370.0 and s < 500.0 else WIDTH
 
 func road_surface_vertex(s: float, lateral: float) -> Vector3:
@@ -461,6 +490,8 @@ func road_surface_vertex(s: float, lateral: float) -> Vector3:
 	return p
 
 func road_surface_color(p: Vector3, s: float) -> Color:
+	if desert:
+		return Color("d4a475").lightened(sin(p.z * 0.25 + p.x * 0.10) * 0.025)
 	var base = Color("708a9c") if winter else ((Color("857763") if village_forest_detour(s) else Color("525757")) if urban else Color("9d896b"))
 	# Continuous low-frequency shading instead of a random colour per triangle.
 	var shade = sin(p.x * 0.17 + p.z * 0.11) * 0.025 + sin(p.z * 0.29 - p.x * 0.07) * 0.015
@@ -481,7 +512,7 @@ func _build_road() -> void:
 			for segment in range(divisions):
 				var begin = s + float(segment) / divisions
 				var end = s + float(segment + 1) / divisions
-				var strips = 8 if village_forest_detour(s) else 4
+				var strips = 8 if desert or village_forest_detour(s) else 4
 				for strip in range(strips):
 					var width = road_width(s)
 					var left = -width * 0.5 + width * float(strip) / strips
@@ -494,13 +525,13 @@ func _build_road() -> void:
 						st.set_color(road_surface_color(v, s))
 						st.add_vertex(v)
 		# Broken muddy wheel tracks, shallow puddles.
-		if not urban and i % 12 == 0:
+		if not urban and not desert and i % 12 == 0:
 			for offset in [-1.0, 1.0]:
 				var p = at(s) + side(s) * offset
 				p.y = ground(p)
 				var rut = RallyProps.box(self, p + Vector3(0, 0.07, 0), Vector3(0.5, 0.025, 2.7), Color("586974") if winter else Color("77654c"))
 				rut.rotation.y = atan2(-direction(s).x, -direction(s).z)
-		if not urban and i % 52 == 28:
+		if not urban and not desert and i % 52 == 28:
 			var p = at(s) + side(s) * 1.5
 			p.y = ground(p)
 			var puddle = RallyProps.cylinder(self, p + Vector3(0, 0.10, 0), 1.1, 1.1, 0.025, Color("56645d"), 9)
@@ -1161,6 +1192,8 @@ func urban_nearest(pos: Vector3) -> Dictionary:
 	return {"s": station, "distance": sqrt(best)}
 
 func rally_speed(s: float) -> float:
+	if desert:
+		return 17.0 if s > 240.0 and s < 420.0 else 26.0
 	if not urban:
 		return 27.0
 	return 15.0 if village(s) else 27.0

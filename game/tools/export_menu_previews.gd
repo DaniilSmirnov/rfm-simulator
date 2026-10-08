@@ -34,6 +34,14 @@ func run() -> void:
 func capture(game: Node, index: int, name: String) -> void:
 	var target = game.car.position + Vector3(0, 0.9, 0) if index == 0 else game.stage.at(390 if game.stage.urban else 200)
 	cameras[index].position = target + (Vector3(4.8, 2.2, 5.6) if index == 0 else Vector3(28, 20, 30))
+	if index == 1 and game.stage.desert:
+		cameras[index].far = 1100
+		cameras[index].fov = 66
+		cameras[index].position = Vector3(150, 125, -235)
+		target = Vector3(0, 40, -410)
+	else:
+		cameras[index].far = 60 if index == 0 else 160
+		cameras[index].fov = 48
 	cameras[index].look_at(target)
 	previews[index].render_target_update_mode = SubViewport.UPDATE_ONCE
 	await process_frame

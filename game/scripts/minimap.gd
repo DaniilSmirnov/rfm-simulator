@@ -37,6 +37,6 @@ func project(p: Vector3) -> Vector2:
 
 func _background() -> StyleBoxFlat:
 	var style = StyleBoxFlat.new()
-	style.bg_color = Color("26352be8")
+	style.bg_color = Color("613b2ae8") if is_instance_valid(game) and game.stage.desert else Color("26352be8")
 	style.set_corner_radius_all(12)
 	return style
