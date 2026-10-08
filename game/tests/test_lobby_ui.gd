@@ -12,6 +12,8 @@ func run() -> void:
 	await process_frame
 	game.set_process(false)
 	game.room.set_process(false)
+	check(game.menu.get_child(0) == game.menu_content, "main menu contains no scroll container")
+	check(not game.menu_title.visible and not game.menu_text.visible, "main menu hides duplicate heading and player count")
 	check(game.room.lobby.is_visible_in_tree() and not game.start_button.visible, "all starts use the unified room menu")
 	check(game.lobby_ui.images.size() == 2 and game.lobby_ui.images[0].texture != null, "both cards have rendered previews")
 	check(game.lobby_ui.background.visible and game.lobby_ui.background.mouse_filter == Control.MOUSE_FILTER_IGNORE, "menu backdrop is visible and does not intercept input")
@@ -63,10 +65,25 @@ func run() -> void:
 	game.lobby_ui._process(0)
 	check(not game.lobby_ui.host_pause.visible, "resuming host hides banner")
 	game.enable_mobile()
-	check(game.menu_content.is_visible_in_tree() and game.room.lobby.is_visible_in_tree(), "mobile keeps scrollable menu content visible")
+	check(game.menu_content.is_visible_in_tree() and game.room.lobby.is_visible_in_tree(), "mobile keeps compact menu content visible")
 	game.playing = false
 	game.lobby_ui._process(0)
 	check(not game.mobile_top.visible and not game.mobile_bottom.visible, "main mobile menu has no empty HUD backgrounds")
+	game.room.connected = false
+	game.select_stage(1)
+	game.platform_service.entitlements.skus = []
+	game.platform_service.purchase_message = "Ждём подтверждения VK. Нажмите «Проверить покупку»."
+	game.lobby_ui.refresh()
+	await process_frame
+	await process_frame
+	var safe = Rect2(54, 120, 852, 390)
+	game.apply_mobile_safe_rect(safe)
+	game.fit_mobile_dialogs()
+	await process_frame
+	check(safe.encloses(game.menu.get_global_rect()), "entire mobile main menu fits VK safe area without scrolling")
+	for control in [game.room.create_button, game.room.join_button, game.lobby_ui.purchase_button, game.lobby_ui.check_purchase, game.lobby_ui.purchase_status]:
+		check(game.menu.get_global_rect().encloses(control.get_global_rect()), "all menu actions and purchase status stay inside panel")
+	check(not game.menu_title.visible and not game.menu_text.visible, "mobile main menu has no duplicate heading or subtitle")
 	game.playing = true
 	game.paused = true
 	game.lobby_ui._process(0)

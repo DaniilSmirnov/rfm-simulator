@@ -257,7 +257,6 @@ var mobile_controls: Control
 var mobile_sidebar: PanelContainer
 var mobile_top: PanelContainer
 var mobile_bottom: PanelContainer
-var menu_help: Label
 var mobile_ui: Control
 var mobile_safe_rect = Rect2()
 var mobile_safe_timer = 0.0
@@ -312,7 +311,6 @@ func enable_mobile() -> void:
 	menu_text.add_theme_font_size_override("font_size", 18)
 	menu_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	menu_text.text = "Доедь до поляны, разложи лагерь и посмотри ралли. Жарь шашлык, помогай экипажам и береги себя."
-	menu_help.text = "Стик — движение и руль. Газ — справа.\nОбзор пешком — свайп по свободной части экрана."
 	print("[RFM] Мобильный интерфейс: панели готовы")
 	var layer = CanvasLayer.new()
 	layer.layer = 10
@@ -343,7 +341,7 @@ func apply_mobile_safe_rect(rect: Rect2) -> void:
 func fit_mobile_dialogs() -> void:
 	if not mobile_mode or not mobile_safe_rect.has_area():
 		return
-	for dialog in [menu, room.lobby]:
+	for dialog in [menu]:
 		var minimum = dialog.get_combined_minimum_size()
 		var extent = Vector2(maxf(620, minimum.x), maxf(390, minimum.y))
 		var factor = minf(1.0, minf((mobile_ui.size.x - 24) / extent.x, (mobile_ui.size.y - 24) / extent.y))
@@ -660,17 +658,16 @@ func _build_ui() -> void:
 	menu.offset_top = -270
 	menu.offset_bottom = 270
 	menu.add_theme_stylebox_override("panel", _panel(Color("23342bf5")))
-	var scroll = ScrollContainer.new()
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	menu.add_child(scroll)
 	var mv = VBoxContainer.new()
 	menu_content = mv
 	mv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	mv.add_theme_constant_override("separation", 12)
-	scroll.add_child(mv)
+	menu.add_child(mv)
 	_label(mv, "ПЕРЕВАЛ. РАЛЛИ. ШАШЛЫК.", 14, Color("dfb270"))
-	menu_title = _label(mv, "Rally Fans Simulator", 34)
-	menu_text = _label(mv, "Твой выезд · до 8 игроков в общем лагере", 17)
+	menu_title = _label(mv, "", 34)
+	menu_text = _label(mv, "", 17)
+	menu_title.hide()
+	menu_text.hide()
 	selection_controls = VBoxContainer.new()
 	selection_controls.add_theme_constant_override("separation", 8)
 	mv.add_child(selection_controls)
@@ -716,7 +713,6 @@ func _build_ui() -> void:
 	mv.add_child(start_button)
 	start_button.hide()
 	lobby_ui.finish(mv)
-	menu_help = _label(mv, "WASD — движение   ·   F — выйти   ·   Esc — пауза\nНа ногах: мышь — обзор   ·   Z/C/G — лагерь", 14, Color("b2bea1"))
 
 func _setup_audio() -> void:
 	engine_audio = AudioStreamPlayer.new()
