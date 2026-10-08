@@ -48,7 +48,7 @@ static func _wheel_parts(parent: Node3D, mesh: Mesh, part: String, color: Color)
 			var wheel = MeshInstance3D.new()
 			wheel.name = "Camping_%s_%s" % [part, key]
 			wheel.mesh = builder.commit()
-			wheel.position = pivot
+			wheel.position = Vector3(-pivot.x, pivot.y, -pivot.z)
 			wheel.rotation.y = PI
 			var mat = StandardMaterial3D.new()
 			mat.albedo_color = color
