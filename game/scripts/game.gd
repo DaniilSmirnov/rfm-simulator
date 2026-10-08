@@ -69,6 +69,7 @@ var playing = false
 var dead = false
 var finished = false
 var paused = false
+var safety_gate: CanvasLayer
 var has_chairs = false
 var personal_chairs: Dictionary = {}
 var personal_flags: Dictionary = {}
@@ -792,6 +793,22 @@ func start_game() -> void:
 	# Automated startup has no browser user gesture. Pointer lock is tested separately.
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if mobile_mode or "--smoke-test" in OS.get_cmdline_user_args() or (room.connected and OS.has_feature("web")) else Input.MOUSE_MODE_CAPTURED
 	toast("Найди подходящее место и разложи лагерь. Установка стола засчитывает выбор места.")
+	if not ("--script" in OS.get_cmdline_args() or "--smoke-test" in OS.get_cmdline_user_args() or "--capture" in OS.get_cmdline_user_args() or "--capture-menu" in OS.get_cmdline_user_args()):
+		_show_stage_safety_gate()
+
+func _show_stage_safety_gate() -> void:
+	if safety_gate != null and is_instance_valid(safety_gate):
+		return
+	paused = true
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	safety_gate = preload("res://scripts/stage_safety_gate.gd").new()
+	add_child(safety_gate)
+	safety_gate.accepted.connect(_accept_stage_safety_gate)
+
+func _accept_stage_safety_gate() -> void:
+	safety_gate = null
+	paused = false
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if mobile_mode or room.connected and OS.has_feature("web") else Input.MOUSE_MODE_CAPTURED
 
 func _menu_action() -> void:
 	if (dead or finished) and room.connected:
@@ -816,6 +833,8 @@ func return_to_main_menu() -> void:
 		get_tree().reload_current_scene()
 
 func _unhandled_input(event: InputEvent) -> void:
+	if safety_gate != null and is_instance_valid(safety_gate):
+		return
 	if placement_kind != "":
 		if event.is_action_pressed("pause_demo") or event.is_action_pressed("placement_cancel"):
 			cancel_placement()
