@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { createHash, webcrypto } from 'node:crypto';
 import { accountStore, paymentCallback, paymentCatalog, VkPayments } from '../server/payments-vk.mjs';
 import worker from '../server/worker.mjs';
@@ -27,6 +28,27 @@ test('only configured testers see one test product; disabled and real mode stay 
   for(const user of ['44','bad'])assert.ok(paymentCatalog(env,user).every(p=>!p.purchase_enabled));
   for(const mode of ['disabled','production']) assert.ok(paymentCatalog({...env,VK_PAYMENTS_MODE:mode},'42').every(p=>!p.purchase_enabled));
   assert.deepEqual((await accountStore(env,'42')).entitlements.skus,[]);
+});
+test('open test access exposes winter purchase to valid VK IDs and keeps live notifications closed',async()=>{
+ const {env}=setup();env.VK_PAYMENTS_TEST_USERS=' * ';
+ for(const user of ['42','44','100500']) {
+  assert.deepEqual(paymentCatalog(env,user).filter(p=>p.purchase_enabled).map(p=>p.sku),['stage_02']);
+  assert.deepEqual((await accountStore(env,user)).entitlements.skus,[]);
+ }
+ for(const user of ['bad','0','-42','42.5'])assert.ok(paymentCatalog(env,user).every(p=>!p.purchase_enabled));
+ for(const mode of ['disabled','production'])assert.ok(paymentCatalog({...env,VK_PAYMENTS_MODE:mode},'44').every(p=>!p.purchase_enabled));
+ await assert.rejects(paymentCallback(signedCallback({...order,user_id:'44',notification_type:'order_status_change'}),env));
+ await paymentCallback(signedCallback({...order,user_id:'44'}),env);
+ assert.deepEqual((await accountStore(env,'44')).entitlements.skus,['stage_02']);
+ assert.deepEqual((await accountStore(env,'42')).entitlements.skus,[]);
+});
+test('deployed configuration enables only test winter purchase rather than hiding the button',()=>{
+ const config=JSON.parse(readFileSync(new URL('../wrangler.jsonc',import.meta.url),'utf8'));
+ assert.equal(config.vars.VK_PAYMENTS_MODE,'test');
+ assert.equal(config.vars.VK_PAYMENTS_TEST_USERS,'*');
+ const products=paymentCatalog({...config.vars,PAYMENTS:{}},'100500').filter(p=>p.purchase_enabled);
+ assert.equal(products.length,1);assert.equal(products[0].sku,'stage_02');
+ assert.equal(products[0].payment_mode,'test');assert.equal(products[0].price,1);
 });
 test('signed item lookup has numeric stable item ID and does not grant content',async()=>{
  const {env,data}=setup();

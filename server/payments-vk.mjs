@@ -9,7 +9,7 @@ const reject = message => { throw new PaymentError(20, message); };
 const id = value => typeof value === 'string' && /^[1-9]\d{0,14}$/.test(value) && Number.isSafeInteger(Number(value));
 export function testBuyer(env, user) {
   return env.VK_PAYMENTS_MODE === 'test' && id(user) &&
-    (env.VK_PAYMENTS_TEST_USERS || '').split(',').map(s => s.trim()).includes(user) &&
+    (env.VK_PAYMENTS_TEST_USERS || '').split(',').map(s => s.trim()).some(s => s === '*' || s === user) &&
     /^[1-9]\d{0,3}$/.test(env.VK_STAGE_02_TEST_PRICE || '') && !!env.PAYMENTS;
 }
 export function paymentCatalog(env, user) {
