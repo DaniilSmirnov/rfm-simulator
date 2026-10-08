@@ -26,6 +26,11 @@ var desert = false
 
 const City = preload("res://scripts/vineyard.gd")
 var city: Node3D
+const BakedVillage = preload("res://scripts/baked_village.gd")
+var baked_scene_path = "res://generated/village.scn"
+var loaded_baked = false
+# Used only by the offline baker/tests; ordinary gameplay retains no CPU copy.
+var capture_bake_buffers = false
 const LENGTH = 840.0
 const STEP = 4.0
 const WIDTH = 7.4
@@ -347,7 +352,10 @@ func trail_distance(pos: Vector3, cutoff: float = INF) -> float:
 		distance = minf(distance, float(_trail_sample(pos, trail).distance))
 	return distance
 
-func build() -> void:
+func build(use_baked: bool = true) -> void:
+	if urban and use_baked and BakedVillage.load_into(self, baked_scene_path):
+		_build_finish()
+		return
 	rng.seed = 7102026 + variant * 971
 	_build_terrain()
 	_build_road()
@@ -356,6 +364,12 @@ func build() -> void:
 	_build_finish()
 
 func build_async(progress: Callable) -> void:
+	if urban and ResourceLoader.exists(baked_scene_path):
+		await progress.call("Загрузка спецучастка", 0)
+		if await BakedVillage.load_into_async(self, baked_scene_path, progress):
+			await progress.call("Судьи и указатели", 75)
+			_build_finish()
+			return
 	rng.seed = 7102026 + variant * 971
 	await progress.call("Рельеф", 0)
 	await _build_terrain(true)
@@ -943,6 +957,8 @@ func _detail_batch(name: String, mesh: Mesh, poses: Array, colors: Array, indice
 		node.visibility_range_end = 70 if name.begins_with("VineyardGrapes") else (110 if name.begins_with("LavenderFlowers") or name.begins_with("LavenderStems") else 160)
 		node.visibility_range_end_margin = 15
 	node.multimesh = mm
+	if capture_bake_buffers:
+		BakedVillage.capture_instances(node, poses, colors, center)
 	node.material_override = mat
 	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(node)

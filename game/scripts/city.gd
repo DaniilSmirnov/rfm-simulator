@@ -565,6 +565,8 @@ func _flush_batches() -> void:
 		stage.add_child(node)
 		node.position = data.center
 		node.multimesh = mm
+		if stage.capture_bake_buffers:
+			stage.BakedVillage.capture_instances(node, data.poses, data.colors, data.center)
 		if not data.casts_shadow:
 			node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		node.material_override = material

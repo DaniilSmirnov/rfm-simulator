@@ -13,6 +13,8 @@ run(process.execPath, ['--test',
 ]);
 run(process.execPath, ['--test', join(root, 'tests/branding.test.mjs'), join(root, 'tests/boot-diagnostics.test.mjs'), join(root, 'tests/audio-recovery.test.mjs')]);
 run(godot, ['--headless', '--editor', '--path', project, '--import']);
+run(godot, ['--headless', '--path', project, '--script', 'res://tools/bake_village.gd']);
+run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_baked_village.gd']);
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_character_asset.gd']);
 run(godot, ['--headless', '--path', project, '--script', 'res://tools/verify_niva_asset.gd']);
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_player_handling.gd']);

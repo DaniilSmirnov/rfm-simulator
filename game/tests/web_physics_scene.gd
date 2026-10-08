@@ -13,7 +13,25 @@ func _ready() -> void:
 	print("WEB_HANDLING_PASS: exported player accelerates and steers")
 	var stage = Stage.new(2)
 	add_child(stage)
-	stage.build()
+	var reports = []
+	await stage.build_async(func(title, amount):
+		reports.append([title, amount])
+		await get_tree().process_frame)
+	if not stage.loaded_baked or reports.size() < 3 or stage.city.walk_surfaces.is_empty():
+		push_error("WEB_PHYSICS_FAIL: prepared village or loading progress missing")
+		get_tree().quit(1)
+		return
+	var grape = stage.collectibles[0]
+	var part = stage.collectible_parts.VineyardGrapes[grape.parts.VineyardGrapes[0]]
+	if not stage.harvest(0) or part.mesh.get_instance_transform(part.instance).basis.determinant() != 0:
+		push_error("WEB_PHYSICS_FAIL: prepared grape instance cannot be harvested")
+		get_tree().quit(1)
+		return
+	if not stage.city.bell.pull(stage.city.bell.handle_position()):
+		push_error("WEB_PHYSICS_FAIL: prepared bell cannot be pulled")
+		get_tree().quit(1)
+		return
+	print("WEB_BAKED_VILLAGE_PASS: async scene, progress, walking support, harvest and bell")
 	await get_tree().physics_frame
 	var lamp: RigidBody3D = stage.city.lamps[0].body
 	var before = lamp.position

@@ -25,6 +25,9 @@ const presetPath = join(project, 'export_presets.cfg');
 const preset = await readFile(presetPath, 'utf8');
 if (!preset.includes('custom_template/release=""')) throw new Error('Unexpected export preset.');
 await writeFile(presetPath, preset.replace('custom_features=""', 'custom_features="' + (target === 'vk' ? 'vk' : '') + '"').replace('custom_template/release=""', `custom_template/release=${JSON.stringify(template)}`));
+// Import source assets, then generate the spatially partitioned village scene.
+run(godot, ['--headless', '--editor', '--path', project, '--import']);
+run(godot, ['--headless', '--path', project, '--script', 'res://tools/bake_village.gd']);
 run(godot, ['--headless', '--path', project, '--export-release', 'Web', join(rawOutput, 'index.html')]);
 await cp(rawOutput, output, {
   recursive: true,
