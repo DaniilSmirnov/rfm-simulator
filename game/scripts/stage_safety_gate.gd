@@ -9,24 +9,24 @@ var scroll: ScrollContainer
 var accept_button: Button
 var user_scrolled = false
 
-const RULES = [
-	"Не находись в зоне вылета.",
-	"Всегда имей путь отхода.",
-	"Слушай маршалов.",
-	"Не выходи на трассу во время гонки.",
-	"Дождись автомобиля безопасности с зелёной мигалкой.",
+const WHERE_TO_STAND = [
+	"Стой в специально отведённой зрительской зоне, за ограждениями и на безопасном расстоянии от дороги.",
+	"Выбирай место с хорошим обзором и свободным путём отхода.",
+	"Избегай внешнего радиуса и апекса поворота, выхода из поворота, слепых перегибов и зон приземления после трамплинов.",
+	"Даже вдали от дороги держись выше возможной траектории вылета автомобиля и не стой там, куда он может скатиться.",
 ]
-const DANGERS = [
-	"Внешний радиус поворота — машина может не вписаться и вылететь наружу.",
-	"Апекс поворота — машина проходит здесь на скорости.",
-	"Выход из поворота — автомобиль может потерять контроль.",
-	"Слепой поворот или перелом — экипаж может появиться внезапно.",
-	"Трамплин или гребёнка — автомобиль может приземлиться непредсказуемо.",
+const ALLOWED = [
+	"Наблюдай за гонкой только из безопасной зрительской зоны.",
+	"Слушай маршалов и выполняй их указания.",
+	"Держи проходы и пути эвакуации свободными.",
+	"Помогай другим зрителям отойти от опасного места, не подвергая себя риску.",
 ]
-const STAGE_GUIDES = [
-	"ЗАЕЗД НА УЧАСТОК\nЛучше заезжать со стороны старта. Со стороны финиша — минимум за 1,5 часа до перекрытия. Двигайся по ходу гонки.",
-	"КОГДА БЫТЬ НА ТОЧКЕ\nПриезжай минимум за 1 час до перекрытия дороги. После перекрытия движение ограничено.",
-	"КАК ВЫЕЗЖАТЬ\nВыезд возможен через 15 минут после «зелёнки». Не мешай «метле» и экстренным службам.",
+const FORBIDDEN = [
+	"Не выходи на трассу, пока её не откроют организаторы и маршалы.",
+	"Не стой в зоне вылета, перед автомобилем или за внешней стороной поворота.",
+	"Не пересекай ограждения и не заходи в закрытые зоны.",
+	"Не подходи к остановившемуся или аварийному автомобилю без разрешения маршалов.",
+	"Не препятствуй работе маршалов, спасателей и экипажей.",
 ]
 
 func _ready() -> void:
@@ -42,49 +42,49 @@ func _ready() -> void:
 	panel.add_child(background)
 	var outer = MarginContainer.new()
 	outer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	outer.add_theme_constant_override("margin_left", 16)
-	outer.add_theme_constant_override("margin_right", 16)
-	outer.add_theme_constant_override("margin_top", 16)
-	outer.add_theme_constant_override("margin_bottom", 16)
+	outer.add_theme_constant_override("margin_left", 0)
+	outer.add_theme_constant_override("margin_right", 0)
+	outer.add_theme_constant_override("margin_top", 0)
+	outer.add_theme_constant_override("margin_bottom", 0)
 	panel.add_child(outer)
 	var layout = VBoxContainer.new()
-	layout.add_theme_constant_override("separation", 12)
+	layout.add_theme_constant_override("separation", 0)
 	outer.add_child(layout)
 	scroll = ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.follow_focus = false
 	scroll.get_v_scroll_bar().value_changed.connect(_on_scroll_changed)
 	layout.add_child(scroll)
-	var centre = CenterContainer.new()
-	centre.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(centre)
+	var margins = MarginContainer.new()
+	margins.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	margins.add_theme_constant_override("margin_left", 24)
+	margins.add_theme_constant_override("margin_right", 24)
+	margins.add_theme_constant_override("margin_top", 24)
+	margins.add_theme_constant_override("margin_bottom", 24)
+	scroll.add_child(margins)
 	var text_column = VBoxContainer.new()
-	text_column.custom_minimum_size.x = 300
-	text_column.add_theme_constant_override("separation", 14)
-	centre.add_child(text_column)
+	text_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	text_column.add_theme_constant_override("separation", 16)
+	margins.add_child(text_column)
 	_add_text(text_column, "ЗРИТЕЛЬ — ЧАСТЬ РАЛЛИ", 15, Color("#ff8b52"))
-	_add_text(text_column, "БЕЗОПАСНОСТЬ", 32, Color.WHITE)
-	_add_text(text_column, "Ралли — это скорость и риск. Машина может выйти за пределы трассы. Выбирай безопасные точки и следуй указаниям маршалов.", 18)
-	_add_text(text_column, "ГЛАВНОЕ", 25, Color("#ffaf6c"))
-	for rule in RULES:
-		_add_text(text_column, "• " + rule, 18)
-	_add_text(text_column, "АВТОМОБИЛИ БЕЗОПАСНОСТИ", 24, Color("#ffaf6c"))
-	_add_text(text_column, "Перед первым боевым экипажем проходят: SAFETY (S1) — 40 минут, 00000 — 25, 0000 — 20, 000 — 15, 00 — 10 и 0 — 5 минут.", 18)
-	_add_text(text_column, "60 МИНУТ ДО СТАРТА — передвижение по спецучастку запрещено.", 19, Color("#ffad8b"))
-	_add_text(text_column, "ОПАСНЫЕ ЗОНЫ", 24, Color("#ffaf6c"))
-	for i in range(DANGERS.size()):
-		_add_text(text_column, "%d. %s" % [i + 1, DANGERS[i]], 18)
-	_add_text(text_column, "Никогда не стой в зоне вылета и за ограждениями. Выбирай место с хорошим обзором и запасом до дороги.", 18)
-	_add_text(text_column, "КАК ВЕСТИ СЕБЯ НА ЭТАПЕ", 24, Color("#ffaf6c"))
-	for guide in STAGE_GUIDES:
-		_add_text(text_column, guide, 18)
-	_add_text(text_column, "«Метла» проходит трассу после экипажей. Дождись разрешения маршалов перед выходом на дорогу.", 18)
+	_add_text(text_column, "БЕЗОПАСНОСТЬ НА СУ", 32, Color.WHITE)
+	_add_text(text_column, "Выбирай безопасное место, не мешай проведению гонки и выполняй указания маршалов.", 19)
+	_add_text(text_column, "ГДЕ СТОЯТЬ", 26, Color("#ffaf6c"))
+	for rule in WHERE_TO_STAND:
+		_add_text(text_column, "• " + rule, 19)
+	_add_text(text_column, "ЧТО МОЖНО ДЕЛАТЬ", 26, Color("#ffaf6c"))
+	for rule in ALLOWED:
+		_add_text(text_column, "• " + rule, 19)
+	_add_text(text_column, "ЧТО НЕЛЬЗЯ ДЕЛАТЬ", 26, Color("#ffaf6c"))
+	for rule in FORBIDDEN:
+		_add_text(text_column, "• " + rule, 19)
 	_add_text(text_column, "БУДЬ ЗРИТЕЛЕМ, А НЕ УЧАСТНИКОМ АВАРИИ.", 19, Color("#ffad8b"))
 	accept_button = Button.new()
 	accept_button.text = "ПРОКРУТИ ПАМЯТКУ ДО КОНЦА"
 	accept_button.disabled = true
-	accept_button.custom_minimum_size.y = 54
+	accept_button.custom_minimum_size.y = 64
 	accept_button.pressed.connect(_accept)
 	layout.add_child(accept_button)
 	scroll.resized.connect(_update_accept)
