@@ -100,7 +100,7 @@ func run() -> void:
 			if b.action == pedal:
 				check(b.rect.size.x >= 88 and b.rect.size.y >= 112, "driving pedals have large touch targets")
 	c._move_stick(c.stick_center + Vector2(62, 62))
-	check(is_equal_approx(c.stick.x, 1.0) and is_zero_approx(c.stick.y), "driving steering uses only horizontal thumb motion")
+	check(is_equal_approx(c.stick.x, sqrt(0.5)) and is_equal_approx(c.stick.y, sqrt(0.5)) and Input.is_action_pressed("right") and not Input.is_action_pressed("forward") and not Input.is_action_pressed("back"), "driving joystick stays circular while pedals exclusively control throttle")
 	c.reset_input()
 	c.touch_begin(27, button(c, "forward"))
 	c.touch_begin(28, button(c, "gear"))
