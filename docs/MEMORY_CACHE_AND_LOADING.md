@@ -4,6 +4,11 @@ Normal Web/VK and desktop clients open the menu without building the terrain,
 forest, stage objects, spectators or player car. Menu cards load the selected
 480×240 WebP image; they no longer allocate SubViewports or preview cameras.
 There are ten car and three stage images, generated from the actual game.
+The menu background uses a separately captured 1280×720 panorama of the selected
+stage, scaled to cover desktop/mobile viewports. Only the selected image is held;
+it is released when play begins. It does not intercept input or appear over the
+pause/gameplay view. Regenerate with `res://tools/export_stage_backdrops.gd`.
+
 Selecting locked content still shows its image; existing entitlement checks block
 starting it. A guest can still borrow the host's stage.
 

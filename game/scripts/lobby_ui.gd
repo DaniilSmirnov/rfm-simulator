@@ -1,6 +1,7 @@
 extends Node
 # Shared presentation only: ownership remains in PlatformService and the backend.
 var game: Node3D
+var background: TextureRect
 var images: Array[TextureRect] = []
 var states: Array[Label] = []
 var return_button: Button
@@ -21,6 +22,16 @@ func add_preview(parent: Control, kind: String) -> void:
 	image.tooltip_text = "Превью машины" if kind == "МАШИНА" else "Превью спецучастка"
 
 func finish(parent: Control) -> void:
+	background = TextureRect.new()
+	background.name = "StageBackdrop"
+	background.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	background.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	background.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	background.modulate = Color(0.8, 0.8, 0.8, 1)
+	var ui = game.menu.get_parent()
+	ui.add_child(background)
+	ui.move_child(background, 0)
+	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	return_button = Button.new()
 	return_button.text = "В ГЛАВНОЕ МЕНЮ"
 	return_button.custom_minimum_size.y = 44
@@ -53,6 +64,8 @@ func refresh() -> void:
 		var ok = car_ok if i == 0 else stage_ok
 		states[i].text = "Доступно для выезда" if ok else "Закрыто · продажи ещё не открыты"
 		states[i].add_theme_color_override("font_color", Color("b2bea1") if ok else Color("ffbc83"))
+	background.visible = not game.playing
+	background.texture = null if game.playing else load("res://textures/previews/backdrop_%d.webp" % game.selected_stage)
 	images[0].texture = load("res://textures/previews/car_%d.webp" % game.selected_car)
 	images[1].texture = load("res://textures/previews/stage_%d.webp" % game.selected_stage)
 	if game.room != null:
