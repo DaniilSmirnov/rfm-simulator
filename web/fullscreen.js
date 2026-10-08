@@ -43,7 +43,8 @@
       #${id} {
         position: fixed;
         top: max(12px, env(safe-area-inset-top));
-        right: max(12px, env(safe-area-inset-right));
+        left: 50%;
+        transform: translateX(-50%);
         z-index: 9998;
         width: 44px;
         height: 44px;
@@ -62,7 +63,7 @@
         -webkit-tap-highlight-color: transparent;
       }
       #${id}:hover { background: rgba(37, 53, 43, .94); }
-      #${id}:active { transform: scale(.96); }
+      #${id}:active { transform: translateX(-50%) scale(.96); }
       #${id}:focus-visible { outline: 2px solid #dfb270; outline-offset: 2px; }
       #${id} svg {
         width: 24px;
@@ -76,7 +77,7 @@
       @media (max-width: 640px) {
         #${id} {
           top: max(8px, env(safe-area-inset-top));
-          right: max(8px, env(safe-area-inset-right));
+          left: 50%;
           width: 42px;
           height: 42px;
         }
