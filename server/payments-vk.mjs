@@ -2,6 +2,8 @@ import { Buffer } from 'node:buffer';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { catalog } from './store.mjs';
 
+export const PAYMENT_HANDLER_VERSION = 'vk-test-callback-v2';
+
 export class PaymentError extends Error {
   constructor(code, message, critical = true) { super(message); this.code = code; this.critical = critical; }
 }
@@ -56,7 +58,10 @@ export async function paymentCallback(raw, env) {
     if (p.item !== 'stage_02') reject('Товар не существует.');
     return {response:{item_id:2,title:'Зимний Турини (тест)',photo_url:'',price:Number(env.VK_STAGE_02_TEST_PRICE)}};
   }
-  if (p.notification_type !== 'order_status_change_test') reject('Поддерживаются только тестовые уведомления.');
+  if (p.notification_type !== 'order_status_change_test') {
+    const received = typeof p.notification_type === 'string' ? p.notification_type.slice(0, 64) : null;
+    reject(`Неподдерживаемый notification_type=${JSON.stringify(received)}. Ожидается get_item_test или order_status_change_test. Обработчик: ${PAYMENT_HANDLER_VERSION}.`);
+  }
   if (p.status !== 'chargeable') throw new PaymentError(100,'Неподдерживаемый статус заказа.');
   if (!id(p.order_id) || p.item_id !== '2' || !id(p.amount)) reject('Некорректный заказ или стоимость.');
   const receipt = await ledger(env,'grant',{mode:'test',order:p.order_id,user:p.user_id,sku:'stage_02',amount:Number(p.amount),expected_price:Number(env.VK_STAGE_02_TEST_PRICE)});

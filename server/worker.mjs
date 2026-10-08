@@ -1,4 +1,4 @@
-import { accountStore, preparePurchase, paymentCallback, PaymentError } from './payments-vk.mjs';
+import { accountStore, preparePurchase, paymentCallback, PaymentError, PAYMENT_HANDLER_VERSION } from './payments-vk.mjs';
 export { VkPayments } from './payments-vk.mjs';
 import { AuthError, authenticateLaunch, authenticateSession } from './auth-vk.mjs';
 import { validateRoomSelection } from './store.mjs';
@@ -54,10 +54,16 @@ export default {
     if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
     if (request.method !== 'POST') return json({ error: 'Нужен POST.' }, 405);
     if (url.pathname === '/api/vk/payments/callback') {
-      try { return json(await paymentCallback(await request.text(), env)); }
+      const reply = data => {
+        const response = json(data);
+        response.headers.set('X-Rally-Payments-Handler', PAYMENT_HANDLER_VERSION);
+        return response;
+      };
+      try { return reply(await paymentCallback(await request.text(), env)); }
       catch (error) {
         const known = error instanceof PaymentError;
-        return json({error:{error_code:known ? error.code : 1,error_msg:known ? error.message : 'Платежи временно недоступны.',critical:known ? error.critical : false}});
+        console.warn('[RFM VK payments]', JSON.stringify({handler:PAYMENT_HANDLER_VERSION,error_code:known ? error.code : 1,message:known ? error.message : 'Платежи временно недоступны.'}));
+        return reply({error:{error_code:known ? error.code : 1,error_msg:known ? error.message : 'Платежи временно недоступны.',critical:known ? error.critical : false}});
       }
     }
     const origin = request.headers.get('Origin');
