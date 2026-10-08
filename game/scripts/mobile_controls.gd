@@ -292,8 +292,7 @@ func _draw() -> void:
 		draw_style_box(button_styles[0], gear_rect)
 	draw_circle(stick_center, STICK_RADIUS, Color("25352baa"))
 	draw_arc(stick_center, STICK_RADIUS, 0, TAU, 40, Color("dfb270"), 3, true)
-	if game.in_car:
-		# Full-circle driving stick.
+	# Circular driving joystick; pedals independently control throttle and brake.
 	draw_circle(stick_center + stick * 48, 28, Color("e3b16bdd"))
 	var text = "ДЖОЙСТИК" if game.in_car else "ИДТИ"
 	draw_string(font, stick_center + Vector2(-42, 94), text, HORIZONTAL_ALIGNMENT_CENTER, 84, 18, Color("f3e8cd"))
