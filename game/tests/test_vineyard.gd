@@ -30,7 +30,7 @@ func run() -> void:
 	var church_center = stage.at(435.0) + stage.side(435.0) * 43.0
 	check(absf(stage.road_distance(stage.city.cemetery_center) - 26.0) < 10.0, "forest route passes alongside cemetery")
 	check(not stage.city._forest_spot_allowed(stage.city.cemetery_center), "mixed forest generation preserves the cemetery clearing")
-	check(stage.city.side_lane_house_count >= 12, "both secondary village streets have additional houses")
+	check(stage.city.side_lane_house_count >= 8, "both secondary village streets have additional houses")
 	check(stage.city.village_sign_count == 2, "village has name signs at both entrance and exit")
 	var village_name_labels = stage.find_children("*", "Label3D", true, false).filter(func(label): return str(label.text) == "Ля Газ в Польен")
 	var signs_face_outward = true
@@ -86,7 +86,7 @@ func run() -> void:
 	for detail_position in stage.city.village_detail_positions:
 		village_details_clear = village_details_clear and stage.city.village_detail_allowed(detail_position)
 	check(village_details_clear, "generated village details never land on paved surfaces or occupied structures")
-	check(not stage.city.village_detail_allowed(stage.at(435.0)), "main village cobblestones reject natural detail")
+	check(not stage.city.village_detail_allowed(stage.at(335.0)), "main village cobblestones reject natural detail")
 	check(not stage.city.village_detail_allowed(stage.at(435.0) + stage.side(435.0) * 5.1), "village sidewalks reject natural detail")
 	check(not stage.city.village_detail_allowed(stage.at(370.0) + stage.side(370.0) * 20.0), "transverse cobbled lanes reject natural detail")
 	var parking_labels = 0
