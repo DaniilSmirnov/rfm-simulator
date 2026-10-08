@@ -29,6 +29,10 @@ var paved_areas: Array[Dictionary] = []
 var tree_positions: Array[Vector3] = []
 var village_prop_count = 0
 var sidewalk_poses: Array[Transform3D] = []
+var interior_footprints: Array[Dictionary] = []
+var walk_surfaces: Array[Dictionary] = []
+var viewpoints: Array[Dictionary] = []
+const Interiors = preload("res://scripts/village_interiors.gd")
 
 func build(cooperative: bool = false) -> void:
 	var floor_body = StaticBody3D.new()
@@ -151,7 +155,7 @@ func _side_lane_houses() -> void:
 					continue
 				var facing = -lane_normal * side_value
 				var yaw = atan2(-facing.x, -facing.z)
-				_house(p, yaw, 100 + int(lane_s) + int(along) + int(side_value))
+				_house(p, yaw, 100 + int(lane_s) + int(along) + int(side_value), along == 28.0 and side_value == 1.0)
 				side_lane_house_count += 1
 
 func _roof(parent: Node3D, width: float, depth: float, y: float, height: float, color: Color) -> void:
@@ -192,13 +196,17 @@ func _window(parent: Node3D, p: Vector3, yaw: float, shutters: Color, flower: bo
 			Props.cylinder(window, Vector3(x, -0.65, -0.23), 0.09, 0.13, 0.23, Color("60733e"), 6)
 			Props.box(window, Vector3(x, -0.5, -0.23), Vector3(0.12, 0.10, 0.10), Color("ba5363"))
 
-func _house(p: Vector3, yaw: float, seed_value: int) -> void:
+func _house(p: Vector3, yaw: float, seed_value: int, accessible: bool = false) -> void:
 	var house = Node3D.new()
 	house.name = "VillageHouse_%d" % village_houses
 	village_houses += 1
 	stage.add_child(house)
 	house.position = p
 	house.rotation.y = yaw
+	if accessible:
+		Interiors.house(self, house)
+		_batch(house, house.transform)
+		return
 	var style = posmod(seed_value, 5)
 	var height = 5.2 + style * 0.55
 	var wall = [Color("e4caa3"), Color("dbc6b2"), Color("d8aa8d"), Color("bec7aa"), Color("eedbc1")][style]
@@ -248,34 +256,7 @@ func _church(p: Vector3) -> void:
 	stage.add_child(church)
 	church.position = p
 	church.rotation.y = PI / 2
-	Props.box(church, Vector3(0, 4.5, 0), Vector3(10, 9, 21), Color("dbcfb5"))
-	_roof(church, 11, 22, 9, 6, Color("875441"))
-	for side_value in [-1.0, 1.0]:
-		for z in [-7.0, -2.0, 3.0, 8.0]:
-			Props.box(church, Vector3(side_value * 5.3, 3.2, z), Vector3(0.9, 6.4, 1), Color("c3b9a1"))
-			_window(church, Vector3(side_value * 5.05, 5.8, z), -side_value * PI / 2, Color("aeb3a2"), false)
-	Props.box(church, Vector3(0, 8, -11), Vector3(6, 16, 6), Color("c7b99b"))
-	for y in [0.4, 5.2, 10.8, 15.6]:
-		Props.box(church, Vector3(0, y, -11), Vector3(6.5, 0.3, 6.5), Color("e5dcc4"))
-	for x in [-2.9, 2.9]:
-		Props.box(church, Vector3(x, 8, -14.1), Vector3(0.4, 16, 0.4), Color("e3d8b9"))
-	Props.box(church, Vector3(0, 1.8, -14.08), Vector3(2.6, 3.6, 0.18), Color("624936"))
-	for side_value in [-1.0, 1.0]:
-		Props.box(church, Vector3(side_value * 1.5, 2, -14.2), Vector3(0.35, 4, 0.4), Color("eee0bd"))
-	for angle in range(0, 181, 15):
-		var a = deg_to_rad(angle)
-		var stone = Props.box(church, Vector3(cos(a) * 1.45, 3.8 + sin(a) * 1.45, -14.2), Vector3(0.40, 0.36, 0.38), Color("eee0bd"))
-		stone.rotation.z = a
-	for side_value in [-1.0, 1.0]:
-		_window(church, Vector3(side_value * 3.05, 12.9, -11), -side_value * PI / 2, Color("6b7367"), false)
-	var clock = Props.cylinder(church, Vector3(0, 9.1, -14.2), 1, 1, 0.09, Color("f0e7ce"), 32)
-	clock.rotation.x = PI / 2
-	Props.box(church, Vector3(0, 9.4, -14.27), Vector3(0.08, 0.6, 0.05), Color("384439"))
-	var hand = Props.box(church, Vector3(0.28, 9.1, -14.28), Vector3(0.65, 0.08, 0.05), Color("384439"))
-	hand.rotation.z = -0.3
-	Props.cylinder(church, Vector3(0, 20, -11), 4.3, 0, 8.6, Color("665f5c"), 8)
-	Props.box(church, Vector3(0, 25.1, -11), Vector3(0.17, 2, 0.17), Color("c4ab6e"))
-	Props.box(church, Vector3(0, 25.5, -11), Vector3(1.1, 0.17, 0.17), Color("c4ab6e"))
+	Interiors.church(self, church)
 	var square = Node3D.new()
 	square.name = "VillageChurchSquare"
 	church.add_child(square)
@@ -288,8 +269,6 @@ func _church(p: Vector3) -> void:
 			var stone = Props.box(square, offset, Vector3(0.88, 0.06, 0.88), Color("a7a194").lightened(float(posmod(x * 5 + z * 7, 9)) * 0.012 - 0.05))
 			stone.rotation.y = (PI / 2.0) if (x + z) % 7 == 0 else 0.0
 			church_square_cobblestones += 1
-	_solid(church, Vector3(0, 4.5, 0), Vector3(10, 9, 21), "building")
-	_solid(church, Vector3(0, 8, -11), Vector3(6, 16, 6), "building")
 	_batch(church, church.transform)
 
 func _cemetery() -> void:
@@ -552,6 +531,10 @@ func _thuja_forest(cooperative: bool = false) -> void:
 	stage._detail_batch("VillageThujaCrown", crown, crown_poses, crown_colors)
 
 func _point_clear_of_obstacles(p: Vector3, padding: float = 0.0) -> bool:
+	for area in interior_footprints:
+		var local: Vector3 = area.inverse * p
+		if absf(local.x) <= area.half.x + padding and absf(local.z) <= area.half.y + padding:
+			return false
 	for obstacle in obstacles:
 		var pose = _relative_pose(obstacle.body)
 		var local = pose.affine_inverse() * p
@@ -860,3 +843,19 @@ func _village_props() -> void:
 		_solid(root, Vector3(0, 0.6, 0), Vector3(3, 1.2, 0.9), "wine_barrels")
 		_batch(root, root.transform)
 		village_prop_count += 6
+
+# Floors are queried only for walkers, never for road/car suspension.
+# The height limit prevents a roof or an overlapping stair flight teleporting
+# a person underneath it upwards. Surfaces remain static and deterministic.
+func walking_floor(pos: Vector3, feet_height: float) -> float:
+	var result = -INF
+	for surface in walk_surfaces:
+		if absf(pos.x - surface.pose.origin.x) > surface.reach or absf(pos.z - surface.pose.origin.z) > surface.reach:
+			continue
+		var local: Vector3 = surface.inverse * pos
+		if absf(local.x) > surface.half.x or absf(local.z) > surface.half.y:
+			continue
+		var height: float = surface.pose.origin.y + surface.rise * (local.z / (surface.half.y * 2.0) + 0.5)
+		if height <= feet_height + 0.45:
+			result = maxf(result, height)
+	return result if is_finite(result) else stage.ground(pos)
