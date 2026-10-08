@@ -15,7 +15,7 @@ func button(c: Control, action: String) -> Vector2:
 	for b in c.buttons:
 		if b.action == action:
 			return b.rect.get_center()
-	if action in ["table", "chairs", "grill", "firewood", "cauldron", "flag", "random_spot", "recover", "eat_berries"]:
+	if action in ["table", "chairs", "grill", "firewood", "cauldron", "flag", "recover", "eat_berries"]:
 		c.gear_open = true
 		c._layout()
 		for b in c.buttons:

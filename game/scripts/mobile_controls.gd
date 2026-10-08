@@ -63,7 +63,7 @@ func _layout() -> void:
 			add_button("Выйти", "interact", false, Rect2(primary - Vector2(-26, 100), Vector2(88, 64)))
 			for i in range(3):
 				add_button(["Назад", "Тормоз", "Газ"][i], ["back", "brake", "forward"][i], true, Rect2(Vector2(size.x - edge - 258 + i * 86, size.y - edge - 84), Vector2(78, 84)))
-			gear = [["Вернуть", "recover"], ["Поляна", "random_spot"]]
+			gear = [["Вернуть", "recover"]]
 		else:
 			var target = game.interaction.current()
 			var label = "Действие"
@@ -73,7 +73,7 @@ func _layout() -> void:
 			if not game.seated and game.beers < 30:
 				add_button("Бег", "sprint", true, Rect2(primary + Vector2(-80, 54), Vector2(68, 68)))
 				add_button("Прыжок", "jump", false, Rect2(primary + Vector2(34, -80), Vector2(70, 64)))
-			gear = [["Поляна", "random_spot"]]
+			gear = []
 			if not game.packing.active():
 				gear.append(["Стол", "table"])
 				gear.append(["Стул", "chairs"])

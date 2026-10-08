@@ -227,7 +227,6 @@ var race_clock = 0.0
 var spawn_clock = 12.0
 var passed = 0
 var helped = 0
-var target_clearing = 0
 var elapsed = 0.0
 var toast_time = 0.0
 var tow_target: Node3D
@@ -476,7 +475,7 @@ func _ready() -> void:
 	print("[RFM] Запуск завершён")
 
 func _setup_input() -> void:
-	var bindings = {"forward": [KEY_W, KEY_UP], "back": [KEY_S, KEY_DOWN], "left": [KEY_A, KEY_LEFT], "right": [KEY_D, KEY_RIGHT], "brake": [KEY_SPACE], "jump": [KEY_SPACE], "sprint": [KEY_SHIFT], "interact": [KEY_F], "table": [KEY_Z], "flag": [KEY_V], "chairs": [KEY_C], "grill": [KEY_G], "firewood": [KEY_J], "cauldron": [KEY_H], "beer": [KEY_B], "eat": [], "collect": [], "mount_mushroom": [], "eat_mushroom": [], "eat_berries": [KEY_K], "rally": [KEY_R], "tow": [KEY_T], "random_spot": [KEY_Q], "map": [KEY_M], "recover": [KEY_HOME], "pause_demo": [KEY_ESCAPE], "placement_confirm": [KEY_ENTER], "placement_rotate": [], "placement_cancel": []}
+	var bindings = {"forward": [KEY_W, KEY_UP], "back": [KEY_S, KEY_DOWN], "left": [KEY_A, KEY_LEFT], "right": [KEY_D, KEY_RIGHT], "brake": [KEY_SPACE], "jump": [KEY_SPACE], "sprint": [KEY_SHIFT], "interact": [KEY_F], "table": [KEY_Z], "flag": [KEY_V], "chairs": [KEY_C], "grill": [KEY_G], "firewood": [KEY_J], "cauldron": [KEY_H], "beer": [KEY_B], "eat": [], "collect": [], "mount_mushroom": [], "eat_mushroom": [], "eat_berries": [KEY_K], "rally": [KEY_R], "tow": [KEY_T], "map": [KEY_M], "recover": [KEY_HOME], "pause_demo": [KEY_ESCAPE], "placement_confirm": [KEY_ENTER], "placement_rotate": [KEY_Q], "placement_cancel": []}
 	for action in bindings:
 		if not InputMap.has_action(action):
 			InputMap.add_action(action)
@@ -793,7 +792,7 @@ func start_game() -> void:
 	mobile_sidebar.show()
 	# Automated startup has no browser user gesture. Pointer lock is tested separately.
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if mobile_mode or "--smoke-test" in OS.get_cmdline_user_args() or (room.connected and OS.has_feature("web")) else Input.MOUSE_MODE_CAPTURED
-	toast("Доедь до любой парковки. Q — выбрать случайную на карте." if stage.urban else "Доедь до любой поляны. Q — выбрать случайную на карте.")
+	toast("Найди подходящее место и разложи лагерь. Установка стола засчитывает выбор места.")
 
 func _menu_action() -> void:
 	if (dead or finished) and room.connected:
@@ -826,7 +825,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			if event.is_action_pressed("interact") or event.is_action_pressed("placement_confirm") or event.is_action_pressed(placement_kind):
 				confirm_placement()
 				return
-			if event.is_action_pressed("random_spot") or event.is_action_pressed("placement_rotate"):
+			if event.is_action_pressed("placement_rotate"):
 				placement_yaw += PI / 8
 				return
 		else:
@@ -884,9 +883,6 @@ func _unhandled_input(event: InputEvent) -> void:
 		eat_meat()
 	elif event.is_action_pressed("rally"):
 		start_rally()
-	elif event.is_action_pressed("random_spot"):
-		target_clearing = rng.randi_range(0, stage.clearings.size() - 1)
-		toast(("Выбрана парковка %d. Оранжевая точка на карте." if stage.urban else "Выбрана поляна %d. Оранжевая точка на карте.") % (target_clearing + 1))
 	elif event.is_action_pressed("recover"):
 		if not racing:
 			if room.connected and room.recover_drive():
@@ -1854,7 +1850,7 @@ func _cancel_tow() -> void:
 
 func toast(message: String) -> void:
 	if mobile_mode:
-		var labels = {"Q —": "Поляна —", "Space —": "Тормоз —", "F —": "Действие —", "Z —": "Стол —", "C —": "Стулья —", "G —": "Мангал —", "X —": "Есть —", "R —": "Заезды —", "— T": "— Трос", ": E.": ": Выйти.", "нажми X": "нажми Есть", "Удерживай T": "Удерживай Трос"}
+		var labels = {"Space —": "Тормоз —", "F —": "Действие —", "Z —": "Стол —", "C —": "Стулья —", "G —": "Мангал —", "X —": "Есть —", "R —": "Заезды —", "— T": "— Трос", ": E.": ": Выйти.", "нажми X": "нажми Есть", "Удерживай T": "Удерживай Трос"}
 		for key in labels:
 			message = message.replace(key, labels[key])
 	if toast_label != null:
@@ -1869,14 +1865,13 @@ func _update_hud() -> void:
 		sobriety_label.text = "ПРОТРЕЗВЛЕНИЕ · ВСТАНЕШЬ ЧЕРЕЗ %02d:%02d" % [seconds / 60, seconds % 60]
 		sobriety_bar.value = SOBER_SECONDS - (sober_remaining if sober_remaining > 0 else SOBER_SECONDS)
 	course_label.text = course.caption()
-	var distance = int(player_position().distance_to(stage.clearings[target_clearing]))
-	quest_label.text = "%s Найти место  ·  %d м\n%s Разложить стол\n%s Поставить стулья\n%s Пожарить и съесть шашлык\n%s Посмотреть %d экипажей" % ["[x]" if camp != null else "[ ]", distance, "[x]" if camp != null else "[ ]", "[x]" if has_chairs else "[ ]", "[x]" if eaten else "[ ]", "[x]" if passed >= RALLY_CREW_LIMIT else "[ ]", RALLY_CREW_LIMIT]
+	quest_label.text = "%s Выбрать место для лагеря\n%s Разложить стол\n%s Поставить стулья\n%s Пожарить и съесть шашлык\n%s Посмотреть %d экипажей" % ["[x]" if camp != null else "[ ]", "[x]" if camp != null else "[ ]", "[x]" if has_chairs else "[ ]", "[x]" if eaten else "[ ]", "[x]" if passed >= RALLY_CREW_LIMIT else "[ ]", RALLY_CREW_LIMIT]
 	if packing.active():
 		quest_label.text = "Оба прохода завершены\nВернуть вещи в багажники: осталось %d\nБагажник открывается при подходе\nF — взять предмет / вернуть коробку\nЗатем все возвращаются в свои машины" % packing.remaining()
 	status_label.text = "ПРОХОД %d/2 · ЭКИПАЖИ %d/%d · ПОМОЩЬ %d\nПИВО %d · ВЫЕЗД %02d:%02d" % [course.pass_index, passed, RALLY_CREW_LIMIT, helped, beers, int(elapsed) / 60, int(elapsed) % 60]
 	if in_car:
 		info_label.text = "%02d КМ/Ч    ·    ЛЕГКОВУШКА %d%%    ·    %s" % [int(absf(speed) * 3.6), int(condition), "ОБОЧИНА" if stage.road_distance(car.position) > 4 else "ГРАВИЙ / КОЛЕЯ"]
-		hint_label.text = "WASD / стрелки — газ и руль   ·   Space — тормоз   ·   F — выйти   ·   Q — случайная поляна   ·   Home — вернуть на СУ"
+		hint_label.text = "WASD / стрелки — газ и руль   ·   Space — тормоз   ·   F — выйти   ·   Home — вернуть на СУ"
 	else:
 		var cook_status = "ШАШЛЫК ГОТОВ" if cook_time >= 35 else ("ШАШЛЫК %d%%" % int(cook_time / 35 * 100) if cooking else "МАНГАЛ НЕ РАЗОЖЖЁН")
 		info_label.text = "ЗРИТЕЛЬ    ·    %s · ШАМПУРЫ %d/10    ·    %s" % [cook_status, grill_servings, course.caption()]
@@ -1910,7 +1905,7 @@ func _update_hud() -> void:
 	if mobile_mode:
 		course_label.text = course.caption().replace("ПРОХОД ", "СУ ").replace(" · ПРЯМО", "").replace(" · ОБРАТНО", "").replace("ДО ОТКРЫТИЯ СУ", "СТАРТ ЧЕРЕЗ")
 		if in_car and tow_target == null:
-			info_label.text = "%02d КМ/Ч · МАШИНА %d%% · %s %d м" % [int(absf(speed) * 3.6), int(condition), "МЕСТО" if stage.urban else "ПОЛЯНА", distance]
+			info_label.text = "%02d КМ/Ч · МАШИНА %d%%" % [int(absf(speed) * 3.6), int(condition)]
 		elif not in_car and drink_time < 0 and eat_time < 0 and beers < 30 and tow_target == null:
 			if packing.active():
 				info_label.text = "ВЕРНУТЬ ВЕЩИ В БАГАЖНИК · ОСТАЛОСЬ %d" % packing.remaining()
@@ -1960,7 +1955,6 @@ func _show_result(title: String, body: String) -> void:
 	fire_audio.stop()
 
 func _prepare_capture() -> void:
-	target_clearing = 1
 	car.position = stage.clearings[1] + Vector3(5, 0, 2)
 	car.position.y = stage.ground(car.position)
 	heading = -0.3
