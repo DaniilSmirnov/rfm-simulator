@@ -1,0 +1,33 @@
+name: Bake Granta OBJ
+on:
+  push:
+    branches:
+      - feat/granta-detailed-black-blue
+    paths:
+      - game/scripts/granta_model.gd
+      - game/tools/export_granta_obj.gd
+      - game/scripts/props.gd
+      - .github/workflows/bake-granta.yml
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Bake OBJ and MTL with Godot
+        run: .cache/godot/Godot_v4.4.1-stable_linux.x86_64 --headless --path game --script res://tools/export_granta_obj.gd
+      - name: Commit generated model assets
+        run: |
+          git add game/models/cars/granta/granta_black_blue.obj game/models/cars/granta/granta_black_blue.mtl
+          if ! git diff --cached --quiet; then
+            git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'Bake Granta OBJ and MTL model assets'
+            git push
+          fi
