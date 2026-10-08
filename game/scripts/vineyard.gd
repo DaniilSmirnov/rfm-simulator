@@ -717,6 +717,40 @@ func _mixed_forest(cooperative: bool = false) -> void:
 			forest_bush_count += 1
 		if forest_bush_count >= 170 and forest_berry_bush_count >= 70:
 			break
+	# Dedicated berry thickets, independent of the random ordinary undergrowth.
+	# Use the same collectible batches so picking berries hides their fruit.
+	var grove_rng = RandomNumberGenerator.new()
+	grove_rng.seed = 71020267
+	var grove_count = 0
+	for attempt in range(720):
+		if grove_count >= 65:
+			break
+		if cooperative and attempt % 180 == 0:
+			await get_tree().process_frame
+		var station = grove_rng.randf_range(VILLAGE_START - 45.0, VILLAGE_END + 45.0)
+		var side_value = -1.0 if grove_rng.randi() % 2 == 0 else 1.0
+		var center = stage.at(station) + stage.side(station) * side_value * grove_rng.randf_range(52.0, 131.0)
+		if not _forest_spot_allowed(center, 1.25) or not stage.rock_hit(center, center, 1.0, false).is_empty():
+			continue
+		center.y = stage.ground(center)
+		var size = grove_rng.randf_range(0.75, 1.35)
+		var start_index = berry_poses.size()
+		for lobe in range(4):
+			var angle = grove_rng.randf() * TAU
+			var leaf_center = center + Vector3(cos(angle) * size * 0.33, size * 0.58, sin(angle) * size * 0.33)
+			berry_bush_poses.append(Transform3D(Basis(Vector3.UP, angle).scaled(Vector3(size * 0.92, size * 0.78, size * 0.92)), leaf_center))
+			berry_bush_colors.append(Color("3c5830").lerp(Color("6c8040"), grove_rng.randf()).darkened(0.08))
+			for fruit in range(5):
+				var fruit_angle = angle + float(fruit) * TAU / 5.0
+				var fruit_position = leaf_center + Vector3(cos(fruit_angle) * size * 0.40, size * 0.15, sin(fruit_angle) * size * 0.36)
+				berry_poses.append(Transform3D(Basis.from_scale(Vector3.ONE * 0.09), fruit_position))
+				berry_colors.append(Color("c34237") if fruit % 2 == 0 else Color("383353"))
+		var indices: Array = []
+		for fruit_index in range(start_index, berry_poses.size()):
+			indices.append(fruit_index)
+		stage.collectibles.append({"kind": "berries", "name": "лесные ягоды", "pos": center, "quantity": 3, "parts": {"VillageForestBerries": indices}})
+		forest_berry_bush_count += 1
+		grove_count += 1
 	var bush_mesh = stage.NATURE_BUSH
 	var berry_mesh = stage.NATURE_BERRY
 	stage._detail_batch("VillageForestBushes", bush_mesh, bush_poses, bush_colors)
