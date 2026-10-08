@@ -35,6 +35,8 @@ var lobby_ui: Node
 var selection_controls: VBoxContainer
 var car_choice: HBoxContainer
 var stage_choice: HBoxContainer
+var fps_label: Label
+var fps_clock = 0.0
 var stage_caption: Label
 var world_environment: WorldEnvironment
 var sunlight: DirectionalLight3D
@@ -575,7 +577,9 @@ func _build_ui() -> void:
 	var vb = VBoxContainer.new()
 	top.add_child(vb)
 	title_label = _label(vb, "Rally Fans Simulator", 22)
-	stage_caption = _label(vb, Stage.STAGES[selected_stage] + "  /  ДЕМО " + str(ProjectSettings.get_setting("application/config/version")), 12, Color("b2bea1"))
+	stage_caption = _label(vb, Stage.STAGES[selected_stage], 12, Color("b2bea1"))
+	fps_label = _label(vb, "v%s · — FPS" % ProjectSettings.get_setting("application/config/version"), 12, Color("b2bea1"))
+	fps_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	course_label = _label(vb, "", 16, Color("ffe4a5"))
 	course_label.hide()
 	var sidebar = PanelContainer.new()
@@ -897,7 +901,17 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif event.physical_keycode == KEY_F9:
 			spawn_racer("crash")
 
+func _update_fps_counter(delta: float) -> void:
+	fps_clock += delta
+	if fps_clock < 0.5 or fps_label == null:
+		return
+	fps_clock = fmod(fps_clock, 0.5)
+	var fps = Engine.get_frames_per_second()
+	if fps > 0:
+		_set_hud_text(fps_label, "v%s · %d FPS" % [ProjectSettings.get_setting("application/config/version"), fps])
+
 func _process(delta: float) -> void:
+	_update_fps_counter(delta)
 	if soundscape != null:
 		soundscape.update(delta)
 	if not playing or paused or dead or finished or (room.connected and not room.is_host and room.world_paused):
@@ -1426,7 +1440,7 @@ func select_stage(variant: int, hosted_guest: bool = false) -> void:
 	jump_height = 0
 	jump_velocity = 0
 	selected_stage = variant
-	stage_caption.text = Stage.STAGES[variant] + "  /  ДЕМО " + str(ProjectSettings.get_setting("application/config/version"))
+	stage_caption.text = Stage.STAGES[variant]
 	stage_choice.select(variant)
 	stage.free()
 	stage = Stage.new(variant)
