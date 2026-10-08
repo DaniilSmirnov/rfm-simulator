@@ -21,6 +21,7 @@ const Spectators = preload("res://scripts/spectators.gd")
 var spectators: Node3D
 const MiniMap = preload("res://scripts/minimap.gd")
 var stage: RallyStage
+var menu_content: VBoxContainer
 var platform_service: Node
 var selected_stage = 0
 var selected_car = 0
@@ -299,8 +300,8 @@ func enable_mobile() -> void:
 	menu.offset_right = 310
 	menu.offset_top = -195
 	menu.offset_bottom = 195
-	menu.get_child(0).add_theme_constant_override("separation", 6)
-	menu.get_child(0).get_child(0).hide()
+	menu_content.add_theme_constant_override("separation", 6)
+	menu_content.get_child(0).hide()
 	menu_title.add_theme_font_size_override("font_size", 26)
 	menu_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	menu_text.add_theme_font_size_override("font_size", 18)
@@ -457,6 +458,7 @@ func _ready() -> void:
 		stage_choice.select(selected_stage)
 		lobby_ui.refresh()
 	)
+	platform_service.purchase_changed.connect(func(): lobby_ui.refresh())
 	platform_service.failed.connect(func(message): push_error(message))
 	add_child(platform_service)
 	print("[RFM] Запуск завершён")
@@ -647,9 +649,14 @@ func _build_ui() -> void:
 	menu.offset_top = -270
 	menu.offset_bottom = 270
 	menu.add_theme_stylebox_override("panel", _panel(Color("23342bf5")))
+	var scroll = ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	menu.add_child(scroll)
 	var mv = VBoxContainer.new()
+	menu_content = mv
+	mv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	mv.add_theme_constant_override("separation", 12)
-	menu.add_child(mv)
+	scroll.add_child(mv)
 	_label(mv, "ПЕРЕВАЛ. РАЛЛИ. ШАШЛЫК.", 14, Color("dfb270"))
 	menu_title = _label(mv, "Rally Fans Simulator", 34)
 	menu_text = _label(mv, "Твой выезд · до 8 игроков в общем лагере", 17)

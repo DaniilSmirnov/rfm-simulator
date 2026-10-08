@@ -1,5 +1,5 @@
 (() => {
-  let profile, entitlements, session, catalog;
+  let profile, entitlements, session, catalog, purchasing = false, orderOpen = false;
   window.RallyViewport?.attachVK(vkBridge);
   // Preserve the real network transport, before the browser-local handler wraps it.
   const networkFetch = window.fetch.bind(window);
@@ -48,8 +48,54 @@
     session = data.session;
   })();
   ready.catch(() => {});
+  const updateStore = data => {
+    if (!data.entitlements || !Array.isArray(data.entitlements.skus) || !Array.isArray(data.catalog)) throw new Error('Некорректные права покупки.');
+    entitlements = {mode:'restricted',skus:data.entitlements.skus};
+    catalog = data.catalog;
+    return {profile,entitlements,catalog};
+  };
+  const storeRequest = async (path, body = {}) => {
+    const request = await window.RallyPlatform.authorize(new Request(new URL(path,location.href), {
+      method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(15000),
+    }));
+    const response = await networkFetch(request);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Не удалось проверить покупку.');
+    return data;
+  };
+  const refreshStore = async () => updateStore(await storeRequest('/api/vk/store'));
+  const buy = async sku => {
+    if (purchasing || orderOpen) throw new Error('Покупка уже выполняется.');
+    if (typeof sku !== 'string' || !/^stage_02$/.test(sku)) throw new Error('Товар недоступен.');
+    purchasing = true;
+    try {
+      const prepared = await storeRequest('/api/vk/payments/prepare',{sku});
+      updateStore(prepared);
+      if (prepared.owned) return {...await refreshStore(),status:'owned'};
+      let outcome = 'pending', timer;
+      try {
+        orderOpen = true;
+        const order = Promise.resolve().then(() => vkBridge.send('VKWebAppShowOrderBox',{type:'item',item:prepared.item})).finally(() => {orderOpen = false;});
+        const result = await Promise.race([
+          order,
+          new Promise((_,reject) => {timer = setTimeout(() => reject(new Error('Order timeout')),25000);}),
+        ]);
+        outcome = result?.status === 'cancel' ? 'cancel' : result?.status === 'success' ? 'pending' : 'fail';
+      } catch { outcome = 'pending'; }
+      finally { clearTimeout(timer); }
+      // Bridge is only presentation. Signed callbacks are the source of ownership,
+      // including when a mobile client reports an error after a completed order.
+      for (let attempt = 0; attempt < 4; attempt++) {
+        const store = await refreshStore();
+        if (store.entitlements.skus.includes(sku)) return {...store,status:'owned'};
+        if (outcome === 'cancel' || outcome === 'fail') return {...store,status:outcome};
+        if (attempt < 3) await new Promise(resolve => setTimeout(resolve,1000));
+      }
+      return {profile,entitlements,catalog,status:'pending'};
+    } finally { purchasing = false; }
+  };
   window.RallyPlatform = {
-    target:'vk',ready:() => ready,
+    target:'vk',ready:() => ready, buy, refreshStore,
     authorize:async request => {
       await ready;
       if (Date.now() >= session.expires_at * 1000) throw new Error('Сессия VK истекла. Откройте игру заново через VK.');

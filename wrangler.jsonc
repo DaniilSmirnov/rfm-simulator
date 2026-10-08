@@ -24,6 +24,10 @@
       {
         "name": "ROOMS",
         "class_name": "RallyRoom"
+      },
+      {
+        "name": "PAYMENTS",
+        "class_name": "VkPayments"
       }
     ]
   },
@@ -33,9 +37,21 @@
       "new_sqlite_classes": [
         "RallyRoom"
       ]
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": [
+        "VkPayments"
+      ]
     }
   ],
   "vars": {
-    "VK_APP_ID": "54809523"
-  }
+    "VK_APP_ID": "54809523",
+    "VK_PAYMENTS_MODE": "disabled",
+    "VK_PAYMENTS_TEST_USERS": "",
+    "VK_STAGE_02_TEST_PRICE": "1"
+  },
+  "compatibility_flags": [
+    "nodejs_compat"
+  ]
 }

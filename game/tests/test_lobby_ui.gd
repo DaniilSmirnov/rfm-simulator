@@ -29,6 +29,20 @@ func run() -> void:
 	check(game.room.create_button.disabled and not game.room.join_button.disabled, "guest can join host stage with free car")
 	game.room.connect_room("")
 	check(not game.room.busy, "locked stage cannot create room")
+	game.select_stage(1)
+	game.platform_service.profile = {"platform": "vk"}
+	game.platform_service.catalog[1].purchase_enabled = true
+	game.platform_service.catalog[1].price = 1
+	game.lobby_ui.refresh()
+	check(game.lobby_ui.purchase_button.visible and game.lobby_ui.check_purchase.visible, "test winter stage exposes purchase and reconciliation")
+	game.platform_service.busy = true
+	game.platform_service.purchase_message = "Ожидаем VK…"
+	game.lobby_ui.refresh()
+	check(game.lobby_ui.purchase_button.disabled and game.lobby_ui.check_purchase.disabled, "pending order blocks double purchase")
+	game.platform_service.busy = false
+	game.platform_service.entitlements.skus = ["stage_02"]
+	game.lobby_ui.refresh()
+	check(not game.room.create_button.disabled and not game.lobby_ui.purchase_button.visible, "confirmed winter ownership unlocks host and hides purchase")
 	game.select_stage(0)
 	game.lobby_ui.refresh()
 	check(not game.room.create_button.disabled, "free baseline enables create")
@@ -46,6 +60,7 @@ func run() -> void:
 	game.lobby_ui._process(0)
 	check(not game.lobby_ui.host_pause.visible, "resuming host hides banner")
 	game.enable_mobile()
+	check(game.menu_content.is_visible_in_tree() and game.room.lobby.is_visible_in_tree(), "mobile keeps scrollable menu content visible")
 	game.playing = false
 	game.lobby_ui._process(0)
 	check(not game.mobile_top.visible and not game.mobile_bottom.visible, "main mobile menu has no empty HUD backgrounds")
