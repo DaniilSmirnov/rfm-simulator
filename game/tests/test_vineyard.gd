@@ -23,7 +23,15 @@ func run() -> void:
 		nature_assets_valid = nature_assets_valid and ResourceLoader.exists(path) and ResourceLoader.load(path) is Mesh
 	check(nature_assets_valid, "vegetation rocks and mushroom meshes load from separate resource files")
 	check(stage.shared_tree_mesh(0).resource_path.ends_with("tree_trunk.tres") and stage.shared_stone_mesh().resource_path.ends_with("stone.tres"), "summer stage uses external tree and stone geometry")
-	check(stage.city.vine_count > 2000 and stage.get_node_or_null("VillageChurch") != null, "vineyard stage includes vines and church")
+	check(stage.city.vine_count > 1000 and stage.get_node_or_null("VillageChurch") != null, "vineyard stage includes vines and church")
+	check(stage.city.lavender_count > 4000, "start side contains dense lavender rows")
+	check(stage.woodland_details.get("LavenderFlowers", 0) == stage.city.lavender_count * 5, "lavender flower spikes use spatial instance batches")
+	var lavender_clear = true
+	for p in stage.city.lavender_positions:
+		lavender_clear = lavender_clear and -p.z < 300.0 and stage.road_distance(p) >= 6.0
+	check(lavender_clear, "lavender stays before village and leaves the road clear")
+	var grape_positions = stage.collectibles.filter(func(item): return item.get("name", "") == "виноград")
+	check(not grape_positions.is_empty() and stage.find_children("VineyardRow_18_*", "Node3D", true, false).is_empty() and not stage.find_children("VineyardRow_585_*", "Node3D", true, false).is_empty(), "grapes remain only in finish-side vineyards")
 	check(stage.city.church_square_cobblestones >= 180 and stage.get_node_or_null("VillageChurch/VillageChurchSquare") != null, "church forecourt is fully paved with cobblestones")
 	check(not stage.city.village_detail_allowed(stage.city.church_square_center), "church cobblestone square rejects grass and loose stones")
 	check(stage.get_node_or_null("VillageCemetery") != null and stage.city.cemetery_grave_count == 28, "forest behind church contains an open cemetery with ordered graves")
