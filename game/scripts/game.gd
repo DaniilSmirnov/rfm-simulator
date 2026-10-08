@@ -964,6 +964,8 @@ func _process(delta: float) -> void:
 	foraging.update_visuals()
 	if not room.connected or room.is_host:
 		_update_racers(delta)
+		for racer in racers:
+			Props.animate_wheels(racer.node)
 		_update_stones(delta)
 		_update_cooking(delta)
 		if room.connected:
