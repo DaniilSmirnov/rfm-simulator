@@ -16,6 +16,13 @@ func run() -> void:
 	game.start_game()
 	game.in_car = false
 	var stage = game.stage
+	var nature_assets = ["tree_trunk.tres", "tree_crown_lower.tres", "tree_crown_middle.tres", "tree_crown_top.tres", "thuja_lower.tres", "thuja_middle.tres", "thuja_top.tres", "stone.tres", "boulder.tres", "bush.tres", "roadside_bush.tres", "bush_stem.tres", "berry.tres", "mushroom_cap.tres", "mushroom_stem.tres", "grass.obj"]
+	var nature_assets_valid = true
+	for asset in nature_assets:
+		var path = "res://models/nature/" + asset
+		nature_assets_valid = nature_assets_valid and ResourceLoader.exists(path) and ResourceLoader.load(path) is Mesh
+	check(nature_assets_valid, "vegetation rocks and mushroom meshes load from separate resource files")
+	check(stage.shared_tree_mesh(0).resource_path.ends_with("tree_trunk.tres") and stage.shared_stone_mesh().resource_path.ends_with("stone.tres"), "summer stage uses external tree and stone geometry")
 	check(stage.city.vine_count > 2000 and stage.get_node_or_null("VillageChurch") != null, "vineyard stage includes vines and church")
 	check(stage.city.church_square_cobblestones >= 180 and stage.get_node_or_null("VillageChurch/VillageChurchSquare") != null, "church forecourt is fully paved with cobblestones")
 	check(not stage.city.village_detail_allowed(stage.city.church_square_center), "church cobblestone square rejects grass and loose stones")

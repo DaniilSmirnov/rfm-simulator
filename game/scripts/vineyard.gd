@@ -476,9 +476,7 @@ func _roadside_details(cooperative: bool = false) -> void:
 				bush_poses.append(pose)
 				bush_colors.append(Color("405f32").lerp(Color("718044"), detail_rng.randf() * 0.6))
 			roadside_bush_count += 1
-	var bush_mesh = SphereMesh.new()
-	bush_mesh.radial_segments = 7
-	bush_mesh.rings = 3
+	var bush_mesh = preload("res://models/nature/roadside_bush.tres")
 	stage._detail_batch("VineyardRoadsideGrass", stage._grass_mesh(), grass_poses, grass_colors)
 	stage._detail_batch("VineyardRoadsideStones", stage.shared_stone_mesh(), stone_poses, stone_colors)
 	stage._detail_batch("VineyardRoadsideBushes", bush_mesh, bush_poses, bush_colors)
@@ -546,24 +544,9 @@ func _thuja_forest(cooperative: bool = false) -> void:
 			crown_poses.append(Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3(width * 0.48, height * 0.28, width * 0.48)), p + Vector3(0, height * 0.82, 0)))
 			crown_colors.append(Color("476a43").lightened(tree_rng.randf_range(-0.03, 0.06)))
 			thuja_count += 1
-	var lower = CylinderMesh.new()
-	lower.height = 1
-	lower.bottom_radius = 0.62
-	lower.top_radius = 0.28
-	lower.radial_segments = 7
-	lower.rings = 1
-	var middle = CylinderMesh.new()
-	middle.height = 1
-	middle.bottom_radius = 0.55
-	middle.top_radius = 0.18
-	middle.radial_segments = 7
-	middle.rings = 1
-	var crown = CylinderMesh.new()
-	crown.height = 1
-	crown.bottom_radius = 0.42
-	crown.top_radius = 0.02
-	crown.radial_segments = 7
-	crown.rings = 1
+	var lower = preload("res://models/nature/thuja_lower.tres")
+	var middle = preload("res://models/nature/thuja_middle.tres")
+	var crown = preload("res://models/nature/thuja_top.tres")
 	stage._detail_batch("VillageThujaLower", lower, lower_poses, lower_colors)
 	stage._detail_batch("VillageThujaMiddle", middle, middle_poses, middle_colors)
 	stage._detail_batch("VillageThujaCrown", crown, crown_poses, crown_colors)
@@ -684,9 +667,7 @@ func _mixed_forest(cooperative: bool = false) -> void:
 		forest_boulder_count += 1
 		if forest_boulder_count >= 44:
 			break
-	var boulder = SphereMesh.new()
-	boulder.radial_segments = 7
-	boulder.rings = 3
+	var boulder = stage.NATURE_BOULDER
 	stage._detail_batch("VillageForestBoulders", boulder, boulder_poses, boulder_colors)
 
 	var bush_poses: Array = []
@@ -734,12 +715,8 @@ func _mixed_forest(cooperative: bool = false) -> void:
 			forest_bush_count += 1
 		if forest_bush_count >= 170 and forest_berry_bush_count >= 70:
 			break
-	var bush_mesh = SphereMesh.new()
-	bush_mesh.radial_segments = 6
-	bush_mesh.rings = 2
-	var berry_mesh = SphereMesh.new()
-	berry_mesh.radial_segments = 5
-	berry_mesh.rings = 2
+	var bush_mesh = stage.NATURE_BUSH
+	var berry_mesh = stage.NATURE_BERRY
 	stage._detail_batch("VillageForestBushes", bush_mesh, bush_poses, bush_colors)
 	stage._detail_batch("VillageForestBerryBushes", bush_mesh, berry_bush_poses, berry_bush_colors)
 	stage._detail_batch("VillageForestBerries", berry_mesh, berry_poses, berry_colors)
