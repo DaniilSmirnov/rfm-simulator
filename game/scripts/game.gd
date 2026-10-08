@@ -254,6 +254,7 @@ var menu_help: Label
 var mobile_ui: Control
 var mobile_safe_rect = Rect2()
 var mobile_safe_timer = 0.0
+var mobile_safe_http: HTTPRequest
 
 func enable_mobile() -> void:
 	if mobile_mode:
@@ -350,16 +351,26 @@ func fit_mobile_dialogs() -> void:
 func update_mobile_safe_area(delta: float) -> void:
 	if not mobile_mode or not OS.has_feature("web"):
 		return
+	if mobile_safe_http == null:
+		mobile_safe_http = HTTPRequest.new()
+		mobile_safe_http.accept_gzip = false
+		mobile_safe_http.timeout = 2.0
+		mobile_safe_http.body_size_limit = 1024
+		add_child(mobile_safe_http)
+		mobile_safe_http.request_completed.connect(_mobile_safe_response)
 	mobile_safe_timer -= delta
-	if mobile_safe_timer > 0.0:
+	if mobile_safe_timer > 0.0 or mobile_safe_http.get_http_client_status() != HTTPClient.STATUS_DISCONNECTED:
 		return
 	mobile_safe_timer = 0.25
-	# The minimal Web template disables eval. Access the interface directly.
-	var bridge = JavaScriptBridge.get_interface("RallyViewport")
-	if bridge == null:
+	# Like profile bootstrap, this is intercepted locally by the browser shell.
+	# The minimal engine has neither eval nor JavaScript object interfaces.
+	mobile_safe_http.request(room.server + "/__rally_viewport")
+
+func _mobile_safe_response(result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
+	if result != HTTPRequest.RESULT_SUCCESS or code != 200:
 		return
-	var data = bridge.snapshot()
-	if data == null:
+	var data = JSON.parse_string(body.get_string_from_utf8())
+	if not data is Dictionary or not data.has_all(["width", "height", "left", "right", "top", "bottom"]):
 		return
 	var extent = get_viewport().get_visible_rect().size
 	var ratio = extent / Vector2(maxf(float(data.width), 1.0), maxf(float(data.height), 1.0))

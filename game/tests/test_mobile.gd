@@ -42,7 +42,11 @@ func run() -> void:
 	check(not c.buttons.any(func(b): return b.action == "table"), "equipment is hidden behind the compact drawer")
 	check(game.mobile_mode and Input.mouse_mode == Input.MOUSE_MODE_VISIBLE, "mobile starts without pointer capture")
 	var safe = Rect2(54, 120, 852, 390)
-	game.apply_mobile_safe_rect(safe)
+	var viewport_size = game.get_viewport().get_visible_rect().size
+	var safe_payload = {"width": viewport_size.x, "height": viewport_size.y, "left": 54, "right": viewport_size.x - 906, "top": 120, "bottom": viewport_size.y - 510}
+	game._mobile_safe_response(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), JSON.stringify(safe_payload).to_utf8_buffer())
+	game._mobile_safe_response(HTTPRequest.RESULT_SUCCESS, 503, PackedStringArray(), "unavailable".to_utf8_buffer())
+	check(game.mobile_safe_rect == safe, "browser viewport response maps to UI and failed responses preserve layout")
 	c._process(0)
 	await process_frame
 	for b in c.buttons:
