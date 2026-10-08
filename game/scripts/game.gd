@@ -23,6 +23,9 @@ const MiniMap = preload("res://scripts/minimap.gd")
 var stage: RallyStage
 var menu_content: VBoxContainer
 var platform_service: Node
+var invite_button: Button
+var invite_status: Label
+var invite_after_room_create = false
 var selected_stage = 0
 var selected_car = 0
 # Headless fixtures may construct synchronously; real clients enter a lightweight menu.
@@ -470,6 +473,14 @@ func _ready() -> void:
 		car_choice.select(selected_car)
 		stage_choice.select(selected_stage)
 		lobby_ui.refresh()
+		_update_invite_button()
+		if platform_service.invite_room != "":
+			call_deferred("_join_invited_room")
+	)
+	platform_service.invite_feedback.connect(func(message: String):
+		invite_status.text = message
+		invite_status.visible = not message.is_empty() and playing and platform_service.profile.get("platform", "") == "vk"
+		invite_button.disabled = false
 	)
 	platform_service.purchase_changed.connect(func(): lobby_ui.refresh())
 	platform_service.failed.connect(func(message): push_error(message))
@@ -727,6 +738,19 @@ func _build_ui() -> void:
 	start_button.pressed.connect(_menu_action)
 	mv.add_child(start_button)
 	start_button.hide()
+	invite_button = Button.new()
+	invite_button.text = "ПРИГЛАСИТЬ ДРУЗЕЙ"
+	invite_button.name = "VKInviteFriends"
+	invite_button.custom_minimum_size.y = 48
+	invite_button.add_theme_font_size_override("font_size", 19)
+	invite_button.add_theme_stylebox_override("normal", _panel(Color("38516a")))
+	invite_button.add_theme_stylebox_override("hover", _panel(Color("4c6888")))
+	invite_button.pressed.connect(_invite_friends)
+	mv.add_child(invite_button)
+	invite_button.hide()
+	invite_status = _label(mv, "", 14, Color("dce7ee"))
+	invite_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	invite_status.hide()
 	lobby_ui.finish(mv)
 
 func _setup_audio() -> void:
@@ -789,6 +813,7 @@ func start_game() -> void:
 	if not world_ready:
 		await prepare_world()
 	playing = true
+	_update_invite_button()
 	soundscape.repair()
 	course.apply_snapshot({})
 	racing = false
@@ -820,6 +845,42 @@ func _accept_stage_safety_gate() -> void:
 	safety_gate = null
 	paused = false
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if mobile_mode or room.connected and OS.has_feature("web") else Input.MOUSE_MODE_CAPTURED
+
+func _update_invite_button() -> void:
+	if invite_button == null:
+		return
+	invite_button.visible = playing and not dead and not finished and platform_service != null and platform_service.profile.get("platform", "") == "vk"
+	if invite_status != null:
+		invite_status.visible = invite_button.visible and not invite_status.text.is_empty()
+
+func _join_invited_room() -> void:
+	if platform_service == null or not playing and (room.connected or room.busy or loading_world):
+		return
+	if playing or room.connected or room.busy or loading_world:
+		return
+	var requested: String = platform_service.invite_room
+	platform_service.invite_room = ""
+	if requested.length() != 6 or not requested.is_valid_hex_number():
+		return
+	room.id_input.text = requested
+	room.connect_room(requested)
+
+func _invite_friends() -> void:
+	if platform_service == null or platform_service.profile.get("platform", "") != "vk" or not playing:
+		return
+	if platform_service.invite_busy or room.busy or loading_world:
+		return
+	if not room.connected:
+		# A solo stage needs a hosted room before it can be invited to.
+		invite_after_room_create = true
+		invite_status.text = "Создаём комнату на текущем спецучастке…"
+		invite_status.show()
+		room.connect_room("")
+		if not room.busy:
+			invite_after_room_create = false
+		return
+	invite_button.disabled = true
+	platform_service.invite_friend(room.room_id)
 
 func _menu_action() -> void:
 	if (dead or finished) and room.connected:
@@ -869,6 +930,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		menu_text.text = "Пауза. Ралли, мангал и таймеры остановлены.\n\nHome — вернуть машину на дорогу.\nF8 / F9 — показать застревание / вылет.\n\nПродолжить — кнопкой или Esc."
 		start_button.text = "ПРОДОЛЖИТЬ"
 		menu_text.text = "Выезд приостановлен. Продолжить или вернуться в меню." if not room.connected or room.is_host else "Твоя пауза. Остальные игроки продолжают выезд."
+		_update_invite_button()
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if paused or mobile_mode else Input.MOUSE_MODE_CAPTURED
 		return
 	if not playing or paused or dead or finished:
@@ -2081,6 +2143,7 @@ func _show_result(title: String, body: String) -> void:
 	_cancel_drink()
 	_cancel_eat()
 	menu.show()
+	_update_invite_button()
 	menu_title.text = title
 	menu_text.text = body
 	start_button.text = "НОВЫЙ ВЫЕЗД"
