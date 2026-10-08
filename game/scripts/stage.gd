@@ -31,7 +31,10 @@ var indexed_rock_count = -1
 const ROCK_CELL_SIZE = 16.0
 var trees: Array[Vector3] = []
 var forest_data: Array[Dictionary] = []
-var forest_layers: Array[MultiMesh] = []
+var forest_layers: Array[Array] = []
+var forest_chunk_slots: Array[Vector2i] = []
+var forest_chunk_centers: Array[Vector3] = []
+const FOREST_RENDER_CELL = 64.0
 var tree_cells: Dictionary = {}
 var indexed_tree_count = -1
 var fallen: Dictionary = {}
@@ -138,6 +141,8 @@ func ground(pos: Vector3) -> float:
 		height = lerpf(clearing.y, height, smoothstep(7.0 if winter else 5.5, 16.0 if winter else 11.5, d))
 	if not winter:
 		for trail in trails:
+			if not _trail_near(pos, trail, float(trail.width)):
+				continue
 			var trail_sample = _trail_sample(pos, trail)
 			if trail_sample.distance < trail.width:
 				var blend = 1.0 - smoothstep(trail.width * 0.55, trail.width, trail_sample.distance)
@@ -163,9 +168,23 @@ func _trail_sample(pos: Vector3, trail: Dictionary) -> Dictionary:
 			nearest_height = lerpf(a.y, b.y, ratio)
 	return {"distance": nearest_distance, "height": nearest_height}
 
-func trail_distance(pos: Vector3) -> float:
-	var distance = INF
+func _trail_near(pos: Vector3, trail: Dictionary, padding: float) -> bool:
+	if not trail.has("bounds"):
+		var low = flat(trail.points[0])
+		var high = low
+		for point in trail.points:
+			low = low.min(flat(point))
+			high = high.max(flat(point))
+		trail.bounds = Rect2(low, high - low)
+	var bounds: Rect2 = trail.bounds
+	var p = flat(pos)
+	return p.distance_squared_to(p.clamp(bounds.position, bounds.end)) <= padding * padding
+
+func trail_distance(pos: Vector3, cutoff: float = INF) -> float:
+	var distance = cutoff
 	for trail in trails:
+		if cutoff != INF and not _trail_near(pos, trail, cutoff):
+			continue
 		distance = minf(distance, float(_trail_sample(pos, trail).distance))
 	return distance
 
@@ -394,26 +413,45 @@ func shared_stone_color(lightness: float = 0.0) -> Color:
 	return Color("7e806e").lightened(clampf(lightness, -0.10, 0.12))
 
 func _build_forest(forest: Array[Dictionary]) -> void:
+	var groups: Array[Array] = []
+	var cells: Dictionary = {}
+	forest_chunk_slots.resize(forest.size())
+	for index in range(forest.size()):
+		var p: Vector3 = forest[index].position
+		var cell = Vector2i(floori(p.x / FOREST_RENDER_CELL), floori(p.z / FOREST_RENDER_CELL))
+		if not cells.has(cell):
+			cells[cell] = groups.size()
+			groups.append([])
+			forest_chunk_centers.append(Vector3((cell.x + 0.5) * FOREST_RENDER_CELL, 0, (cell.y + 0.5) * FOREST_RENDER_CELL))
+		var chunk: int = cells[cell]
+		forest_chunk_slots[index] = Vector2i(chunk, groups[chunk].size())
+		groups[chunk].append(index)
 	for layer in range(4):
 		var mesh = shared_tree_mesh(layer)
 		var mat = RallyProps.material(Color.WHITE)
 		mat.vertex_color_use_as_albedo = true
 		mat.vertex_color_is_srgb = true
 		mesh.material = mat
-		var mm = MultiMesh.new()
-		mm.transform_format = MultiMesh.TRANSFORM_3D
-		mm.use_colors = true
-		mm.mesh = mesh
-		mm.instance_count = forest.size()
-		forest_layers.append(mm)
-		for i in range(forest.size()):
-			var tree_data = forest[i]
-			mm.set_instance_transform(i, shared_tree_pose(tree_data.position, float(tree_data.height), layer))
-			mm.set_instance_color(i, shared_tree_color(layer, float(tree_data.shade), winter))
-		var instance = MultiMeshInstance3D.new()
-		instance.name = "ForestLayer%d" % layer
-		instance.multimesh = mm
-		add_child(instance)
+		var chunks: Array = []
+		for chunk in range(groups.size()):
+			var mm = MultiMesh.new()
+			mm.transform_format = MultiMesh.TRANSFORM_3D
+			mm.use_colors = true
+			mm.mesh = mesh
+			mm.instance_count = groups[chunk].size()
+			chunks.append(mm)
+			for local in range(groups[chunk].size()):
+				var tree_data: Dictionary = forest[groups[chunk][local]]
+				var pose = shared_tree_pose(tree_data.position, float(tree_data.height), layer)
+				pose.origin -= forest_chunk_centers[chunk]
+				mm.set_instance_transform(local, pose)
+				mm.set_instance_color(local, shared_tree_color(layer, float(tree_data.shade), winter))
+			var instance = MultiMeshInstance3D.new()
+			instance.name = "ForestLayer%d_Chunk%d" % [layer, chunk]
+			instance.position = forest_chunk_centers[chunk]
+			instance.multimesh = mm
+			add_child(instance)
+		forest_layers.append(chunks)
 
 func _rebuild_tree_index() -> void:
 	tree_cells.clear()
@@ -453,7 +491,8 @@ func update_fallen(delta: float) -> void:
 			var radius = 0.2 if layer == 0 else h * (0.28 - (layer - 1) * 0.055)
 			var height = h * (0.64 if layer == 0 else 0.49)
 			var y = h * (0.32 if layer == 0 else 0.47 + (layer - 1) * 0.18)
-			forest_layers[layer].set_instance_transform(index, Transform3D(basis * Basis.from_scale(Vector3(radius, height, radius)), trees[index] + Vector3(0, 0.2, 0) + basis * Vector3(0, y, 0)))
+			var slot: Vector2i = forest_chunk_slots[index]
+			forest_layers[layer][slot.x].set_instance_transform(slot.y, Transform3D(basis * Basis.from_scale(Vector3(radius, height, radius)), trees[index] - forest_chunk_centers[slot.x] + Vector3(0, 0.2, 0) + basis * Vector3(0, y, 0)))
 
 func tree_snapshot() -> Array:
 	var result = []
@@ -604,7 +643,7 @@ func rock_hit(start: Vector3, end: Vector3, radius: float, allow_escape: bool = 
 func forest_relief(pos: Vector3, distance: float) -> float:
 	var hills = (sin(pos.x * 0.043 + pos.z * 0.017) * 1.5 + sin(pos.z * 0.063 - pos.x * 0.031) * 0.85 + sin(pos.x * 0.115) * sin(pos.z * 0.087) * 0.55) * smoothstep(10.0, 24.0, distance)
 	var ditch = (1.0 - smoothstep(0.45, 1.9, absf(distance - 6.4))) * 0.85
-	ditch *= smoothstep(2.2, 4.0, trail_distance(pos))
+	ditch *= smoothstep(2.2, 4.0, trail_distance(pos, 4.0))
 	return hills - ditch
 
 func woodland_spot(pos: Vector3, padding: float = 0.0) -> bool:
