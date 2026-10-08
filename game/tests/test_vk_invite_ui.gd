@@ -40,6 +40,27 @@ func run() -> void:
 	game.platform_service.invite_room = "BAD!!"
 	game._join_invited_room()
 	check(not game.room.connected and not game.room.busy and game.platform_service.invite_room.is_empty(), "invalid launch request is ignored before room network call")
+	var chair = Node3D.new()
+	chair.set_meta("gear_owner", "local")
+	game.add_child(chair)
+	game.personal_chairs["local"] = chair
+	var flag = Node3D.new()
+	flag.set_meta("gear_owner", "local")
+	game.add_child(flag)
+	game.personal_flags["local"] = [flag]
+	game.foraging.inventories["local"] = {"berries": 3, "mushrooms": 1, "mushroom_types": ["edible"]}
+	game.foraging.effects["local"] = {"serial": 1}
+	game.cargo.held["local"] = {"owner": "local", "kind": "table", "returning": false}
+	game.cargo.opened["local"] = true
+	game.room.player_id = "vk_host_123"
+	game.room._adopt_local_host_state()
+	check(game.personal_chairs.has("vk_host_123") and not game.personal_chairs.has("local"), "solo chair ownership moves to the room host")
+	check(game.personal_flags.has("vk_host_123") and not game.personal_flags.has("local"), "solo flags retain ownership")
+	check(chair.get_meta("gear_owner", "") == "vk_host_123" and flag.get_meta("gear_owner", "") == "vk_host_123", "deployed objects retain their new network owner")
+	check(game.foraging.inventories.has("vk_host_123") and not game.foraging.inventories.has("local"), "foraged mushrooms and berries are preserved")
+	check(game.foraging.effects.has("vk_host_123") and not game.foraging.effects.has("local"), "active mushroom effects preserve player identity")
+	check(game.cargo.held.has("vk_host_123") and not game.cargo.held.has("local") and game.cargo.held["vk_host_123"].owner == "vk_host_123", "carried cargo stays with its owner")
+	check(game.cargo.opened.has("vk_host_123") and not game.cargo.opened.has("local"), "existing trunk state follows host")
 	game.queue_free()
 	await process_frame
 	print("VK INVITE UI RESULT: %d failures" % failures)
