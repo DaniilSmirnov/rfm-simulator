@@ -89,6 +89,7 @@ func run() -> void:
 	game.apply_mobile_safe_rect(safe)
 	game.fit_mobile_dialogs()
 	await process_frame
+	check(game.lobby_ui.background.get_global_rect().size.distance_to(game.get_viewport().get_visible_rect().size) < 1, "backdrop covers full viewport outside safe HUD rectangle")
 	check(safe.encloses(game.menu.get_global_rect()), "entire mobile main menu fits VK safe area without scrolling")
 	for control in [game.room.create_button, game.room.join_button, game.lobby_ui.purchase_button, game.lobby_ui.car_purchase_button, game.lobby_ui.check_purchase, game.lobby_ui.purchase_status]:
 		check(game.menu.get_global_rect().encloses(control.get_global_rect()), "all menu actions and purchase status stay inside panel")

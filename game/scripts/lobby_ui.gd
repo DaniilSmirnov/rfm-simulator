@@ -34,8 +34,13 @@ func finish(parent: Control) -> void:
 	background.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	background.modulate = Color(0.8, 0.8, 0.8, 1)
 	var ui = game.menu.get_parent()
-	ui.add_child(background)
-	ui.move_child(background, 0)
+	# Backdrop fills the viewport independently of the inset HUD root.
+	var backdrop_root = Control.new()
+	backdrop_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ui.get_parent().add_child(backdrop_root)
+	ui.get_parent().move_child(backdrop_root, 0)
+	backdrop_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	backdrop_root.add_child(background)
 	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	return_button = Button.new()
 	return_button.text = "В ГЛАВНОЕ МЕНЮ"
