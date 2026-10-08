@@ -13,9 +13,16 @@
   const roomFromLaunch = raw => {
     const query = typeof raw === 'string' ? new URLSearchParams(raw) : raw || {};
     const read = key => query instanceof URLSearchParams ? query.get(key) : query[key];
-    return roomFromKey(read('request_key')) || roomFromKey(read('vk_request_key')) || roomFromKey(read('requestKey'));
+    return roomFromKey(read('request_key')) || roomFromKey(read('vk_request_key')) ||
+      roomFromKey(read('requestKey')) || roomFromKey(read('vk_ref'));
   };
-  let inviteRoom = roomFromLaunch(location.search);
+  // VK can launch the application from a requestKey or an app URL fragment.
+  // The fragment is a room hint only; it is NOT used to authenticate the user.
+  const roomFromHash = hash => {
+    try { return roomFromKey(decodeURIComponent((hash || '').replace(/^#/, ''))); }
+    catch { return ''; }
+  };
+  let inviteRoom = roomFromLaunch(location.search) || roomFromHash(location.hash);
 
   // Preserve the real network transport, before the browser-local handler wraps it.
   const networkFetch = window.fetch.bind(window);
@@ -112,19 +119,117 @@
       return {profile,entitlements,catalog,status:'pending'};
     } finally { purchasing = false; }
   };
+  let inviteDialog = null;
   const inviteFriend = async rawRoom => {
     await ready;
     const id = roomId(rawRoom);
     if (!id) throw new Error('Некорректный ID комнаты.');
-    // The user explicitly chooses one VK friend; do not send bulk/spam requests.
-    const selection = await vkBridge.send('VKWebAppGetFriends', {multi:false});
-    const uid = Number(selection?.users?.[0]?.id);
-    if (!Number.isSafeInteger(uid) || uid <= 0) return {status:'cancel'};
-    const request = await vkBridge.send('VKWebAppShowRequestBox', {
-      uid, message:'Заходи смотреть ралли со мной в Rally Fans Simulator!',
-      requestKey:keyForRoom(id),
+    if (typeof document === 'undefined' || !document.body) {
+      throw new Error('Окно VK пока недоступно. Повторите попытку.');
+    }
+    // Godot sends UI actions through asynchronous HTTP. Native VK dialogs can
+    // require a browser user gesture, which is lost after the HTTP round trip.
+    // Present an actual clickable DOM control and call Bridge from its click.
+    if (inviteDialog?.parentNode) inviteDialog.remove();
+    const link = 'https://vk.com/app54809523#' + keyForRoom(id);
+    const overlay = document.createElement('div');
+    inviteDialog = overlay;
+    overlay.id = 'rfm-vk-invite-dialog';
+    Object.assign(overlay.style, {
+      position:'fixed',inset:'0',zIndex:'2147483000',background:'rgba(5,12,16,.78)',
+      display:'flex',alignItems:'center',justifyContent:'center',padding:'18px',
+      boxSizing:'border-box',fontFamily:'system-ui, sans-serif',color:'#edf3f7',
     });
-    return {status:request?.success === true ? 'sent' : 'cancel'};
+    const panel = document.createElement('div');
+    Object.assign(panel.style, {
+      background:'#23342b',border:'1px solid #526657',borderRadius:'18px',
+      width:'min(100%, 440px)',maxHeight:'90vh',overflowY:'auto',
+      padding:'22px',boxSizing:'border-box',display:'flex',flexDirection:'column',gap:'12px',
+      boxShadow:'0 12px 42px rgba(0,0,0,.4)',
+    });
+    const label = (tag, text, size) => {
+      const el = document.createElement(tag);
+      el.textContent = text;
+      el.style.fontSize = size;
+      el.style.margin = '0';
+      return el;
+    };
+    const title = label('h2','Пригласить друзей','22px');
+    const hint = label('p','Комната '+id+'. Приглашение откроет другу эту же гонку.','15px');
+    const status = label('p','Выбери способ приглашения.','14px');
+    status.setAttribute('role','status');
+    status.setAttribute('aria-live','polite');
+    status.style.color = '#efc78e';
+    const urlInput = document.createElement('input');
+    urlInput.type = 'text';
+    urlInput.readOnly = true;
+    urlInput.value = link;
+    Object.assign(urlInput.style,{width:'100%',boxSizing:'border-box',padding:'10px',
+      color:'#ffffff',background:'#15251f',border:'1px solid #526657',borderRadius:'8px'});
+    const button = (text, handler, primary = false) => {
+      const el = document.createElement('button');
+      el.type = 'button';
+      el.textContent = text;
+      Object.assign(el.style,{
+        padding:'12px',borderRadius:'10px',border:'0',cursor:'pointer',fontSize:'16px',
+        background:primary?'#e3b16b':'#38516a',color:primary?'#23342b':'#ffffff',
+      });
+      el.addEventListener('click',handler);
+      return el;
+    };
+    const vkError = (label, error) => {
+      const reason = typeof error?.error_type === 'string' ? error.error_type :
+        typeof error?.message === 'string' ? error.message : 'недоступно в этом VK-клиенте';
+      status.textContent = label+': '+reason+'. Используй ссылку ниже.';
+    };
+    const pickFriend = button('Выбрать друга в VK',() => {
+      status.textContent = 'Открываем друзей VK…';
+      // Directly inside the browser's user gesture, without fetch()/await.
+      vkBridge.send('VKWebAppGetFriends',{multi:false}).then(selection => {
+        const uid = Number(selection?.users?.[0]?.id);
+        if (!Number.isSafeInteger(uid) || uid <= 0) {
+          status.textContent = 'Друг не выбран. Можно попробовать снова или отправить ссылку.';
+          return;
+        }
+        status.textContent = 'Подтверди отправку приглашения в VK…';
+        return vkBridge.send('VKWebAppShowRequestBox',{
+          uid,message:'Заходи смотреть ралли со мной в Rally Fans Simulator!',
+          requestKey:keyForRoom(id),
+        }).then(result => {
+          status.textContent = result?.success === true ?
+            'Приглашение отправлено! Друг войдёт в комнату '+id+'.' :
+            'Отправка не подтверждена. Попробуй снова или поделись ссылкой.';
+        });
+      }).catch(error=>vkError('VK не открыл приглашение',error));
+    },true);
+    const share = button('Поделиться ссылкой через VK',() => {
+      status.textContent = 'Открываем отправку ссылки…';
+      vkBridge.send('VKWebAppShare',{link}).then(() => {
+        status.textContent = 'Проверь отправляемую ссылку: она должна содержать '+id+
+          '. Некоторые версии VK игнорируют ссылку — в таком случае скопируй её ниже.';
+      }).catch(error=>vkError('VK не открыл отправку ссылки',error));
+    });
+    const copy = button('Скопировать ссылку на комнату',async()=>{
+      try {
+        if (navigator?.clipboard?.writeText) {
+          await navigator.clipboard.writeText(link);
+        } else {
+          urlInput.focus();
+          urlInput.select();
+          if (!document.execCommand?.('copy')) throw new Error('Clipboard unavailable');
+        }
+        status.textContent = 'Ссылка скопирована. Отправь её другу в сообщении VK.';
+      } catch {
+        urlInput.focus();
+        urlInput.select();
+        status.textContent = 'Скопируй выделенную ссылку вручную и отправь другу.';
+      }
+    });
+    const close = button('Закрыть',()=>{overlay.remove(); if(inviteDialog===overlay)inviteDialog=null;});
+    panel.append(title,hint,pickFriend,share,urlInput,copy,status,close);
+    overlay.append(panel);
+    document.body.append(overlay);
+    return {status:'opened'};
   };
   window.RallyPlatform = {
     target:'vk',ready:() => ready, buy, refreshStore, inviteFriend,
