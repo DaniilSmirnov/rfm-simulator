@@ -524,6 +524,11 @@ static func player_car(variant: int = 0) -> Node3D:
 	variant = posmod(variant, PLAYER_MODELS.size())
 	if variant == 0:
 		return load("res://scripts/granta_model.gd").build()
+	if variant == 2:
+		var imported = load("res://scripts/niva_asset.gd").build()
+		if imported != null:
+			return imported
+		# Preserve a usable car while an asset import is incomplete.
 	if variant == 8:
 		return player_car_camping_hatchback()
 	if variant == 9:

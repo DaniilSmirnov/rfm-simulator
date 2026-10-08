@@ -1,0 +1,137 @@
+# Unbranded flat colors, Godot-compatible Wavefront MTL
+newmtl body
+Kd 0.14000 0.21000 0.12000
+Ka 0.0 0.0 0.0
+Ks 0.05 0.05 0.05
+illum 2
+
+newmtl glass
+Kd 0.07000 0.09500 0.11200
+Ka 0.0 0.0 0.0
+Ks 0.05 0.05 0.05
+illum 2
+
+newmtl trim
+Kd 0.14000 0.17000 0.17000
+Ka 0.0 0.0 0.0
+Ks 0.05 0.05 0.05
+illum 2
+
+newmtl rubber
+Kd 0.09000 0.10000 0.10000
+Ka 0.0 0.0 0.0
+Ks 0.05 0.05 0.05
+illum 2
+
+newmtl metal
+Kd 0.48000 0.51000 0.48000
+Ka 0.0 0.0 0.0
+Ks 0.05 0.05 0.05
+illum 2
+
+newmtl grille
+Kd 0.05300 0.06600 0.06700
+Ka 0.0 0.0 0.0
+Ks 0.05 0.05 0.05
+illum 2
+
+newmtl grille_bar
+Kd 0.18000 0.20000 0.20000
+Ka 0.0 0.0 0.0
+Ks 0.05 0.05 0.05
+illum 2
+
+newmtl lamp_socket
+Kd 0.02400 0.02600 0.02600
+Ka 0.0 0.0 0.0
+Ks 0.05 0.05 0.05
+illum 2
+
+newmtl headlight_rims
+Kd 0.34000 0.36000 0.36000
+Ka 0.0 0.0 0.0
+Ks 0.05 0.05 0.05
+illum 2
+
+newmtl headlights
+Kd 0.83000 0.87000 0.84000
+Ka 0.0 0.0 0.0
+Ks 0.05 0.05 0.05
+illum 2
+
+newmtl lens_glint
+Kd 0.96000 0.97000 0.92000
+Ka 0.0 0.0 0.0
+Ks 0.05 0.05 0.05
+illum 2
+
+newmtl indicator_bezel
+Kd 0.10000 0.11000 0.11000
+Ka 0.0 0.0 0.0
+Ks 0.05 0.05 0.05
+illum 2
+
+newmtl indicator_lens
+Kd 0.90000 0.47000 0.05500
+Ka 0.0 0.0 0.0
+Ks 0.05 0.05 0.05
+illum 2
+
+newmtl indicator_reflector
+Kd 0.98000 0.69000 0.21000
+Ka 0.0 0.0 0.0
+Ks 0.05 0.05 0.05
+illum 2
+
+newmtl rear_lamps
+Kd 0.58000 0.09500 0.11000
+Ka 0.0 0.0 0.0
+Ks 0.05 0.05 0.05
+illum 2
+
+newmtl reverse_lamps
+Kd 0.83000 0.83000 0.75000
+Ka 0.0 0.0 0.0
+Ks 0.05 0.05 0.05
+illum 2
+
+newmtl rear_turn_lamps
+Kd 0.81000 0.37000 0.05500
+Ka 0.0 0.0 0.0
+Ks 0.05 0.05 0.05
+illum 2
+
+
+
+# Solid windows and inner shadow: no alpha textures or blending.
+
+# Solid windows and inner shadow: no alpha textures or blending.
+
+# Solid windows and inner shadow: no alpha textures or blending.
+newmtl cabin_shadow
+Kd 0.02300 0.03000 0.03900
+Ka 0.0 0.0 0.0
+Ks 0.00 0.00 0.00
+d 1.0
+illum 2
+
+newmtl opaque_glass_front
+Kd 0.11800 0.17700 0.20700
+Ka 0.0 0.0 0.0
+Ks 0.04 0.04 0.04
+d 1.0
+illum 2
+
+newmtl opaque_glass_side
+Kd 0.10400 0.15700 0.18600
+Ka 0.0 0.0 0.0
+Ks 0.04 0.04 0.04
+d 1.0
+illum 2
+
+newmtl opaque_glass_rear
+Kd 0.09000 0.13900 0.17100
+Ka 0.0 0.0 0.0
+Ks 0.03 0.03 0.03
+d 1.0
+illum 2
