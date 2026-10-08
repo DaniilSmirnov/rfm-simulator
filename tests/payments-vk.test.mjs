@@ -117,7 +117,7 @@ test('VK reported get_item_test payload succeeds at the Worker callback without 
 });
 test('unsupported signed callback reports actual type and deployment marker without interpreting live as test',async()=>{
  const {env}=setup();
- for(const type of ['get_item','order_status_change','get_item_test_test','test_get_item','unrecognized']) {
+ for(const type of ['order_status_change','get_item_test_test','test_get_item','unrecognized']) {
   const response=await worker.fetch(new Request('https://game.test/api/vk/payments/callback',{method:'POST',body:signedCallback({notification_type:type,item:'stage_02'})}),env);
   const body=await response.json();assert.equal(body.error.error_code,20);assert.equal(body.error.critical,true);
   assert.ok(body.error.error_msg.includes('notification_type='+JSON.stringify(type)));
@@ -126,3 +126,19 @@ test('unsupported signed callback reports actual type and deployment marker with
   assert.equal(response.headers.get('X-Rally-Payments-Handler'),PAYMENT_HANDLER_VERSION);
  }
 });
+
+ test('signed get_item metadata supports the reported mismatch but never grants or enables live orders',async()=>{
+  const {env,data}=setup();env.VK_PAYMENTS_TEST_USERS='*';
+  const fields={app_id:'54809523',item:'stage_02',lang:'ru_RU',notification_type:'get_item',order_id:'2366806',receiver_id:'87478742',user_id:'87478742'};
+  const callback=raw=>worker.fetch(new Request('https://game.test/api/vk/payments/callback',{method:'POST',body:raw}),env);
+  const response=await callback(signedCallback(fields));
+  assert.deepEqual(await response.json(),{response:{item_id:2,title:'Зимний Турини (тест)',photo_url:'',price:1}});
+  assert.equal(data.size,0);
+  const invalid=[signedCallback(fields,'wrong'),signedCallback({...fields,app_id:'9'}),signedCallback({...fields,item:'car_04'}),signedCallback({...fields,receiver_id:'43'}),signedCallback({...order,user_id:fields.user_id,notification_type:'order_status_change'})];
+  for(const raw of invalid) assert.ok((await (await callback(raw)).json()).error);
+  for(const mode of ['disabled','production']) await assert.rejects(paymentCallback(signedCallback(fields),{...env,VK_PAYMENTS_MODE:mode}));
+  await assert.rejects(paymentCallback(signedCallback(fields),{...env,VK_PAYMENTS_TEST_USERS:'42'}));
+  const tampered=signedCallback({...fields,notification_type:'get_item_test'}).replace('notification_type=get_item_test','notification_type=get_item');
+  assert.equal((await (await callback(tampered)).json()).error.error_code,10);
+  assert.equal(data.size,0);
+ });
