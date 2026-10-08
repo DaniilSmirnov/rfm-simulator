@@ -14,11 +14,18 @@ var gear_rect = Rect2()
 var button_styles: Array[StyleBoxFlat] = []
 var stick_center = Vector2.ZERO
 const STICK_RADIUS = 62.0
+const LOOK_RADIUS = 44.0
+var look_center = Vector2.ZERO
+var look = Vector2.ZERO
+var icons: Dictionary = {}
+const ICON_NAMES = {"forward": "gas", "brake": "brake", "back": "reverse", "interact": "hand", "sprint": "run", "jump": "jump", "map": "map", "pause_demo": "pause", "gear": "bag", "recover": "recover", "table": "table", "chairs": "chair", "grill": "grill", "firewood": "wood", "cauldron": "pot", "flag": "flag", "eat_berries": "berries", "tow": "tow", "placement_confirm": "check", "placement_rotate": "rotate", "placement_cancel": "cancel"}
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	resized.connect(reset_input)
+	for name in ICON_NAMES.values() + ["door", "eye"]:
+		icons[name] = load("res://textures/ui/mobile/" + name + ".svg")
 	for color in [Color("22342bd9"), Color("dfa963f2"), Color("dfb270e6")]:
 		var style = StyleBoxFlat.new()
 		style.bg_color = color
@@ -42,6 +49,9 @@ func _process(_delta: float) -> void:
 	last_size = size
 	_layout()
 	game.mobile_sidebar.visible = active() and map_open
+	if active() and landscape() and not world_blocked() and not map_open and not gear_open:
+		game.view_yaw -= look.x * 2.4 * _delta
+		game.view_pitch = clampf(game.view_pitch - look.y * 1.8 * _delta, -1.15, 1.1)
 	queue_redraw()
 
 func _notification(what: int) -> void:
@@ -62,6 +72,7 @@ func _layout() -> void:
 		stick_center = Vector2(edge + 84, size.y - edge - 80)
 	if not active() or not landscape():
 		return
+	look_center = Vector2(size.x - edge - 48, size.y - edge - (208 if game.in_car else 238))
 	var primary = Vector2(size.x - edge - 120, size.y - edge - 136)
 	var gear: Array[Array] = []
 	if not world_blocked():
@@ -71,7 +82,7 @@ func _layout() -> void:
 				add_button(actions[i][0], actions[i][1], false, Rect2(Vector2(size.x / 2 - 158 + i * 108, size.y - edge - 64), Vector2(100, 64)))
 		elif game.in_car:
 			# Two large pedals under the right thumb; reverse is a separate hold.
-			add_button("Выйти", "interact", false, Rect2(Vector2(size.x - edge - 88, size.y - edge - 252), Vector2(88, 64)))
+			add_button("Выйти", "interact", false, Rect2(Vector2(size.x - edge - 184, size.y - edge - 252), Vector2(88, 64)))
 			add_button("Назад", "back", true, Rect2(Vector2(size.x - edge - 184, size.y - edge - 180), Vector2(88, 56)))
 			add_button("Тормоз", "brake", true, Rect2(Vector2(size.x - edge - 184, size.y - edge - 112), Vector2(88, 112)))
 			add_button("Газ", "forward", true, Rect2(Vector2(size.x - edge - 88, size.y - edge - 112), Vector2(88, 112)))
@@ -166,10 +177,11 @@ func touch_begin(index: int, pos: Vector2) -> void:
 			stick_center = Vector2(clampf(pos.x, STICK_RADIUS + 24, size.x * 0.5 - STICK_RADIUS), clampf(pos.y, size.y * 0.28 + STICK_RADIUS, size.y - STICK_RADIUS - 24))
 		fingers[index] = {"kind": "stick"}
 		_move_stick(pos)
-	elif pos.x >= size.x * 0.5 and not _has_role("look"):
+	elif not map_open and pos.distance_to(look_center) <= LOOK_RADIUS and not _has_role("look"):
 		fingers[index] = {"kind": "look"}
+		_move_look(pos)
 
-func touch_drag(index: int, pos: Vector2, relative: Vector2) -> void:
+func touch_drag(index: int, pos: Vector2, _relative: Vector2) -> void:
 	if not active() or not landscape() or world_blocked():
 		reset_input()
 		return
@@ -179,8 +191,7 @@ func touch_drag(index: int, pos: Vector2, relative: Vector2) -> void:
 	if finger.kind == "stick":
 		_move_stick(pos)
 	elif finger.kind == "look":
-		game.view_yaw -= relative.x / maxf(size.x, 1) * 5.0
-		game.view_pitch = clampf(game.view_pitch - relative.y / maxf(size.y, 480) * 3.0, -1.15, 1.1)
+		_move_look(pos)
 	elif finger.button.hold:
 		var inside: bool = finger.button.rect.has_point(pos)
 		if inside != finger.pressed:
@@ -195,6 +206,8 @@ func touch_end(index: int) -> void:
 		stick = Vector2.ZERO
 		_set_axis("left", "right", 0)
 		_set_axis("forward", "back", 0)
+	elif finger.kind == "look":
+		look = Vector2.ZERO
 	elif finger.kind == "button" and finger.button.hold and finger.pressed:
 		_release(finger.button.action)
 	fingers.erase(index)
@@ -204,6 +217,17 @@ func _has_role(role: String) -> bool:
 		if finger.kind == role:
 			return true
 	return false
+
+func _move_look(pos: Vector2) -> void:
+	look = ((pos - look_center) / LOOK_RADIUS).limit_length(1.0)
+	if look.length() < 0.12:
+		look = Vector2.ZERO
+
+func button_icon(button: Dictionary) -> Texture2D:
+	var name: String = ICON_NAMES.get(button.action, "hand")
+	if button.action == "interact" and (game.in_car or button.label == "В машину"):
+		name = "door"
+	return icons.get(name)
 
 func _move_stick(pos: Vector2) -> void:
 	var delta = (pos - stick_center) / STICK_RADIUS
@@ -246,6 +270,7 @@ func reset_input() -> void:
 	held.clear()
 	fingers.clear()
 	stick = Vector2.ZERO
+	look = Vector2.ZERO
 
 func _draw() -> void:
 	if not active():
@@ -265,6 +290,11 @@ func _draw() -> void:
 	draw_circle(stick_center + stick * 48, 28, Color("e3b16bdd"))
 	var text = "РУЛЬ" if game.in_car else "ИДТИ"
 	draw_string(font, stick_center + Vector2(-42, 94), text, HORIZONTAL_ALIGNMENT_CENTER, 84, 18, Color("f3e8cd"))
+	if not map_open and not gear_open and not world_blocked():
+		draw_circle(look_center, LOOK_RADIUS, Color("25352baa"))
+		draw_arc(look_center, LOOK_RADIUS, 0, TAU, 40, Color("dfb270"), 3, true)
+		draw_circle(look_center + look * 28, 22, Color("e3b16bdd"))
+		draw_texture_rect(icons["eye"], Rect2(look_center + look * 28 - Vector2(14, 14), Vector2(28, 28)), false, Color("22342b"))
 	for button in buttons:
 		var pressed = false
 		for finger in fingers.values():
@@ -274,11 +304,7 @@ func _draw() -> void:
 		var style = button_styles[1 if pressed else (2 if emphasized else 0)]
 		draw_style_box(style, button.rect)
 		var text_color = Color("22342b") if pressed or emphasized else Color("f6ead1")
-		var baseline = button.rect.size.y / 2 + 6
-		if button.action in ["forward", "brake"]:
-			baseline = button.rect.size.y - 16
-			for row in range(3):
-				var y = button.rect.position.y + 20 + row * 14
-				draw_line(Vector2(button.rect.position.x + 20, y), Vector2(button.rect.end.x - 20, y), text_color * Color(1, 1, 1, 0.55), 4, true)
-		draw_string(font, button.rect.position + Vector2(4, baseline), button.label, HORIZONTAL_ALIGNMENT_CENTER, button.rect.size.x - 8, 17, text_color)
-
+		var icon = button_icon(button)
+		if icon != null:
+			var extent = 36.0 if button.rect.size.y < 80 else 44.0
+			draw_texture_rect(icon, Rect2(button.rect.get_center() - Vector2.ONE * extent / 2, Vector2.ONE * extent), false, text_color)

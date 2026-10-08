@@ -56,6 +56,14 @@ func run() -> void:
 	check(safe.encloses(game.menu.get_global_rect()), "compact menu fits inside VK safe area")
 	check(game.mobile_top.global_position.y >= safe.position.y and game.mobile_bottom.global_position.x >= safe.position.x, "HUD respects safe area origin")
 	check(game.crosshair.get_global_rect().get_center().distance_to(game.get_viewport().get_visible_rect().size / 2) < 0.1, "aim stays at camera centre when safe area moves HUD")
+	check(safe.encloses(game.mobile_bottom.get_global_rect()), "bottom status panel fits safe area with startup message")
+	check(game.mobile_bottom.anchor_top == 1 and game.mobile_bottom.anchor_bottom == 1, "status HUD anchored at bottom")
+	check(Rect2(Vector2.ZERO, c.size).encloses(Rect2(c.look_center - Vector2.ONE * c.LOOK_RADIUS, Vector2.ONE * c.LOOK_RADIUS * 2)), "look stick fits safe area")
+	for b in c.buttons:
+		check(not b.rect.intersects(Rect2(c.look_center - Vector2.ONE * c.LOOK_RADIUS, Vector2.ONE * c.LOOK_RADIUS * 2)), "look stick does not overlap button: " + b.action)
+		check(c.button_icon(b) != null, "visible button has an icon: " + b.action)
+	c.touch_begin(40, Vector2(c.size.x * 0.6, 150))
+	check(not c.fingers.has(40), "free right-side touches do not capture camera")
 	var touch = InputEventScreenTouch.new()
 	touch.index = 21
 	touch.pressed = true
@@ -90,19 +98,23 @@ func run() -> void:
 	c.touch_begin(1, button(c, "forward"))
 	c.touch_begin(2, c.stick_center + Vector2(60, 0))
 	check(Input.is_action_pressed("forward") and Input.is_action_pressed("right"), "gas and steering support multitouch")
-	var look_point = Vector2(c.size.x * 0.6, 225)
+	var look_point = c.look_center
 	var drive_yaw = game.view_yaw
 	var drive_pitch = game.view_pitch
 	var drive_heading = game.heading
 	c.touch_begin(3, look_point)
 	c.touch_drag(3, look_point + Vector2(70, 50), Vector2(70, 50))
+	c._process(0.1)
 	check(game.view_yaw != drive_yaw and game.view_pitch != drive_pitch and game.heading == drive_heading and Input.is_action_pressed("forward") and Input.is_action_pressed("right"), "driver swipes horizontally and vertically while holding gas and steering")
-	c.touch_begin(4, look_point + Vector2(-100, 0))
+	c.touch_begin(4, look_point + Vector2(1, 0))
 	var owned_yaw = game.view_yaw
 	c.touch_drag(4, look_point, Vector2(100, 0))
 	check(game.view_yaw == owned_yaw, "another finger cannot steal the active camera gesture")
 	c.touch_end(4)
 	c.touch_end(3)
+	var stopped_yaw = game.view_yaw
+	c._process(0.1)
+	check(c.look == Vector2.ZERO and game.view_yaw == stopped_yaw, "look stick stops immediately on release")
 	check(Input.is_action_pressed("forward") and Input.is_action_pressed("right"), "releasing camera finger preserves gas and steering")
 	c.touch_end(2)
 	check(Input.is_action_pressed("forward") and not Input.is_action_pressed("right"), "releasing steering preserves held gas")
@@ -117,9 +129,10 @@ func run() -> void:
 	game.view_pitch = -0.12
 	game._update_camera(1)
 	var camera_height = game.camera.position.y
-	var left_free = Vector2(c.size.x * 0.72, 190)
+	var left_free = c.look_center
 	c.touch_begin(5, left_free)
 	c.touch_drag(5, left_free + Vector2(40, 80), Vector2(40, 80))
+	c._process(0.5)
 	game._update_camera(1)
 	check(game.camera.position.y > camera_height + 0.5 and c.fingers.get(5, {}).get("kind", "") == "look", "right-side swipe changes actual third-person camera height")
 	c.touch_end(5)
@@ -144,8 +157,9 @@ func run() -> void:
 	check(not game.in_car, "touch exit switches to walking controls")
 	c.touch_begin(1, c.stick_center + Vector2(0, -60))
 	var yaw = game.view_yaw
-	c.touch_begin(2, Vector2(c.size.x * 0.6, 225))
-	c.touch_drag(2, Vector2(c.size.x * 0.6 + 50, 225), Vector2(50, 0))
+	c.touch_begin(2, c.look_center)
+	c.touch_drag(2, c.look_center + Vector2(50, 0), Vector2(50, 0))
+	c._process(0.1)
 	check(Input.is_action_pressed("forward") and game.view_yaw != yaw, "walking and swipe look work together")
 	var crossing_yaw = game.view_yaw
 	c.touch_drag(1, Vector2(c.size.x * 0.8, c.size.y * 0.5), Vector2(20, 0))
@@ -170,7 +184,7 @@ func run() -> void:
 	c.touch_begin(8, c.stick_center)
 	c.touch_drag(8, c.stick_center + Vector2(0, -60), Vector2(0, -60))
 	c.touch_begin(9, button(c, "sprint"))
-	c.touch_begin(10, look_point)
+	c.touch_begin(10, c.look_center)
 	check(Input.is_action_pressed("forward") and Input.is_action_pressed("sprint") and c.fingers[10].kind == "look", "sprint, movement and camera accept three independent fingers")
 	c.touch_end(9)
 	check(Input.is_action_pressed("forward") and not Input.is_action_pressed("sprint") and c.fingers.has(10), "releasing sprint preserves stick and camera")

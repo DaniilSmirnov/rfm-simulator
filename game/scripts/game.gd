@@ -279,12 +279,13 @@ func enable_mobile() -> void:
 	mobile_top.get_child(0).get_child(1).hide()
 	mobile_top.position = Vector2(24, 20)
 	mobile_top.size = Vector2(360, 0)
-	mobile_bottom.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	mobile_bottom.offset_left = 36
-	mobile_bottom.offset_right = -270
-	mobile_bottom.offset_top = 92
-	mobile_bottom.offset_bottom = 148
+	mobile_bottom.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	mobile_bottom.offset_left = 200
+	mobile_bottom.offset_right = -224
+	mobile_bottom.offset_top = -148
+	mobile_bottom.offset_bottom = -24
 	info_label.add_theme_font_size_override("font_size", 16)
+	info_label.max_lines_visible = 4
 	info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hint_label.hide()
 	quest_label.hide()
