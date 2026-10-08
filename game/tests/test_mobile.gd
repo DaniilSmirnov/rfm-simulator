@@ -49,6 +49,7 @@ func run() -> void:
 	check(game.mobile_safe_rect == safe, "browser viewport response maps to UI and failed responses preserve layout")
 	c._process(0)
 	await process_frame
+	check(c.scale == Vector2.ONE and game.mobile_ui.scale == Vector2.ONE, "safe area never scales gameplay controls or HUD")
 	for b in c.buttons:
 		var screen_rect = Rect2(c.get_global_transform() * b.rect.position, b.rect.size * c.scale)
 		check(safe.encloses(screen_rect), "VK buttons stay outside shell and system edges")
@@ -60,7 +61,7 @@ func run() -> void:
 	touch.pressed = true
 	touch.position = c.get_global_transform() * button(c, "forward")
 	c._input(touch)
-	check(Input.is_action_pressed("forward"), "scaled safe-area input hits the visible pedal")
+	check(Input.is_action_pressed("forward"), "safe-area input hits the visible full-size pedal")
 	touch.index = 22
 	touch.position = Vector2(100, 20)
 	c._input(touch)
