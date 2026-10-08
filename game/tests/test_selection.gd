@@ -47,6 +47,17 @@ func run() -> void:
 		var lid = camping_lid.get_node_or_null(lid_name) if camping_lid != null else null
 		imported_hatch_complete = imported_hatch_complete and lid is MeshInstance3D and lid.mesh.get_surface_count() > 0
 	check(imported_hatch_complete, "imported hatch moves rear body, glass, trim and lamps together")
+	var rear_hatch_only = imported_hatch_complete and camping_lid.position.z >= 1.19
+	if rear_hatch_only:
+		for lid_name in imported_lid_names:
+			var lid_mesh: MeshInstance3D = camping_lid.get_node(lid_name)
+			for surface_index in range(lid_mesh.mesh.get_surface_count()):
+				var vertices: PackedVector3Array = lid_mesh.mesh.surface_get_arrays(surface_index)[Mesh.ARRAY_VERTEX]
+				for vertex in vertices:
+					if vertex.z < 1.19:
+						rear_hatch_only = false
+						break
+	check(rear_hatch_only, "2112 trunk lid contains only the rear hatch, never passenger cabin panels")
 	var boat_static = host.car.get_node_or_null("CarModelDetails/Camping_boat") != null
 	var boat_mesh = host.car.get_node_or_null("CarModelDetails/Camping_boat") as MeshInstance3D
 	check(boat_mesh != null and boat_mesh.transform.basis.z.dot(Vector3.FORWARD) > 0.99, "imported OBJ parts rotate 180 degrees to match game driving direction")
