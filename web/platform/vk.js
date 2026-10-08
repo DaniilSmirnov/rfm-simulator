@@ -18,7 +18,10 @@
   };
   // VK can launch the application from a requestKey or an app URL fragment.
   // The fragment is a room hint only; it is NOT used to authenticate the user.
-  const roomFromHash = hash => roomFromKey(decodeURIComponent((hash || '').replace(/^#/, '')));
+  const roomFromHash = hash => {
+    try { return roomFromKey(decodeURIComponent((hash || '').replace(/^#/, ''))); }
+    catch { return ''; }
+  };
   let inviteRoom = roomFromLaunch(location.search) || roomFromHash(location.hash);
 
   // Preserve the real network transport, before the browser-local handler wraps it.
