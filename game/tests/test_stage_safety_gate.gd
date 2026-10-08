@@ -23,6 +23,7 @@ func run() -> void:
 	game._show_stage_safety_gate()
 	await process_frame
 	var gate = game.safety_gate
+	await process_frame
 	check(game.paused and gate != null, "entering rally stage blocks gameplay")
 	check(gate.accept_button.disabled, "acknowledgment is initially locked")
 	check(gate.RULES.size() == 5 and gate.DANGERS.size() == 5 and gate.STAGE_GUIDES.size() == 3, "memo carries all RFM PWA rule sections")
