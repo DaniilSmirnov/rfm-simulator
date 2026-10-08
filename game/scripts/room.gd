@@ -50,10 +50,8 @@ var name_input: LineEdit
 var id_input: LineEdit
 var create_button: Button
 var join_button: Button
-var friends_button: Button
 var exit_button: Button
 var racer_targets: Dictionary = {}
-var lobby_back: Button
 var last_ui_size = Vector2.ZERO
 var last_mobile = false
 
@@ -72,45 +70,39 @@ func _ready() -> void:
 
 func _build_ui() -> void:
 	var ui = game.menu.get_parent()
-	friends_button = Button.new()
-	friends_button.text = "С ДРУЗЬЯМИ"
-	friends_button.custom_minimum_size.y = 44
-	friends_button.add_theme_font_size_override("font_size", 22)
-	game.menu.get_child(0).add_child(friends_button)
-	friends_button.pressed.connect(func():
-		game.menu.hide()
-		lobby.show()
-	)
 	lobby = PanelContainer.new()
-	ui.add_child(lobby)
-	lobby.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-	lobby.offset_left = -300
-	lobby.offset_right = 300
-	lobby.offset_top = -195
-	lobby.offset_bottom = 195
-	lobby.add_theme_stylebox_override("panel", game._panel(Color("23342bf5")))
+	game.menu.get_child(0).add_child(lobby)
 	var box = VBoxContainer.new()
 	box.add_theme_constant_override("separation", 10)
 	lobby.add_child(box)
-	game._label(box, "РАЛЛИ С ДРУЗЬЯМИ", 28)
+	game._label(box, "НАЧАТЬ ВЫЕЗД", 16, Color("dfb270"))
 	name_input = LineEdit.new()
 	name_input.placeholder_text = "Твой ник"
 	name_input.max_length = 24
 	name_input.text = "Овощ"
 	name_input.custom_minimum_size.y = 48
 	name_input.add_theme_font_size_override("font_size", 22)
-	box.add_child(name_input)
+	var fields = HBoxContainer.new()
+	fields.add_theme_constant_override("separation", 12)
+	box.add_child(fields)
+	name_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	fields.add_child(name_input)
 	id_input = LineEdit.new()
 	id_input.placeholder_text = "ID комнаты · 6 символов"
 	id_input.max_length = 6
 	id_input.custom_minimum_size.y = 48
 	id_input.add_theme_font_size_override("font_size", 22)
-	box.add_child(id_input)
+	id_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	fields.add_child(id_input)
 	var row = HBoxContainer.new()
 	row.add_theme_constant_override("separation", 12)
 	box.add_child(row)
 	create_button = Button.new()
-	create_button.text = "СОЗДАТЬ"
+	create_button.text = "СОЗДАТЬ ВЫЕЗД"
+	create_button.add_theme_color_override("font_color", Color("25352b"))
+	create_button.add_theme_stylebox_override("normal", game._panel(Color("e3b16b")))
+	create_button.add_theme_stylebox_override("hover", game._panel(Color("f1c687")))
+	create_button.add_theme_stylebox_override("pressed", game._panel(Color("c78f4a")))
 	join_button = Button.new()
 	join_button.text = "ВОЙТИ ПО ID"
 	for button in [create_button, join_button]:
@@ -127,17 +119,8 @@ func _build_ui() -> void:
 	)
 	lobby_status = game._label(box, "До 8 игроков. Общий лагерь и ралли.\nСоздатель должен оставаться в комнате.", 18)
 	lobby_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	var back = Button.new()
-	lobby_back = back
-	back.text = "НАЗАД"
-	back.custom_minimum_size.y = 44
-	box.add_child(back)
-	back.pressed.connect(func():
-		if not busy:
-			lobby.hide()
-			game.menu.show()
-	)
-	lobby.hide()
+	id_input.text_changed.connect(func(_text): game.lobby_ui.refresh())
+	game.lobby_ui.refresh.call_deferred()
 	room_label = game._label(ui, "", 18, Color("ffe4a5"))
 	room_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	room_label.offset_left = 36
@@ -199,6 +182,7 @@ func _response(result: int, code: int, _headers: PackedStringArray, bytes: Packe
 			lobby_status.text = message
 			create_button.disabled = false
 			join_button.disabled = false
+			game.lobby_ui.refresh()
 		return
 	errors = 0
 	if data.has("server_time"):
@@ -220,10 +204,10 @@ func _response(result: int, code: int, _headers: PackedStringArray, bytes: Packe
 		for control in [name_input, id_input, create_button, join_button]:
 			control.release_focus()
 		lobby.hide()
-		friends_button.hide()
 		room_label.show()
 		exit_button.show()
 		game.select_stage(int(data.get("stage", 0)), not is_host)
+		game.select_player_car(int(data.get("car_model", game.selected_car)))
 		game.start_game()
 		# Separate parked cars at the start; local movement remains responsive.
 		var lane = int(data.get("slot", 0))
@@ -293,22 +277,6 @@ func server_clock() -> float:
 	return Time.get_ticks_usec() / 1000000.0 + server_offset
 
 func _process(delta: float) -> void:
-	var ui_size = game.get_viewport().get_visible_rect().size
-	if ui_size != last_ui_size or game.mobile_mode != last_mobile:
-		last_ui_size = ui_size
-		last_mobile = game.mobile_mode
-		var portrait = game.mobile_mode and ui_size.y > ui_size.x
-		lobby.offset_top = -300 if portrait else -195
-		lobby.offset_bottom = 300 if portrait else 195
-		for input in [name_input, id_input]:
-			input.custom_minimum_size.y = 80 if portrait else 48
-			input.add_theme_font_size_override("font_size", 26 if portrait else 22)
-		for button in [create_button, join_button, lobby_back]:
-			button.custom_minimum_size.y = 80 if portrait else 48
-			button.add_theme_font_size_override("font_size", 26 if portrait else 22)
-		lobby_status.add_theme_font_size_override("font_size", 22 if portrait else 18)
-		friends_button.custom_minimum_size.y = 72 if portrait else 44
-		room_label.add_theme_font_size_override("font_size", 24 if game.mobile_mode else 18)
 	if not connected:
 		return
 	exit_button.visible = game.paused or game.dead or game.finished
