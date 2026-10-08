@@ -149,6 +149,26 @@ func run() -> void:
 	check(stage.city.forest_grass_count > 1000 and stage.city.forest_stone_count > 200, "mixed forest has dense grass and loose stones")
 	check(stage.city.forest_boulder_count > 25 and stage.rocks.size() >= stage.city.forest_boulder_count, "forest contains collidable boulders")
 	check(stage.city.forest_bush_count > 100 and stage.city.forest_berry_bush_count > 40, "forest has ordinary and berry undergrowth")
+	check(stage.city.mixed_tree_count > 1800 and stage.city.forest_grass_count > 2300 and stage.city.forest_stone_count > 400, "village forest has denser spatially batched trees grass and stones")
+	var mushrooms = stage.collectibles.filter(func(item): return item.kind == "mushrooms")
+	check(mushrooms.size() > 200, "village forest has harvestable mushroom clusters")
+	var mushroom_contact = true
+	for item in mushrooms:
+		mushroom_contact = mushroom_contact and absf(item.pos.y - stage.terrain_surface_height(item.pos)) < 0.001 and stage.city._forest_spot_allowed(item.pos, 0.2)
+	var mushroom_id = stage.collectibles.find(mushrooms[0])
+	check(stage.harvest(mushroom_id), "village mushroom can be harvested")
+	var mushroom_hidden = true
+	for layer in mushrooms[0].parts:
+		for part_index in mushrooms[0].parts[layer]:
+			mushroom_hidden = mushroom_hidden and stage.collectible_parts[layer][part_index].hidden
+	check(mushroom_hidden, "harvest hides both cap and stem of the village mushroom")
+	check(mushroom_contact, "mushrooms touch rendered forest terrain and avoid crops roads and buildings")
+	check(stage.find_children("MushroomCaps_Tile_*", "MultiMeshInstance3D", true, false).size() > 4, "mushrooms retain spatial culling")
+	var entry = stage.flat(stage.urban_at(402) - stage.urban_at(382)).normalized()
+	var lane = stage.flat(stage.village_main_side(370)).normalized()
+	check(absf(rad_to_deg(entry.angle_to(lane))) > 25 and absf(rad_to_deg(entry.angle_to(lane))) < 35, "forest entry diagonal is about thirty degrees")
+	check(absf(stage.village_forest_microrelief(Vector3(110, 0, -430))) > 0.01, "forest has continuous microrelief")
+
 	var forest_berry_items = stage.collectibles.filter(func(item): return item.get("name", "") == "лесные ягоды")
 	check(forest_berry_items.size() == stage.city.forest_berry_bush_count, "forest berry bushes expose deterministic collectible berries")
 	check(stage.woodland_details.get("VillageForestBerries", 0) > stage.city.forest_berry_bush_count * 6, "forest berry fruit is visibly instanced on bushes")
@@ -173,7 +193,7 @@ func run() -> void:
 	check(stage.direction(320).z < -0.8 and stage.direction(530).z < -0.8, "village route continues toward finish without a reversal")
 	check(stage.village_forest_offset(435.0) > 45.0 and stage.village_forest_offset(370.0) == 0.0 and stage.village_forest_offset(500.0) == 0.0, "forest diversion joins both village side streets")
 	check(stage.village_forest_detour(435.0) and not stage.village_forest_detour(320.0), "only wooded section uses gravel grip and light terrain")
-	var id = stage.collectibles.size() / 2
+	var id = stage.collectibles.find(grape_positions[grape_positions.size() / 2])
 	var grape = stage.collectibles[id]
 	game.walker = grape.pos
 	game.camera.position = grape.pos + Vector3(0, 1.6, 1.3)

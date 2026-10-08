@@ -93,6 +93,7 @@ func build(cooperative: bool = false) -> void:
 		await _village_natural_details(true)
 	else:
 		_village_natural_details()
+	_forest_mushrooms()
 	_landscape()
 	_flush_batches()
 
@@ -336,18 +337,21 @@ func _village_sign(s: float, side_value: float) -> void:
 # Village terrain uses 4 m triangles. Cache their vertices only while building
 # crops; thousands of nearby stems share the same terrain cell.
 func _crop_height(p: Vector3) -> float:
-	var cell = Vector2i(floori(p.x / 4.0), floori(p.z / 4.0))
+	var cell_x = floorf(p.x / 4) * 4
+	var cell_z = floorf(p.z / 4) * 4
+	var step = stage.terrain_tile_step(cell_x, cell_z)
+	var x = cell_x + floorf((p.x - cell_x) / step) * step
+	var z = cell_z + floorf((p.z - cell_z) / step) * step
 	var heights: Array[float] = []
-	for offset in [Vector2i.ZERO, Vector2i(1, 0), Vector2i(0, 1), Vector2i.ONE]:
-		var key: Vector2i = cell + offset
-		if not crop_heights.has(key):
-			crop_heights[key] = stage.terrain_vertex_height(key.x * 4.0, key.y * 4.0)
-		heights.append(crop_heights[key])
-	var u = p.x / 4.0 - cell.x
-	var v = p.z / 4.0 - cell.y
-	if u + v <= 1.0:
+	for point in [Vector2(x, z), Vector2(x + step, z), Vector2(x, z + step), Vector2(x + step, z + step)]:
+		if not crop_heights.has(point):
+			crop_heights[point] = stage.terrain_vertex_height(point.x, point.y)
+		heights.append(crop_heights[point])
+	var u = (p.x - x) / step
+	var v = (p.z - z) / step
+	if u + v <= 1:
 		return heights[0] + (heights[1] - heights[0]) * u + (heights[2] - heights[0]) * v
-	return heights[3] + (heights[2] - heights[3]) * (1.0 - u) + (heights[1] - heights[3]) * (1.0 - v)
+	return heights[3] + (heights[2] - heights[3]) * (1 - u) + (heights[1] - heights[3]) * (1 - v)
 
 # Soil ribbons use sampled terrain heights, including curved hills and parking
 # transitions. Keep a mesh per spatial tile rather than one draw per plant.
@@ -386,19 +390,22 @@ func _crop_soil(pose: Transform3D) -> void:
 	# can bury a long overlay when it crosses a different triangle's slope.
 	for x in range(floori(bounds.position.x / 4.0), floori(bounds.end.x / 4.0) + 1):
 		for z in range(floori(bounds.position.y / 4.0), floori(bounds.end.y / 4.0) + 1):
-			var a = Vector2(x * 4.0, z * 4.0)
-			var b = a + Vector2(4, 0)
-			var c = a + Vector2(0, 4)
-			var d = a + Vector2(4, 4)
-			for triangle in [[a, b, c], [d, c, b]]:
-				var polygon = footprint.duplicate()
-				for i in range(3):
-					polygon = _clip_crop_polygon(polygon, triangle[i], triangle[(i + 1) % 3])
-				for i in range(1, polygon.size() - 1):
-					for point in [polygon[0], polygon[i], polygon[i + 1]]:
-						var world = Vector3(point.x, 0, point.y)
-						world.y = _crop_height(world) + 0.012
-						builder.add_vertex(world)
+			var step = int(stage.terrain_tile_step(x * 4, z * 4))
+			for dx in range(0, 4, step):
+				for dz in range(0, 4, step):
+					var a = Vector2(x * 4.0 + dx, z * 4.0 + dz)
+					var b = a + Vector2(step, 0)
+					var c = a + Vector2(0, step)
+					var d = a + Vector2(step, step)
+					for triangle in [[a, b, c], [d, c, b]]:
+						var polygon = footprint.duplicate()
+						for i in range(3):
+							polygon = _clip_crop_polygon(polygon, triangle[i], triangle[(i + 1) % 3])
+						for i in range(1, polygon.size() - 1):
+							for point in [polygon[0], polygon[i], polygon[i + 1]]:
+								var world = Vector3(point.x, 0, point.y)
+								world.y = _crop_height(world) + 0.012
+								builder.add_vertex(world)
 
 func _flush_crop_soil() -> void:
 	for key in crop_soil:
@@ -611,7 +618,7 @@ func _roadside_details(cooperative: bool = false) -> void:
 				blocked = blocked or stage.flat(center).distance_to(stage.flat(parking)) < 9.0
 			if blocked:
 				continue
-			center.y = stage.ground(center)
+			center.y = stage.terrain_surface_height(center)
 			var size = detail_rng.randf_range(0.55, 1.15)
 			for lobe in range(3):
 				var angle = detail_rng.randf() * TAU
@@ -709,6 +716,8 @@ func _point_clear_of_obstacles(p: Vector3, padding: float = 0.0) -> bool:
 	return true
 
 func _forest_spot_allowed(p: Vector3, padding: float = 0.0) -> bool:
+	if absf(p.x) > 196.0 - padding:
+		return false
 	if not crop_clear(p, 6.0 + padding) or paved_at(p, padding):
 		return false
 	if cemetery_center != Vector3.ZERO and stage.flat(p).distance_to(stage.flat(cemetery_center)) < 20.0 + padding:
@@ -731,7 +740,7 @@ func _mixed_forest(cooperative: bool = false) -> void:
 	var forest_rng = RandomNumberGenerator.new()
 	forest_rng.seed = 71020265
 	var tree_data: Array[Dictionary] = []
-	for i in range(7000):
+	for i in range(10500):
 		if cooperative and i % 200 == 0:
 			await get_tree().process_frame
 		var s = forest_rng.randf_range(VILLAGE_START - 52.0, VILLAGE_END + 52.0)
@@ -748,7 +757,7 @@ func _mixed_forest(cooperative: bool = false) -> void:
 			"shade": forest_rng.randf_range(-0.025, 0.045),
 		})
 		mixed_tree_count += 1
-		if mixed_tree_count >= 1600:
+		if mixed_tree_count >= 2200:
 			break
 	for layer in range(4):
 		var poses: Array = []
@@ -760,7 +769,7 @@ func _mixed_forest(cooperative: bool = false) -> void:
 
 	var grass_poses: Array = []
 	var grass_colors: Array = []
-	for i in range(4200):
+	for i in range(6500):
 		if cooperative and i % 200 == 0:
 			await get_tree().process_frame
 		var s = forest_rng.randf_range(VILLAGE_START - 52.0, VILLAGE_END + 52.0)
@@ -768,18 +777,18 @@ func _mixed_forest(cooperative: bool = false) -> void:
 		var p = stage.at(s) + stage.side(s) * side_value * forest_rng.randf_range(48.0, 142.0)
 		if not _forest_spot_allowed(p):
 			continue
-		p.y = stage.ground(p) - 0.12
+		p.y = stage.terrain_surface_height(p) - 0.03
 		var size = forest_rng.randf_range(0.28, 0.70)
 		grass_poses.append(Transform3D(Basis(Vector3.UP, forest_rng.randf() * TAU).scaled(Vector3(size * 1.8, size, size * 1.8)), p))
 		grass_colors.append(stage.shared_grass_color(forest_rng.randf()))
 		forest_grass_count += 1
-		if forest_grass_count >= 1900:
+		if forest_grass_count >= 2900:
 			break
 	stage._detail_batch("VillageForestGrass", stage._grass_mesh(), grass_poses, grass_colors)
 
 	var stone_poses: Array = []
 	var stone_colors: Array = []
-	for i in range(900):
+	for i in range(1400):
 		if cooperative and i % 200 == 0:
 			await get_tree().process_frame
 		var s = forest_rng.randf_range(VILLAGE_START - 50.0, VILLAGE_END + 50.0)
@@ -787,12 +796,12 @@ func _mixed_forest(cooperative: bool = false) -> void:
 		var p = stage.at(s) + stage.side(s) * side_value * forest_rng.randf_range(50.0, 140.0)
 		if not _forest_spot_allowed(p):
 			continue
-		p.y = stage.ground(p)
+		p.y = stage.terrain_surface_height(p)
 		var radius = forest_rng.randf_range(0.12, 0.38)
 		stone_poses.append(stage.shared_stone_pose(p + Vector3(0, radius * 0.22, 0), radius, forest_rng.randf() * TAU))
 		stone_colors.append(stage.shared_stone_color(forest_rng.randf_range(-0.10, 0.12)))
 		forest_stone_count += 1
-		if forest_stone_count >= 320:
+		if forest_stone_count >= 520:
 			break
 	stage._detail_batch("VillageForestStones", stage.shared_stone_mesh(), stone_poses, stone_colors)
 
@@ -824,7 +833,7 @@ func _mixed_forest(cooperative: bool = false) -> void:
 	var berry_bush_colors: Array = []
 	var berry_poses: Array = []
 	var berry_colors: Array = []
-	for i in range(900):
+	for i in range(1400):
 		if cooperative and i % 200 == 0:
 			await get_tree().process_frame
 		var s = forest_rng.randf_range(VILLAGE_START - 50.0, VILLAGE_END + 50.0)
@@ -832,10 +841,10 @@ func _mixed_forest(cooperative: bool = false) -> void:
 		var center = stage.at(s) + stage.side(s) * side_value * forest_rng.randf_range(50.0, 136.0)
 		if not _forest_spot_allowed(center, 1.0) or not stage.rock_hit(center, center, 0.8, false).is_empty():
 			continue
-		center.y = stage.ground(center)
+		center.y = stage.terrain_surface_height(center)
 		var size = forest_rng.randf_range(0.55, 1.35)
 		var bearing = forest_rng.randf() * TAU
-		var berry_bush = forest_rng.randf() < 0.30
+		var berry_bush = forest_rng.randf() < 0.40
 		var berry_begin = berry_poses.size()
 		for lobe in range(3):
 			var angle = bearing + lobe * TAU / 3.0
@@ -861,7 +870,7 @@ func _mixed_forest(cooperative: bool = false) -> void:
 			forest_berry_bush_count += 1
 		else:
 			forest_bush_count += 1
-		if forest_bush_count >= 170 and forest_berry_bush_count >= 70:
+		if forest_bush_count >= 220 and forest_berry_bush_count >= 120:
 			break
 	var bush_mesh = stage.NATURE_BUSH
 	var berry_mesh = stage.NATURE_BERRY
@@ -917,7 +926,7 @@ func _village_natural_details(cooperative: bool = false) -> void:
 		village_grass_count += 1
 		if village_grass_count >= 720:
 			break
-	for i in range(900):
+	for i in range(1400):
 		if cooperative and i % 200 == 0:
 			await get_tree().process_frame
 		var s = detail_rng.randf_range(VILLAGE_START + 4.0, VILLAGE_END - 4.0)
@@ -935,6 +944,37 @@ func _village_natural_details(cooperative: bool = false) -> void:
 			break
 	stage._detail_batch("VillageGrass", stage._grass_mesh(), grass_poses, grass_colors)
 	stage._detail_batch("VillageStones", stage.shared_stone_mesh(), stone_poses, stone_colors)
+
+
+func _forest_mushrooms() -> void:
+	var random = RandomNumberGenerator.new()
+	random.seed = 71020266
+	var caps = {"edible": [], "fly_agaric": [], "toadstool": []}
+	var colors = {"edible": [], "fly_agaric": [], "toadstool": []}
+	var stems = []
+	var stem_colors = []
+	for i in range(1100):
+		var s = random.randf_range(290, 610)
+		var p = stage.at(s) + stage.side(s) * random.randf_range(12, 140) * (-1 if i % 2 else 1)
+		if not _forest_spot_allowed(p, 0.5) or not stage.rock_hit(p, p, 0.5, false).is_empty():
+			continue
+		for j in range(3):
+			var at = p + Vector3(random.randf_range(-0.4, 0.4), 0, random.randf_range(-0.4, 0.4))
+			if not _forest_spot_allowed(at, 0.2):
+				continue
+			at.y = stage.terrain_surface_height(at)
+			var size = random.randf_range(0.12, 0.24)
+			var species = "fly_agaric" if i % 10 == 4 else ("toadstool" if i % 10 == 7 else "edible")
+			var layer = "FlyAgaricCaps" if species == "fly_agaric" else ("ToadstoolCaps" if species == "toadstool" else "MushroomCaps")
+			stage.collectibles.append({"kind": "mushrooms", "species": species, "name": "мухомор" if species == "fly_agaric" else ("поганка" if species == "toadstool" else "гриб"), "pos": at, "quantity": 1, "parts": {layer: [caps[species].size()], "MushroomStems": [stems.size()]}})
+			caps[species].append(Transform3D(Basis.from_scale(Vector3(size * 1.4, size * 0.55, size * 1.4)), at + Vector3.UP * size))
+			colors[species].append(Color("b87743") if species == "edible" else Color.WHITE)
+			stems.append(Transform3D(Basis.from_scale(Vector3(size * 0.2, size, size * 0.2)), at + Vector3.UP * size * 0.5))
+			stem_colors.append(Color("c5baa1"))
+	stage._detail_batch("MushroomCaps", stage.NATURE_MUSHROOM_CAP, caps.edible, colors.edible)
+	stage._detail_batch("FlyAgaricCaps", stage.NATURE_MUSHROOM_CAP, caps.fly_agaric, colors.fly_agaric)
+	stage._detail_batch("ToadstoolCaps", stage.NATURE_MUSHROOM_CAP, caps.toadstool, colors.toadstool)
+	stage._detail_batch("MushroomStems", stage.NATURE_MUSHROOM_STEM, stems, stem_colors)
 
 func _landscape() -> void:
 	var root = Node3D.new()
