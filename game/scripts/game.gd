@@ -914,6 +914,7 @@ func _process(delta: float) -> void:
 	_update_fps_counter(delta)
 	if soundscape != null:
 		soundscape.update(delta)
+	camp_cooking.animate_flames(Time.get_ticks_msec() / 1000.0)
 	if not playing or paused or dead or finished or (room.connected and not room.is_host and room.world_paused):
 		return
 	if not room.connected or room.is_host:
@@ -1140,8 +1141,9 @@ func _update_camera(delta: float) -> void:
 	collapse_time = minf(0.8, collapse_time + delta) if beers >= 30 else 0.0
 	var collapse = smoothstep(0, 0.8, collapse_time)
 	if in_car:
-		var orbit = view_yaw
-		var behind = Vector3(sin(orbit), 0, cos(orbit))
+		var travel_yaw = heading + (PI if speed < -0.5 else 0.0)
+		view_yaw = lerp_angle(view_yaw, travel_yaw, 1.0 - exp(-delta * 2.8))
+		var behind = Vector3(sin(view_yaw), 0, cos(view_yaw))
 		var elevation = clampf(atan2(4.4, 8.2) - (view_pitch + 0.12), 0.14, 1.25)
 		var distance = Vector2(8.2, 4.4).length()
 		var desired = car.position + behind * cos(elevation) * distance + Vector3.UP * sin(elevation) * distance
