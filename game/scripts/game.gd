@@ -854,9 +854,7 @@ func _update_invite_button() -> void:
 		invite_status.visible = invite_button.visible and not invite_status.text.is_empty()
 
 func _join_invited_room() -> void:
-	if platform_service == null or not playing and (room.connected or room.busy or loading_world):
-		return
-	if playing or room.connected or room.busy or loading_world:
+	if platform_service == null or playing or room.connected or room.busy or loading_world:
 		return
 	var requested: String = platform_service.invite_room
 	platform_service.invite_room = ""
