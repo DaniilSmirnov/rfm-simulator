@@ -1,6 +1,5 @@
 extends RefCounted
 class_name RallyProps
-const GrantaModel = preload("res://scripts/granta_model.gd")
 const CampingHatchbackAsset = preload("res://scripts/camping_hatchback_asset.gd")
 const FOOD_PORTIONS = 10
 const CARGO_KINDS = ["table", "chairs", "grill", "firewood", "cauldron"]
@@ -484,7 +483,7 @@ static func player_car_sport_sedan() -> Node3D:
 static func player_car(variant: int = 0) -> Node3D:
 	variant = posmod(variant, PLAYER_MODELS.size())
 	if variant == 0:
-		return GrantaModel.build()
+		return load("res://scripts/granta_model.gd").build()
 	if variant == 8:
 		return player_car_camping_hatchback()
 	if variant == 9:
