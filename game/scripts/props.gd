@@ -45,25 +45,56 @@ static func material(color: Color) -> StandardMaterial3D:
 	m.roughness = 0.95
 	return m
 
+# Exact resource keys and hard limits prevent random geometry/colours growing the cache.
+const RESOURCE_CACHE_LIMIT = 256
+static var _materials: Dictionary = {}
+static var _boxes: Dictionary = {}
+static var _cylinders: Dictionary = {}
+static var _faceted: Dictionary = {}
+
+static func shared_material(color: Color) -> StandardMaterial3D:
+	if _materials.has(color):
+		return _materials[color]
+	var result = material(color)
+	if _materials.size() < RESOURCE_CACHE_LIMIT:
+		_materials[color] = result
+	return result
+
+static func unique_material(node: MeshInstance3D) -> void:
+	# Copy before an object's colour, glow or shading changes independently.
+	node.material_override = node.material_override.duplicate()
+
+static func resource_cache_sizes() -> Dictionary:
+	return {"materials": _materials.size(), "boxes": _boxes.size(), "cylinders": _cylinders.size(), "faceted": _faceted.size()}
+
 static func box(parent: Node3D, pos: Vector3, size: Vector3, color: Color) -> MeshInstance3D:
 	var n = MeshInstance3D.new()
-	var mesh = BoxMesh.new()
-	mesh.size = size
+	var mesh: BoxMesh = _boxes.get(size)
+	if mesh == null:
+		mesh = BoxMesh.new()
+		mesh.size = size
+		if _boxes.size() < RESOURCE_CACHE_LIMIT:
+			_boxes[size] = mesh
 	n.mesh = mesh
-	n.material_override = material(color)
+	n.material_override = shared_material(color)
 	parent.add_child(n)
 	n.position = pos
 	return n
 
 static func cylinder(parent: Node3D, pos: Vector3, bottom: float, top: float, height: float, color: Color, sides: int = 7) -> MeshInstance3D:
 	var n = MeshInstance3D.new()
-	var mesh = CylinderMesh.new()
-	mesh.bottom_radius = bottom
-	mesh.top_radius = top
-	mesh.height = height
-	mesh.radial_segments = sides
+	var key = Vector4(bottom, top, height, sides)
+	var mesh: CylinderMesh = _cylinders.get(key)
+	if mesh == null:
+		mesh = CylinderMesh.new()
+		mesh.bottom_radius = bottom
+		mesh.top_radius = top
+		mesh.height = height
+		mesh.radial_segments = sides
+		if _cylinders.size() < RESOURCE_CACHE_LIMIT:
+			_cylinders[key] = mesh
 	n.mesh = mesh
-	n.material_override = material(color)
+	n.material_override = shared_material(color)
 	parent.add_child(n)
 	n.position = pos
 	return n
@@ -80,30 +111,35 @@ static func spectator_profile(variant: int) -> Dictionary:
 
 # Separate triangle normals keep these small ellipsoids visibly faceted in WebGL.
 static func faceted(parent: Node3D, pos: Vector3, size: Vector3, color: Color, sides: int = 10, rings: int = 5) -> MeshInstance3D:
-	var sphere = SphereMesh.new()
-	sphere.radius = 0.5
-	sphere.height = 1.0
-	sphere.radial_segments = sides
-	sphere.rings = rings
-	var vertices = sphere.get_faces()
-	var normals = PackedVector3Array()
-	for i in range(0, vertices.size(), 3):
-		for j in range(3):
-			vertices[i + j] *= size
-		var normal = (vertices[i + 1] - vertices[i]).cross(vertices[i + 2] - vertices[i]).normalized()
-		if normal.dot(vertices[i] + vertices[i + 1] + vertices[i + 2]) < 0:
-			normal = -normal
-		for j in range(3):
-			normals.append(normal)
-	var arrays = []
-	arrays.resize(Mesh.ARRAY_MAX)
-	arrays[Mesh.ARRAY_VERTEX] = vertices
-	arrays[Mesh.ARRAY_NORMAL] = normals
-	var mesh = ArrayMesh.new()
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	var key = [size, sides, rings]
+	var mesh: ArrayMesh = _faceted.get(key)
+	if mesh == null:
+		var sphere = SphereMesh.new()
+		sphere.radius = 0.5
+		sphere.height = 1.0
+		sphere.radial_segments = sides
+		sphere.rings = rings
+		var vertices = sphere.get_faces()
+		var normals = PackedVector3Array()
+		for i in range(0, vertices.size(), 3):
+			for j in range(3):
+				vertices[i + j] *= size
+			var normal = (vertices[i + 1] - vertices[i]).cross(vertices[i + 2] - vertices[i]).normalized()
+			if normal.dot(vertices[i] + vertices[i + 1] + vertices[i + 2]) < 0:
+				normal = -normal
+			for j in range(3):
+				normals.append(normal)
+		var arrays = []
+		arrays.resize(Mesh.ARRAY_MAX)
+		arrays[Mesh.ARRAY_VERTEX] = vertices
+		arrays[Mesh.ARRAY_NORMAL] = normals
+		mesh = ArrayMesh.new()
+		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+		if _faceted.size() < RESOURCE_CACHE_LIMIT:
+			_faceted[key] = mesh
 	var part = MeshInstance3D.new()
 	part.mesh = mesh
-	part.material_override = material(color)
+	part.material_override = shared_material(color)
 	parent.add_child(part)
 	part.position = pos
 	return part
@@ -860,6 +896,7 @@ static func course_car(role: String, zero_index: int = 0) -> Node3D:
 	var red = box(node, Vector3(0.38, 1.78, 0.2), Vector3(0.43, 0.17, 0.25), Color("ff4038"))
 	red.name = "BeaconRed"
 	for light in [blue, red]:
+		unique_material(light)
 		light.material_override.emission_enabled = true
 		light.material_override.emission = light.material_override.albedo_color
 		light.material_override.emission_energy_multiplier = 2.5
@@ -950,6 +987,7 @@ static func campfire(parent: Node3D) -> Node3D:
 	root.add_child(flames)
 	for i in range(5):
 		var flame = faceted(flames, Vector3(sin(i * 2.4) * 0.23, 0.35, cos(i * 2.4) * 0.23), Vector3(0.19, 0.55, 0.19), Color("ff751e") if i % 2 else Color("ffc53f"), 5, 3)
+		unique_material(flame)
 		flame.material_override.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	return root
 
@@ -990,7 +1028,9 @@ static func cauldron(parent: Node3D) -> Node3D:
 	var rice = Node3D.new()
 	rice.name = "Rice"
 	root.add_child(rice)
-	cylinder(rice, Vector3.ZERO, 0.36, 0.465, 0.26, Color("e1ba64"), 16).name = "FoodSurface"
+	var surface = cylinder(rice, Vector3.ZERO, 0.36, 0.465, 0.26, Color("e1ba64"), 16)
+	surface.name = "FoodSurface"
+	unique_material(surface)
 	for i in range(FOOD_PORTIONS):
 		var portion = Node3D.new()
 		portion.name = "Portion_%02d" % i
@@ -1147,6 +1187,7 @@ static func judges_car() -> Node3D:
 	box(car, Vector3(0, 1.58, 0.1), Vector3(0.95, 0.07, 0.24), Color("293339"))
 	var beacon = cylinder(car, Vector3(0, 1.72, 0.1), 0.12, 0.09, 0.22, Color("ffb52b"), 8)
 	beacon.name = "AmberBeacon"
+	unique_material(beacon)
 	beacon.material_override.emission_enabled = true
 	beacon.material_override.emission = Color("ffaf26")
 	beacon.material_override.emission_energy_multiplier = 0.6

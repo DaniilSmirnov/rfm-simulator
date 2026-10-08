@@ -8,7 +8,7 @@ var people: Array[Dictionary] = []
 var clock = 0.0
 var actor_targets: Dictionary = {}
 
-func rebuild() -> void:
+func rebuild(cooperative: bool = false) -> void:
 	for child in get_children():
 		child.free()
 	groups.clear()
@@ -17,6 +17,8 @@ func rebuild() -> void:
 	actor_targets.clear()
 	var stage = game.stage
 	for i in range(stage.clearings.size()):
+		if cooperative:
+			await get_tree().process_frame
 		var clearing = stage.clearings[i]
 		var s = stage.road_s(clearing)
 		var outward = (clearing - stage.at(s)).normalized()

@@ -14,12 +14,14 @@ func run() -> void:
 	game.room.set_process(false)
 	check(game.room.lobby.is_visible_in_tree() and not game.start_button.visible, "all starts use the unified room menu")
 	check(game.lobby_ui.images.size() == 2 and game.lobby_ui.images[0].texture != null, "both cards have rendered previews")
+	check(game.lobby_ui.background.visible and game.lobby_ui.background.mouse_filter == Control.MOUSE_FILTER_IGNORE, "menu backdrop is visible and does not intercept input")
 	game.platform_service.catalog = JSON.parse_string(FileAccess.get_file_as_string("res://data/store_catalog.json"))
 	game.platform_service.entitlements = {"mode": "restricted", "skus": []}
 	game.room.id_input.text = "ABCDEF"
 	game.select_player_car(9)
 	game.select_stage(2)
 	game.lobby_ui.refresh()
+	check(game.lobby_ui.background.texture.resource_path.ends_with("backdrop_2.webp"), "backdrop follows locked stage selection")
 	check(game.selected_car == 9 and game.selected_stage == 2, "closed content can be previewed")
 	check(game.room.create_button.disabled and game.room.join_button.disabled, "locked car blocks both entry actions")
 	game.start_game()
@@ -54,6 +56,7 @@ func run() -> void:
 	game.paused = true
 	game.playing = true
 	game.lobby_ui._process(0)
+	check(not game.lobby_ui.background.visible and game.lobby_ui.background.texture == null, "gameplay releases menu background texture")
 	check(game.lobby_ui.return_button.visible and not game.lobby_ui.host_pause.visible, "own pause offers return to main menu")
 	game.paused = false
 	game.room.world_paused = false

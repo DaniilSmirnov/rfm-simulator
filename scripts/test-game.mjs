@@ -45,6 +45,8 @@ run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_party
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_selection.gd']);
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_vk_access.gd']);
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_lobby_ui.gd']);
+run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_resource_cache.gd']);
+run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_world_loading.gd']);
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_network_motion.gd']);
 
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_furniture.gd']);

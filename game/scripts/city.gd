@@ -8,7 +8,7 @@ var lamp_targets: Dictionary = {}
 var batches: Dictionary = {}
 var meshes: Dictionary = {}
 
-func build() -> void:
+func build(cooperative: bool = false) -> void:
 	var floor_body = StaticBody3D.new()
 	floor_body.name = "CityPhysicsGround"
 	stage.add_child(floor_body)
@@ -26,11 +26,15 @@ func build() -> void:
 	# Adjacent 10 m townhouses, with an opening at every intersecting street.
 	for x in [-24.0, 24.0, 120.0]:
 		for z in range(-15, -301, -10):
+			if cooperative:
+				await get_tree().process_frame
 			for side in [-1.0, 1.0]:
 				var p = Vector3(x + side * 17, 2, z)
 				if _site_clear(p):
 					_building(p, 0, side, int(absf(x) * 0.5 + absf(z) / 10 + side * 3))
 	for z in CROSS_Z:
+		if cooperative:
+			await get_tree().process_frame
 		for x in range(-75, 131, 10):
 			for side in [-1.0, 1.0]:
 				var p = Vector3(x, 2, z + side * 17)
@@ -333,6 +337,7 @@ func _lamp(p: Vector3, side: float) -> void:
 	arm.rotation.z = -side * 0.2
 	Props.box(body, Vector3(side * 1.0, 1.8, 0), Vector3(0.48, 0.35, 0.48), Color("33454c"))
 	var glass = Props.box(body, Vector3(side * 1.0, 1.75, 0), Vector3(0.38, 0.25, 0.38), Color("eadca0"))
+	Props.unique_material(glass)
 	glass.material_override.emission_enabled = true
 	glass.material_override.emission = Color("baa86d")
 	glass.material_override.emission_energy_multiplier = 0.3

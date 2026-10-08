@@ -34,6 +34,8 @@ jobs:
 
       - name: Render desktop and mobile lobby
         run: xvfb-run -a .cache/godot/Godot_v4.4.1-stable_linux.x86_64 --path game --script res://tests/lobby_preview.gd
+      - name: Render lightweight menu and staged loading
+        run: xvfb-run -a .cache/godot/Godot_v4.4.1-stable_linux.x86_64 --path game --script res://tests/memory_preview.gd
       - name: Render text flag faces
         run: xvfb-run -a .cache/godot/Godot_v4.4.1-stable_linux.x86_64 --path game --rendering-method gl_compatibility --script res://tests/flag_preview.gd
       - name: Render imported reference-style characters
@@ -51,6 +53,7 @@ jobs:
         if: always()
         with:
           name: visual-previews
+          include-hidden-files: true
           path: |
             .cache/ui-screens/*.png
             flag-*.png
