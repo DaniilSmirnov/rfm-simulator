@@ -24,6 +24,8 @@ static func build() -> Node3D:
 	root.set_meta("model", "Походный хэтчбек")
 	root.set_meta("variant", 8)
 	root.set_meta("roof_cargo", "inflatable_boat")
+	# The OBJ hatch starts behind the rear passenger seats, unlike the generic hatch template.
+	root.set_meta("trunk_lid_start_z", 1.20)
 	var details = Node3D.new()
 	details.name = "CarModelDetails"
 	root.add_child(details)
