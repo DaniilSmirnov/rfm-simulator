@@ -19,6 +19,9 @@ var clearings: Array[Vector3] = []
 var trails: Array[Dictionary] = []
 var woodland_details: Dictionary = {}
 var collectibles: Array[Dictionary] = []
+const COLLECTIBLE_CELL_SIZE = 8.0
+var collectible_cells: Dictionary = {}
+var indexed_collectible_count = -1
 var harvested: Dictionary = {}
 var collectible_parts: Dictionary = {}
 var rocks: Array[Dictionary] = []
@@ -434,6 +437,10 @@ func update_fallen(delta: float) -> void:
 		var tree_data: Dictionary = forest_data[index]
 		var f: Dictionary = fallen[index]
 		f.age = minf(1.3, f.age + delta)
+		if f.get("rendered_age", -1.0) == f.age and f.get("rendered_direction", Vector3.ZERO) == f.direction:
+			continue
+		f.rendered_age = f.age
+		f.rendered_direction = f.direction
 		var angle = smoothstep(0, 1.3, f.age) * PI * 0.5
 		var basis = Basis(Vector3.UP.cross(f.direction).normalized(), angle)
 		f.basis = basis
@@ -856,10 +863,30 @@ func rally_speed(s: float) -> float:
 
 # Collectible identifiers follow deterministic generation order and are shared by
 # every room member. Harvesting hides the existing instances without new nodes.
+func nearby_collectibles(pos: Vector3, reach: float) -> Array:
+	# Static generated positions; harvesting does not change IDs or cells.
+	# Rebuild when callers/tests append or clear the public collection.
+	if indexed_collectible_count != collectibles.size():
+		collectible_cells.clear()
+		for id in range(collectibles.size()):
+			var p: Vector3 = collectibles[id].pos
+			var cell = Vector2i(floori(p.x / COLLECTIBLE_CELL_SIZE), floori(p.z / COLLECTIBLE_CELL_SIZE))
+			if not collectible_cells.has(cell):
+				collectible_cells[cell] = []
+			collectible_cells[cell].append(id)
+		indexed_collectible_count = collectibles.size()
+	var found: Array = []
+	for x in range(floori((pos.x - reach) / COLLECTIBLE_CELL_SIZE), floori((pos.x + reach) / COLLECTIBLE_CELL_SIZE) + 1):
+		for z in range(floori((pos.z - reach) / COLLECTIBLE_CELL_SIZE), floori((pos.z + reach) / COLLECTIBLE_CELL_SIZE) + 1):
+			found.append_array(collectible_cells.get(Vector2i(x, z), []))
+	# Preserve original generation order for equally near targets.
+	found.sort()
+	return found
+
 func nearest_collectible(pos: Vector3, reach: float = 1.8) -> int:
 	var best = reach
 	var found = -1
-	for i in range(collectibles.size()):
+	for i in nearby_collectibles(pos, reach):
 		if harvested.has(i):
 			continue
 		var item: Dictionary = collectibles[i]

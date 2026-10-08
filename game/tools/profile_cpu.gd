@@ -8,6 +8,7 @@ func run():
  root.add_child(game)
  await process_frame
  game.set_process(false)
+ game.rng.seed = 20261008
  await game.start_game()
  print("CPU_PROFILE setup stage=",game.selected_stage," max_fps=",Engine.max_fps," samples=300 dt=1/60 headless=true")
  for mode in ["driving", "walking"]:

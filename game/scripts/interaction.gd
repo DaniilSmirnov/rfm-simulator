@@ -39,7 +39,7 @@ func current() -> Dictionary:
 	var owner = game.chair_owner()
 	if game.personal_chairs.has(owner):
 		offer(items, game.personal_chairs[owner].position + Vector3(0, 0.65, 0), 0.5, 2.5, "sit", "Сесть на стул")
-	for id in range(game.stage.collectibles.size()):
+	for id in game.stage.nearby_collectibles(game.walker, 2.1):
 		if game.stage.harvested.has(id):
 			continue
 		var item = game.stage.collectibles[id]

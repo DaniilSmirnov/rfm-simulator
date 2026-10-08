@@ -13,6 +13,19 @@ func first_item(stage: Node3D, kind: String, skip: int = -1) -> int:
 			return i
 	return -1
 func run() -> void:
+	var indexed = preload("res://scripts/stage.gd").new()
+	indexed.collectibles.append({"kind": "mushrooms", "pos": Vector3(7.9, 0, -8.1)})
+	indexed.collectibles.append({"kind": "berries", "pos": Vector3(8.2, 0, -7.8)})
+	indexed.collectibles.append({"kind": "berries", "pos": Vector3(100, 0, 100)})
+	check(indexed.nearby_collectibles(Vector3(8, 0, -8), 2.1) == [0, 1], "collectible index queries adjacent cells and excludes distant items")
+	check(indexed.nearest_collectible(Vector3(8, 0, -8)) == 0, "nearest collectible retains exact distance selection across cell boundaries")
+	indexed.harvested[0] = true
+	check(indexed.nearest_collectible(Vector3(8, 0, -8)) == 1, "indexed search skips harvested items")
+	indexed.collectibles.append({"kind": "mushrooms", "pos": Vector3(8, 0, -8)})
+	check(indexed.nearest_collectible(Vector3(8, 0, -8)) == 3, "appending collectibles rebuilds index and preserves IDs")
+	indexed.collectibles.clear()
+	check(indexed.nearby_collectibles(Vector3.ZERO, 2.1).is_empty(), "clearing collectibles discards old indexed IDs")
+	indexed.free()
 	var host = load("res://main.tscn").instantiate()
 	var guest = load("res://main.tscn").instantiate()
 	for game in [host, guest]:

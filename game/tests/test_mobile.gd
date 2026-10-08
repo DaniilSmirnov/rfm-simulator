@@ -65,6 +65,17 @@ func run() -> void:
 		check(c.button_icon(b) != null, "visible button has an icon: " + b.action)
 	c.touch_begin(40, Vector2(c.size.x * 0.6, 150))
 	check(not c.fingers.has(40), "free right-side touches do not capture camera")
+	game._update_hud()
+	var hud_revision = game.hud_revision
+	game.elapsed += 0.01
+	game._update_hud()
+	check(game.hud_revision == hud_revision, "mobile hidden elapsed timer does not rebuild HUD")
+	game.toast("Проверка уведомления")
+	game._update_hud()
+	check(game.info_label.text.contains("Проверка уведомления"), "mobile toast appears without timer polling")
+	game.toast_time = 0
+	game._update_hud()
+	check(not game.info_label.text.contains("Проверка уведомления"), "expired mobile toast removed immediately")
 	var touch = InputEventScreenTouch.new()
 	touch.index = 21
 	touch.pressed = true
