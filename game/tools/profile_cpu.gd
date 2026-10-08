@@ -4,12 +4,18 @@ func _initialize():
 func run():
  var game=load("res://tools/cpu_profile_game.gd").new()
  var args = OS.get_cmdline_user_args()
- game.selected_stage = clampi(int(args[0]), 0, 2) if not args.is_empty() else 0
+ var requested_stage = clampi(int(args[0]), 0, 3) if not args.is_empty() else 0
+ game.defer_world = true
  root.add_child(game)
  await process_frame
  game.set_process(false)
+ game.select_stage(requested_stage)
  game.rng.seed = 20261008
  await game.start_game()
+ if game.stage.variant != requested_stage:
+  push_error("CPU profile loaded the wrong stage")
+  quit(1)
+  return
  if args.size() > 1 and args[1] == "racing":
   game.course.phase = "racing"
   game.spawn_clock = 999.0
@@ -24,7 +30,7 @@ func run():
   game.car.position = game.stage.at(240) + game.stage.side(240) * 35.0
   game.car.position.y = game.stage.ground(game.car.position)
  print("CPU_PROFILE setup racers=",game.racers.size())
- print("CPU_PROFILE setup stage=",game.selected_stage," max_fps=",Engine.max_fps," samples=300 dt=1/60 headless=true")
+ print("CPU_PROFILE setup stage=",game.stage.variant," max_fps=",Engine.max_fps," samples=300 dt=1/60 headless=true")
  for mode in ["driving", "walking"]:
   game.in_car = mode == "driving"
   game.walker = game.car.position + Vector3(2,0,0)

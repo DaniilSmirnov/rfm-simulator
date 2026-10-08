@@ -1,6 +1,12 @@
 extends SceneTree
 const Stage = preload("res://scripts/stage.gd")
 const Traffic = preload("res://scripts/rally_traffic.gd")
+class ExhaustiveVillage:
+	extends "res://scripts/vineyard.gd"
+	func _collision_candidates(_start: Vector3, _end: Vector3, _radius: float) -> Array:
+		if indexed_obstacle_count != obstacles.size():
+			_index_collisions()
+		return range(obstacles.size())
 var failures = 0
 func check(ok: bool, title: String) -> void:
 	print(("PASS: " if ok else "FAIL: ") + title)
@@ -23,6 +29,25 @@ func run() -> void:
 	for s in range(0, 840, 4):
 		open_route = open_route and stage.city.hit(stage.at(s), stage.at(s + 4), 0.85).is_empty()
 	check(open_route, "full rally route clears buildings, monument and lamps")
+	var reference = ExhaustiveVillage.new()
+	reference.stage = stage
+	reference.obstacles = stage.city.obstacles
+	var random = RandomNumberGenerator.new()
+	random.seed = 20261008
+	var collision_matches = true
+	for sample in range(800):
+		var begin = Vector3(random.randf_range(-90, 145), random.randf_range(2, 29), random.randf_range(-580, -290))
+		var end = begin + Vector3(random.randf_range(-45, 45), random.randf_range(-4, 4), random.randf_range(-45, 45))
+		var radius = random.randf_range(0.3, 1.7)
+		var actual = stage.city.hit(begin, end, radius, sample % 2 == 0)
+		var expected = reference.hit(begin, end, radius, sample % 2 == 0)
+		collision_matches = collision_matches and actual.is_empty() == expected.is_empty()
+		if not actual.is_empty() and not expected.is_empty():
+			collision_matches = collision_matches and actual.position.distance_to(expected.position) < 0.001 and actual.normal.distance_to(expected.normal) < 0.001
+	check(collision_matches, "collision grid matches exhaustive swept collision checks for rotated structures and long paths")
+	var forest_point = stage.at(435)
+	check(stage.city._collision_candidates(forest_point, forest_point + Vector3(2, 0, 0), 0.85).size() < stage.city.obstacles.size() / 3, "forest movement checks only nearby solids and movable lamps")
+	reference.free()
 	var nearest_ok = true
 	for s in [30.0, 340.0, 410.0, 650.0, 790.0]:
 		nearest_ok = nearest_ok and absf(stage.road_s(stage.at(s)) - s) < 1
