@@ -1,0 +1,119 @@
+[
+  {
+    "sku": "stage_01",
+    "type": "stage",
+    "content_id": 0,
+    "title": "Лесной перевал",
+    "free": true,
+    "enabled": true,
+    "purchase_enabled": false
+  },
+  {
+    "sku": "stage_02",
+    "type": "stage",
+    "content_id": 1,
+    "title": "Зимний Турини",
+    "free": false,
+    "enabled": true,
+    "purchase_enabled": false
+  },
+  {
+    "sku": "stage_03",
+    "type": "stage",
+    "content_id": 2,
+    "title": "Виноградники",
+    "free": false,
+    "enabled": true,
+    "purchase_enabled": false
+  },
+  {
+    "sku": "car_01",
+    "type": "car",
+    "content_id": 0,
+    "title": "Компактный седан",
+    "free": true,
+    "enabled": true,
+    "purchase_enabled": false
+  },
+  {
+    "sku": "car_02",
+    "type": "car",
+    "content_id": 1,
+    "title": "Городской седан",
+    "free": true,
+    "enabled": true,
+    "purchase_enabled": false
+  },
+  {
+    "sku": "car_03",
+    "type": "car",
+    "content_id": 2,
+    "title": "Лесной внедорожник",
+    "free": true,
+    "enabled": true,
+    "purchase_enabled": false
+  },
+  {
+    "sku": "car_04",
+    "type": "car",
+    "content_id": 3,
+    "title": "Классический седан",
+    "free": false,
+    "enabled": true,
+    "purchase_enabled": false
+  },
+  {
+    "sku": "car_05",
+    "type": "car",
+    "content_id": 4,
+    "title": "Лёгкий седан",
+    "free": false,
+    "enabled": true,
+    "purchase_enabled": false
+  },
+  {
+    "sku": "car_06",
+    "type": "car",
+    "content_id": 5,
+    "title": "Дорожный седан",
+    "free": false,
+    "enabled": true,
+    "purchase_enabled": false
+  },
+  {
+    "sku": "car_07",
+    "type": "car",
+    "content_id": 6,
+    "title": "Семейный седан",
+    "free": false,
+    "enabled": true,
+    "purchase_enabled": false
+  },
+  {
+    "sku": "car_08",
+    "type": "car",
+    "content_id": 7,
+    "title": "Туристический кроссовер",
+    "free": false,
+    "enabled": true,
+    "purchase_enabled": false
+  },
+  {
+    "sku": "car_09",
+    "type": "car",
+    "content_id": 8,
+    "title": "Походный хэтчбек",
+    "free": false,
+    "enabled": true,
+    "purchase_enabled": false
+  },
+  {
+    "sku": "car_10",
+    "type": "car",
+    "content_id": 9,
+    "title": "Спортивный седан",
+    "free": false,
+    "enabled": true,
+    "purchase_enabled": false
+  }
+]

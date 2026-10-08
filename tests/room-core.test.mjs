@@ -327,6 +327,27 @@ test('late players receive cooked portions and cannot replace a host cauldron', 
   const late = r.add('Late', 1300);
   assert.deepEqual(r.sync({ token: late.token, state: state() }, 1400).world.camp_cooking, world.camp_cooking);
 });
+test('drive input transport limits and sanitizes prediction commands and preserves legacy clients', () => {
+  const {r,h,g} = setup();
+  const valid = {seq:1,ticks:5,throttle:1,steer:0.25,brake:false};
+  r.sync({token:g.token,state:{...state(),drive_enabled:true,drive_inputs:[valid,{...valid,seq:2,ticks:999},{...valid,seq:3,throttle:Infinity}]}},1100);
+  let reply = r.sync({token:h.token,state:state()},1200);
+  const guest = reply.players.find(p=>p.id===g.player);
+  assert.equal(guest.state.drive_enabled,true);
+  assert.deepEqual(guest.state.drive_inputs,[valid]);
+  r.sync({token:g.token,state:state()},1300);
+  reply = r.sync({token:h.token,state:state()},1400);
+  assert.equal(reply.players.find(p=>p.id===g.player).state.drive_enabled,false);
+});
+
+test('recovery survives transport while extra input fields and forged authority are discarded', () => {
+  const {r,h,g}=setup();
+  const input={seq:1,ticks:1,throttle:0,steer:0,brake:false,recover:true,condition:1000,pos:[999,0,0]};
+  r.sync({token:h.token,state:state(),world:{driving:{[g.player]:{ack:0,pos:[0,0,0]}}}},1100);
+  const reply=r.sync({token:g.token,state:{...state(),drive_enabled:true,drive_inputs:[input]},world:{driving:{[g.player]:{ack:999}}}},1200);
+  assert.equal(reply.world.driving[g.player].ack,0);
+  assert.deepEqual(reply.players.find(p=>p.id===g.player).state.drive_inputs,[{seq:1,ticks:1,throttle:0,steer:0,brake:false,recover:true}]);
+});
 
 test('long VK shortnames survive room roster without legacy 24-character truncation', () => {
   const room = new RoomState();

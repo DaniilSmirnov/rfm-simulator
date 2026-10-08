@@ -104,6 +104,40 @@ func run() -> void:
 	check(guest.racers.is_empty(), "removed rally car disappears from guest")
 	host.room._update_peers([])
 	check(host.room.peers.is_empty(), "departed player nodes removed")
+	var drive_state = {"drive_enabled": true, "drive_inputs": [{"seq": 1, "ticks": 12, "throttle": 1.0, "steer": 0.0, "brake": false}], "pos": [999, 0, 0], "car": [999, 0, 0], "in_car": true, "heading": 0.0, "yaw": 0.0, "pitch": 0.0, "beer": -1.0}
+	var driver = {"id": "driver", "name": "Driver", "slot": 1, "car_model": 0, "state_time": 10000, "state": drive_state.duplicate(true)}
+	host.room._update_peers([driver])
+	check(host.room.host_drives.driver.node.position.distance_to(host.stage.at(18)) < 2, "host initializes driving from trusted slot rather than claimed position")
+	var solver = host.room.host_drives.driver
+	driver.state = drive_state.duplicate(true)
+	driver.state.drive_inputs.append({"seq": 2, "ticks": 12, "throttle": 1.0, "steer": 0.0, "brake": false})
+	host.room._update_peers([driver])
+	check(solver.ack == 2 and host.room.peers.driver.state.car == host.room.a(solver.node.position), "host render and contacts advance when queued input shares the same client timestamp")
+	check(host.room.peers.driver.last_state_time == 10.0, "authoritative rendering does not refresh stale player activity")
+	host.room._update_peers([])
+	check(host.room.host_drives.is_empty(), "departed driver removes authoritative physics and budget")
+	guest.room.prediction_enabled = true
+	guest.room.prediction.reset(guest.car.position, guest.heading)
+	var visual = guest.car.get_children().filter(func(child): return child is MeshInstance3D)[0]
+	var original_visual = visual.transform
+	var original_car = guest.car.transform
+	guest.room.prediction.visual_offset = Vector3(0.5, 0.1, 0.4)
+	guest.room.smooth_car_visuals()
+	var once_visual = visual.transform
+	guest.room.smooth_car_visuals()
+	check(guest.car.transform == original_car and visual.transform.is_equal_approx(once_visual), "visual correction keeps physics root fixed and never accumulates between frames")
+	check(visual.position.distance_to(original_visual.origin + guest.car.basis.inverse() * guest.room.prediction.visual_offset) < 0.00001, "car mesh receives the same world correction as the camera")
+	guest.room.prediction.visual_offset = Vector3.ZERO
+	guest.room.smooth_car_visuals()
+	check(visual.transform.is_equal_approx(original_visual), "settled correction restores original model transform")
+	guest.room.prediction.active = false
+	check(guest.room.recover_drive() and guest.car.transform == original_car, "recovery waits for authority instead of taking the legacy teleport path during handshake")
+	guest.room.prediction.active = true
+	for i in range(guest.room.Prediction.LIMIT):
+		guest.room.prediction.pending.append({"seq": i + 1})
+	var queue_size = guest.room.prediction.pending.size()
+	check(guest.room.recover_drive() and guest.room.prediction.pending.size() == queue_size and guest.car.transform == original_car, "full input queue defers recovery without a local teleport or a success notice")
+	guest.room.prediction.pending.clear()
 	host.dead = true
 	host.menu_title.text = "Общий выезд окончен"
 	guest.room.apply_world(host.room.world_state())

@@ -3,5 +3,5 @@ window.RallyPlatform = {
   target:'vk-prototype',
   ready:async () => {},
   getProfile:async () => ({platform:'vk-prototype',nickname:'vk_prototype',verified:false}),
-  getEntitlements:async () => ({mode:'prototype',skus:[]}),
+  getEntitlements:async () => ({mode:'unrestricted',skus:[]}),
 };

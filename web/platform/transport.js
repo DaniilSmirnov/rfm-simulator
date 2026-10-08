@@ -17,7 +17,7 @@
       const raw = await request.text();
       if (raw.length > 4096) return Response.json({error:'Message too large'}, {status:413});
       const {method} = JSON.parse(raw);
-      const methods = {getProfile: () => RallyPlatform.getProfile(), getEntitlements: () => RallyPlatform.getEntitlements()};
+      const methods = {getBootstrap: async () => RallyPlatform.getBootstrap ? RallyPlatform.getBootstrap() : {profile:await RallyPlatform.getProfile(), entitlements:await RallyPlatform.getEntitlements(),catalog:[]}, getProfile: () => RallyPlatform.getProfile(), getEntitlements: () => RallyPlatform.getEntitlements()};
       if (!Object.hasOwn(methods, method)) return Response.json({error:'Unknown platform method'}, {status:400});
       await RallyPlatform.ready();
       return Response.json({result:await methods[method]()});

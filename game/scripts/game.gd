@@ -379,6 +379,12 @@ func _ready() -> void:
 		if profile.get("platform", "standalone") != "standalone":
 			room.name_input.text = str(profile.get("nickname", ""))
 			room.name_input.editable = false
+		for i in range(car_choice.items.size()):
+			car_choice.items[i] = Props.PLAYER_MODELS[i].name + (" · Закрыто" if not platform_service.can_use("car", i) else "")
+		for i in range(stage_choice.items.size()):
+			stage_choice.items[i] = Stage.STAGES[i] + (" · Закрыто" if not platform_service.can_use("stage", i) else "")
+		car_choice.select(selected_car)
+		stage_choice.select(selected_stage)
 	)
 	platform_service.failed.connect(func(message): push_error(message))
 	add_child(platform_service)
@@ -642,6 +648,9 @@ func _setup_audio() -> void:
 	add_child(soundscape)
 
 func start_game() -> void:
+	if platform_service != null and (not platform_service.can_use("car", car_choice.selected) or not platform_service.can_use("stage", stage_choice.selected, room.connected and not room.is_host)):
+		toast("Выбранный контент недоступен в VK. Дождитесь загрузки прав или выберите бесплатный вариант.")
+		return
 	if playing:
 		return
 	playing = true
@@ -744,6 +753,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		toast(("Выбрана парковка %d. Оранжевая точка на карте." if stage.urban else "Выбрана поляна %d. Оранжевая точка на карте.") % (target_clearing + 1))
 	elif event.is_action_pressed("recover"):
 		if not racing:
+			if room.connected and room.recover_drive():
+				return
 			car.position = stage.at(stage.road_s(car.position))
 			heading = atan2(-stage.direction(stage.road_s(car.position)).x, -stage.direction(stage.road_s(car.position)).z)
 			speed = 0
@@ -780,6 +791,9 @@ func _process(delta: float) -> void:
 	mushroom_effect.update(delta)
 	_update_eating(delta)
 	_update_camera(delta)
+	if room.connected and room.prediction_enabled:
+		camera.position += room.prediction.visual_offset
+	room.smooth_car_visuals()
 	_update_placement()
 	cargo.update(delta)
 	camp_cooking.update(delta, room.connected and not room.is_host)
@@ -840,6 +854,8 @@ func player_position() -> Vector3:
 	return car.position if in_car else walker
 
 func _drive(delta: float) -> void:
+	if room.connected and room.predict_drive(delta):
+		return
 	# Carry fractional ticks across render frames; cap long stalls at one second.
 	vehicle_motion.drive_clock += clampf(delta, 0, 1.0)
 	var dt: float = vehicle_motion.handling.STEP
@@ -1255,6 +1271,9 @@ func _cancel_drink() -> void:
 		beer_audio.stop()
 
 func select_player_car(variant: int) -> void:
+	if platform_service != null and not platform_service.can_use("car", posmod(variant, Props.PLAYER_MODELS.size())):
+		toast("Эта машина пока недоступна в VK. Продажи ещё не открыты.")
+		return
 	selected_car = posmod(variant, Props.PLAYER_MODELS.size())
 	if car_choice != null:
 		car_choice.select(selected_car)
@@ -1264,10 +1283,13 @@ func select_player_car(variant: int) -> void:
 	add_child(car)
 	car.transform = transform_before
 
-func select_stage(variant: int) -> void:
+func select_stage(variant: int, hosted_guest: bool = false) -> void:
 	if playing:
 		return
 	variant = clampi(variant, 0, Stage.STAGES.size() - 1)
+	if platform_service != null and not platform_service.can_use("stage", variant, hosted_guest and room.connected and not room.is_host):
+		toast("Этот спецучасток пока недоступен в VK. Продажи ещё не открыты.")
+		return
 	if variant == selected_stage:
 		return
 	jump_height = 0
@@ -1605,6 +1627,8 @@ func _update_racers(delta: float) -> void:
 
 func stone_impact(id: String) -> void:
 	impact_serials[id] = int(impact_serials.get(id, 0)) + 1
+	if room.is_host and room.host_drives.has(id) and room.peers.has(id) and room.peers[id].state.in_car:
+		room.host_drives[id].condition = maxf(0, room.host_drives[id].condition - 0.8)
 	if id == room.player_id or id == "local":
 		impact_shake = 0.8
 		if in_car:

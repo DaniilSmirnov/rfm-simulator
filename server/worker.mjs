@@ -1,4 +1,5 @@
 import { AuthError, authenticateLaunch, authenticateSession } from './auth-vk.mjs';
+import { validateRoomSelection } from './store.mjs';
 import { RoomState, RoomError } from './room-core.mjs';
 const json = (data, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
 export class RallyRoom {
@@ -71,7 +72,9 @@ export default {
           let body;
           try { body = JSON.parse(raw); } catch { return json({ error: 'Некорректное сообщение.' }, 400); }
           if (!body || typeof body !== 'object' || Array.isArray(body)) return json({ error: 'Некорректное сообщение.' }, 400);
-          request = new Request(request, { body: JSON.stringify({ ...body, name: session.nickname }) });
+          const denied = validateRoomSelection(body, url.pathname === '/api/rooms');
+          if (denied) return json({error:denied}, 403);
+          request = new Request(request, { body: JSON.stringify({ ...body, car_model: body.car_model ?? 0, name: session.nickname }) });
         }
       }
     } catch (error) {

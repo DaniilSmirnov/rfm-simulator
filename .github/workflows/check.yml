@@ -74,6 +74,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      - name: Verify two native multiplayer clients
+        run: node scripts/test-multiplayer.mjs
 
       - name: Verify production artifacts
         run: |
@@ -108,6 +110,7 @@ jobs:
         run: |
           node scripts/test-web-startup.mjs
           node scripts/test-web-physics.mjs
+          node scripts/test-multiplayer.mjs --web
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -117,6 +120,7 @@ jobs:
             dist/
             branding-loading*.png
             web-startup-*.png
+            network-test.log
           if-no-files-found: warn
 
   vk-prototype:

@@ -1,8 +1,10 @@
-# Rally Fans Simulator — VK Mini Apps / Games integration
+# Rally Fans Map — VK Mini Apps / Games integration
 
-Status: design specification  
+Status: authentication and VK content-access foundation implemented; persistence and payments pending
 Target: a dedicated VK build that coexists with the current standalone web build  
 Repository: `DaniilSmirnov/rfm-simulator`
+
+Текущий статус и очередность реализации: [план интеграции](prompts/VK_MINI_APPS_IMPLEMENTATION.md). Разделы ниже описывают целевое состояние; не все возможности уже реализованы. Общая сборка сейчас публикует standalone `/` и VK `/vk/` в одном Worker.
 
 ## 1. Goal
 

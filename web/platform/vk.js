@@ -1,5 +1,5 @@
 (() => {
-  let profile, entitlements, session;
+  let profile, entitlements, session, catalog;
   // Preserve the real network transport, before the browser-local handler wraps it.
   const networkFetch = window.fetch.bind(window);
 
@@ -42,7 +42,8 @@
       throw new Error('Некорректный ответ сервера авторизации VK.');
     }
     profile = data.profile;
-    entitlements = data.entitlements;
+    entitlements = {mode:'restricted',skus:Array.isArray(data.entitlements.skus) ? data.entitlements.skus : []};
+    catalog = Array.isArray(data.catalog) ? data.catalog : [];
     session = data.session;
   })();
   ready.catch(() => {});
@@ -56,6 +57,7 @@
       headers.set('X-Rally-Platform', 'vk');
       return new Request(request, {headers});
     },
+    getBootstrap:async () => {await ready;return {profile,entitlements,catalog};},
     getProfile:async () => {await ready;return profile;},
     getEntitlements:async () => {await ready;return entitlements;},
   };
