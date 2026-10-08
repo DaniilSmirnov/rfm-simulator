@@ -122,9 +122,38 @@ func roughness(s: float) -> float:
 	# Broad crests plus broken ruts; deterministic across all room members.
 	return sin(s * 0.46) * 0.075 + sin(s * 1.13) * 0.035 + pow(maxf(0, cos((s - 32.0) * TAU / 46.0)), 10) * 0.55
 
+# Compact smooth profiles keep junctions and village paving untouched.
+func gravel_profile(s: float, center: float, half_length: float) -> float:
+	var t = absf(s - center) / half_length
+	return (1.0 + cos(t * PI)) * 0.5 if t < 1.0 else 0.0
+
+func gravel_relief(pos: Vector3, s: float) -> float:
+	if not village_forest_detour(s):
+		return 0.0
+	var lateral = (pos - at(s)).dot(side(s))
+	var edge = 1.0 - smoothstep(road_width(s) * 0.45, road_width(s) * 0.75, absf(lateral))
+	var blend = smoothstep(386.0, 398.0, s) * (1.0 - smoothstep(474.0, 484.0, s))
+	var bumps = sin(s * 1.8) * 0.08 + sin(s * 0.77 + lateral * 1.5) * 0.10
+	var ramps = gravel_profile(s, 423.0, 5.0) * 0.90 + gravel_profile(s, 450.0, 4.0) * 0.65
+	var wheel_rut = exp(-pow((absf(lateral) - 0.80) / 0.24, 2.0))
+	var ruts = -wheel_rut * (0.09 + 0.04 * sin(s * 0.6))
+	var puddles = -gravel_profile(s, 412.0, 2.4) * 0.16 * exp(-pow((lateral + 0.55) / 0.8, 2.0))
+	puddles -= gravel_profile(s, 463.0, 2.6) * 0.18 * exp(-pow((lateral - 0.55) / 0.8, 2.0))
+	return (bumps + ramps + ruts + puddles) * edge * blend
+
 func grip(pos: Vector3) -> float:
 	if urban:
-		return (0.62 if village_forest_detour(road_s(pos)) else (0.86 if village(road_s(pos)) else 1.02)) if road_distance(pos) < road_width(road_s(pos)) * 0.55 else 0.58
+		var nearest = urban_nearest(pos)
+		var s: float = nearest.s
+		if nearest.distance >= road_width(s) * 0.55:
+			return 0.58
+		var base = 0.62 if village_forest_detour(s) else (0.86 if village(s) else 1.02)
+		if village_forest_detour(s):
+			var lateral = (pos - at(s)).dot(side(s))
+			var wet = gravel_profile(s, 412.0, 2.4) * exp(-pow((lateral + 0.55) / 0.8, 2.0))
+			wet += gravel_profile(s, 463.0, 2.6) * exp(-pow((lateral - 0.55) / 0.8, 2.0))
+			return lerpf(base, 0.38, clampf(wet, 0.0, 1.0))
+		return base
 	if winter:
 		if road_distance(pos) > WIDTH * 0.55:
 			return 0.32
@@ -144,7 +173,7 @@ func ground(pos: Vector3) -> float:
 		var distance: float = nearest.distance
 		if village(s):
 			var junction = absf(s - 370.0) <= 3.0 or absf(s - 500.0) <= 3.0
-			return (p.y + roughness(s) * (1.0 - smoothstep(3.0, 8.0, distance)) + sin(pos.x * 0.12 + pos.z * 0.085) * 0.48 * smoothstep(5.0, 13.0, distance)) if village_forest_detour(s) else (2.36 if not junction and distance > 3.75 and distance < 6.45 else 2.0)
+			return (p.y + gravel_relief(pos, s) + roughness(s) * (1.0 - smoothstep(3.0, 8.0, distance)) + sin(pos.x * 0.12 + pos.z * 0.085) * 0.48 * smoothstep(5.0, 13.0, distance)) if village_forest_detour(s) else (2.36 if not junction and distance > 3.75 and distance < 6.45 else 2.0)
 		var hillside = maxf(distance - 6.0, 0) * 0.12
 		var height = p.y + hillside + sin(pos.x * 0.075 + s * 0.025) * minf(hillside * 0.2, 1.5)
 		for parking in clearings:
@@ -428,10 +457,11 @@ func _build_road() -> void:
 			for segment in range(divisions):
 				var begin = s + float(segment) / divisions
 				var end = s + float(segment + 1) / divisions
-				for strip in range(4):
+				var strips = 8 if village_forest_detour(s) else 4
+				for strip in range(strips):
 					var width = road_width(s)
-					var left = -width * 0.5 + width * float(strip) / 4.0
-					var right = -width * 0.5 + width * float(strip + 1) / 4.0
+					var left = -width * 0.5 + width * float(strip) / strips
+					var right = -width * 0.5 + width * float(strip + 1) / strips
 					var a = road_surface_vertex(begin, right)
 					var b = road_surface_vertex(begin, left)
 					var c = road_surface_vertex(end, right)
@@ -469,6 +499,16 @@ func _build_road() -> void:
 	n.material_override = mat
 	n.name = "StageRoadSurface"
 	add_child(n)
+	if urban:
+		for station in [412.0, 463.0]:
+			var offset = -0.55 if station < 440.0 else 0.55
+			var p = at(station) + side(station) * offset
+			p.y = ground(p) + 0.07
+			var puddle = RallyProps.cylinder(self, p, 0.68, 0.68, 0.012, Color("56645d"), 24)
+			puddle.name = "GravelPuddle_%d" % int(station)
+			puddle.scale.z = 2.0
+			puddle.rotation.y = atan2(-direction(station).x, -direction(station).z)
+
 
 # Four instanced draw calls for the forest instead of thousands of nodes.
 # Collision positions remain in `trees`, matching the original gameplay.

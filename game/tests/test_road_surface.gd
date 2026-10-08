@@ -15,6 +15,8 @@ func run() -> void:
 			check(is_equal_approx(stage.road_width(435.0), 4 * 0.8 + 0.76), "gravel width matches the five cobbled side-lane rows")
 			check(is_equal_approx(stage.road_width(180.0), stage.WIDTH), "country main road retains its width")
 		stage._build_road()
+		if variant == 2:
+			check(stage.get_node_or_null("GravelPuddle_412") != null and stage.get_node_or_null("GravelPuddle_463") != null, "gravel depressions contain visible water surfaces")
 		var mesh: ArrayMesh = stage.get_node("StageRoadSurface").mesh
 		var arrays = mesh.surface_get_arrays(0)
 		var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
