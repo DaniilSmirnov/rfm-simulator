@@ -35,7 +35,6 @@
   };
 
   const install = () => {
-    if (window.RallyViewport?.isVKMobile()) return null;
     if (document.getElementById(id)) return document.getElementById(id);
 
     const style = document.createElement('style');
