@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import { DatabaseSync } from 'node:sqlite';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createHash, webcrypto } from 'node:crypto';
@@ -12,15 +13,18 @@ export function signedCallback(fields, secret = 'test-secret') {
   return new URLSearchParams({...values,sig:createHash('md5').update(raw+secret).digest('hex')}).toString();
 }
 const order = {notification_type:'order_status_change_test',order_id:'701',item_id:'stage_02',item_price:'1',status:'chargeable'};
-function setup() {
-  const data = new Map();
-  const storage = {get:async k=>structuredClone(data.get(k)),put:async(k,v)=>data.set(k,structuredClone(v)),transaction:async fn=>{
-    const backup = structuredClone(data);
-    try {return await fn(storage);} catch (e) {data.clear();for(const [k,v] of backup)data.set(k,v);throw e;}
-  }};
+function setup(legacyRecords = []) {
+  const legacy = new Map(legacyRecords);
+  const db = new DatabaseSync(':memory:');
+  const storage = {
+    list:async ({prefix,startAfter,limit})=>new Map([...legacy].filter(([k])=>k.startsWith(prefix) && (!startAfter || k > startAfter)).sort().slice(0,limit)),
+    sql:{exec:(query,...params)=>db.prepare(query).all(...params)},
+    transactionSync:fn=>{db.exec('BEGIN');try {const r=fn();db.exec('COMMIT');return r;}catch(e){db.exec('ROLLBACK');throw e;}}
+  };
+  const data = {get size(){return db.prepare('SELECT COUNT(*) AS n FROM payment_orders').get().n;}};
   let object = new VkPayments({storage});
   const env = {VK_APP_ID:'54809523',VK_APP_SECRET:'test-secret',VK_PAYMENTS_MODE:'test',VK_PAYMENTS_TEST_USERS:'42, 43',VK_STAGE_02_TEST_PRICE:'1',PAYMENTS:{idFromName:x=>x,get:()=>({fetch:r=>object.fetch(r)})}};
-  return {env,data,restart:()=>{object=new VkPayments({storage});}};
+  return {env,data,db,legacy,storage,restart:()=>{object=new VkPayments({storage});}};
 }
 test('only configured testers see one test product; disabled and real mode stay closed',async()=>{
   const {env}=setup();
@@ -70,7 +74,7 @@ test('atomic idempotent receipt and ownership survive recreation; changing owner
  assert.deepEqual(await paymentCallback(signedCallback(order),env),receipt);
  assert.deepEqual((await accountStore(env,'42')).entitlements.skus,['stage_02']);
  assert.deepEqual((await accountStore(env,'43')).entitlements.skus,[]);
- assert.equal(data.size,3);
+ assert.equal(data.size,1);
  await assert.rejects(paymentCallback(signedCallback({...order,user_id:'43'}),env));
  env.VK_STAGE_02_TEST_PRICE='2';
  assert.deepEqual(await paymentCallback(signedCallback(order),env),receipt,'old receipt is replayed even after price change');
@@ -78,7 +82,7 @@ test('atomic idempotent receipt and ownership survive recreation; changing owner
  assert.deepEqual((await accountStore({...env,VK_PAYMENTS_MODE:'disabled'},'42')).entitlements.skus,[]);
 });
 test('storage failure never acknowledges the order and callback stays retriable',async()=>{
- const storage={get:async()=>undefined,transaction:async()=>{throw Error('storage unavailable');}};
+ const storage={sql:{exec:()=>{throw Error('storage unavailable');}}};
  const {env}=setup();const object=new VkPayments({storage});env.PAYMENTS.get=()=>object;
  const response=await worker.fetch(new Request('https://game.test/api/vk/payments/callback',{method:'POST',body:signedCallback(order)}),env);
  const body=await response.json();assert.equal(body.error.critical,false);assert.equal(body.error.error_code,1);
@@ -151,17 +155,41 @@ test('actual VK test order grants once with SKU and item_price and rejects incon
  assert.deepEqual(await callback(fields),receipt);
  restart();assert.deepEqual(await callback(fields),receipt);
  assert.deepEqual((await accountStore(env,fields.user_id)).entitlements.skus,['stage_02']);
- assert.equal(data.size,3);
+ assert.equal(data.size,1);
  for(const patch of [{item:'car_04'},{item_id:'car_04'},{item_price:'2'},{item_price:''},{item_price:'1.0'},{item_price:'-1'},{item_price:undefined},{amount:'2'},{notification_type:'order_status_change'},{receiver_id:'42'}]) {
   const p={...fields,...patch,order_id:'2366820'};
   for(const key of Object.keys(p)) if(p[key]===undefined) delete p[key];
   assert.ok((await callback(p)).error);
  }
- assert.equal(data.size,3);
+ assert.equal(data.size,1);
 });
 test('legacy numeric item and amount remain compatible with SKU callbacks',async()=>{
  const {env}=setup();
  const legacy={notification_type:'order_status_change_test',order_id:'701',item_id:'2',amount:'1',status:'chargeable'};
  const receipt=await paymentCallback(signedCallback(legacy),env);
  assert.deepEqual(await paymentCallback(signedCallback(order),env),receipt);
+});
+
+test('legacy receipts migrate once; orphan rights never grant and SQL deletion survives restart',async()=>{
+ const {env,db,restart}=setup([['orders:test:701',{user:'42',sku:'stage_02',amount:1,receipt:{order_id:701,app_order_id:701},created_at:1}],['entitlements:test:43',['stage_02']]]);
+ assert.deepEqual((await accountStore(env,'42')).entitlements.skus,['stage_02']);
+ assert.deepEqual((await accountStore(env,'43')).entitlements.skus,[]);
+ db.prepare('DELETE FROM payment_orders WHERE user_id = ?').run('42');
+ restart();
+ assert.deepEqual((await accountStore(env,'42')).entitlements.skus,[]);
+});
+
+test('SQL edits control ownership and another confirmed order preserves access',async()=>{
+ const {env,db}=setup();
+ await paymentCallback(signedCallback(order),env);
+ await paymentCallback(signedCallback({...order,order_id:'702'}),env);
+ db.prepare('DELETE FROM payment_orders WHERE order_id = ?').run('701');
+ assert.deepEqual((await accountStore(env,'42')).entitlements.skus,['stage_02']);
+ db.prepare('UPDATE payment_orders SET user_id = ? WHERE order_id = ?').run('43','702');
+ assert.deepEqual((await accountStore(env,'42')).entitlements.skus,[]);
+ assert.deepEqual((await accountStore(env,'43')).entitlements.skus,['stage_02']);
+});
+test('invalid legacy receipt blocks migration rather than granting phantom ownership',async()=>{
+ const {env}=setup([['orders:test:701',{user:'42',sku:'stage_02',amount:1,receipt:{order_id:700,app_order_id:701},created_at:1}]]);
+ await assert.rejects(accountStore(env,'42'));
 });

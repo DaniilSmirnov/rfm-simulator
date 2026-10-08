@@ -38,6 +38,7 @@ func run() -> void:
 	game.platform_service.catalog[1].purchase_enabled = true
 	game.platform_service.catalog[1].price = 1
 	game.lobby_ui.refresh()
+	check(not game.lobby_ui.states[1].text.contains("Куплено"), "unpaid stage has no purchase label")
 	check(game.lobby_ui.purchase_button.visible and game.lobby_ui.check_purchase.visible, "test winter stage exposes purchase and reconciliation")
 	game.platform_service.busy = true
 	game.platform_service.purchase_message = "Ожидаем VK…"
@@ -46,6 +47,7 @@ func run() -> void:
 	game.platform_service.busy = false
 	game.platform_service.entitlements.skus = ["stage_02"]
 	game.lobby_ui.refresh()
+	check(game.lobby_ui.states[1].text.contains("Куплено"), "server ownership shows purchase label")
 	check(not game.room.create_button.disabled and not game.lobby_ui.purchase_button.visible, "confirmed winter ownership unlocks host and hides purchase")
 	game.select_stage(0)
 	game.lobby_ui.refresh()

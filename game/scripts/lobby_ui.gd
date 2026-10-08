@@ -98,7 +98,8 @@ func refresh() -> void:
 	var stage_ok = allowed("stage", game.stage_choice.selected)
 	for i in range(2):
 		var ok = car_ok if i == 0 else stage_ok
-		states[i].text = "Доступно для выезда" if ok else ("Закрыто · доступна тестовая покупка" if i == 1 and can_buy else "Закрыто · продажи ещё не открыты")
+		var bought = service != null and service.owns("car" if i == 0 else "stage", game.car_choice.selected if i == 0 else game.stage_choice.selected)
+		states[i].text = ("Куплено · доступно для выезда" if bought else "Доступно для выезда") if ok else ("Закрыто · доступна тестовая покупка" if i == 1 and can_buy else "Закрыто · продажи ещё не открыты")
 		states[i].add_theme_color_override("font_color", Color("b2bea1") if ok else Color("ffbc83"))
 	background.visible = not game.playing
 	background.texture = null if game.playing else load("res://textures/previews/backdrop_%d.webp" % game.selected_stage)
