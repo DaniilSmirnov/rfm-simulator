@@ -69,7 +69,9 @@ export class RoomState {
     const host = this.data.players[this.data.host];
     const staleHost = !this.data.world_time || now - this.data.world_time > 3500;
     const world = this.data.world && typeof this.data.world === "object"
-      ? {...this.data.world, paused: this.data.world.paused === true || host?.background === true || staleHost}
+      ? (host?.background === true || staleHost
+          ? {...this.data.world, paused: true}
+          : this.data.world)
       : this.data.world;
     return { server_time: now, world_time: this.data.world_time ?? 0, stage: this.data.stage ?? 0, host: this.data.host, world, accepted: p.seq,
       players: Object.values(this.data.players).map(({ id, name, slot, car_model, state_time, state }) => ({ id, name, slot, car_model: car_model ?? slot, state_time: state_time ?? 0, state })),
