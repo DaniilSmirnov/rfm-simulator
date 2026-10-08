@@ -1311,8 +1311,11 @@ static func add_player_trunk(root: Node3D, variant: int) -> Node3D:
 	var hinge = Node3D.new()
 	hinge.name = "TrunkHinge"
 	root.add_child(hinge)
-	hinge.position = Vector3(0, p.top, p.hinge)
-	var planes = [Vector4(1, 0, 0, p.half), Vector4(-1, 0, 0, p.half), Vector4(0, 0, -1, -p.hinge), Vector4(0, -1, 0, -p.floor - 0.10), Vector4(0, 1, 0, p.top + 0.07)]
+	# Only the imported hatch uses a tighter rear-door cut. The trunk profile
+	# still controls cargo placement, so seats and stored equipment do not move.
+	var lid_start: float = float(root.get_meta("trunk_lid_start_z", p.hinge))
+	hinge.position = Vector3(0, p.top, lid_start)
+	var planes = [Vector4(1, 0, 0, p.half), Vector4(-1, 0, 0, p.half), Vector4(0, 0, -1, -lid_start), Vector4(0, -1, 0, -p.floor - 0.10), Vector4(0, 1, 0, p.top + 0.07)]
 	var bodywork: Array = root.get_children().duplicate()
 	for child in bodywork:
 		if not child is MeshInstance3D:
