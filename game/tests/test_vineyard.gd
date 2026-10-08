@@ -30,6 +30,34 @@ func run() -> void:
 	for p in stage.city.lavender_positions:
 		lavender_clear = lavender_clear and -p.z < 300.0 and stage.road_distance(p) >= 6.0
 	check(lavender_clear, "lavender stays before village and leaves the road clear")
+	var forest_crops_clear = true
+	for p in stage.city.tree_positions:
+		forest_crops_clear = forest_crops_clear and stage.city.crop_clear(p)
+	check(forest_crops_clear, "all village forest trees leave six metres around cultivated plants")
+	var soil_contact = true
+	var soil_tiles = 0
+	for node in stage.get_children():
+		if not str(node.name).begins_with("VineyardSoil_"):
+			continue
+		soil_tiles += 1
+		var arrays = node.mesh.surface_get_arrays(0)
+		var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		soil_contact = soil_contact and arrays[Mesh.ARRAY_NORMAL][0].y > 0.0
+		for i in range(0, vertices.size(), 31):
+			var p: Vector3 = vertices[i]
+			soil_contact = soil_contact and absf(p.y - stage.terrain_surface_height(p)) < 0.025
+		var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+		for i in range(0, indices.size() - 2, 111):
+			var p = (vertices[indices[i]] + vertices[indices[i + 1]] + vertices[indices[i + 2]]) / 3.0
+			soil_contact = soil_contact and absf(p.y - stage.terrain_surface_height(p)) < 0.025
+	check(stage.city.crop_heights.is_empty(), "temporary planting height cache is released after generation")
+	check(soil_contact and soil_tiles > 0 and soil_tiles < 40, "vineyard soil follows rendered hills using spatial mesh tiles")
+	var slope = stage.at(178.0) + stage.side(178.0) * 42.0
+	var basis = stage.terrain_basis(slope, 0.0)
+	check(basis.y.y > 0.85 and basis.y.distance_to(Vector3.UP) > 0.01, "planting frame follows gentle rendered hillside")
+	for station in [407.0, 412.0, 463.0, 469.0]:
+		check(stage.get_node_or_null("GravelPuddle_%d" % int(station)) != null, "gravel has water in physical depressions")
+
 	var grape_positions = stage.collectibles.filter(func(item): return item.get("name", "") == "виноград")
 	check(not grape_positions.is_empty() and stage.find_children("VineyardRow_18_*", "Node3D", true, false).is_empty() and not stage.find_children("VineyardRow_585_*", "Node3D", true, false).is_empty(), "grapes remain only in finish-side vineyards")
 	var bell = stage.city.bell

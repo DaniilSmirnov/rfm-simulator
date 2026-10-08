@@ -71,6 +71,11 @@ func run() -> void:
 	for fps in [24.0, 60.0, 144.0]:
 		render_fps = fps
 		check(route(city, church.transform, path), "actual walking climbs ten tower flights at %d FPS" % fps)
+	check(route(city, church.transform, [Vector3(2.85, 24.1, -13.2), Vector3(2.85, 24.1, -9.2)]), "outer tower deck strip has continuous support beside stairwell")
+	check(route(city, church.transform, [Vector3(-2.85, 24.1, -13.2), Vector3(-2.85, 24.1, -9.2)]), "left tower deck extends continuously to outer balustrade")
+	for z in [-12.8, -11.1, -9.6]:
+		var seam: Vector3 = church.transform * Vector3(2.4, 24.1, z)
+		check(absf(city.walking_floor(seam, seam.y) - seam.y) < 0.01, "outer stair/deck seam supports feet")
 	var reverse = path.duplicate()
 	reverse.reverse()
 	check(route(city, church.transform, reverse), "walk back down tower without jumps or teleportation")

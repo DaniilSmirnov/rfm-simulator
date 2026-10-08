@@ -136,13 +136,16 @@ func gravel_relief(pos: Vector3, s: float) -> float:
 	var lateral = (pos - at(s)).dot(side(s))
 	var edge = 1.0 - smoothstep(road_width(s) * 0.45, road_width(s) * 0.75, absf(lateral))
 	var blend = smoothstep(386.0, 398.0, s) * (1.0 - smoothstep(474.0, 484.0, s))
+	var bank = lateral * sin(s * 0.095) * 0.10
 	var bumps = sin(s * 1.8) * 0.08 + sin(s * 0.77 + lateral * 1.5) * 0.10
 	var ramps = gravel_profile(s, 423.0, 5.0) * 0.90 + gravel_profile(s, 450.0, 4.0) * 0.65
 	var wheel_rut = exp(-pow((absf(lateral) - 0.80) / 0.24, 2.0))
 	var ruts = -wheel_rut * (0.09 + 0.04 * sin(s * 0.6))
-	var puddles = -gravel_profile(s, 412.0, 2.4) * 0.16 * exp(-pow((lateral + 0.55) / 0.8, 2.0))
+	var puddles = -gravel_profile(s, 407.0, 2.2) * 0.13 * exp(-pow((lateral - 0.5) / 0.7, 2.0))
+	puddles -= gravel_profile(s, 469.0, 2.2) * 0.14 * exp(-pow((lateral + 0.5) / 0.7, 2.0))
+	puddles -= gravel_profile(s, 412.0, 2.4) * 0.16 * exp(-pow((lateral + 0.55) / 0.8, 2.0))
 	puddles -= gravel_profile(s, 463.0, 2.6) * 0.18 * exp(-pow((lateral - 0.55) / 0.8, 2.0))
-	return (bumps + ramps + ruts + puddles) * edge * blend
+	return (bank + bumps + ramps + ruts + puddles) * edge * blend
 
 func grip(pos: Vector3) -> float:
 	if urban:
@@ -153,7 +156,9 @@ func grip(pos: Vector3) -> float:
 		var base = 0.62 if village_forest_detour(s) else (0.86 if village(s) else 1.02)
 		if village_forest_detour(s):
 			var lateral = (pos - at(s)).dot(side(s))
-			var wet = gravel_profile(s, 412.0, 2.4) * exp(-pow((lateral + 0.55) / 0.8, 2.0))
+			var wet = gravel_profile(s, 407.0, 2.2) * exp(-pow((lateral - 0.5) / 0.7, 2.0))
+			wet += gravel_profile(s, 469.0, 2.2) * exp(-pow((lateral + 0.5) / 0.7, 2.0))
+			wet += gravel_profile(s, 412.0, 2.4) * exp(-pow((lateral + 0.55) / 0.8, 2.0))
 			wet += gravel_profile(s, 463.0, 2.6) * exp(-pow((lateral - 0.55) / 0.8, 2.0))
 			return lerpf(base, 0.38, clampf(wet, 0.0, 1.0))
 		return base
@@ -180,9 +185,9 @@ func ground(pos: Vector3) -> float:
 		var distance: float = nearest.distance
 		if village(s):
 			var junction = absf(s - 370.0) <= 3.0 or absf(s - 500.0) <= 3.0
-			return (p.y + gravel_relief(pos, s) + roughness(s) * (1.0 - smoothstep(3.0, 8.0, distance)) + sin(pos.x * 0.12 + pos.z * 0.085) * 0.48 * smoothstep(5.0, 13.0, distance)) if village_forest_detour(s) else (2.36 if not junction and distance > 3.75 and distance < 6.45 else 2.0)
-		var hillside = maxf(distance - 6.0, 0) * 0.12
-		var height = p.y + hillside + sin(pos.x * 0.075 + s * 0.025) * minf(hillside * 0.2, 1.5)
+			return (p.y + gravel_relief(pos, s) + roughness(s) * (1.0 - smoothstep(3.0, 8.0, distance)) + sin(pos.x * 0.035 + pos.z * 0.025) * 0.35 * smoothstep(5.0, 13.0, distance)) if village_forest_detour(s) else (2.36 if not junction and distance > 3.75 and distance < 6.45 else 2.0)
+		var hillside = (sqrt(pow(maxf(distance - 6.0, 0), 2.0) + 144.0) - 12.0) * 0.085
+		var height = p.y + hillside + sin(pos.x * 0.025 + s * 0.012) * minf(hillside * 0.12, 0.65)
 		for parking in clearings:
 			var d = flat(pos).distance_to(flat(parking))
 			height = lerpf(parking.y, height, smoothstep(5.0, 11.0, d))
@@ -255,6 +260,15 @@ func terrain_surface_height(pos: Vector3) -> float:
 	if u + v <= 1.0:
 		return a + (b - a) * u + (c - a) * v
 	return d + (c - d) * (1.0 - u) + (b - d) * (1.0 - v)
+
+func terrain_basis(pos: Vector3, yaw: float, sampler: Callable = Callable()) -> Basis:
+	var heights = sampler if sampler.is_valid() else terrain_surface_height
+	var dx: float = heights.call(pos + Vector3(0.2, 0, 0)) - heights.call(pos - Vector3(0.2, 0, 0))
+	var dz: float = heights.call(pos + Vector3(0, 0, 0.2)) - heights.call(pos - Vector3(0, 0, 0.2))
+	var up = Vector3(-dx / 0.4, 1.0, -dz / 0.4).normalized()
+	var forward = Basis(Vector3.UP, yaw).z
+	var right = up.cross(forward).normalized()
+	return Basis(right, up, right.cross(up).normalized())
 
 func _trail_sample(pos: Vector3, trail: Dictionary) -> Dictionary:
 	var nearest_distance = INF
@@ -450,6 +464,9 @@ func road_surface_color(p: Vector3, s: float) -> Color:
 	var base = Color("708a9c") if winter else ((Color("857763") if village_forest_detour(s) else Color("525757")) if urban else Color("9d896b"))
 	# Continuous low-frequency shading instead of a random colour per triangle.
 	var shade = sin(p.x * 0.17 + p.z * 0.11) * 0.025 + sin(p.z * 0.29 - p.x * 0.07) * 0.015
+	if village_forest_detour(s):
+		var lateral = (p - at(s)).dot(side(s))
+		base = base.darkened(exp(-pow((absf(lateral) - 0.80) / 0.28, 2.0)) * 0.18)
 	return base.lightened(shade)
 
 func _build_road() -> void:
@@ -507,14 +524,45 @@ func _build_road() -> void:
 	n.name = "StageRoadSurface"
 	add_child(n)
 	if urban:
-		for station in [412.0, 463.0]:
-			var offset = -0.55 if station < 440.0 else 0.55
+		for station in [407.0, 412.0, 463.0, 469.0]:
+			var offset = (-0.55 if station < 440.0 else 0.55) if station in [412.0, 463.0] else (0.5 if station < 440.0 else -0.5)
 			var p = at(station) + side(station) * offset
 			p.y = ground(p) + 0.07
-			var puddle = RallyProps.cylinder(self, p, 0.68, 0.68, 0.012, Color("56645d"), 24)
-			puddle.name = "GravelPuddle_%d" % int(station)
-			puddle.scale.z = 2.0
-			puddle.rotation.y = atan2(-direction(station).x, -direction(station).z)
+			_build_gravel_puddle(p, station)
+
+func _build_gravel_puddle(center: Vector3, station: float) -> void:
+	var basis = Basis(Vector3.UP, atan2(-direction(station).x, -direction(station).z))
+	var shoreline: Array[Vector3] = []
+	for i in range(48):
+		var angle = i * TAU / 48.0
+		var ray = basis * Vector3(cos(angle) * 0.68, 0, sin(angle) * 1.36)
+		var low = 0.0
+		var high = 1.0
+		# Stop at the first bank; water stays horizontal, below surrounding road.
+		for sample in range(1, 13):
+			var radius = float(sample) / 12.0
+			if ground(center + ray * radius) + 0.04 >= center.y:
+				high = radius
+				break
+			low = radius
+		for iteration in range(8):
+			var radius = (low + high) * 0.5
+			if ground(center + ray * radius) + 0.04 >= center.y:
+				high = radius
+			else:
+				low = radius
+		shoreline.append(center + ray * low)
+	var builder = SurfaceTool.new()
+	builder.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for i in range(48):
+		for point in [center, shoreline[i], shoreline[(i + 1) % 48]]:
+			builder.add_vertex(point)
+	builder.generate_normals()
+	var puddle = MeshInstance3D.new()
+	puddle.name = "GravelPuddle_%d" % int(station)
+	puddle.mesh = builder.commit()
+	puddle.material_override = RallyProps.material(Color("56645d"))
+	add_child(puddle)
 
 
 # Four instanced draw calls for the forest instead of thousands of nodes.
@@ -1033,7 +1081,7 @@ func village_main_at(s: float) -> Vector3:
 	var village_blend = smoothstep(260.0, 300.0, s) * (1.0 - smoothstep(570.0, 610.0, s))
 	var country_x = sin(s / 85.0) * 34.0 + sin(s / 43.0) * 10.0
 	var village_x = sin((s - 300.0) / 100.0) * 14.0
-	var height = 2.0 + (1.0 - village_blend) * (7.0 + sin(s / 95.0) * 3.0 + s * 0.004)
+	var height = 2.0 + (1.0 - village_blend) * (7.0 + sin(s / 95.0) * 3.0 + s * 0.004 + sin(s / 14.0) * 0.32 + gravel_profile(s, 178.0, 9.0) * 1.1 + gravel_profile(s, 686.0, 8.0) * 0.95)
 	return Vector3(lerpf(country_x, village_x, village_blend), height, -s)
 
 func village_main_direction(s: float) -> Vector3:

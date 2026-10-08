@@ -97,4 +97,28 @@ static func advance(stage, progress: float, metres: float, reverse: bool, offset
 	var station = stage.LENGTH - progress if reverse else progress
 	var lateral = offset * sign_value
 	var prediction = metres / metric(stage, station, lateral)
-	return metres / metric(stage, station + sign_value * prediction * 0.5, lateral)
+	prediction = metres / metric(stage, station + sign_value * prediction * 0.5, lateral)
+	# A step may cross a station boundary with a different metre scale.
+	# Correct against the travelled chord rather than trusting one derivative.
+	var start = offset_path(stage, station, lateral)
+	var end = offset_path(stage, station + sign_value * prediction, lateral)
+	var travelled = Vector2(end.x - start.x, end.z - start.z).length()
+	if absf(travelled - metres) <= 0.001:
+		return prediction
+	var low = 0.0
+	var high = prediction
+	for expansion in range(6):
+		if travelled >= metres:
+			break
+		high *= 2.0
+		end = offset_path(stage, station + sign_value * high, lateral)
+		travelled = Vector2(end.x - start.x, end.z - start.z).length()
+	for iteration in range(14):
+		prediction = (low + high) * 0.5
+		end = offset_path(stage, station + sign_value * prediction, lateral)
+		travelled = Vector2(end.x - start.x, end.z - start.z).length()
+		if travelled > metres:
+			high = prediction
+		else:
+			low = prediction
+	return prediction
