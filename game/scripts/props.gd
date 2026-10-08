@@ -1,5 +1,6 @@
 extends RefCounted
 class_name RallyProps
+const GrantaModel = preload("res://scripts/granta_model.gd")
 const CampingHatchbackAsset = preload("res://scripts/camping_hatchback_asset.gd")
 const FOOD_PORTIONS = 10
 const CARGO_KINDS = ["table", "chairs", "grill", "firewood", "cauldron"]
@@ -197,7 +198,7 @@ static func car(color: Color, rally: bool = false, variant: int = 0) -> Node3D:
 
 # Player fleet. Shapes are stylized original meshes, with recognizable proportions.
 const PLAYER_MODELS = [
-	{"name": "Компактный седан", "color": "c8884c", "length": 4.26, "width": 1.70, "height": 1.50, "rear": 0.95, "glass": 0.36, "lights": "wide", "grille": 0.65},
+	{"name": "Компактный седан", "color": "111a2b", "length": 4.26, "width": 1.70, "height": 1.50, "rear": 0.95, "glass": 0.36, "lights": "wide", "grille": 0.65},
 	{"name": "Городской седан", "color": "a8bdc2", "length": 4.41, "width": 1.77, "height": 1.49, "rear": 1.05, "glass": 0.48, "lights": "slim", "grille": 0.94},
 	{"name": "Лесной внедорожник", "color": "627746", "length": 3.74, "width": 1.68, "height": 1.74, "rear": 1.50, "glass": 0.14, "lights": "round", "grille": 0.86},
 	{"name": "Классический седан", "color": "e6dfc7", "length": 4.12, "width": 1.64, "height": 1.45, "rear": 0.95, "glass": 0.19, "lights": "square", "grille": 0.55},
@@ -482,6 +483,8 @@ static func player_car_sport_sedan() -> Node3D:
 
 static func player_car(variant: int = 0) -> Node3D:
 	variant = posmod(variant, PLAYER_MODELS.size())
+	if variant == 0:
+		return GrantaModel.build()
 	if variant == 8:
 		return player_car_camping_hatchback()
 	if variant == 9:
