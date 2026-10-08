@@ -28,9 +28,9 @@ func run() -> void:
 	check(not stage.city.village_detail_allowed(stage.city.church_square_center), "church cobblestone square rejects grass and loose stones")
 	check(stage.get_node_or_null("VillageCemetery") != null and stage.city.cemetery_grave_count == 28, "forest behind church contains an open cemetery with ordered graves")
 	var church_center = stage.at(435.0) + stage.side(435.0) * 43.0
-	check(stage.road_distance(stage.city.cemetery_center) > stage.road_distance(church_center) + 20.0, "cemetery sits deeper in the forest behind the church")
+	check(absf(stage.road_distance(stage.city.cemetery_center) - 26.0) < 10.0, "forest route passes alongside cemetery")
 	check(not stage.city._forest_spot_allowed(stage.city.cemetery_center), "mixed forest generation preserves the cemetery clearing")
-	check(stage.city.side_lane_house_count >= 12, "both secondary village streets have additional houses")
+	check(stage.city.side_lane_house_count >= 8, "both secondary village streets have additional houses")
 	check(stage.city.village_sign_count == 2, "village has name signs at both entrance and exit")
 	var village_name_labels = stage.find_children("*", "Label3D", true, false).filter(func(label): return str(label.text) == "Ля Газ в Польен")
 	var signs_face_outward = true
@@ -58,7 +58,7 @@ func run() -> void:
 					covered = covered or (absf(local.x) <= 1.35 and absf(local.z) <= 0.775)
 				sidewalk_coverage = sidewalk_coverage and covered
 	check(sidewalk_coverage, "sidewalks cover both edges and centers continuously around village bends")
-	check(is_equal_approx(stage.ground(stage.at(435) + stage.side(435) * 5.1), 2.36), "walking height matches the raised sidewalk surface")
+	check(is_equal_approx(stage.ground(stage.at(335) + stage.side(335) * 5.1), 2.36), "walking height matches the raised village sidewalk surface")
 	check(is_equal_approx(stage.ground(stage.at(370) + stage.side(370) * 5.1), 2.0), "side street junction has no raised sidewalk across its entrance")
 	check(village_name_labels.size() == 4, "both village signs show Ля Газ в Польен on both faces")
 	check(stage.city.thuja_count > 300, "dense thuja forest surrounds the village")
@@ -86,7 +86,7 @@ func run() -> void:
 	for detail_position in stage.city.village_detail_positions:
 		village_details_clear = village_details_clear and stage.city.village_detail_allowed(detail_position)
 	check(village_details_clear, "generated village details never land on paved surfaces or occupied structures")
-	check(not stage.city.village_detail_allowed(stage.at(435.0)), "main village cobblestones reject natural detail")
+	check(not stage.city.village_detail_allowed(stage.at(335.0)), "main village cobblestones reject natural detail")
 	check(not stage.city.village_detail_allowed(stage.at(435.0) + stage.side(435.0) * 5.1), "village sidewalks reject natural detail")
 	check(not stage.city.village_detail_allowed(stage.at(370.0) + stage.side(370.0) * 20.0), "transverse cobbled lanes reject natural detail")
 	var parking_labels = 0
@@ -97,9 +97,11 @@ func run() -> void:
 	check(stage.city.roadside_grass_count > 500 and stage.city.roadside_stone_count > 20 and stage.city.roadside_bush_count > 20, "country road has dense grass, stones and bushes before and after village")
 	check(stage.woodland_details.get("VineyardRoadsideGrass", 0) == stage.city.roadside_grass_count, "roadside grass is instanced through shared detail batches")
 	check(not stage.city._roadside_station_allowed(435.0) and stage.city._roadside_station_allowed(180.0), "roadside vegetation stays outside village")
-	check(stage.city.village_cobblestones >= 2700 and stage.city.sidewalk_segments >= 170, "village has dense cobblestone paving and continuous sidewalks")
-	check(not stage.draw_base_road_surface(435.0) and stage.draw_base_road_surface(180.0), "village road uses cobblestones without the generic road surface underneath")
+	check(stage.city.village_cobblestones >= 1500 and stage.city.sidewalk_segments >= 170, "both remaining village streets have dense cobblestone paving and sidewalks")
+	check(not stage.draw_base_road_surface(335.0) and stage.draw_base_road_surface(435.0) and stage.draw_base_road_surface(180.0), "village road uses cobblestones while the forest detour has a gravel base")
 	check(stage.direction(320).z < -0.8 and stage.direction(530).z < -0.8, "village route continues toward finish without a reversal")
+	check(stage.village_forest_offset(435.0) > 80.0 and stage.village_forest_offset(370.0) == 0.0 and stage.village_forest_offset(500.0) == 0.0, "forest diversion joins both village side streets")
+	check(stage.village_forest_detour(435.0) and not stage.village_forest_detour(320.0), "only wooded section uses gravel grip and light terrain")
 	var id = stage.collectibles.size() / 2
 	var grape = stage.collectibles[id]
 	game.walker = grape.pos

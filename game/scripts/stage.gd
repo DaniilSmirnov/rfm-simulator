@@ -112,13 +112,13 @@ func road_distance(pos: Vector3) -> float:
 
 func roughness(s: float) -> float:
 	if urban:
-		return sin(s * 3.4) * 0.014 if village(s) else sin(s * 0.8) * 0.018
+		return (sin(s * 0.55) * 0.045 + sin(s * 1.7) * 0.018) if village_forest_detour(s) else (sin(s * 3.4) * 0.014 if village(s) else sin(s * 0.8) * 0.018)
 	# Broad crests plus broken ruts; deterministic across all room members.
 	return sin(s * 0.46) * 0.075 + sin(s * 1.13) * 0.035 + pow(maxf(0, cos((s - 32.0) * TAU / 46.0)), 10) * 0.55
 
 func grip(pos: Vector3) -> float:
 	if urban:
-		return (0.86 if village(road_s(pos)) else 1.02) if road_distance(pos) < WIDTH * 0.55 else 0.58
+		return (0.62 if village_forest_detour(road_s(pos)) else (0.86 if village(road_s(pos)) else 1.02)) if road_distance(pos) < WIDTH * 0.55 else 0.58
 	if winter:
 		if road_distance(pos) > WIDTH * 0.55:
 			return 0.32
@@ -134,7 +134,7 @@ func ground(pos: Vector3) -> float:
 		var distance = road_distance(pos)
 		if village(s):
 			var junction = absf(s - 370.0) <= 3.0 or absf(s - 500.0) <= 3.0
-			return 2.36 if not junction and distance > 3.75 and distance < 6.45 else 2.0
+			return (p.y + roughness(s) * (1.0 - smoothstep(3.0, 8.0, distance)) + sin(pos.x * 0.12 + pos.z * 0.085) * 0.48 * smoothstep(5.0, 13.0, distance)) if village_forest_detour(s) else (2.36 if not junction and distance > 3.75 and distance < 6.45 else 2.0)
 		var hillside = maxf(distance - 6.0, 0) * 0.12
 		var height = p.y + hillside + sin(pos.x * 0.075 + s * 0.025) * minf(hillside * 0.2, 1.5)
 		for parking in clearings:
@@ -390,7 +390,7 @@ func _build_terrain(cooperative: bool = false) -> void:
 func draw_base_road_surface(s: float) -> bool:
 	# The village has its own explicit cobblestone mesh; do not leave asphalt
 	# underneath it where it can show through between individual stones.
-	return not village(s)
+	return not village(s) or village_forest_detour(s)
 
 func _build_road() -> void:
 	var st = SurfaceTool.new()
@@ -403,7 +403,7 @@ func _build_road() -> void:
 		var d = at(s + 1) - side(s + 1) * WIDTH / 2
 		if draw_base_road_surface(s):
 			for v in [a, b, c, b, d, c]:
-				st.set_color((Color("708a9c") if winter else (Color("525757") if urban else Color("9d896b"))).lightened(rng.randf_range(-0.065, 0.045)))
+				st.set_color((Color("708a9c") if winter else ((Color("857763") if village_forest_detour(s) else Color("525757")) if urban else Color("9d896b"))).lightened(rng.randf_range(-0.065, 0.045)))
 				v.y = ground(v) + 0.04
 				st.add_vertex(v)
 		# Broken muddy wheel tracks, shallow puddles.
@@ -936,12 +936,28 @@ func _build_woodland_details(cooperative: bool = false) -> void:
 func village(s: float) -> bool:
 	return urban and s >= 300.0 and s <= 570.0
 
+# The first village side street branches through the woods past the cemetery
+# and joins the second side street. All stations remain ordered start-to-finish.
+func village_forest_detour(s: float) -> bool:
+	return urban and s > 380.0 and s < 490.0
+
+func village_forest_offset(s: float) -> float:
+	if s <= 370.0 or s >= 500.0:
+		return 0.0
+	var stations = [370.0, 385.0, 402.0, 418.0, 438.0, 453.0, 469.0, 487.0, 500.0]
+	var offsets = [0.0, 36.0, 71.0, 87.0, 89.0, 87.0, 77.0, 33.0, 0.0]
+	for i in range(stations.size() - 1):
+		if s <= stations[i + 1]:
+			var t = smoothstep(stations[i], stations[i + 1], s)
+			return lerpf(offsets[i], offsets[i + 1], t)
+	return 0.0
+
 func urban_at(s: float) -> Vector3:
 	var village_blend = smoothstep(260.0, 300.0, s) * (1.0 - smoothstep(570.0, 610.0, s))
 	var country_x = sin(s / 85.0) * 34.0 + sin(s / 43.0) * 10.0
 	var village_x = sin((s - 300.0) / 100.0) * 14.0
 	var height = 2.0 + (1.0 - village_blend) * (7.0 + sin(s / 95.0) * 3.0 + s * 0.004)
-	return Vector3(lerpf(country_x, village_x, village_blend), height, -s)
+	return Vector3(lerpf(country_x, village_x, village_blend) + village_forest_offset(s), height + (sin(s * 0.12) * 0.55 + sin(s * 0.037) * 0.75) * smoothstep(378.0, 407.0, s) * (1.0 - smoothstep(465.0, 495.0, s)), -s)
 
 func urban_nearest(pos: Vector3) -> Dictionary:
 	var best = INF
