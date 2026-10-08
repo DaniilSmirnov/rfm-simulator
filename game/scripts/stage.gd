@@ -165,6 +165,26 @@ func ground(pos: Vector3) -> float:
 				height = lerpf(height, trail_sample.height, blend)
 	return height
 
+# Trees must touch the *rendered* terrain, not the continuous ground()
+# function. Terrain is triangulated in 4 m cells (2 m near forest roads)
+# and its vertices are 0.25 m below ground(). Reproduce that interpolation
+# exactly to avoid suspended trunks on slopes and relief crests.
+func terrain_surface_height(pos: Vector3) -> float:
+	var cell_x = floorf(pos.x / 4.0) * 4.0
+	var cell_z = floorf(pos.z / 4.0) * 4.0
+	var step = 2.0 if variant == 0 and road_distance(Vector3(cell_x + 2.0, 0, cell_z + 2.0)) < 12.0 else 4.0
+	var x = cell_x + floorf((pos.x - cell_x) / step) * step
+	var z = cell_z + floorf((pos.z - cell_z) / step) * step
+	var u = clampf((pos.x - x) / step, 0.0, 1.0)
+	var v = clampf((pos.z - z) / step, 0.0, 1.0)
+	var a = ground(Vector3(x, 0, z))
+	var b = ground(Vector3(x + step, 0, z))
+	var c = ground(Vector3(x, 0, z + step))
+	var d = ground(Vector3(x + step, 0, z + step))
+	if u + v <= 1.0:
+		return a + (b - a) * u + (c - a) * v - 0.25
+	return d + (c - d) * (1.0 - u) + (b - d) * (1.0 - v) - 0.25
+
 func _trail_sample(pos: Vector3, trail: Dictionary) -> Dictionary:
 	var nearest_distance = INF
 	var nearest_height = pos.y
@@ -243,7 +263,7 @@ func _build_nature(cooperative: bool = false) -> void:
 				in_clearing = true
 		if in_clearing:
 			continue
-		p.y = ground(p)
+		p.y = terrain_surface_height(p) - 0.03
 		trees.append(p)
 		forest.append({"position": p, "height": rng.randf_range(6, 13 if winter else 17), "shade": rng.randf_range(-0.025, 0.045)})
 	forest_data = forest
