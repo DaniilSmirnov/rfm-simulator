@@ -48,12 +48,12 @@ func build(cooperative: bool = false) -> void:
 		if cooperative:
 			await get_tree().process_frame
 		for side_value in [-1.0, 1.0]:
-			var p = stage.at(s) + stage.side(s) * side_value * 14.0
-			var reserved = stage.village_forest_detour(float(s)) or absf(s - 370) < 11 or absf(s - 500) < 11
+			var p = stage.village_main_at(s) + stage.village_main_side(s) * side_value * 14.0
+			var reserved = absf(s - 370) < 11 or absf(s - 500) < 11
 			for parking in stage.clearings:
 				reserved = reserved or stage.flat(p).distance_to(stage.flat(parking)) < 13
 			if not reserved:
-				_house(p, atan2(stage.side(s).x * side_value, stage.side(s).z * side_value), int(s / 18) + int(side_value))
+				_house(p, atan2(stage.village_main_side(s).x * side_value, stage.village_main_side(s).z * side_value), int(s / 18) + int(side_value))
 	_side_lane_houses()
 	_church(Vector3(43.0, stage.ground(Vector3(43, 0, -435)), -435.0))
 	_cemetery()
@@ -61,7 +61,7 @@ func build(cooperative: bool = false) -> void:
 	_village_sign(VILLAGE_END + 10.0, 1.0)
 	for s in range(318, 565, 28):
 		for side_value in [-1.0, 1.0]:
-			_lamp(stage.at(s) + stage.side(s) * side_value * 6.2, -side_value)
+			_lamp(stage.village_main_at(s) + stage.village_main_side(s) * side_value * 6.2, -side_value)
 	_village_props()
 	if cooperative:
 		await _vineyards(true)
@@ -91,37 +91,33 @@ func _village_street(cooperative: bool = false) -> void:
 	street.name = "VillageCobblestoneStreet"
 	stage.add_child(street)
 	for s in range(300, 570):
-		if stage.village_forest_detour(float(s)):
-			continue
 		if cooperative and int(s) % 20 == 0:
 			await get_tree().process_frame
-		var p = stage.at(s)
-		var right = stage.side(s)
-		var yaw = atan2(-stage.direction(s).x, -stage.direction(s).z)
+		var p = stage.village_main_at(s)
+		var right = stage.village_main_side(s)
+		var yaw = atan2(-stage.village_main_direction(s).x, -stage.village_main_direction(s).z)
 		for column in range(-5, 5):
 			var stone = Props.box(street, p + right * (column * 0.72 + (0.18 if s % 2 else 0.0)) + Vector3(0, 0.065, 0), Vector3(0.68, 0.045, 0.95), Color("a5a095").lightened(((s * 13 + column * 7) % 9) * 0.015 - 0.07))
 			stone.rotation.y = yaw
 			village_cobblestones += 1
 	for s in range(300, 571):
-		if stage.village_forest_detour(float(s)):
-			continue
 		if cooperative and int(s) % 20 == 0:
 			await get_tree().process_frame
 		if absf(s - 370.0) <= 2.5 or absf(s - 500.0) <= 2.5:
 			continue # Side-street junctions must stay open, without a raised kerb.
-		var p = stage.at(s)
-		var yaw = atan2(-stage.direction(s).x, -stage.direction(s).z)
+		var p = stage.village_main_at(s)
+		var yaw = atan2(-stage.village_main_direction(s).x, -stage.village_main_direction(s).z)
 		for side_value in [-1.0, 1.0]:
-			var sidewalk = Props.box(street, p + stage.side(s) * side_value * 5.1 + Vector3(0, 0.18, 0), Vector3(2.7, 0.36, 1.55), Color("c8c1ae"))
+			var sidewalk = Props.box(street, p + stage.village_main_side(s) * side_value * 5.1 + Vector3(0, 0.18, 0), Vector3(2.7, 0.36, 1.55), Color("c8c1ae"))
 			sidewalk.rotation.y = yaw
 			sidewalk_poses.append(sidewalk.transform)
 			sidewalk_segments += 1
-			var curb = Props.box(street, p + stage.side(s) * side_value * 3.83 + Vector3(0, 0.16, 0), Vector3(0.17, 0.32, 1.55), Color("ded8c6"))
+			var curb = Props.box(street, p + stage.village_main_side(s) * side_value * 3.83 + Vector3(0, 0.16, 0), Vector3(0.17, 0.32, 1.55), Color("ded8c6"))
 			curb.rotation.y = yaw
-			var seam = Props.box(street, p + stage.side(s) * side_value * 5.1 + Vector3(0, 0.365, 0), Vector3(2.45, 0.012, 0.025), Color("8f8e81"))
+			var seam = Props.box(street, p + stage.village_main_side(s) * side_value * 5.1 + Vector3(0, 0.365, 0), Vector3(2.45, 0.012, 0.025), Color("8f8e81"))
 			seam.rotation.y = yaw
 			if s % 24 == 0:
-				var drain = Props.box(street, p + stage.side(s) * side_value * 3.6 + Vector3(0, 0.10, 0), Vector3(0.35, 0.04, 0.65), Color("434941"))
+				var drain = Props.box(street, p + stage.village_main_side(s) * side_value * 3.6 + Vector3(0, 0.10, 0), Vector3(0.35, 0.04, 0.65), Color("434941"))
 				drain.rotation.y = yaw
 	_batch(street, Transform3D.IDENTITY)
 	# Short village side lanes really connect to the main road.
@@ -129,8 +125,8 @@ func _village_street(cooperative: bool = false) -> void:
 		var lane = Node3D.new()
 		lane.name = "VillageSideLane_%d" % int(s)
 		stage.add_child(lane)
-		lane.position = stage.at(s)
-		lane.rotation.y = atan2(-stage.direction(s).x, -stage.direction(s).z)
+		lane.position = stage.village_main_at(s)
+		lane.rotation.y = atan2(-stage.village_main_direction(s).x, -stage.village_main_direction(s).z)
 		paved_areas.append({"pose": lane.transform, "half": Vector2(47.0, 2.5)})
 		for x in range(-46, 47):
 			for z in range(-2, 3):
@@ -139,16 +135,14 @@ func _village_street(cooperative: bool = false) -> void:
 
 func _side_lane_houses() -> void:
 	for lane_s in [370.0, 500.0]:
-		var lane_direction = stage.side(lane_s).normalized()
-		var lane_normal = stage.direction(lane_s).normalized()
+		var lane_direction = stage.village_main_side(lane_s).normalized()
+		var lane_normal = stage.village_main_direction(lane_s).normalized()
 		# Keep the junction open and place homes deeper along each secondary street.
 		# A small collision padding protects existing yards without incorrectly
 		# rejecting neighbouring houses whose gardens merely approach each other.
 		for along in [-40.0, -28.0, 28.0, 40.0]:
-			if along > 0.0:
-				continue # Forest rally road uses the outward side of both junctions.
 			for side_value in [-1.0, 1.0]:
-				var p = stage.at(lane_s) + lane_direction * along + lane_normal * side_value * 12.5
+				var p = stage.village_main_at(lane_s) + lane_direction * along + lane_normal * side_value * 12.5
 				p.y = stage.ground(p)
 				var blocked = false
 				for spot in stage.clearings:
@@ -303,7 +297,7 @@ func _cemetery() -> void:
 	root.name = "VillageCemetery"
 	stage.add_child(root)
 	var s = 435.0
-	cemetery_center = Vector3(115.0, 0.0, -435.0)
+	cemetery_center = stage.village_main_at(s) + stage.village_main_side(s) * 87.0
 	cemetery_center.y = stage.ground(cemetery_center)
 	root.position = cemetery_center
 	root.rotation.y = 0.0
@@ -332,10 +326,10 @@ func _village_sign(s: float, side_value: float) -> void:
 	var root = Node3D.new()
 	root.name = "VillageNameSign_%d" % village_sign_count
 	stage.add_child(root)
-	var p = stage.at(s) + stage.side(s) * side_value * 7.2
+	var p = stage.village_main_at(s) + stage.village_main_side(s) * side_value * 7.2
 	p.y = stage.ground(p)
 	root.position = p
-	root.rotation.y = atan2(-stage.direction(s).x, -stage.direction(s).z)
+	root.rotation.y = atan2(-stage.village_main_direction(s).x, -stage.village_main_direction(s).z)
 	for x in [-1.45, 1.45]:
 		Props.cylinder(root, Vector3(x, 1.2, 0), 0.065, 0.065, 2.4, Color("62665f"), 7)
 	Props.box(root, Vector3(0, 2.15, 0), Vector3(4.2, 1.25, 0.12), Color("eee9d6"))
@@ -374,7 +368,7 @@ func _vineyards(cooperative: bool = false) -> void:
 				for s in range(start, row_end, 6):
 					if cooperative and int(s) % 20 == 0:
 						await get_tree().process_frame
-					var p = stage.at(s) + stage.side(s) * side_value * (13.0 + row * 4)
+					var p = stage.village_main_at(s) + stage.village_main_side(s) * side_value * (13.0 + row * 4)
 					var blocked = false
 					for parking in stage.clearings:
 						blocked = blocked or stage.flat(p).distance_to(stage.flat(parking)) < 10
@@ -383,15 +377,15 @@ func _vineyards(cooperative: bool = false) -> void:
 					p.y = stage.ground(p)
 					vine_count += 1
 					var soil = Props.box(root, p + Vector3(0, 0.015, 0), Vector3(1.4, 0.03, 6.2), Color("7e7054"))
-					soil.rotation.y = atan2(-stage.direction(s).x, -stage.direction(s).z)
+					soil.rotation.y = atan2(-stage.village_main_direction(s).x, -stage.village_main_direction(s).z)
 					Props.cylinder(root, p + Vector3(0, 0.70, 0), 0.08, 0.04, 1.4, Color("735943"), 6)
 					Props.cylinder(root, p + Vector3(0, 1, 0), 0.04, 0.025, 2.0, Color("8b8063"), 6)
-					var yaw = atan2(-stage.direction(s).x, -stage.direction(s).z)
+					var yaw = atan2(-stage.village_main_direction(s).x, -stage.village_main_direction(s).z)
 					for y in [0.85, 1.35, 1.80]:
 						var wire = Props.box(root, p + Vector3(0, y, 0), Vector3(0.018, 0.018, 6.2), Color("7b7d68"))
 						wire.rotation.y = yaw
 					for offset in [-1.7, -0.65, 0.65, 1.7]:
-						var position = p + stage.direction(s) * offset + Vector3(0, 1.2 + sin(s + offset) * 0.15, 0)
+						var position = p + stage.village_main_direction(s) * offset + Vector3(0, 1.2 + sin(s + offset) * 0.15, 0)
 						leaves.append(Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3(0.85, 0.60, 1.05)), position))
 						leaf_colors.append(Color("526e37").lightened(float((s + row) % 5) * 0.025))
 					var indices: Array = []
@@ -400,7 +394,7 @@ func _vineyards(cooperative: bool = false) -> void:
 							var tier = berry / 4
 							var angle = berry * 2.4
 							var radius = 0.12 - tier * 0.025
-							var position = p + stage.direction(s) * cluster * 1.0 + stage.side(s) * 0.43 + Vector3(cos(angle) * radius, 1.08 - tier * 0.105, sin(angle) * radius)
+							var position = p + stage.village_main_direction(s) * cluster * 1.0 + stage.village_main_side(s) * 0.43 + Vector3(cos(angle) * radius, 1.08 - tier * 0.105, sin(angle) * radius)
 							indices.append(fruit.size())
 							fruit.append(Transform3D(Basis.from_scale(Vector3.ONE * 0.12), position))
 							fruit_colors.append(Color("6b4769") if row % 3 else Color("a3b657"))
@@ -742,7 +736,7 @@ func village_detail_allowed(p: Vector3) -> bool:
 		if absf(s - lane_s) <= 3.2 and distance <= 48.5:
 			return false
 	# Keep the church building and its cobbled square clean.
-	var church_center = stage.at(435.0) + stage.side(435.0) * 43.0
+	var church_center = stage.village_main_at(435.0) + stage.village_main_side(435.0) * 43.0
 	if stage.flat(p).distance_to(stage.flat(church_center)) < 13.5:
 		return false
 	if church_square_center != Vector3.ZERO and stage.flat(p).distance_to(stage.flat(church_square_center)) < 10.5:
@@ -764,7 +758,7 @@ func _village_natural_details(cooperative: bool = false) -> void:
 			await get_tree().process_frame
 		var s = detail_rng.randf_range(VILLAGE_START + 3.0, VILLAGE_END - 3.0)
 		var side_value = -1.0 if detail_rng.randi() % 2 == 0 else 1.0
-		var p = stage.at(s) + stage.side(s) * side_value * detail_rng.randf_range(7.0, 47.0) + stage.direction(s) * detail_rng.randf_range(-1.5, 1.5)
+		var p = stage.village_main_at(s) + stage.village_main_side(s) * side_value * detail_rng.randf_range(7.0, 47.0) + stage.village_main_direction(s) * detail_rng.randf_range(-1.5, 1.5)
 		if not village_detail_allowed(p):
 			continue
 		p.y = stage.ground(p) - 0.06
@@ -780,7 +774,7 @@ func _village_natural_details(cooperative: bool = false) -> void:
 			await get_tree().process_frame
 		var s = detail_rng.randf_range(VILLAGE_START + 4.0, VILLAGE_END - 4.0)
 		var side_value = -1.0 if detail_rng.randi() % 2 == 0 else 1.0
-		var p = stage.at(s) + stage.side(s) * side_value * detail_rng.randf_range(7.2, 46.0)
+		var p = stage.village_main_at(s) + stage.village_main_side(s) * side_value * detail_rng.randf_range(7.2, 46.0)
 		if not village_detail_allowed(p):
 			continue
 		p.y = stage.ground(p)
@@ -800,7 +794,7 @@ func _landscape() -> void:
 	stage.add_child(root)
 	for s in range(40, 820, 32):
 		for side_value in [-1.0, 1.0]:
-			var p = stage.at(s) + stage.side(s) * side_value * 100
+			var p = stage.village_main_at(s) + stage.village_main_side(s) * side_value * 100
 			p.y = stage.ground(p)
 			Props.cylinder(root, p + Vector3(0, 3.5, 0), 0.10, 0.06, 7, Color("795e44"), 8)
 			Props.cylinder(root, p + Vector3(0, 5, 0), 1.5, 0.08, 8, Color("426345"), 10)
@@ -827,8 +821,8 @@ func _village_props() -> void:
 			var root = Node3D.new()
 			root.name = "VillageStreetFurniture_%d_%d" % [int(station), int(side_value)]
 			stage.add_child(root)
-			root.position = stage.at(station) + stage.side(station) * side_value * 7.7
-			root.rotation.y = atan2(-stage.direction(station).x, -stage.direction(station).z)
+			root.position = stage.village_main_at(station) + stage.village_main_side(station) * side_value * 7.7
+			root.rotation.y = atan2(-stage.village_main_direction(station).x, -stage.village_main_direction(station).z)
 			# Benches face the stage and stand behind the pedestrian corridor.
 			for slat in range(4):
 				Props.box(root, Vector3(0, 0.48, -0.24 + slat * 0.16), Vector3(1.8, 0.07, 0.12), Color("93684a"))
@@ -852,8 +846,8 @@ func _village_props() -> void:
 		var root = Node3D.new()
 		root.name = "VillageWineDelivery_%d" % int(station)
 		stage.add_child(root)
-		root.position = stage.at(station) + stage.side(station) * -20.0 + stage.direction(station) * 5.0
-		root.rotation.y = atan2(-stage.direction(station).x, -stage.direction(station).z)
+		root.position = stage.village_main_at(station) + stage.village_main_side(station) * -20.0 + stage.village_main_direction(station) * 5.0
+		root.rotation.y = atan2(-stage.village_main_direction(station).x, -stage.village_main_direction(station).z)
 		for x in [-1.0, 0.0, 1.0]:
 			Props.cylinder(root, Vector3(x, 0.6, 0), 0.43, 0.43, 1.2, Color("886345"), 12)
 			for y in [0.18, 0.95]:
