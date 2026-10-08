@@ -864,19 +864,38 @@ func _join_invited_room() -> void:
 	room.connect_room(requested)
 
 func _invite_friends() -> void:
+	# Always acknowledge a press before branching into room/network/Bridge state.
+	# Previously failures were visible only in the hidden lobby.
+	print("[VK invite] button pressed; playing=", playing, " room=", room.room_id, " connected=", room.connected)
 	if platform_service == null or platform_service.profile.get("platform", "") != "vk" or not playing:
+		toast("Приглашения доступны после входа на СУ через VK.")
 		return
 	if platform_service.invite_busy or room.busy or loading_world:
+		invite_status.text = "Подожди: уже идёт подключение или отправка приглашения."
+		invite_status.show()
+		toast(invite_status.text)
 		return
 	if not room.connected:
-		# A solo stage needs a hosted room before it can be invited to.
+		# Create a session on this stage without resetting solo camp/vehicle.
 		invite_after_room_create = true
-		invite_status.text = "Создаём комнату на текущем спецучастке…"
+		invite_status.text = "Создаём комнату для друзей…"
 		invite_status.show()
+		toast(invite_status.text)
 		room.connect_room("")
 		if not room.busy:
 			invite_after_room_create = false
+			invite_status.text = "Не удалось создать комнату: " + room.lobby_status.text
+			invite_status.show()
+			toast(invite_status.text)
 		return
+	if room.room_id.is_empty():
+		invite_status.text = "У комнаты отсутствует ID. Переподключись к комнате."
+		invite_status.show()
+		toast(invite_status.text)
+		return
+	invite_status.text = "Открываем приглашение VK для комнаты " + room.room_id + "…"
+	invite_status.show()
+	toast(invite_status.text)
 	invite_button.disabled = true
 	platform_service.invite_friend(room.room_id)
 
