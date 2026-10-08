@@ -19,6 +19,10 @@ func can_use(kind: String, index: int, guest: bool = false) -> bool:
 			return product.get("enabled", false) and (product.get("free", false) or product.get("sku") in entitlements.get("skus", []) or (kind == "stage" and guest))
 	return false
 
+func owns(kind: String, index: int) -> bool:
+	var entry = product(kind, index)
+	return entitlements.get("mode") == "restricted" and entry.get("sku", "") in entitlements.get("skus", [])
+
 func _ready() -> void:
 	if OS.has_feature("vk"):
 		entitlements = {"mode": "restricted", "skus": []}
@@ -86,7 +90,9 @@ func _response(result: int, code: int, _headers: PackedStringArray, body: Packed
 	print("[RFM Platform] access ", JSON.stringify({"mode": entitlements.get("mode"), "stage_1": can_use("stage", 0), "stage_2": can_use("stage", 1), "car_3": can_use("car", 2), "car_4": can_use("car", 3)}))
 	purchase_message = ""
 	match bootstrap.get("status", ""):
-		"owned": purchase_message = "Покупка подтверждена · СУ открыт"
+		"owned":
+			if owns("stage", 1):
+				purchase_message = "Покупка подтверждена · СУ открыт"
 		"cancel": purchase_message = "Покупка отменена"
 		"fail": purchase_message = "VK не завершил покупку"
 		"pending": purchase_message = "Ждём подтверждения VK. Нажмите «Проверить покупку»."

@@ -76,32 +76,65 @@ export async function paymentCallback(raw, env) {
   return {response:receipt};
 }
 
-// A separate SQLite-backed Durable Object. No room TTL, alarms or deleteAll.
-// Transaction commits receipt and ownership together before acknowledging VK.
+// SQL rows are the source of ownership; deleting an order revokes its grant
+// unless another confirmed order for the same user/SKU remains.
 export class VkPayments {
-  constructor(ctx) { this.storage = ctx.storage; }
+  constructor(ctx) {
+    this.storage = ctx.storage;
+    this.ready = ctx.blockConcurrencyWhile
+      ? ctx.blockConcurrencyWhile(() => this.initialize()) : this.initialize();
+  }
+  async initialize() {
+    const sql = this.storage.sql;
+    sql.exec(`CREATE TABLE IF NOT EXISTS payment_orders (
+      mode TEXT NOT NULL CHECK(mode = 'test'), order_id TEXT NOT NULL,
+      user_id TEXT NOT NULL, sku TEXT NOT NULL, amount INTEGER NOT NULL CHECK(amount > 0),
+      app_order_id INTEGER NOT NULL, created_at INTEGER NOT NULL,
+      PRIMARY KEY(mode, order_id))`);
+    sql.exec('CREATE INDEX IF NOT EXISTS payment_orders_owner ON payment_orders(mode, user_id, sku)');
+    sql.exec('CREATE TABLE IF NOT EXISTS payment_migrations (name TEXT PRIMARY KEY)');
+    if ([...sql.exec("SELECT name FROM payment_migrations WHERE name = 'kv_orders_v1'")].length) return;
+    const orders = [];
+    let startAfter;
+    while (true) {
+      const batch = await this.storage.list({prefix:'orders:test:',limit:1000,...(startAfter ? {startAfter} : {})});
+      for (const [key,p] of batch) {
+        const order = key.slice('orders:test:'.length);
+        if (!id(order) || !id(p.user) || p.sku !== 'stage_02' || !Number.isInteger(p.amount) || p.amount < 1 ||
+            p.receipt?.order_id !== Number(order) || !Number.isSafeInteger(p.receipt?.app_order_id)) {
+          throw new Error('Invalid legacy payment receipt');
+        }
+        orders.push({order,...p});
+        startAfter = key;
+      }
+      if (batch.size < 1000) break;
+    }
+    this.storage.transactionSync(() => {
+      for (const p of orders) sql.exec('INSERT OR IGNORE INTO payment_orders VALUES (?, ?, ?, ?, ?, ?, ?)',
+        'test',p.order,p.user,p.sku,p.amount,p.receipt.app_order_id,p.created_at);
+      sql.exec("INSERT INTO payment_migrations VALUES ('kv_orders_v1')");
+    });
+    // Retain old KV entries as a backup. They are never read for rights again.
+  }
   async fetch(request) {
     try {
+      await this.ready;
       const p = await request.json();
       if (p.mode !== 'test' || !id(p.user)) reject('Некорректный аккаунт.');
-      const rightsKey = `entitlements:test:${p.user}`;
-      if (new URL(request.url).pathname === '/rights') return Response.json({skus:await this.storage.get(rightsKey) || []});
+      const sql = this.storage.sql;
+      if (new URL(request.url).pathname === '/rights') {
+        return Response.json({skus:[...sql.exec('SELECT DISTINCT sku FROM payment_orders WHERE mode = ? AND user_id = ? ORDER BY sku',p.mode,p.user)].map(row=>row.sku)});
+      }
       if (new URL(request.url).pathname !== '/grant' || !id(p.order) || p.sku !== 'stage_02' || !Number.isInteger(p.amount) || p.amount < 1) reject('Некорректный заказ.');
-      const receipt = await this.storage.transaction(async tx => {
-        const key = `orders:test:${p.order}`;
-        const previous = await tx.get(key);
+      const receipt = this.storage.transactionSync(() => {
+        const previous = [...sql.exec('SELECT * FROM payment_orders WHERE mode = ? AND order_id = ?',p.mode,p.order)][0];
         if (previous) {
-          if (previous.user !== p.user || previous.sku !== p.sku || previous.amount !== p.amount) reject('Конфликт заказа.');
-          return previous.receipt;
+          if (previous.user_id !== p.user || previous.sku !== p.sku || previous.amount !== p.amount) reject('Конфликт заказа.');
+          return {order_id:Number(previous.order_id),app_order_id:previous.app_order_id};
         }
         if (p.amount !== p.expected_price) reject('Некорректная стоимость.');
-        const receipt = {order_id:Number(p.order),app_order_id:Number(p.order)};
-        await tx.put(key,{user:p.user,sku:p.sku,amount:p.amount,receipt,created_at:Date.now()});
-        await tx.put(`users:test:${p.user}`,{user:p.user});
-        const owned = await tx.get(rightsKey) || [];
-        if (!owned.includes(p.sku)) owned.push(p.sku);
-        await tx.put(rightsKey,owned);
-        return receipt;
+        sql.exec('INSERT INTO payment_orders VALUES (?, ?, ?, ?, ?, ?, ?)',p.mode,p.order,p.user,p.sku,p.amount,Number(p.order),Date.now());
+        return {order_id:Number(p.order),app_order_id:Number(p.order)};
       });
       return Response.json(receipt);
     } catch (error) {
