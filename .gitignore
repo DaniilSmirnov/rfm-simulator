@@ -10,3 +10,6 @@ dist-vk-prototype/
 
 .dev.vars*
 .env*
+
+# Rebuilt from source before every web export.
+game/generated/

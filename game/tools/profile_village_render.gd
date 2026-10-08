@@ -10,6 +10,8 @@ func run():
  game.set_process(false)
  game.room.set_process(false)
  game.select_stage(2)
+ if OS.get_cmdline_user_args().has("--generated"):
+  game.stage.baked_scene_path = "res://generated/missing.scn"
  await game.start_game()
  for panel in game.hud_panels: panel.hide()
  game.title_label.hide()
