@@ -2,7 +2,7 @@ import { Buffer } from 'node:buffer';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { catalog } from './store.mjs';
 
-export const PAYMENT_HANDLER_VERSION = 'vk-test-callback-v2';
+export const PAYMENT_HANDLER_VERSION = 'vk-test-callback-v3';
 
 export class PaymentError extends Error {
   constructor(code, message, critical = true) { super(message); this.code = code; this.critical = critical; }
@@ -54,13 +54,14 @@ export function verifyCallback(raw, env) {
 }
 export async function paymentCallback(raw, env) {
   const p = verifyCallback(raw,env);
-  if (p.notification_type === 'get_item_test') {
+  // Item metadata is read-only; only the explicitly test order callback can grant rights.
+  if (p.notification_type === 'get_item_test' || p.notification_type === 'get_item') {
     if (p.item !== 'stage_02') reject('Товар не существует.');
     return {response:{item_id:2,title:'Зимний Турини (тест)',photo_url:'',price:Number(env.VK_STAGE_02_TEST_PRICE)}};
   }
   if (p.notification_type !== 'order_status_change_test') {
     const received = typeof p.notification_type === 'string' ? p.notification_type.slice(0, 64) : null;
-    reject(`Неподдерживаемый notification_type=${JSON.stringify(received)}. Ожидается get_item_test или order_status_change_test. Обработчик: ${PAYMENT_HANDLER_VERSION}.`);
+    reject(`Неподдерживаемый notification_type=${JSON.stringify(received)}. Ожидается get_item, get_item_test или order_status_change_test. Обработчик: ${PAYMENT_HANDLER_VERSION}.`);
   }
   if (p.status !== 'chargeable') throw new PaymentError(100,'Неподдерживаемый статус заказа.');
   if (!id(p.order_id) || p.item_id !== '2' || !id(p.amount)) reject('Некорректный заказ или стоимость.');
