@@ -80,6 +80,13 @@ func run() -> void:
 	check(host.foraging.can_mount() and host.foraging.mount(), "nearby player mounts a mushroom on the free skewer")
 	check(host.foraging.stock().mushrooms == 0 and host.foraging.free_skewers(-1) == 0, "mounting consumes inventory and occupies exactly one skewer")
 	check(host.grill.get_node("FoodSkewer_09/MushroomFood").visible, "mounted mushroom is visible on the grill")
+	var saved_foraging = host.foraging.snapshot()
+	var emptied = saved_foraging.duplicate(true)
+	emptied.skewers = {}
+	host.foraging.apply_snapshot(emptied)
+	check(int(host.grill.get_meta("mushrooms")) == 0 and not host.grill.get_node("FoodSkewer_09/MushroomFood").visible, "removing skewers refreshes cached grill visuals")
+	host.foraging.apply_snapshot(saved_foraging)
+	check(host.grill.get_node("FoodSkewer_09/MushroomFood").visible, "restoring skewers refreshes cached grill visuals")
 	check(not host.foraging.can_eat("mushroom"), "freshly mounted mushroom must cook first")
 	host.elapsed += 10
 	check(host.eat_foraged("mushroom"), "cooked mushroom starts its eating animation")

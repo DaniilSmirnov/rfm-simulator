@@ -389,6 +389,7 @@ const Traffic = preload("res://scripts/rally_traffic.gd")
 const Motion = preload("res://scripts/vehicle_motion.gd")
 var vehicle_motion = Motion.new()
 var stones: Array[Dictionary] = []
+var gravel_pool: Array[MeshInstance3D] = []
 var stone_serial = 0
 var impact_serials: Dictionary = {}
 var impact_shake = 0.0
@@ -1770,6 +1771,26 @@ func stone_impact(id: String) -> void:
 			condition = maxf(0, condition - 0.8)
 		toast("Гравий из-под колёс! Отойди дальше от края СУ.")
 
+func _acquire_gravel(size: float) -> MeshInstance3D:
+	var node: MeshInstance3D
+	while not gravel_pool.is_empty() and not is_instance_valid(gravel_pool.back()):
+		gravel_pool.pop_back()
+	if gravel_pool.is_empty():
+		node = Props.box(self, Vector3.ZERO, Vector3.ONE, Color("9b9079"))
+	else:
+		node = gravel_pool.pop_back()
+	node.rotation = Vector3.ZERO
+	node.scale = Vector3.ONE * size
+	node.show()
+	return node
+
+func _release_gravel(node: MeshInstance3D) -> void:
+	node.hide()
+	if gravel_pool.size() < 48:
+		gravel_pool.append(node)
+	else:
+		node.queue_free()
+
 func _update_stones(delta: float) -> void:
 	stone_clock -= delta
 	if stone_clock <= 0:
@@ -1782,7 +1803,7 @@ func _update_stones(delta: float) -> void:
 			var s: float = racer.s
 			var direction = race_direction(s)
 			var side = race_side(s) * (-1.0 if rng.randf() < 0.5 else 1.0)
-			var node = Props.box(self, Vector3.ZERO, Vector3.ONE * rng.randf_range(0.07, 0.14), Color("9b9079"))
+			var node = _acquire_gravel(rng.randf_range(0.07, 0.14))
 			node.position = racer.node.position - direction * 1.6 + side * 0.65 + Vector3(0, 0.25, 0)
 			stone_serial += 1
 			stones.append({"id": stone_serial, "node": node, "velocity": direction * rng.randf_range(-5, 3) + side * rng.randf_range(5, 12) + Vector3(0, rng.randf_range(3, 7), 0), "life": 2.0, "bounces": 0})
@@ -1800,7 +1821,7 @@ func _update_stones(delta: float) -> void:
 					stone_impact(peer.id)
 					hit = true
 		if hit or stone.life <= 0 or not alive:
-			stone.node.queue_free()
+			_release_gravel(stone.node)
 			stones.erase(stone)
 
 func walking_intent() -> Vector3:

@@ -149,16 +149,25 @@ func consume(kind: String, owner: String = "", source: int = -2) -> bool:
 	return true
 
 func update_visuals() -> void:
-	for key in skewers:
-		var source = int(key)
+	var sources: Array = [-1]
+	for source in range(game.spectators.groups.size()):
+		sources.append(source)
+	for source in sources:
+		var entries: Array = skewers.get(str(source), [])
 		var node = grill_node(source)
 		if node != null:
-			node.set_meta("mushrooms", skewers[key].size())
+			var state: Array = [meat_count(source)]
+			for entry in entries:
+				state.append(str(entry.get("species", "edible")))
+			if node.get_meta("foraging_visual_state", []) == state:
+				continue
+			node.set_meta("foraging_visual_state", state)
+			node.set_meta("mushrooms", entries.size())
 			Props.set_grill_servings(node, meat_count(source))
-			for i in range(skewers[key].size()):
+			for i in range(entries.size()):
 				var skewer = node.get_node_or_null("FoodSkewer_%02d/MushroomFood" % (meat_count(source) + i))
 				if skewer != null:
-					Props.style_mushrooms(skewer, str(skewers[key][i].get("species", "edible")))
+					Props.style_mushrooms(skewer, str(entries[i].get("species", "edible")))
 
 func snapshot() -> Dictionary:
 	var effect_states = {}

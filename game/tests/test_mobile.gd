@@ -76,6 +76,15 @@ func run() -> void:
 	game.toast_time = 0
 	game._update_hud()
 	check(not game.info_label.text.contains("Проверка уведомления"), "expired mobile toast removed immediately")
+	c._layout()
+	var layout_revision = c.layout_revision
+	c._layout()
+	check(c.layout_revision == layout_revision, "unchanged mobile controls reuse layout")
+	c.gear_open = true
+	c._layout()
+	check(c.layout_revision == layout_revision + 1 and c.buttons.any(func(b): return b.action == "recover"), "drawer state invalidates cached layout immediately")
+	c.gear_open = false
+	c._layout()
 	var touch = InputEventScreenTouch.new()
 	touch.index = 21
 	touch.pressed = true

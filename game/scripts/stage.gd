@@ -25,6 +25,10 @@ var indexed_collectible_count = -1
 var harvested: Dictionary = {}
 var collectible_parts: Dictionary = {}
 var rocks: Array[Dictionary] = []
+var rock_cells: Dictionary = {}
+var dynamic_rock_ids: Array = []
+var indexed_rock_count = -1
+const ROCK_CELL_SIZE = 16.0
 var trees: Array[Vector3] = []
 var forest_data: Array[Dictionary] = []
 var forest_layers: Array[MultiMesh] = []
@@ -519,6 +523,38 @@ func obstacle_hit(start: Vector3, end: Vector3, radius: float, allow_escape: boo
 			return index
 	return -1
 
+func rocks_in_bounds(low: Vector2, high: Vector2) -> Array:
+	if indexed_rock_count != rocks.size():
+		rock_cells.clear()
+		dynamic_rock_ids.clear()
+		for id in range(rocks.size()):
+			var rock: Dictionary = rocks[id]
+			if rock.has("actor"):
+				dynamic_rock_ids.append(id)
+				continue
+			var p = flat(rock.pos)
+			var r = Vector2.ONE * float(rock.radius)
+			for x in range(floori((p.x-r.x)/ROCK_CELL_SIZE), floori((p.x+r.x)/ROCK_CELL_SIZE)+1):
+				for z in range(floori((p.y-r.y)/ROCK_CELL_SIZE), floori((p.y+r.y)/ROCK_CELL_SIZE)+1):
+					var cell = Vector2i(x, z)
+					if not rock_cells.has(cell):
+						rock_cells[cell] = []
+					rock_cells[cell].append(id)
+		indexed_rock_count = rocks.size()
+	var ids: Dictionary = {}
+	for id in dynamic_rock_ids:
+		ids[id] = true
+	for x in range(floori(low.x/ROCK_CELL_SIZE), floori(high.x/ROCK_CELL_SIZE)+1):
+		for z in range(floori(low.y/ROCK_CELL_SIZE), floori(high.y/ROCK_CELL_SIZE)+1):
+			for id in rock_cells.get(Vector2i(x, z), []):
+				ids[id] = true
+	var ordered = ids.keys()
+	ordered.sort()
+	var result: Array = []
+	for id in ordered:
+		result.append(rocks[id])
+	return result
+
 # Earliest swept horizontal circle contact. Height allows cars to jump over rocks.
 # Escape handling prevents an overlapping spawn or a low-speed bump from trapping a car.
 func rock_hit(start: Vector3, end: Vector3, radius: float, allow_escape: bool = true) -> Dictionary:
@@ -527,7 +563,7 @@ func rock_hit(start: Vector3, end: Vector3, radius: float, allow_escape: bool = 
 	var travel = b - a
 	var best: Dictionary = {}
 	var earliest = INF
-	for rock in rocks:
+	for rock in rocks_in_bounds(a.min(b) - Vector2.ONE * radius, a.max(b) + Vector2.ONE * radius):
 		if minf(start.y, end.y) > rock.pos.y + rock.height:
 			continue
 		var center = flat(rock.pos)

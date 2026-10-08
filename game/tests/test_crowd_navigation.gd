@@ -46,6 +46,7 @@ func run() -> void:
 	check(route_clear(game, start, goal, ctx, route), "planner finds swept collision-free route around boulder")
 	var reached = false
 	for frame in range(100):
+		game.spectators.navigation_budget.advance(0.1)
 		Navigation.move(game, person, goal, 0.1, false)
 		if person.avatar.position.distance_to(goal) < 0.2:
 			reached = true
@@ -72,10 +73,12 @@ func run() -> void:
 	person.avatar.position = start
 	person.erase("navigation")
 	await process_frame
+	game.spectators.navigation_budget.advance(0.1)
 	Navigation.move(game, person, goal, 0.1, false)
 	game.stage.rocks.append({"pos": ground(game, start + Vector3(3, 0, 0)), "radius": 1.4, "height": 3.0})
 	var previous: Vector3 = person.avatar.position
 	await process_frame
+	game.spectators.navigation_budget.advance(0.1)
 	Navigation.move(game, person, goal, 0.1, false)
 	ctx = Navigation.context(game, person, previous, goal, false)
 	check(Navigation.clear(game, previous, person.avatar.position, ctx) and person.navigation.route.size() > 1, "new obstruction triggers safe route rebuild")

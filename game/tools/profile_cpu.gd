@@ -10,6 +10,17 @@ func run():
  game.set_process(false)
  game.rng.seed = 20261008
  await game.start_game()
+ if args.size() > 1 and args[1] == "racing":
+  game.course.phase = "racing"
+  game.spawn_clock = 999.0
+  for i in range(8):
+   game.spawn_racer("pass")
+   var racer = game.racers.back()
+   racer.s = 20.0 + i * 70.0
+   racer.node.position = game.race_at(racer.s)
+   var direction = game.race_direction(racer.s)
+   racer.node.rotation.y = atan2(-direction.x, -direction.z)
+ print("CPU_PROFILE setup racers=",game.racers.size())
  print("CPU_PROFILE setup stage=",game.selected_stage," max_fps=",Engine.max_fps," samples=300 dt=1/60 headless=true")
  for mode in ["driving", "walking"]:
   game.in_car = mode == "driving"

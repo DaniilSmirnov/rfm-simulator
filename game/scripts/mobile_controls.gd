@@ -6,6 +6,8 @@ var fingers: Dictionary = {}
 var held: Dictionary = {}
 var stick = Vector2.ZERO
 var buttons: Array[Dictionary] = []
+var layout_state: Array = []
+var layout_revision = 0
 var last_size = Vector2.ZERO
 var last_in_car = true
 var map_open = false
@@ -65,11 +67,21 @@ func add_button(label: String, action: String, hold: bool, rect: Rect2) -> void:
 	buttons.append({"label": label, "action": action, "hold": hold, "rect": rect})
 
 func _layout() -> void:
-	buttons.clear()
-	gear_rect = Rect2()
 	var edge = 24.0
 	if not _has_role("stick"):
 		stick_center = Vector2(edge + 84, size.y - edge - 80)
+	var target: Dictionary = {}
+	if active() and not game.in_car:
+		target = game.hud_target if game.hud_target_frame == Engine.get_process_frames() else game.interaction.current()
+	var state: Array = [size, active(), landscape(), world_blocked(), game.in_car, game.placement_kind,
+		gear_open, game.seated, game.beers < 30, game.packing.active(), game.flag_count(),
+		game.foraging.can_eat("berries"), game.tow_target != null, game.nearby_tow_racer(), target.get("label", "")]
+	if state == layout_state:
+		return
+	layout_state = state
+	layout_revision += 1
+	buttons.clear()
+	gear_rect = Rect2()
 	if not active() or not landscape():
 		return
 	look_center = Vector2(size.x - edge - 84, size.y - edge - 80)
@@ -87,7 +99,6 @@ func _layout() -> void:
 			add_button("Газ", "forward", true, Rect2(Vector2(size.x - edge - 88, size.y - edge - 256), Vector2(88, 112)))
 			gear = [["Вернуть", "recover"]]
 		else:
-			var target = game.hud_target if game.hud_target_frame == Engine.get_process_frames() else game.interaction.current()
 			var label = "Действие"
 			if not target.is_empty():
 				label = str(target.label).replace("Вернуть коробку в багажник", "Вернуть").replace("Собрать казан с подставкой", "Убрать казан").replace("Потушить и собрать костёр", "Убрать костёр").replace("Сесть в машину", "В машину").replace("Сесть на стул", "На стул").replace("Встать со стула", "Встать").replace("Собрать гриб", "Собрать").replace("Собрать ягоды", "Собрать").replace("Собрать виноград", "Виноград").replace("Насадить гриб", "Насадить").replace("Съесть шашлык", "Шашлык").replace("Съесть гриб", "Есть гриб").replace("Выпить пиво", "Пиво").replace("Потушить и собрать мангал", "Убрать мангал").replace("Поставить казан на костёр", "На костёр").replace("Добавить ингредиенты и готовить плов", "Готовить плов").replace("Съесть плов", "Плов").replace("Собрать ", "Убрать ")
