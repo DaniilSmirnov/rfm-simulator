@@ -1,5 +1,6 @@
 extends SceneTree
 const Stage = preload("res://scripts/stage.gd")
+const RallyProps = preload("res://scripts/props.gd")
 var checks = 0
 var failures = 0
 func check(ok: bool, title: String) -> void:
@@ -36,6 +37,23 @@ func run() -> void:
 	host.car_choice.cycle(-1)
 	check(host.selected_car == 9 and host.car.get_meta("model") == "Спортивный седан", "previous arrow wraps to red Sport F80")
 	host.select_player_car(8)
+	var obj_asset_script = load("res://scripts/camping_hatchback_asset.gd")
+	check(obj_asset_script.PARTS.size() == 8, "camping hatchback supports eight independently imported OBJ parts")
+	check(host.car.get_meta("roof_cargo", "") == "inflatable_boat", "camping hatchback retains inflatable roof boat configuration")
+	var camping_lid = host.car.get_node_or_null("TrunkHinge")
+	var imported_lid_names = ["BodyShellHatchback_Lid", "Camping_glass_Lid", "Camping_trim_Lid", "Camping_lights_Lid"]
+	var imported_hatch_complete = camping_lid != null
+	for lid_name in imported_lid_names:
+		var lid = camping_lid.get_node_or_null(lid_name) if camping_lid != null else null
+		imported_hatch_complete = imported_hatch_complete and lid is MeshInstance3D and lid.mesh.get_surface_count() > 0
+	check(imported_hatch_complete, "imported hatch moves rear body, glass, trim and lamps together")
+	var boat_static = host.car.get_node_or_null("CarModelDetails/Camping_boat") != null
+	check(boat_static and camping_lid.get_node_or_null("Camping_boat_Lid") == null, "inflatable roof boat remains fixed when trunk opens")
+	var original_hatch_position = camping_lid.transform if camping_lid != null else Transform3D.IDENTITY
+	RallyProps.update_player_trunk(host.car, true, [true, true, true, true, true], 1.0)
+	check(camping_lid != null and camping_lid.rotation.x < -0.8 and host.car.get_node("TrunkBoxes").visible, "imported rear hatch opens and exposes stored cargo")
+	RallyProps.update_player_trunk(host.car, false, [true, true, true, true, true], 1.0)
+	check(camping_lid != null and absf(camping_lid.rotation.x) < 0.01, "imported rear hatch closes completely")
 	check(host.car.get_node_or_null("BodyShellHatchback") != null and host.car.get_node_or_null("RoofHatchback") != null, "2112 has dedicated body, short roof and sloped-glasshouse geometry")
 	host.car_choice.select(9)
 	host.car_choice.cycle(1)
