@@ -23,11 +23,21 @@
     try {
       const response = await window.fetch(`/api/rooms/${current.room}/heartbeat`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: current.token }), keepalive: true,
+        body: JSON.stringify({ token: current.token, background: document.hidden === true }), keepalive: true,
       });
       if ([401, 404, 410].includes(response.status) && session === current) session = null;
     } catch {} finally { heartbeatBusy = false; }
   }, 5000);
+  const sendVisibility = () => {
+    if (!session) return;
+    originalFetch(`/api/rooms/${session.room}/heartbeat`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: session.token, background: document.hidden === true }),
+      keepalive: true,
+    }).catch(() => {});
+  };
+  document.addEventListener('visibilitychange', sendVisibility);
+  window.addEventListener('focus', sendVisibility);
   window.addEventListener('pagehide', event => {
     if (event.persisted || !session) return;
     if (window.RallyPlatform?.target === 'vk') {
