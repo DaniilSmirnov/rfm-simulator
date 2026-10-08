@@ -38,6 +38,9 @@ static func build() -> Node3D:
 		var surface = MeshInstance3D.new()
 		surface.name = "BodyShellHatchback" if part == "body" else "Camping_" + part
 		surface.mesh = mesh
+		# Source OBJ faces +Z, while gameplay expects vehicle forward along -Z.
+		# Apply to each part before add_player_trunk() clips the rear hatch.
+		surface.rotation.y = PI
 		var mat = StandardMaterial3D.new()
 		mat.albedo_color = COLORS[part]
 		mat.metallic = 0.15 if part == "wheels_metal" else 0.0
