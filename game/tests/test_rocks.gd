@@ -68,11 +68,16 @@ func run() -> void:
 	racer.start = origin + Vector3(-4, 0, 0)
 	racer.target = origin + Vector3(4, 0, 0)
 	racer.node.position = racer.start
+	racer.motion.velocity = Vector3(16, 0, 0)
+	racer.yaw_rate = 0.0
 	game._update_racers(0.5)
 	check(racer.state == "rock_bounce" and racer.node.position.x < origin.x and racer.motion.velocity.x < 0, "rally car physically rebounds from a roadside rock")
 	var snapshot = game.room.world_state()
 	check(snapshot.racers[0].state == "rock_bounce" and snapshot.racers[0].has("tilt"), "room shares rally rock rebound and suspension pose")
-	game._update_racers(0.9)
+	for i in range(480):
+		game._update_racers(1.0 / 60.0)
+		if racer.state == "stranded":
+			break
 	check(racer.state == "stranded", "crashed rally crew waits for towing after rock rebound")
 	var passed = game.passed
 	racer.state = "offroad"
@@ -81,6 +86,8 @@ func run() -> void:
 	racer.start = origin + Vector3(-4, 0, 0)
 	racer.target = origin + Vector3(1, 0, 0)
 	racer.node.position = racer.start
+	racer.motion.velocity = Vector3(16, 0, 0)
+	racer.yaw_rate = 0.0
 	game._update_racers(0.8)
 	check(game.passed == passed + 1, "rock hit on final offroad frame counts the crew once")
 	var node = Node3D.new()

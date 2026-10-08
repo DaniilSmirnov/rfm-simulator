@@ -50,6 +50,7 @@ func run() -> void:
 		check(safe.encloses(screen_rect), "VK buttons stay outside shell and system edges")
 	check(safe.encloses(game.menu.get_global_rect()), "compact menu fits inside VK safe area")
 	check(game.mobile_top.global_position.y >= safe.position.y and game.mobile_bottom.global_position.x >= safe.position.x, "HUD respects safe area origin")
+	check(game.crosshair.get_global_rect().get_center().distance_to(game.get_viewport().get_visible_rect().size / 2) < 0.1, "aim stays at camera centre when safe area moves HUD")
 	var touch = InputEventScreenTouch.new()
 	touch.index = 21
 	touch.pressed = true

@@ -113,6 +113,26 @@ func run() -> void:
 	game.recover_racer(lead)
 	check(lead.state == "racing" and lead.node.position.distance_to(game.race_at(lead.s)) < 0.01 and (-lead.node.basis.z).dot(game.race_direction(lead.s)) > 0.99, "recovery rejoins road in reverse travel direction")
 	clear_cars(game)
+	game.course.phase = "racing"
+	game.spawn_racer("pass")
+	var drifting = game.racers[0]
+	drifting.s = 160.0
+	drifting.focus = 650.0
+	drifting.node.position = game.race_at(drifting.s)
+	drifting.slide = 1.0
+	drifting.slide_speed = 0.5
+	game._update_racers(1.0 / 60.0)
+	var lateral: float = (drifting.node.position - game.race_at(drifting.s)).dot(game.race_side(drifting.s))
+	check(absf(lateral - drifting.line - drifting.slide) < 0.01, "slide displaces the actual vehicle rather than only changing its steering target")
+	drifting.slide = 3.6
+	game._update_racers(1.0 / 60.0)
+	check(drifting.state == "offroad" and drifting.motion.velocity.length() > 5, "excessive slide releases the vehicle from the road with momentum")
+	var carried: Vector3 = (drifting.node.position - drifting.previous) * 60.0
+	carried.y = 0.0
+	check(drifting.motion.velocity.distance_to(carried) < 0.001, "departure carries actual trajectory velocity, including lane changes")
+	game.recover_racer(drifting)
+	check(drifting.slide == 0 and drifting.slide_speed == 0 and drifting.drift_yaw == 0 and drifting.yaw_rate == 0 and drifting.motion.velocity == Vector3.ZERO, "towing resets lateral inertia and accident rotation")
+	clear_cars(game)
 	await game._shutdown_audio()
 	game.queue_free()
 	await process_frame
