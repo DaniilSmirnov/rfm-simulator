@@ -169,6 +169,43 @@ static func player_avatar(variant: int = 0) -> Node3D:
 	food.hide()
 	return root
 
+
+# Roll wheel and hub meshes according to signed longitudinal travel.
+# Cache references once per car; skip teleports to prevent large visual jumps.
+static func animate_wheels(car_root: Node3D) -> void:
+	if car_root == null:
+		return
+	var current_position = car_root.global_position
+	if not car_root.has_meta("wheel_previous_position"):
+		car_root.set_meta("wheel_previous_position", current_position)
+		return
+	var previous: Vector3 = car_root.get_meta("wheel_previous_position")
+	car_root.set_meta("wheel_previous_position", current_position)
+	var travelled = current_position - previous
+	if travelled.length_squared() < 0.000001 or travelled.length_squared() > 64.0:
+		return
+	var signed_distance = travelled.dot(-car_root.global_basis.z.normalized())
+	if absf(signed_distance) < 0.0001:
+		return
+	if not car_root.has_meta("wheel_parts"):
+		var wheels: Array = []
+		var pending: Array[Node] = [car_root]
+		while not pending.is_empty():
+			var current: Node = pending.pop_back()
+			for child in current.get_children():
+				pending.append(child)
+				if child is Node3D and child.has_meta("rolling_wheel_radius"):
+					wheels.append(child)
+		car_root.set_meta("wheel_parts", wheels)
+	var parts: Array = car_root.get_meta("wheel_parts")
+	for wheel in parts:
+		if not is_instance_valid(wheel):
+			continue
+		var radius = wheel.get_meta("rolling_wheel_radius")
+		if radius is String:
+			radius = 0.4
+		wheel.rotate_object_local(wheel.get_meta("rolling_wheel_axis", Vector3.UP), signed_distance / maxf(float(radius), 0.1))
+
 static func car(color: Color, rally: bool = false, variant: int = 0) -> Node3D:
 	if rally:
 		return rally_car(variant)
@@ -186,8 +223,10 @@ static func car(color: Color, rally: bool = false, variant: int = 0) -> Node3D:
 		for z in [-1.22, 1.25]:
 			var wheel = cylinder(root, Vector3(x, 0.39, z), 0.4, 0.4, 0.28, Color("222b2a"), 10)
 			wheel.rotation.z = PI / 2
+			wheel.set_meta("rolling_wheel_radius", 0.4)
 			var hub = cylinder(root, Vector3(x * 1.15, 0.39, z), 0.22, 0.22, 0.03, Color("ddd7c3"), 8)
 			hub.rotation.z = PI / 2
+			hub.set_meta("rolling_wheel_radius", "inherit")
 	if rally:
 		box(root, Vector3(0, 1.3, 1.65), Vector3(2, 0.1, 0.42), Color("273230"))
 		box(root, Vector3(0, 0.86, -0.7), Vector3(0.65, 0.1, 2), Color("f2e8d0"))
@@ -328,8 +367,10 @@ static func player_car_camping_hatchback() -> Node3D:
 		for z in [-1.33, 1.34]:
 			var wheel = cylinder(root, Vector3(side * 0.87, 0.39, z), 0.39, 0.39, 0.28, Color("171c1e"), 12)
 			wheel.rotation.z = PI / 2
+			wheel.set_meta("rolling_wheel_radius", 0.39)
 			var hub = cylinder(root, Vector3(side * 1.03, 0.39, z), 0.22, 0.22, 0.035, Color("323b40"), 8)
 			hub.rotation.z = PI / 2
+			hub.set_meta("rolling_wheel_radius", "inherit")
 	# Large slanted windscreen; the rear glass is a long fastback panel into the hatch.
 	quad_panel(root, PackedVector3Array([
 		Vector3(-0.66, 1.40, -0.62), Vector3(0.66, 1.40, -0.62),
@@ -369,8 +410,6 @@ static func player_car_camping_hatchback() -> Node3D:
 		box(root, Vector3(0, 1.91, z), Vector3(1.48, 0.045, 0.10), Color("e0b83f"))
 		box(root, Vector3(0, 1.83, z), Vector3(0.055, 0.38, 0.055), Color("202a2d"))
 	return add_player_trunk(root, 8)
-
-
 static func player_car_sport_sedan() -> Node3D:
 	var root = Node3D.new()
 	root.name = "PlayerCar_9"
@@ -429,6 +468,7 @@ static func player_car_sport_sedan() -> Node3D:
 			var z = -1.42 if wheel_index == 0 else 1.39
 			var wheel = cylinder(root, Vector3(side * 0.94, 0.36, z), 0.36, 0.36, 0.26, black, 16)
 			wheel.rotation.z = PI / 2
+			wheel.set_meta("rolling_wheel_radius", 0.36)
 			wheel.name = "SportWheel_%s_%d" % [side, wheel_index]
 			var rim = cylinder(root, Vector3(side * 1.077, 0.36, z), 0.27, 0.27, 0.018, Color("252a30"), 16)
 			rim.rotation.z = PI / 2
@@ -528,8 +568,10 @@ static func player_car(variant: int = 0) -> Node3D:
 		for z in [front + shape[4], rear - shape[5]]:
 			var wheel = cylinder(root, Vector3(side * half * 1.01, radius, z), radius, radius, 0.26, Color("202827"), 12)
 			wheel.rotation.z = PI / 2
+			wheel.set_meta("rolling_wheel_radius", radius)
 			var hub = cylinder(root, Vector3(side * half * 1.17, radius, z), radius * 0.60, radius * 0.60, 0.035, Color("b8c0bf"), 8)
 			hub.rotation.z = PI / 2
+			hub.set_meta("rolling_wheel_radius", "inherit")
 			cylinder(hub, Vector3(0, 0.024, 0), radius * 0.19, radius * 0.19, 0.025, Color("515b5e"), 8)
 			if suv:
 				box(root, Vector3(side * half, base + 0.02, z), Vector3(0.11, 0.13, 1.00), Color("35413d"))
@@ -793,8 +835,10 @@ static func rally_car(variant: int, number_override: int = -1, sponsor_override:
 		for z in [-1.25, 1.27]:
 			var wheel = cylinder(root, Vector3(side * 0.9, 0.38, z), 0.38, 0.38, 0.3, Color("202826"), 10)
 			wheel.rotation.z = PI / 2
+			wheel.set_meta("rolling_wheel_radius", 0.38)
 			var hub = cylinder(root, Vector3(side * 1.06, 0.38, z), 0.23, 0.23, 0.035, accent, 8)
 			hub.rotation.z = PI / 2
+			hub.set_meta("rolling_wheel_radius", "inherit")
 			box(root, Vector3(side * 0.9, 0.47, z + 0.4), Vector3(0.27, 0.44, 0.06), Color("212a24"))
 			box(root, Vector3(side * 0.89, 0.79, z), Vector3(0.13, 0.13, 0.77), accent)
 		# Door number panels, club sponsor and lower sill stripes.
@@ -1144,8 +1188,6 @@ static func set_grill_servings(grill_node: Node3D, servings: int) -> void:
 			skewer_node.visible = i < count + mushrooms
 			skewer_node.get_node("MeatPieces").visible = i < count
 			skewer_node.get_node("MushroomFood").visible = i >= count and i < count + mushrooms
-
-
 static func rope(parent: Node3D, a: Vector3, b: Vector3) -> MeshInstance3D:
 	var n = cylinder(parent, (a + b) / 2, 0.025, 0.025, a.distance_to(b), Color("e7b44c"), 5)
 	n.quaternion = Quaternion(Vector3.UP, (b - a).normalized())

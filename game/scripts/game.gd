@@ -956,6 +956,7 @@ func _process(delta: float) -> void:
 		camera.position += room.prediction.visual_offset
 	room.smooth_car_visuals()
 	_update_placement()
+	Props.animate_wheels(car)
 	cargo.update(delta)
 	camp_cooking.update(delta, room.connected and not room.is_host)
 	spectators.update(elapsed, delta, room.connected and not room.is_host)
@@ -963,6 +964,8 @@ func _process(delta: float) -> void:
 	foraging.update_visuals()
 	if not room.connected or room.is_host:
 		_update_racers(delta)
+		for racer in racers:
+			Props.animate_wheels(racer.node)
 		_update_stones(delta)
 		_update_cooking(delta)
 		if room.connected:

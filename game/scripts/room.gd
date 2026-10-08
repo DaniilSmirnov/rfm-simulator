@@ -286,6 +286,7 @@ func _process(delta: float) -> void:
 		var car_pose = peer.car_motion.render(server_clock(), frozen)
 		peer.car.position = car_pose.position
 		peer.car.rotation = car_pose.rotation
+		Props.animate_wheels(peer.car)
 		var avatar_pose = peer.avatar_motion.render(server_clock(), frozen)
 		peer.avatar.position = avatar_pose.position
 		peer.avatar.rotation.y = avatar_pose.rotation.y
