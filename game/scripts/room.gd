@@ -171,6 +171,9 @@ func _response(result: int, code: int, _headers: PackedStringArray, bytes: Packe
 			lobby_status.text = message
 			create_button.disabled = false
 			join_button.disabled = false
+			if game.invite_after_room_create:
+				game.invite_after_room_create = false
+				game.invite_status.text = "Не удалось создать комнату: " + message
 			game.lobby_ui.refresh()
 		return
 	errors = 0
@@ -202,6 +205,9 @@ func _response(result: int, code: int, _headers: PackedStringArray, bytes: Packe
 		game.avatar_variant = posmod(lane, Props.SPECTATOR_MODELS.size())
 		game.car.position = game.stage.at(12 + lane * 6)
 		game.toast("Комната %s · %s. Передай ID друзьям!" % [room_id, game.car.get_meta("model")])
+		if game.invite_after_room_create:
+			game.invite_after_room_create = false
+			game._invite_friends()
 		print("ROOM_CONNECTED ", room_id, " host=", is_host)
 	else:
 		if not is_host and data.world is Dictionary:
