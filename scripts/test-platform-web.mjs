@@ -72,7 +72,7 @@ try {
    assert.equal(authorizedRoomRequests,mobile?2:1);
   }
   assert.equal(platformNetworkRequests,0,'Browser-local transport leaked to server');
-  assert.equal(await page.locator('#rally-fullscreen').count(),1);
+  assert.equal(await page.locator('#rally-fullscreen').count(),isVk&&mobile?0:1);
   if(isVk&&mobile) {
    await page.evaluate(()=>window.testVKConfig({detail:{type:'VKWebAppUpdateConfig',data:{insets:{top:0,left:44,right:44,bottom:21}}}}));
    const safe=await page.evaluate(()=>window.RallyViewport.snapshot());
