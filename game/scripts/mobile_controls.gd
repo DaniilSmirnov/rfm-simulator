@@ -10,6 +10,8 @@ var last_size = Vector2.ZERO
 var last_in_car = true
 var map_open = false
 var gear_open = false
+var gear_rect = Rect2()
+var button_styles: Array[StyleBoxFlat] = []
 var stick_center = Vector2.ZERO
 const STICK_RADIUS = 62.0
 
@@ -17,6 +19,13 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	resized.connect(reset_input)
+	for color in [Color("22342bd9"), Color("dfa963f2"), Color("dfb270e6")]:
+		var style = StyleBoxFlat.new()
+		style.bg_color = color
+		style.border_color = Color("d7b479")
+		style.set_border_width_all(2)
+		style.set_corner_radius_all(18)
+		button_styles.append(style)
 
 func active() -> bool:
 	return game != null and game.playing and not game.paused and not game.dead and not game.finished
@@ -47,6 +56,7 @@ func add_button(label: String, action: String, hold: bool, rect: Rect2) -> void:
 
 func _layout() -> void:
 	buttons.clear()
+	gear_rect = Rect2()
 	var edge = 24.0
 	if not _has_role("stick"):
 		stick_center = Vector2(edge + 84, size.y - edge - 80)
@@ -60,19 +70,21 @@ func _layout() -> void:
 			for i in range(actions.size()):
 				add_button(actions[i][0], actions[i][1], false, Rect2(Vector2(size.x / 2 - 158 + i * 108, size.y - edge - 64), Vector2(100, 64)))
 		elif game.in_car:
-			add_button("Выйти", "interact", false, Rect2(primary - Vector2(-26, 100), Vector2(88, 64)))
-			for i in range(3):
-				add_button(["Назад", "Тормоз", "Газ"][i], ["back", "brake", "forward"][i], true, Rect2(Vector2(size.x - edge - 258 + i * 86, size.y - edge - 84), Vector2(78, 84)))
+			# Two large pedals under the right thumb; reverse is a separate hold.
+			add_button("Выйти", "interact", false, Rect2(Vector2(size.x - edge - 88, size.y - edge - 252), Vector2(88, 64)))
+			add_button("Назад", "back", true, Rect2(Vector2(size.x - edge - 184, size.y - edge - 180), Vector2(88, 56)))
+			add_button("Тормоз", "brake", true, Rect2(Vector2(size.x - edge - 184, size.y - edge - 112), Vector2(88, 112)))
+			add_button("Газ", "forward", true, Rect2(Vector2(size.x - edge - 88, size.y - edge - 112), Vector2(88, 112)))
 			gear = [["Вернуть", "recover"]]
 		else:
 			var target = game.interaction.current()
 			var label = "Действие"
 			if not target.is_empty():
 				label = str(target.label).replace("Вернуть коробку в багажник", "Вернуть").replace("Собрать казан с подставкой", "Убрать казан").replace("Потушить и собрать костёр", "Убрать костёр").replace("Сесть в машину", "В машину").replace("Сесть на стул", "На стул").replace("Встать со стула", "Встать").replace("Собрать гриб", "Собрать").replace("Собрать ягоды", "Собрать").replace("Собрать виноград", "Виноград").replace("Насадить гриб", "Насадить").replace("Съесть шашлык", "Шашлык").replace("Съесть гриб", "Есть гриб").replace("Выпить пиво", "Пиво").replace("Потушить и собрать мангал", "Убрать мангал").replace("Поставить казан на костёр", "На костёр").replace("Добавить ингредиенты и готовить плов", "Готовить плов").replace("Съесть плов", "Плов").replace("Собрать ", "Убрать ")
-			add_button(label, "interact", false, Rect2(primary, Vector2(112, 96)))
+			add_button(label, "interact", false, Rect2(Vector2(size.x - edge - 96, size.y - edge - 100), Vector2(96, 100)))
 			if not game.seated and game.beers < 30:
-				add_button("Бег", "sprint", true, Rect2(primary + Vector2(-80, 54), Vector2(68, 68)))
-				add_button("Прыжок", "jump", false, Rect2(primary + Vector2(34, -80), Vector2(70, 64)))
+				add_button("Бег", "sprint", true, Rect2(Vector2(size.x - edge - 172, size.y - edge - 72), Vector2(64, 72)))
+				add_button("Прыжок", "jump", false, Rect2(Vector2(size.x - edge - 96, size.y - edge - 176), Vector2(96, 64)))
 			gear = []
 			if not game.packing.active():
 				gear.append(["Стол", "table"])
@@ -87,14 +99,15 @@ func _layout() -> void:
 			if game.tow_target != null or game.nearby_tow_racer():
 				add_button("Трос", "tow", true, Rect2(primary + Vector2(-80, -26), Vector2(68, 68)))
 		if not gear.is_empty():
-			add_button("Вещи", "gear", false, Rect2(Vector2(size.x - edge - 210, edge), Vector2(66, 54)))
+			add_button("Лагерь", "gear", false, Rect2(Vector2(size.x - edge - 216, edge), Vector2(64, 56)))
 		if gear_open and game.placement_kind == "":
 			var rows = ceili(gear.size() / 3.0)
-			var origin = Vector2(size.x / 2 - 154, size.y - edge - rows * 56 - 12)
+			var origin = Vector2(size.x / 2 - 154, size.y - edge - rows * 64 - 12)
+			gear_rect = Rect2(origin - Vector2(8, 8), Vector2(316, rows * 64 + 8))
 			for i in range(gear.size()):
-				add_button(gear[i][0], gear[i][1], false, Rect2(origin + Vector2((i % 3) * 104, (i / 3) * 56), Vector2(96, 48)))
-	add_button("Пауза", "pause_demo", false, Rect2(Vector2(size.x - edge - 66, edge), Vector2(66, 54)))
-	add_button("Карта", "map", false, Rect2(Vector2(size.x - edge - 138, edge), Vector2(66, 54)))
+				add_button(gear[i][0], gear[i][1], false, Rect2(origin + Vector2((i % 3) * 104, (i / 3) * 64), Vector2(96, 56)))
+	add_button("Пауза", "pause_demo", false, Rect2(Vector2(size.x - edge - 64, edge), Vector2(64, 56)))
+	add_button("Карта", "map", false, Rect2(Vector2(size.x - edge - 140, edge), Vector2(64, 56)))
 
 func _input(event: InputEvent) -> void:
 	if not active() or not landscape():
@@ -126,9 +139,11 @@ func touch_begin(index: int, pos: Vector2) -> void:
 			if button.hold:
 				_hold(button.action)
 			elif button.action == "map":
+				reset_input()
 				map_open = not map_open
 				gear_open = false
 			elif button.action == "gear":
+				reset_input()
 				gear_open = not gear_open
 				map_open = false
 			else:
@@ -139,6 +154,11 @@ func touch_begin(index: int, pos: Vector2) -> void:
 				if not button.hold:
 					gear_open = false
 			return
+	if gear_open:
+		# Drawer gaps/outside taps never turn into camera or movement input.
+		if not gear_rect.has_point(pos):
+			gear_open = false
+		return
 	if world_blocked():
 		return
 	if pos.x < size.x * 0.5 and pos.y > size.y * 0.28 and not _has_role("stick"):
@@ -186,7 +206,10 @@ func _has_role(role: String) -> bool:
 	return false
 
 func _move_stick(pos: Vector2) -> void:
-	stick = ((pos - stick_center) / STICK_RADIUS).limit_length(1.0)
+	var delta = (pos - stick_center) / STICK_RADIUS
+	if game.in_car:
+		delta.y = 0
+	stick = delta.limit_length(1.0)
 	if stick.length() < 0.12:
 		stick = Vector2.ZERO
 	_set_axis("left", "right", stick.x)
@@ -231,9 +254,14 @@ func _draw() -> void:
 	if not landscape():
 		draw_string(font, Vector2(0, size.y / 2), "Поверните устройство горизонтально", HORIZONTAL_ALIGNMENT_CENTER, size.x, 24, Color.WHITE)
 		return
-	draw_string(font, Vector2(size.x * 0.62, size.y * 0.40), "ОБЗОР", HORIZONTAL_ALIGNMENT_CENTER, size.x * 0.30, 18, Color("f3e8cd70"))
+	if gear_open and gear_rect.has_area():
+		draw_style_box(button_styles[0], gear_rect)
 	draw_circle(stick_center, STICK_RADIUS, Color("25352baa"))
 	draw_arc(stick_center, STICK_RADIUS, 0, TAU, 40, Color("dfb270"), 3, true)
+	if game.in_car:
+		draw_line(stick_center + Vector2(-42, 0), stick_center + Vector2(42, 0), Color("dfb27088"), 2)
+		draw_string(font, stick_center + Vector2(-54, 6), "‹", HORIZONTAL_ALIGNMENT_LEFT, 24, 24, Color("f3e8cd"))
+		draw_string(font, stick_center + Vector2(40, 6), "›", HORIZONTAL_ALIGNMENT_LEFT, 24, 24, Color("f3e8cd"))
 	draw_circle(stick_center + stick * 48, 28, Color("e3b16bdd"))
 	var text = "РУЛЬ" if game.in_car else "ИДТИ"
 	draw_string(font, stick_center + Vector2(-42, 94), text, HORIZONTAL_ALIGNMENT_CENTER, 84, 18, Color("f3e8cd"))
@@ -242,11 +270,15 @@ func _draw() -> void:
 		for finger in fingers.values():
 			if finger.kind == "button" and finger.button.action == button.action and finger.pressed:
 				pressed = true
-		var style = StyleBoxFlat.new()
-		style.bg_color = Color("d7a45eec") if pressed else Color("25352be6")
-		style.border_color = Color("d7b479")
-		style.set_border_width_all(2)
-		style.set_corner_radius_all(16)
+		var emphasized = button.action == "forward" or (button.action == "interact" and not game.in_car)
+		var style = button_styles[1 if pressed else (2 if emphasized else 0)]
 		draw_style_box(style, button.rect)
-		draw_string(font, button.rect.position + Vector2(4, button.rect.size.y / 2 + 6), button.label, HORIZONTAL_ALIGNMENT_CENTER, button.rect.size.x - 8, 17, Color("f6ead1"))
+		var text_color = Color("22342b") if pressed or emphasized else Color("f6ead1")
+		var baseline = button.rect.size.y / 2 + 6
+		if button.action in ["forward", "brake"]:
+			baseline = button.rect.size.y - 16
+			for row in range(3):
+				var y = button.rect.position.y + 20 + row * 14
+				draw_line(Vector2(button.rect.position.x + 20, y), Vector2(button.rect.end.x - 20, y), text_color * Color(1, 1, 1, 0.55), 4, true)
+		draw_string(font, button.rect.position + Vector2(4, baseline), button.label, HORIZONTAL_ALIGNMENT_CENTER, button.rect.size.x - 8, 17, text_color)
 

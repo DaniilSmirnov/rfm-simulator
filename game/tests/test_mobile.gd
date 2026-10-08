@@ -66,6 +66,24 @@ func run() -> void:
 	touch.position = Vector2(100, 20)
 	c._input(touch)
 	check(not c.fingers.has(22), "VK overlay band does not acquire a gameplay gesture")
+	for pedal in ["forward", "brake"]:
+		for b in c.buttons:
+			if b.action == pedal:
+				check(b.rect.size.x >= 88 and b.rect.size.y >= 112, "driving pedals have large touch targets")
+	c._move_stick(c.stick_center + Vector2(62, 62))
+	check(is_equal_approx(c.stick.x, 1.0) and is_zero_approx(c.stick.y), "driving steering uses only horizontal thumb motion")
+	c.reset_input()
+	c.touch_begin(27, button(c, "forward"))
+	c.touch_begin(28, button(c, "gear"))
+	check(not Input.is_action_pressed("forward") and c.fingers.is_empty(), "opening drawer releases held driving input")
+	c.gear_open = true
+	c._layout()
+	var old_yaw = game.view_yaw
+	c.touch_begin(25, c.gear_rect.position + Vector2(2, 2))
+	c.touch_drag(25, c.gear_rect.position + Vector2(50, 2), Vector2(48, 0))
+	check(not c.fingers.has(25) and game.view_yaw == old_yaw, "drawer padding never starts movement or camera gesture")
+	c.touch_begin(26, Vector2(c.size.x * 0.75, 150))
+	check(not c.gear_open and not c.fingers.has(26), "outside drawer tap closes it without camera capture")
 	game.apply_mobile_safe_rect(Rect2(Vector2.ZERO, Vector2(960, 540)))
 	c._process(0)
 	check(not Input.is_action_pressed("forward") and c.fingers.is_empty(), "inset changes cancel held touches")
