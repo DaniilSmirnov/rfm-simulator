@@ -286,10 +286,6 @@ func enable_mobile() -> void:
 	mobile_bottom.offset_bottom = 148
 	info_label.add_theme_font_size_override("font_size", 16)
 	info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	room.room_label.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
-	room.room_label.position = Vector2(24, 76)
-	room.room_label.size = Vector2(400, 16)
-	room.room_label.add_theme_font_size_override("font_size", 12)
 	hint_label.hide()
 	quest_label.hide()
 	mobile_sidebar.get_child(0).get_child(0).hide()
