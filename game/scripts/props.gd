@@ -1129,6 +1129,10 @@ static func set_grill_servings(grill_node: Node3D, servings: int) -> void:
 		return
 	var count = clampi(servings, 0, FOOD_PORTIONS)
 	var mushrooms = clampi(int(grill_node.get_meta("mushrooms", 0)), 0, FOOD_PORTIONS - count)
+	var state = Vector2i(count, mushrooms)
+	if grill_node.get_meta("serving_visual_state", Vector2i(-1, -1)) == state:
+		return
+	grill_node.set_meta("serving_visual_state", state)
 	grill_node.set_meta("servings", count)
 	for i in range(FOOD_PORTIONS):
 		var skewer_node = grill_node.get_node_or_null("FoodSkewer_%02d" % i)

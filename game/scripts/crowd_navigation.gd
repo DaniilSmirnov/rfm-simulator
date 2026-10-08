@@ -3,8 +3,6 @@ extends RefCounted
 const CELL = 1.5
 const RADIUS = 0.35
 const MAX_VISITS = 420
-static var planning_frame = -1
-static var plans_this_frame = 0
 
 static func flat(p: Vector3) -> Vector2:
 	return Vector2(p.x, p.z)
@@ -13,7 +11,7 @@ static func context(game, person: Dictionary, start: Vector3, goal: Vector3, roa
 	var solids: Array = []
 	var low = flat(start).min(flat(goal)) - Vector2.ONE * 13
 	var high = flat(start).max(flat(goal)) + Vector2.ONE * 13
-	for rock in game.stage.rocks:
+	for rock in game.stage.rocks_in_bounds(low, high):
 		if rock.get("actor", null) == person.avatar:
 			continue
 		var p = flat(rock.pos)
@@ -144,13 +142,8 @@ static func move(game, person: Dictionary, goal: Vector3, delta: float, roadside
 		route.pop_front()
 	var blocked = not route.is_empty() and not clear(game, start, route[0], ctx)
 	if changed or blocked or (route.is_empty() and state.retry <= 0):
-		var frame = Engine.get_process_frames()
-		if frame != planning_frame:
-			planning_frame = frame
-			plans_this_frame = 0
-		if plans_this_frame >= 2:
+		if not game.spectators.navigation_budget.request(person.avatar.get_instance_id()):
 			return
-		plans_this_frame += 1
 		state.goal = goal
 		state.route = plan(game, start, goal, ctx)
 		state.retry = 0.8

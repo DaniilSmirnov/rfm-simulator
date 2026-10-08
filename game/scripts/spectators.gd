@@ -6,9 +6,11 @@ var game: Node3D
 var groups: Array[Dictionary] = []
 var people: Array[Dictionary] = []
 var clock = 0.0
+var navigation_budget = preload("res://scripts/navigation_budget.gd").new()
 var actor_targets: Dictionary = {}
 
 func rebuild(cooperative: bool = false) -> void:
+	navigation_budget = preload("res://scripts/navigation_budget.gd").new()
 	for child in get_children():
 		child.free()
 	groups.clear()
@@ -97,6 +99,7 @@ func activity(id: int, time: float) -> Dictionary:
 	return {"action": action, "time": phase, "cycle": cycle}
 
 func update(world_time: float, delta: float, guest: bool) -> void:
+	navigation_budget.advance(delta)
 	if guest:
 		clock += delta
 		if absf(clock - world_time) > 0.35:

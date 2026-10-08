@@ -1,6 +1,10 @@
 extends SceneTree
 const Stage = preload("res://scripts/stage.gd")
 const Motion = preload("res://scripts/vehicle_motion.gd")
+class LinearStage:
+	extends "res://scripts/stage.gd"
+	func rocks_in_bounds(_low: Vector2, _high: Vector2) -> Array:
+		return rocks
 var failures = 0
 func check(ok: bool, title: String) -> void:
 	print(("PASS: " if ok else "FAIL: ") + title)
@@ -24,6 +28,36 @@ func run() -> void:
 	solver.rock_impulse(Vector3.LEFT, -PI / 2)
 	check(solver.velocity.x < 0 and solver.velocity.z > 0 and solver.velocity.length_squared() < energy, "rock rebound loses energy and preserves tangential slide")
 	check(solver.vertical_speed > 0 and solver.vertical_speed <= 2.8, "rock strike produces a bounded suspension kick")
+	var oracle = LinearStage.new()
+	var indexed = Stage.new()
+	var random = RandomNumberGenerator.new()
+	random.seed = 351008
+	for i in range(120):
+		var rock = {"pos": Vector3(random.randf_range(-80, 80), 0, random.randf_range(-80, 80)), "radius": random.randf_range(0.2, 22), "height": random.randf_range(0.3, 3)}
+		oracle.rocks.append(rock)
+		indexed.rocks.append(rock)
+	var matching = true
+	for i in range(160):
+		var a = Vector3(random.randf_range(-100, 100), random.randf_range(0, 4), random.randf_range(-100, 100))
+		var b = Vector3(random.randf_range(-100, 100), random.randf_range(0, 4), random.randf_range(-100, 100))
+		var radius = random.randf_range(0.05, 2)
+		var linear = oracle.rock_hit(a, b, radius, i % 2 == 0)
+		var accelerated = indexed.rock_hit(a, b, radius, i % 2 == 0)
+		matching = matching and linear.is_empty() == accelerated.is_empty()
+		if not linear.is_empty() and not accelerated.is_empty():
+			matching = matching and linear.position.distance_to(accelerated.position) < 0.00001 and absf(linear.time-accelerated.time) < 0.00001
+	check(matching, "rock index matches linear swept collision across cells, heights and large radii")
+	var actor = Node3D.new()
+	var moving = {"pos": Vector3(200,0,200), "radius": 1.0, "height": 3.0, "actor": actor}
+	indexed.rocks.append(moving)
+	indexed.rocks_in_bounds(Vector2.ZERO, Vector2.ONE)
+	moving.pos = Vector3(150,0,150)
+	check(not indexed.rock_hit(Vector3(145,0,150), Vector3(155,0,150), 0.5).is_empty(), "moving marshal record remains queryable after crossing cells")
+	indexed.rocks.clear()
+	check(indexed.rock_hit(Vector3.ZERO, Vector3.ONE, 1).is_empty(), "rock index discards cleared obstacles")
+	actor.free()
+	oracle.free()
+	indexed.free()
 	stage.free()
 	var game = load("res://main.tscn").instantiate()
 	root.add_child(game)
@@ -31,6 +65,18 @@ func run() -> void:
 	game.set_process(false)
 	game.room.set_process(false)
 	game.start_game()
+	var pebble = game._acquire_gravel(0.1)
+	pebble.rotation = Vector3.ONE
+	game._release_gravel(pebble)
+	check(not pebble.visible and game.gravel_pool.size() == 1, "expired gravel is hidden and retained")
+	var reused = game._acquire_gravel(0.07)
+	check(reused == pebble and reused.visible and reused.rotation == Vector3.ZERO and reused.scale.is_equal_approx(Vector3.ONE * 0.07), "pooled gravel resets rotation size and visibility")
+	game._release_gravel(reused)
+	var child_count = game.get_child_count()
+	for i in range(100):
+		var recycled = game._acquire_gravel(0.07 + (i % 8) * 0.01)
+		game._release_gravel(recycled)
+	check(game.get_child_count() == child_count and game.gravel_pool.size() == 1, "repeated gravel lifecycles do not create more nodes")
 	game.stage.trees.clear()
 	game.stage.rocks.clear()
 	origin = game.stage.clearings[0]
