@@ -793,7 +793,7 @@ func start_game() -> void:
 	# Automated startup has no browser user gesture. Pointer lock is tested separately.
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if mobile_mode or "--smoke-test" in OS.get_cmdline_user_args() or (room.connected and OS.has_feature("web")) else Input.MOUSE_MODE_CAPTURED
 	toast("Найди подходящее место и разложи лагерь. Установка стола засчитывает выбор места.")
-	if not ("--smoke-test" in OS.get_cmdline_user_args() or "--capture" in OS.get_cmdline_user_args() or "--capture-menu" in OS.get_cmdline_user_args()):
+	if not ("--script" in OS.get_cmdline_args() or "--smoke-test" in OS.get_cmdline_user_args() or "--capture" in OS.get_cmdline_user_args() or "--capture-menu" in OS.get_cmdline_user_args()):
 		_show_stage_safety_gate()
 
 func _show_stage_safety_gate() -> void:
