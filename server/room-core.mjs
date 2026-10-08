@@ -47,6 +47,7 @@ export class RoomState {
     p.state = { drive_enabled: s.drive_enabled === true, drive_inputs, pos: s.pos, car: s.car, heading: s.heading, tilt: vec(s.tilt) ? s.tilt : [0, s.heading, 0], yaw: s.yaw, pitch: s.pitch, in_car: s.in_car, tow: s.tow === true && !s.in_car, push: vec(s.push) ? s.push.map((n, i) => i === 1 ? 0 : Math.max(-1, Math.min(1, n))) : [0, 0, 0], speed: number(s.speed) ? Math.max(-50, Math.min(50, s.speed)) : 0, beers: Number.isSafeInteger(s.beers) ? Math.max(0, Math.min(100000, s.beers)) : 0, trees: Array.isArray(s.trees) ? s.trees.slice(0, 8).filter(t => Number.isSafeInteger(t?.id) && t.id >= 0 && t.id < 20000 && vec(t.dir)).map(t => ({ id: t.id, dir: t.dir })) : [], lamps: Array.isArray(s.lamps) ? s.lamps.slice(0, 8).filter(t => Number.isSafeInteger(t?.id) && t.id >= 0 && t.id < 512 && vec(t.dir)).map(t => ({ id: t.id, dir: t.dir })) : [], seated: s.seated === true && !s.in_car, running: s.running === true && !s.in_car && s.seated !== true, airborne: s.airborne === true && !s.in_car && s.seated !== true, food_species: ['edible', 'fly_agaric', 'toadstool'].includes(s.food_species) ? s.food_species : 'edible', food_kind: ['meat', 'mushroom', 'berries', 'plov'].includes(s.food_kind) ? s.food_kind : 'meat', eat: Number.isFinite(s.eat) ? Math.max(-1, Math.min(3.6, s.eat)) : -1, beer: Math.max(-1, Math.min(3.3, Number(s.beer) || 0)) };
     p.seen = now;
     p.state_time = now;
+    if (p.id === this.data.host) p.background = false;
     if (p.id === this.data.host) {
       if (body.world && typeof body.world === 'object' && !Array.isArray(body.world)) { this.data.world = body.world; this.data.world_time = now; }
       const ack = new Set(Array.isArray(body.ack) ? body.ack.slice(0, 64) : []);
@@ -66,13 +67,20 @@ export class RoomState {
         p.seq = c.seq;
       }
     }
-    return { server_time: now, world_time: this.data.world_time ?? 0, stage: this.data.stage ?? 0, host: this.data.host, world: this.data.world, accepted: p.seq,
+    const host = this.data.players[this.data.host];
+    const staleHost = !this.data.world_time || now - this.data.world_time > 3500;
+    const world = this.data.world && typeof this.data.world === "object"
+      ? {...this.data.world, paused: this.data.world.paused === true || host?.background === true || staleHost}
+      : this.data.world;
+    return { server_time: now, world_time: this.data.world_time ?? 0, stage: this.data.stage ?? 0, host: this.data.host, world, accepted: p.seq,
       players: Object.values(this.data.players).map(({ id, name, slot, car_model, state_time, state }) => ({ id, name, slot, car_model: car_model ?? slot, state_time: state_time ?? 0, state })),
       commands: p.id === this.data.host ? this.data.commands : [] };
   }
-  heartbeat(token, now) {
+  heartbeat(token, now, background = false) {
     if (this.data.closed) throw new RoomError(410, 'Создатель вышел. Комната закрыта.');
-    this.member(token).seen = now;
+    const player = this.member(token);
+    player.seen = now;
+    if (player.id === this.data.host) player.background = background === true;
     return { alive: true };
   }
   leave(token) {
