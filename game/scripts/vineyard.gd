@@ -507,8 +507,8 @@ func _thuja_forest(cooperative: bool = false) -> void:
 					blocked = blocked or stage.flat(p).distance_to(stage.flat(_relative_pose(obstacle.body).origin)) < 7.0
 				if blocked or paved_at(p, 2.0):
 					continue
+				p.y = stage.terrain_surface_height(p) - 0.03
 				tree_positions.append(p)
-				p.y = stage.ground(p)
 				var height = tree_rng.randf_range(5.5, 9.5)
 				var width = tree_rng.randf_range(1.15, 1.75)
 				var yaw = tree_rng.randf() * TAU
@@ -532,8 +532,8 @@ func _thuja_forest(cooperative: bool = false) -> void:
 				blocked = blocked or stage.flat(p).distance_to(stage.flat(spot)) < 10.0
 			if blocked or paved_at(p, 2.0):
 				continue
+			p.y = stage.terrain_surface_height(p) - 0.03
 			tree_positions.append(p)
-			p.y = stage.ground(p)
 			var height = tree_rng.randf_range(5.5, 9.5)
 			var width = tree_rng.randf_range(1.15, 1.75)
 			var yaw = tree_rng.randf() * TAU
@@ -592,8 +592,8 @@ func _mixed_forest(cooperative: bool = false) -> void:
 		var p = stage.at(s) + stage.side(s) * side_value * lateral + stage.direction(s) * forest_rng.randf_range(-4.0, 4.0)
 		if not _forest_spot_allowed(p, 1.6):
 			continue
+		p.y = stage.terrain_surface_height(p) - 0.03
 		tree_positions.append(p)
-		p.y = stage.ground(p)
 		tree_data.append({
 			"position": p,
 			"height": forest_rng.randf_range(6.0, 17.0),
