@@ -26,7 +26,9 @@ func run() -> void:
 	await process_frame
 	check(game.paused and gate != null, "entering rally stage blocks gameplay")
 	check(gate.accept_button.disabled, "acknowledgment is initially locked")
-	check(gate.RULES.size() == 5 and gate.DANGERS.size() == 5 and gate.STAGE_GUIDES.size() == 3, "memo carries all RFM PWA rule sections")
+	check(gate.WHERE_TO_STAND.size() == 4 and gate.ALLOWED.size() == 4 and gate.FORBIDDEN.size() == 5, "memo only covers safe viewing locations, allowed and forbidden actions")
+	check(gate.panel.anchor_right == 1.0 and gate.panel.anchor_bottom == 1.0, "safety memo covers the complete viewport")
+	check(gate.scroll.size_flags_horizontal == Control.SIZE_EXPAND_FILL, "safety memo content expands to full width")
 	var press_count := [0]
 	gate.accepted.connect(func(): press_count[0] += 1)
 	gate._accept()
