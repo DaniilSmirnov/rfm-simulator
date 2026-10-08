@@ -97,6 +97,21 @@ func run() -> void:
 	check(stage.get_node_or_null("VillageFlyAgaricCaps") != null and stage.get_node_or_null("VillageToadstoolCaps") != null, "poisonous mushroom meshes render in village forest")
 	var forest_berry_items = stage.collectibles.filter(func(item): return item.get("name", "") == "лесные ягоды")
 	check(forest_berry_items.size() == stage.city.forest_berry_bush_count, "forest berry bushes expose deterministic collectible berries")
+	check(stage.city.forest_berry_bush_count >= 95, "dedicated berry thickets increase village forest harvestable bushes")
+	var berries_safe = true
+	for berry_item in forest_berry_items:
+		berries_safe = berries_safe and stage.city._forest_spot_allowed(berry_item.pos)
+		berries_safe = berries_safe and berry_item.parts.has("VillageForestBerries")
+	check(berries_safe, "berry bushes avoid gravel roads, cemetery, paved streets and obstacles")
+	var first_berry = forest_berry_items[0]
+	var first_berry_id = stage.collectibles.find(first_berry)
+	game.walker = first_berry.pos
+	check(game.foraging.collect(first_berry_id), "forest berries can be picked using existing foraging action")
+	check(not game.foraging.collect(first_berry_id), "picked village berries cannot be collected twice")
+	var berry_hidden = true
+	for fruit_id in first_berry.parts.VillageForestBerries:
+		berry_hidden = berry_hidden and stage.collectible_parts.VillageForestBerries[fruit_id].hidden
+	check(berry_hidden, "harvest hides the berry fruit instances")
 	check(stage.woodland_details.get("VillageForestBerries", 0) > stage.city.forest_berry_bush_count * 6, "forest berry fruit is visibly instanced on bushes")
 	check(stage.city.village_grass_count > 400 and stage.city.village_stone_count > 80, "village yards and verges contain natural grass and stones")
 	var village_details_clear = true
