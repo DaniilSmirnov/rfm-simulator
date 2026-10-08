@@ -26,17 +26,17 @@ func run() -> void:
 	check(game.paused and gate != null, "entering rally stage blocks gameplay")
 	check(gate.accept_button.disabled, "acknowledgment is initially locked")
 	check(gate.RULES.size() == 5 and gate.DANGERS.size() == 5 and gate.STAGE_GUIDES.size() == 3, "memo carries all RFM PWA rule sections")
-	var press_count := 0
-	gate.accepted.connect(func(): press_count += 1)
+	var press_count := [0]
+	gate.accepted.connect(func(): press_count[0] += 1)
 	gate._accept()
-	check(press_count == 0 and game.paused, "cannot bypass unread memo with button handler")
+	check(press_count[0] == 0 and game.paused, "cannot bypass unread memo with button handler")
 	gate.scroll.scroll_vertical = 100000
 	await process_frame
 	gate._update_accept()
 	check(not gate.accept_button.disabled, "reading to bottom unlocks acknowledgement")
 	gate._accept()
 	await process_frame
-	check(press_count == 1 and not game.paused and game.safety_gate == null, "acknowledgement resumes gameplay and clears gate")
+	check(press_count[0] == 1 and not game.paused and game.safety_gate == null, "acknowledgement resumes gameplay and clears gate")
 	print("STAGE SAFETY GATE RESULT: %d checks, %d failures" % [checks, failures])
 	game.queue_free()
 	await process_frame
