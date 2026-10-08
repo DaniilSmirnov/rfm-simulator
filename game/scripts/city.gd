@@ -1,4 +1,9 @@
 extends Node3D
+const COLLISION_CELL = 16.0
+var collision_cells: Dictionary = {}
+var moving_obstacle_ids: Array[int] = []
+var indexed_obstacle_count = -1
+var collision_radius_factor = 1.0
 const Props = preload("res://scripts/props.gd")
 const CROSS_Z = [-50.0, -100.0, -150.0, -200.0, -250.0, -280.0]
 var stage: Node3D
@@ -352,12 +357,54 @@ func _relative_pose(node: Node3D) -> Transform3D:
 		parent = parent.get_parent()
 	return pose
 
+# Buildings and furniture are static; lamps retain live physics transforms.
+func _index_collisions() -> void:
+	collision_cells.clear()
+	moving_obstacle_ids.clear()
+	collision_radius_factor = 1.0
+	for id in range(obstacles.size()):
+		var object: Dictionary = obstacles[id]
+		if object.body is RigidBody3D:
+			moving_obstacle_ids.append(id)
+			continue
+		var pose = _relative_pose(object.body)
+		object["collision_pose"] = pose
+		object["collision_inverse"] = pose.affine_inverse()
+		var bounds = pose * AABB(-object.half, object.half * 2.0)
+		var expansion = pose.basis.x.abs() + pose.basis.y.abs() + pose.basis.z.abs()
+		collision_radius_factor = maxf(collision_radius_factor, maxf(expansion.x, maxf(expansion.y, expansion.z)))
+		for x in range(floori(bounds.position.x / COLLISION_CELL), floori(bounds.end.x / COLLISION_CELL) + 1):
+			for z in range(floori(bounds.position.z / COLLISION_CELL), floori(bounds.end.z / COLLISION_CELL) + 1):
+				var key = Vector2i(x, z)
+				if not collision_cells.has(key):
+					collision_cells[key] = []
+				collision_cells[key].append(id)
+	indexed_obstacle_count = obstacles.size()
+
+func _collision_candidates(start: Vector3, end: Vector3, radius: float) -> Array:
+	if indexed_obstacle_count != obstacles.size():
+		_index_collisions()
+	var padding = radius * collision_radius_factor
+	var low = start.min(end) - Vector3.ONE * padding
+	var high = start.max(end) + Vector3.ONE * padding
+	var seen: Dictionary = {}
+	for x in range(floori(low.x / COLLISION_CELL), floori(high.x / COLLISION_CELL) + 1):
+		for z in range(floori(low.z / COLLISION_CELL), floori(high.z / COLLISION_CELL) + 1):
+			for id in collision_cells.get(Vector2i(x, z), []):
+				seen[id] = true
+	for id in moving_obstacle_ids:
+		seen[id] = true
+	var ids = seen.keys()
+	ids.sort()
+	return ids
+
 func hit(start: Vector3, end: Vector3, radius: float, escape: bool = true, center_offset: Vector3 = Vector3(0, 0.35, 0)) -> Dictionary:
 	var result = {}
 	var earliest = INF
-	for object in obstacles:
-		var pose = _relative_pose(object.body)
-		var inverse = pose.affine_inverse()
+	for id in _collision_candidates(start + center_offset, end + center_offset, radius):
+		var object: Dictionary = obstacles[id]
+		var pose: Transform3D = _relative_pose(object.body) if object.body is RigidBody3D else object.collision_pose
+		var inverse: Transform3D = pose.affine_inverse() if object.body is RigidBody3D else object.collision_inverse
 		var a: Vector3 = inverse * (start + center_offset)
 		var b: Vector3 = inverse * (end + center_offset)
 		var half: Vector3 = object.half + Vector3.ONE * radius
@@ -486,9 +533,10 @@ func _batch(parent: Node3D, pose: Transform3D) -> void:
 				var transform = pose * child.transform
 				transform.basis = transform.basis * Basis.from_scale(scale)
 				var cell = Vector2i(floori(transform.origin.x / 64), floori(transform.origin.z / 64))
-				var tile = "%s_%d_%d" % [key, cell.x, cell.y]
+				var casts_shadow = not (key == "box" and scale.y <= 0.12)
+				var tile = "%s_%d_%d%s" % [key, cell.x, cell.y, "" if casts_shadow else "_no_shadow"]
 				if not batches.has(tile):
-					batches[tile] = {"key": key, "poses": [], "colors": [], "center": Vector3(cell.x * 64 + 32, 0, cell.y * 64 + 32)}
+					batches[tile] = {"key": key, "poses": [], "colors": [], "center": Vector3(cell.x * 64 + 32, 0, cell.y * 64 + 32), "casts_shadow": casts_shadow}
 				batches[tile].poses.append(transform)
 				batches[tile].colors.append(child.material_override.albedo_color)
 				child.free()
@@ -517,5 +565,7 @@ func _flush_batches() -> void:
 		stage.add_child(node)
 		node.position = data.center
 		node.multimesh = mm
+		if not data.casts_shadow:
+			node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		node.material_override = material
 	batches.clear()

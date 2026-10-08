@@ -38,6 +38,12 @@ var winter = false
 var urban = false
 var village_church_center = Vector3.ZERO
 var points: PackedVector3Array = []
+var road_segment_starts = PackedVector2Array()
+var road_segment_deltas = PackedVector2Array()
+var road_segment_inverse_lengths = PackedFloat64Array()
+var road_group_low = PackedVector2Array()
+var road_group_high = PackedVector2Array()
+const ROAD_GROUP_SIZE = 8
 var clearings: Array[Vector3] = []
 var trails: Array[Dictionary] = []
 var woodland_details: Dictionary = {}
@@ -82,6 +88,8 @@ func _init(selected: int = 0) -> void:
 			points.append(urban_at(s))
 		else:
 			points.append(Vector3(sin(s / 90.0) * 38.0 + sin(s / 38.0) * 9.0, 5.0 + s * 0.024 + sin(s / 58.0) * 3.7, -s))
+	if urban:
+		_index_urban_route()
 	if desert:
 		canyon.configure(self)
 		return
@@ -199,15 +207,16 @@ func ground(pos: Vector3) -> float:
 		var s: float = nearest.s
 		var p = at(s)
 		var distance: float = nearest.distance
-		if village(s):
-			var junction = absf(s - 370.0) <= 3.0 or absf(s - 500.0) <= 3.0
-			return (p.y + gravel_relief(pos, s) + roughness(s) * (1.0 - smoothstep(3.0, 8.0, distance)) + sin(pos.x * 0.035 + pos.z * 0.025) * 0.35 * smoothstep(5.0, 13.0, distance)) if village_forest_detour(s) else (2.36 if not junction and distance > 3.75 and distance < 6.45 else 2.0)
-		var hillside = (sqrt(pow(maxf(distance - 6.0, 0), 2.0) + 144.0) - 12.0) * 0.085
-		var height = p.y + hillside + sin(pos.x * 0.025 + s * 0.012) * minf(hillside * 0.12, 0.65)
+		var road_height = p.y + roughness(s)
+		if village_forest_detour(s):
+			road_height += gravel_relief(pos, s)
+		# The distant landscape must not change elevation when the nearest road
+		# switches from the countryside to the lower village forest bypass.
+		var height = lerpf(road_height, village_hill_height(pos), smoothstep(road_width(s) * 0.5 + 1.0, 24.0, distance))
 		for parking in clearings:
 			var d = flat(pos).distance_to(flat(parking))
-			height = lerpf(parking.y, height, smoothstep(5.0, 11.0, d))
-		return height + roughness(s) * (1.0 - smoothstep(3.5, 8.0, distance))
+			height = lerpf(parking.y, height, smoothstep(5.0, 16.0, d))
+		return height
 	var s = road_s(pos)
 	var p = at(s)
 	var distance = road_distance(pos)
@@ -231,6 +240,17 @@ func ground(pos: Vector3) -> float:
 				var blend = 1.0 - smoothstep(trail.width * 0.55, trail.width, trail_sample.distance)
 				height = lerpf(height, trail_sample.height, blend)
 	return height
+
+func village_hill_height(pos: Vector3) -> float:
+	var station = clampf(-pos.z, 0.0, LENGTH - 0.001)
+	var axis = village_main_at(station)
+	var distance = absf(pos.x - axis.x)
+	var excess = maxf(distance - 8.0, 0.0)
+	var hillside = (sqrt(excess * excess + 1296.0) - 36.0) * 0.045
+	var village_blend = smoothstep(250.0, 320.0, station) * (1.0 - smoothstep(550.0, 640.0, station))
+	var road_blend = smoothstep(190.0, 300.0, station) * (1.0 - smoothstep(570.0, 710.0, station))
+	var axis_height = axis.y - (1.0 - road_blend) * (sin(station / 14.0) * 0.32 + gravel_profile(station, 178.0, 9.0) * 1.1 + gravel_profile(station, 686.0, 6.5) * 1.25)
+	return axis_height + hillside * (1.0 - village_blend) + sin(pos.x * 0.016 + pos.z * 0.010) * minf(hillside * 0.08, 0.20) * (1.0 - village_blend)
 
 # Trees must touch the *rendered* terrain, not the continuous ground()
 # function. Terrain is triangulated in 4 m cells (2 m near forest roads)
@@ -437,12 +457,17 @@ func _build_city(cooperative: bool = false) -> void:
 		city.build()
 
 func _build_terrain(cooperative: bool = false) -> void:
-	var st = SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var builders: Dictionary = {}
 	for z in range(-920, 81, 4):
 		if cooperative and (z + 920) % 64 == 0:
 			await get_tree().process_frame
 		for x in range(-204, 204, 4):
+			var tile = Vector2i(floori(x / 64.0), floori(z / 64.0)) if urban else Vector2i.ZERO
+			if not builders.has(tile):
+				var builder = SurfaceTool.new()
+				builder.begin(Mesh.PRIMITIVE_TRIANGLES)
+				builders[tile] = builder
+			var st: SurfaceTool = builders[tile]
 			# Resolve narrow roadside ditches without subdividing the whole map.
 			var step = int(terrain_tile_step(x, z))
 			for dz in range(0, 4, step):
@@ -463,14 +488,17 @@ func _build_terrain(cooperative: bool = false) -> void:
 								color = color.darkened(0.16)
 						st.set_color(color.lightened(rng.randf_range(-0.07, 0.07)))
 						st.add_vertex(v)
-	st.generate_normals()
-	var n = MeshInstance3D.new()
-	n.mesh = st.commit()
 	var mat = RallyProps.material(Color.WHITE)
 	mat.vertex_color_use_as_albedo = true
 	mat.vertex_color_is_srgb = true
-	n.material_override = mat
-	add_child(n)
+	for tile in builders:
+		var st: SurfaceTool = builders[tile]
+		st.generate_normals()
+		var n = MeshInstance3D.new()
+		n.name = "TerrainTile_%d_%d" % [tile.x, tile.y]
+		n.mesh = st.commit()
+		n.material_override = mat
+		add_child(n)
 
 func draw_base_road_surface(s: float) -> bool:
 	# The village has its own explicit cobblestone mesh; do not leave asphalt
@@ -869,7 +897,7 @@ func woodland_spot(pos: Vector3, padding: float = 0.0) -> bool:
 	return true
 
 func _detail_batch(name: String, mesh: Mesh, poses: Array, colors: Array, indices: Array = []) -> void:
-	if name in ["ForestGrass", "ForestBushes", "ForestBerryBushes", "ForestBerries", "ForestBushStems", "VineyardGrapes", "VineyardLeaves", "VineyardRoadsideGrass", "VineyardRoadsideStones", "VineyardRoadsideBushes", "VillageForestTreeLayer0", "VillageForestTreeLayer1", "VillageForestTreeLayer2", "VillageForestTreeLayer3", "VillageForestGrass", "VillageForestStones", "VillageForestBoulders", "VillageForestBushes", "VillageForestBerryBushes", "VillageForestBerries", "VillageGrass", "VillageStones"]:
+	if name in ["LavenderFoliage", "LavenderStems", "LavenderFlowers", "VillageThujaLower", "VillageThujaMiddle", "VillageThujaCrown", "ForestGrass", "ForestBushes", "ForestBerryBushes", "ForestBerries", "ForestBushStems", "VineyardGrapes", "VineyardLeaves", "VineyardRoadsideGrass", "VineyardRoadsideStones", "VineyardRoadsideBushes", "VillageForestTreeLayer0", "VillageForestTreeLayer1", "VillageForestTreeLayer2", "VillageForestTreeLayer3", "VillageForestGrass", "VillageForestStones", "VillageForestBoulders", "VillageForestBushes", "VillageForestBerryBushes", "VillageForestBerries", "VillageGrass", "VillageStones"]:
 		var cells = {}
 		for i in range(poses.size()):
 			var origin: Vector3 = poses[i].origin
@@ -912,7 +940,7 @@ func _detail_batch(name: String, mesh: Mesh, poses: Array, colors: Array, indice
 	node.name = name
 	node.position = center
 	if name.begins_with("GrassTile") or name.contains("_Tile_"):
-		node.visibility_range_end = 70 if name.begins_with("VineyardGrapes") else 160
+		node.visibility_range_end = 70 if name.begins_with("VineyardGrapes") else (110 if name.begins_with("LavenderFlowers") or name.begins_with("LavenderStems") else 160)
 		node.visibility_range_end_margin = 15
 	node.multimesh = mm
 	node.material_override = mat
@@ -1109,10 +1137,10 @@ func village_forest_offset(s: float) -> float:
 # Village buildings and the original cobblestone main road must not follow
 # the rally-only forest bypass. Keep their historical straight village axis.
 func village_main_at(s: float) -> Vector3:
-	var village_blend = smoothstep(260.0, 300.0, s) * (1.0 - smoothstep(570.0, 610.0, s))
+	var village_blend = smoothstep(190.0, 300.0, s) * (1.0 - smoothstep(570.0, 710.0, s))
 	var country_x = sin(s / 85.0) * 34.0 + sin(s / 43.0) * 10.0
 	var village_x = sin((s - 300.0) / 100.0) * 14.0
-	var height = 2.0 + (1.0 - village_blend) * (7.0 + sin(s / 95.0) * 3.0 + s * 0.004 + sin(s / 14.0) * 0.32 + gravel_profile(s, 178.0, 9.0) * 1.1 + gravel_profile(s, 686.0, 8.0) * 0.95)
+	var height = 2.0 + (1.0 - village_blend) * (7.0 + sin(s / 95.0) * 3.0 + s * 0.004 + sin(s / 14.0) * 0.32 + gravel_profile(s, 178.0, 9.0) * 1.1 + gravel_profile(s, 686.0, 6.5) * 1.25)
 	return Vector3(lerpf(country_x, village_x, village_blend), height, -s)
 
 func village_main_direction(s: float) -> Vector3:
@@ -1177,18 +1205,50 @@ func village_paved_height(pos: Vector3) -> float:
 		return 2.36
 	return INF
 
+func _index_urban_route() -> void:
+	road_segment_starts.clear()
+	road_segment_deltas.clear()
+	road_segment_inverse_lengths.clear()
+	road_group_low.clear()
+	road_group_high.clear()
+	for i in range(points.size() - 1):
+		var a = flat(points[i])
+		var b = flat(points[i + 1])
+		road_segment_starts.append(a)
+		road_segment_deltas.append(b - a)
+		road_segment_inverse_lengths.append(1.0 / maxf((b - a).length_squared(), 0.000001))
+		var group = int(i / ROAD_GROUP_SIZE)
+		if i % ROAD_GROUP_SIZE == 0:
+			road_group_low.append(a.min(b))
+			road_group_high.append(a.max(b))
+		else:
+			road_group_low[group] = road_group_low[group].min(a).min(b)
+			road_group_high[group] = road_group_high[group].max(a).max(b)
+
 func urban_nearest(pos: Vector3) -> Dictionary:
+	if road_segment_starts.size() != points.size() - 1:
+		_index_urban_route()
 	var best = INF
 	var station = 0.0
 	var p = flat(pos)
-	for i in range(points.size() - 1):
-		var a = flat(points[i])
-		var segment = flat(points[i + 1]) - a
-		var ratio = clampf((p - a).dot(segment) / maxf(segment.length_squared(), 0.000001), 0, 1)
-		var distance = p.distance_squared_to(a + segment * ratio)
-		if distance < best:
-			best = distance
-			station = (i + ratio) * STEP
+	var seed = clampi(int(-pos.z / (STEP * ROAD_GROUP_SIZE)), 0, road_group_low.size() - 1)
+	# Visit the likely group first, then reject others by a conservative bound.
+	# Every segment capable of winning is still tested, including distant points.
+	for pass_index in range(road_group_low.size() + 1):
+		var group = seed if pass_index == 0 else pass_index - 1
+		if pass_index > 0 and group == seed:
+			continue
+		if p.distance_squared_to(p.clamp(road_group_low[group], road_group_high[group])) > best:
+			continue
+		for i in range(group * ROAD_GROUP_SIZE, mini((group + 1) * ROAD_GROUP_SIZE, road_segment_starts.size())):
+			var a = road_segment_starts[i]
+			var segment = road_segment_deltas[i]
+			var ratio = clampf((p - a).dot(segment) * road_segment_inverse_lengths[i], 0.0, 1.0)
+			var distance = p.distance_squared_to(a + segment * ratio)
+			var candidate = (i + ratio) * STEP
+			if distance < best or (distance == best and candidate < station):
+				best = distance
+				station = candidate
 	return {"s": station, "distance": sqrt(best)}
 
 func rally_speed(s: float) -> float:

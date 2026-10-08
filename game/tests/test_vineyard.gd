@@ -58,6 +58,12 @@ func run() -> void:
 	for station in [407.0, 412.0, 463.0, 469.0]:
 		check(stage.get_node_or_null("GravelPuddle_%d" % int(station)) != null, "gravel has water in physical depressions")
 
+	var lavender_tiles = stage.find_children("LavenderFlowers_Tile_*", "MultiMeshInstance3D", false, false)
+	var thuja_tiles = stage.find_children("VillageThujaLower_Tile_*", "MultiMeshInstance3D", false, false)
+	check(lavender_tiles.size() > 8 and thuja_tiles.size() > 4, "lavender and thuja use spatially culled instance tiles")
+	check(lavender_tiles[0].visibility_range_end == 110 and thuja_tiles[0].visibility_range_end == 160, "small flowers and trees have bounded drawing ranges")
+	var microdetail_tiles = stage.find_children("CityDetail_*_no_shadow", "MultiMeshInstance3D", false, false)
+	check(microdetail_tiles.size() > 4 and microdetail_tiles[0].cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF, "paving and thin decorative geometry omit shadow passes")
 	var grape_positions = stage.collectibles.filter(func(item): return item.get("name", "") == "виноград")
 	check(not grape_positions.is_empty() and stage.find_children("VineyardRow_18_*", "Node3D", true, false).is_empty() and not stage.find_children("VineyardRow_585_*", "Node3D", true, false).is_empty(), "grapes remain only in finish-side vineyards")
 	var bell = stage.city.bell

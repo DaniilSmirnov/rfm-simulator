@@ -29,6 +29,7 @@ run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_run_j
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_course_officials.gd']);
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_city_physics.gd']);
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_vineyard.gd']);
+run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_village_terrain_performance.gd']);
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_village_viewpoints.gd']);
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_rally_handling.gd']);
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_rally_smoothness.gd']);
