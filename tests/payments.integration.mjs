@@ -43,7 +43,7 @@ async function callback(fields, signingSecret=secret) {
  const body=new URLSearchParams({...p,sig:createHash('md5').update(canonical+signingSecret).digest('hex')});
  return (await fetch(origin+'/api/vk/payments/callback',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body})).json();
 }
-const order={notification_type:'order_status_change_test',order_id:'9001',item_id:'2',amount:'1',status:'chargeable'};
+const order={notification_type:'order_status_change_test',order_id:'9001',item_id:'stage_02',item_price:'1',status:'chargeable'};
 try {
  await start();
  let session=await login();assert.deepEqual(session.entitlements.skus,[]);

@@ -11,7 +11,7 @@ export function signedCallback(fields, secret = 'test-secret') {
   const raw = Object.keys(values).sort().map(k=>`${k}=${values[k]}`).join('');
   return new URLSearchParams({...values,sig:createHash('md5').update(raw+secret).digest('hex')}).toString();
 }
-const order = {notification_type:'order_status_change_test',order_id:'701',item_id:'2',amount:'1',status:'chargeable'};
+const order = {notification_type:'order_status_change_test',order_id:'701',item_id:'stage_02',item_price:'1',status:'chargeable'};
 function setup() {
   const data = new Map();
   const storage = {get:async k=>structuredClone(data.get(k)),put:async(k,v)=>data.set(k,structuredClone(v)),transaction:async fn=>{
@@ -50,10 +50,10 @@ test('deployed configuration enables only test winter purchase rather than hidin
  assert.equal(products.length,1);assert.equal(products[0].sku,'stage_02');
  assert.equal(products[0].payment_mode,'test');assert.equal(products[0].price,1);
 });
-test('signed item lookup has numeric stable item ID and does not grant content',async()=>{
+test('signed item lookup has stable SKU item ID and does not grant content',async()=>{
  const {env,data}=setup();
  const lookup=await paymentCallback(signedCallback({notification_type:'get_item_test',item:'stage_02'}),env);
- assert.equal(lookup.response.item_id,2);assert.equal(lookup.response.price,1);assert.equal(data.size,0);
+ assert.equal(lookup.response.item_id,'stage_02');assert.equal(lookup.response.price,1);assert.equal(data.size,0);
  await assert.rejects(paymentCallback(signedCallback({notification_type:'get_item_test',item:'car_04'}),env));
 });
 test('callback forgery, duplicate fields, other app/user, live mode, gifts and bad orders never grant',async()=>{
@@ -112,7 +112,7 @@ test('VK reported get_item_test payload succeeds at the Worker callback without 
  const response=await worker.fetch(new Request('https://game.test/api/vk/payments/callback',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:signedCallback(fields)}),env);
  assert.equal(response.status,200);
  assert.equal(response.headers.get('X-Rally-Payments-Handler'),PAYMENT_HANDLER_VERSION);
- assert.deepEqual(await response.json(),{response:{item_id:2,title:'Зимний Турини (тест)',photo_url:'',price:1}});
+ assert.deepEqual(await response.json(),{response:{item_id:'stage_02',title:'Зимний Турини (тест)',photo_url:'',price:1}});
  assert.equal(data.size,0);
 });
 test('unsupported signed callback reports actual type and deployment marker without interpreting live as test',async()=>{
@@ -132,7 +132,7 @@ test('unsupported signed callback reports actual type and deployment marker with
   const fields={app_id:'54809523',item:'stage_02',lang:'ru_RU',notification_type:'get_item',order_id:'2366806',receiver_id:'87478742',user_id:'87478742'};
   const callback=raw=>worker.fetch(new Request('https://game.test/api/vk/payments/callback',{method:'POST',body:raw}),env);
   const response=await callback(signedCallback(fields));
-  assert.deepEqual(await response.json(),{response:{item_id:2,title:'Зимний Турини (тест)',photo_url:'',price:1}});
+  assert.deepEqual(await response.json(),{response:{item_id:'stage_02',title:'Зимний Турини (тест)',photo_url:'',price:1}});
   assert.equal(data.size,0);
   const invalid=[signedCallback(fields,'wrong'),signedCallback({...fields,app_id:'9'}),signedCallback({...fields,item:'car_04'}),signedCallback({...fields,receiver_id:'43'}),signedCallback({...order,user_id:fields.user_id,notification_type:'order_status_change'})];
   for(const raw of invalid) assert.ok((await (await callback(raw)).json()).error);
@@ -142,3 +142,26 @@ test('unsupported signed callback reports actual type and deployment marker with
   assert.equal((await (await callback(tampered)).json()).error.error_code,10);
   assert.equal(data.size,0);
  });
+
+test('actual VK test order grants once with SKU and item_price and rejects inconsistent data',async()=>{
+ const {env,data,restart}=setup();env.VK_PAYMENTS_TEST_USERS='*';
+ const fields={app_id:'54809523',date:'1791447068',item:'stage_02',item_id:'stage_02',item_photo_url:'',item_price:'1',item_title:'Зимний Турини (тест)',notification_type:'order_status_change_test',order_id:'2366819',receiver_id:'87478742',status:'chargeable',user_id:'87478742'};
+ const callback=async p=>(await worker.fetch(new Request('https://game.test/api/vk/payments/callback',{method:'POST',body:signedCallback(p)}),env)).json();
+ const receipt={response:{order_id:2366819,app_order_id:2366819}};
+ assert.deepEqual(await callback(fields),receipt);
+ restart();assert.deepEqual(await callback(fields),receipt);
+ assert.deepEqual((await accountStore(env,fields.user_id)).entitlements.skus,['stage_02']);
+ assert.equal(data.size,3);
+ for(const patch of [{item:'car_04'},{item_id:'car_04'},{item_price:'2'},{item_price:''},{item_price:'1.0'},{item_price:'-1'},{item_price:undefined},{amount:'2'},{notification_type:'order_status_change'},{receiver_id:'42'}]) {
+  const p={...fields,...patch,order_id:'2366820'};
+  for(const key of Object.keys(p)) if(p[key]===undefined) delete p[key];
+  assert.ok((await callback(p)).error);
+ }
+ assert.equal(data.size,3);
+});
+test('legacy numeric item and amount remain compatible with SKU callbacks',async()=>{
+ const {env}=setup();
+ const legacy={notification_type:'order_status_change_test',order_id:'701',item_id:'2',amount:'1',status:'chargeable'};
+ const receipt=await paymentCallback(signedCallback(legacy),env);
+ assert.deepEqual(await paymentCallback(signedCallback(order),env),receipt);
+});
