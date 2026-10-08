@@ -82,6 +82,17 @@ func run() -> void:
 	check(guest.stage.trails.is_empty(), "winter stage keeps its original forest without spectator footpaths")
 	check(guest.car.get_meta("model") == "Лесной внедорожник" and host.car.get_meta("model") == "Дорожный седан", "room handshake preserves individual car choices")
 	check(host.stage.trees == guest.stage.trees and host.stage.points == guest.stage.points, "winter forest and terrain match on every client")
+	var winter_tree_height_ok = true
+	for tree in host.stage.trees:
+		winter_tree_height_ok = winter_tree_height_ok and absf(tree.y - (host.stage.terrain_surface_height(tree) - 0.03)) < 0.005
+	check(winter_tree_height_ok, "winter forest tree bases match visible terrain triangles")
+	var summer_sample = Stage.new()
+	var forest_position = Vector3(68.25, 0.0, -420.75)
+	var x0 = floorf(forest_position.x / 4.0) * 4.0
+	var z0 = floorf(forest_position.z / 4.0) * 4.0
+	check(summer_sample.terrain_surface_height(forest_position) <= summer_sample.ground(forest_position) + 1.0, "rendered terrain height follows the sampled mesh rather than the continuous height function")
+	summer_sample.free()
+
 	host.room._update_peers([{"id": "guest", "name": "Друг", "slot": 1, "car_model": 2, "state": guest.room.local_state()}])
 	check(host.room.peers.guest.car.get_meta("model") == "Лесной внедорожник", "peer model uses selected car instead of room slot")
 	guest.select_player_car(9)
