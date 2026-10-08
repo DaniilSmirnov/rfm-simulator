@@ -26,6 +26,8 @@ func current() -> Dictionary:
 	if not game.cargo.at_open_trunk(game.chair_owner()):
 		offer(items, game.car.position + Vector3(0, 0.9, 0), 1.4, 4, "car", "Сесть в машину")
 	game.camp_cooking.offers(items, self)
+	if game.stage.urban and game.stage.city.bell != null:
+		offer(items, game.stage.city.bell.handle_position(), 0.35, 2.0, "church_bell", "Позвонить в колокол")
 	if game.packing.active():
 		for item in game.packing.items():
 			if item.kind == "firewood" and game.camp_cooking.pot != null:
@@ -92,6 +94,9 @@ func activate() -> void:
 	if target.is_empty():
 		return
 	match target.action:
+		"church_bell":
+			if not game.room.submit("church_bell"):
+				game.stage.city.bell.pull(game.walker)
 		"mount_cauldron": game.camp_cooking.mount()
 		"mount_firewood": game.camp_cooking.light_under_pot()
 		"plov_cook": game.camp_cooking.start()

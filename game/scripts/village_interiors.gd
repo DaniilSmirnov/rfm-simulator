@@ -25,8 +25,9 @@ static func stairs(city, root: Node3D, start: Vector3, width: float, length: flo
 		var height = rise * float(i + 1) / count
 		var z = length * (float(i) + 0.5) / count
 		block(city, root, start + basis * Vector3(0, height - 0.075, z), Vector3(width, 0.15, length / count + 0.01), WOOD, false)
-	# Smooth support over the visible steps avoids vibration in first-person view.
+	# Register the same tread heights as the visible steps.
 	surface(city, root, start + basis * Vector3(0, 0, length * 0.5), width, length, rise, yaw)
+	city.walk_surfaces.back()["steps"] = count
 
 static func rail(city, root: Node3D, p: Vector3, size: Vector3) -> void:
 	# A single collision volume keeps the player behind the open balustrade.
@@ -88,19 +89,23 @@ static func church(city, root: Node3D) -> void:
 		var y = 0.1 + flight * 2.4
 		var forward = flight % 2 == 0
 		var x = -1.45 if forward else 1.45
-		stairs(city, root, Vector3(x, y, -13.0 if forward else -9.4), 1.55, 3.6, 2.4, 0.0 if forward else PI)
-		floor_panel(city, root, Vector3(0, y + 2.4, -9.2 if forward else -13.2), 5.5, 1.0)
+		stairs(city, root, Vector3(x, y, -13.0 if forward else -9.4), 1.8, 3.6, 2.4, 0.0 if forward else PI)
+		floor_panel(city, root, Vector3(0, y + 2.4, -9.2 if forward else -13.2), 5.5, 1.4)
 		# Inner balustrade leaves headroom for the flight above.
-		rail(city, root, Vector3(0, y + 2.4, -8.65 if forward else -13.75), Vector3(5.5, 0, 0.12))
+		if flight < 9:
+			rail(city, root, Vector3(0, y + 2.4, -8.65 if forward else -13.75), Vector3(5.5, 0, 0.12))
 	floor_panel(city, root, Vector3(-1.0, 24.1, -11.1), 3.0, 6.7)
 	floor_panel(city, root, Vector3(0, 24.1, -13.7), 6.7, 1.5)
 	floor_panel(city, root, Vector3(0, 24.1, -8.5), 6.7, 1.5)
 	# Keep an opening above the last stair flight.
 	# Final flight ascends along x=+1.45 towards the front landing.
 	rail(city, root, Vector3(0.55, 24.1, -11.1), Vector3(0.12, 0, 3.0))
-	# Stationary bell under the open belfry canopy.
-	Props.cylinder(root, Vector3(0, 26.8, -11.1), 0.65, 0.3, 0.9, Color("a38a56"), 12)
-	Props.box(root, Vector3(0, 27.4, -11.1), Vector3(0.15, 0.4, 0.15), WOOD)
+	var bell = load("res://scripts/church_bell.gd").new()
+	bell.name = "ChurchBell"
+	root.add_child(bell)
+	bell.position = Vector3(-1.2, 27.2, -11.1)
+	bell.build()
+	city.bell = bell
 	for x in [-3.3, 3.3]:
 		rail(city, root, Vector3(x, 24.1, -11.1), Vector3(0.12, 0, 6.6))
 	for z in [-14.4, -7.8]:
