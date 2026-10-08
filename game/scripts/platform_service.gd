@@ -91,8 +91,8 @@ func _response(result: int, code: int, _headers: PackedStringArray, body: Packed
 	purchase_message = ""
 	match bootstrap.get("status", ""):
 		"owned":
-			if owns("stage", 1):
-				purchase_message = "Покупка подтверждена · СУ открыт"
+			if bootstrap.get("purchased_sku", "") in entitlements.get("skus", []):
+				purchase_message = "Тестовая покупка подтверждена · контент открыт"
 		"cancel": purchase_message = "Покупка отменена"
 		"fail": purchase_message = "VK не завершил покупку"
 		"pending": purchase_message = "Ждём подтверждения VK. Нажмите «Проверить покупку»."

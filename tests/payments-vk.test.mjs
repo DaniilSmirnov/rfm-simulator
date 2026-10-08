@@ -5,6 +5,8 @@ import { readFileSync } from 'node:fs';
 import { createHash, webcrypto } from 'node:crypto';
 import { accountStore, paymentCallback, paymentCatalog, VkPayments, PAYMENT_HANDLER_VERSION } from '../server/payments-vk.mjs';
 import worker from '../server/worker.mjs';
+import {catalog} from '../server/store.mjs';
+const paidSkus = catalog.filter(p=>p.enabled && !p.free).map(p=>p.sku);
 import { authenticateLaunch } from '../server/auth-vk.mjs';
 globalThis.crypto ||= webcrypto;
 export function signedCallback(fields, secret = 'test-secret') {
@@ -28,7 +30,7 @@ function setup(legacyRecords = []) {
 }
 test('only configured testers see one test product; disabled and real mode stay closed',async()=>{
   const {env}=setup();
-  assert.deepEqual(paymentCatalog(env,'42').filter(p=>p.purchase_enabled).map(p=>p.sku),['stage_02']);
+  assert.deepEqual(paymentCatalog(env,'42').filter(p=>p.purchase_enabled).map(p=>p.sku),paidSkus);
   for(const user of ['44','bad'])assert.ok(paymentCatalog(env,user).every(p=>!p.purchase_enabled));
   for(const mode of ['disabled','production']) assert.ok(paymentCatalog({...env,VK_PAYMENTS_MODE:mode},'42').every(p=>!p.purchase_enabled));
   assert.deepEqual((await accountStore(env,'42')).entitlements.skus,[]);
@@ -36,7 +38,7 @@ test('only configured testers see one test product; disabled and real mode stay 
 test('open test access exposes winter purchase to valid VK IDs and keeps live notifications closed',async()=>{
  const {env}=setup();env.VK_PAYMENTS_TEST_USERS=' * ';
  for(const user of ['42','44','100500']) {
-  assert.deepEqual(paymentCatalog(env,user).filter(p=>p.purchase_enabled).map(p=>p.sku),['stage_02']);
+  assert.deepEqual(paymentCatalog(env,user).filter(p=>p.purchase_enabled).map(p=>p.sku),paidSkus);
   assert.deepEqual((await accountStore(env,user)).entitlements.skus,[]);
  }
  for(const user of ['bad','0','-42','42.5'])assert.ok(paymentCatalog(env,user).every(p=>!p.purchase_enabled));
@@ -51,14 +53,14 @@ test('deployed configuration enables only test winter purchase rather than hidin
  assert.equal(config.vars.VK_PAYMENTS_MODE,'test');
  assert.equal(config.vars.VK_PAYMENTS_TEST_USERS,'*');
  const products=paymentCatalog({...config.vars,PAYMENTS:{}},'100500').filter(p=>p.purchase_enabled);
- assert.equal(products.length,1);assert.equal(products[0].sku,'stage_02');
+ assert.equal(products.length,paidSkus.length);assert.equal(products[0].sku,'stage_02');
  assert.equal(products[0].payment_mode,'test');assert.equal(products[0].price,1);
 });
 test('signed item lookup has stable SKU item ID and does not grant content',async()=>{
  const {env,data}=setup();
  const lookup=await paymentCallback(signedCallback({notification_type:'get_item_test',item:'stage_02'}),env);
  assert.equal(lookup.response.item_id,'stage_02');assert.equal(lookup.response.price,1);assert.equal(data.size,0);
- await assert.rejects(paymentCallback(signedCallback({notification_type:'get_item_test',item:'car_04'}),env));
+ await assert.rejects(paymentCallback(signedCallback({notification_type:'get_item_test',item:'car_01'}),env));
 });
 test('callback forgery, duplicate fields, other app/user, live mode, gifts and bad orders never grant',async()=>{
  const {env,data}=setup();
@@ -100,7 +102,7 @@ test('Worker restores account rights on login and gates rooms using server owner
  const api=(path,body={},token=login.session.token)=>worker.fetch(new Request('https://game.test'+path,{method:'POST',headers:{Authorization:'Bearer '+token},body:JSON.stringify(body)}),env);
  assert.equal((await api('/api/rooms',{stage:1,car_model:0})).status,403);
  assert.equal((await api('/api/vk/payments/prepare',{sku:'stage_02'})).status,200);
- assert.equal((await api('/api/vk/payments/prepare',{sku:'car_04'})).status,403);
+ assert.equal((await api('/api/vk/payments/prepare',{sku:'car_01'})).status,403);
  assert.equal((await api('/api/vk/store',{},'fake')).status,401);
  await paymentCallback(signedCallback(order),env);
  assert.equal((await api('/api/rooms',{stage:1,car_model:0})).status,200);
@@ -138,7 +140,7 @@ test('unsupported signed callback reports actual type and deployment marker with
   const response=await callback(signedCallback(fields));
   assert.deepEqual(await response.json(),{response:{item_id:'stage_02',title:'Зимний Турини (тест)',photo_url:'',price:1}});
   assert.equal(data.size,0);
-  const invalid=[signedCallback(fields,'wrong'),signedCallback({...fields,app_id:'9'}),signedCallback({...fields,item:'car_04'}),signedCallback({...fields,receiver_id:'43'}),signedCallback({...order,user_id:fields.user_id,notification_type:'order_status_change'})];
+  const invalid=[signedCallback(fields,'wrong'),signedCallback({...fields,app_id:'9'}),signedCallback({...fields,item:'car_01'}),signedCallback({...fields,receiver_id:'43'}),signedCallback({...order,user_id:fields.user_id,notification_type:'order_status_change'})];
   for(const raw of invalid) assert.ok((await (await callback(raw)).json()).error);
   for(const mode of ['disabled','production']) await assert.rejects(paymentCallback(signedCallback(fields),{...env,VK_PAYMENTS_MODE:mode}));
   await assert.rejects(paymentCallback(signedCallback(fields),{...env,VK_PAYMENTS_TEST_USERS:'42'}));
@@ -192,4 +194,18 @@ test('SQL edits control ownership and another confirmed order preserves access',
 test('invalid legacy receipt blocks migration rather than granting phantom ownership',async()=>{
  const {env}=setup([['orders:test:701',{user:'42',sku:'stage_02',amount:1,receipt:{order_id:700,app_order_id:701},created_at:1}]]);
  await assert.rejects(accountStore(env,'42'));
+});
+
+test('each paid catalog product has matching metadata, independent ownership and replay',async()=>{
+ const {env}=setup();
+ for(const [i,sku] of paidSkus.entries()) {
+  const metadata=await paymentCallback(signedCallback({notification_type:'get_item_test',item:sku}),env);
+  assert.equal(metadata.response.item_id,sku);assert.equal(metadata.response.price,1);
+  const fields={notification_type:'order_status_change_test',order_id:String(800+i),item:sku,item_id:sku,item_price:'1',status:'chargeable'};
+  const receipt=await paymentCallback(signedCallback(fields),env);
+  assert.deepEqual(await paymentCallback(signedCallback(fields),env),receipt);
+  assert.deepEqual((await accountStore(env,'42')).entitlements.skus,[...paidSkus.slice(0,i+1)].sort());
+  assert.deepEqual((await accountStore(env,'43')).entitlements.skus,[]);
+ }
+ for(const sku of ['unknown','stage_01','car_01']) await assert.rejects(paymentCallback(signedCallback({notification_type:'order_status_change_test',order_id:'999',item_id:sku,item_price:'1',status:'chargeable'}),env));
 });

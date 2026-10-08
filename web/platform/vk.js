@@ -66,12 +66,12 @@
   const refreshStore = async () => updateStore(await storeRequest('/api/vk/store'));
   const buy = async sku => {
     if (purchasing || orderOpen) throw new Error('Покупка уже выполняется.');
-    if (typeof sku !== 'string' || !/^stage_02$/.test(sku)) throw new Error('Товар недоступен.');
+    if (typeof sku !== 'string' || !catalog?.some(p => p.sku === sku && p.purchase_enabled)) throw new Error('Товар недоступен.');
     purchasing = true;
     try {
       const prepared = await storeRequest('/api/vk/payments/prepare',{sku});
       updateStore(prepared);
-      if (prepared.owned) return {...await refreshStore(),status:'owned'};
+      if (prepared.owned) return {...await refreshStore(),status:'owned',purchased_sku:sku};
       let outcome = 'pending', timer;
       try {
         orderOpen = true;
@@ -87,7 +87,7 @@
       // including when a mobile client reports an error after a completed order.
       for (let attempt = 0; attempt < 4; attempt++) {
         const store = await refreshStore();
-        if (store.entitlements.skus.includes(sku)) return {...store,status:'owned'};
+        if (store.entitlements.skus.includes(sku)) return {...store,status:'owned',purchased_sku:sku};
         if (outcome === 'cancel' || outcome === 'fail') return {...store,status:outcome};
         if (attempt < 3) await new Promise(resolve => setTimeout(resolve,1000));
       }
