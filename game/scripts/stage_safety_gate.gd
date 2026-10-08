@@ -7,7 +7,7 @@ signal accepted
 var panel: Control
 var scroll: ScrollContainer
 var accept_button: Button
-var previous_mouse_mode = Input.MOUSE_MODE_VISIBLE
+var user_scrolled = false
 
 const RULES = [
 	"Не находись в зоне вылета.",
@@ -54,7 +54,7 @@ func _ready() -> void:
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.follow_focus = false
-	scroll.get_v_scroll_bar().value_changed.connect(_update_accept)
+	scroll.get_v_scroll_bar().value_changed.connect(_on_scroll_changed)
 	layout.add_child(scroll)
 	var centre = CenterContainer.new()
 	centre.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -99,11 +99,16 @@ func _add_text(parent: VBoxContainer, value: String, font_size: int, color: Colo
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	parent.add_child(label)
 
-func _update_accept(_value: float = 0.0) -> void:
+func _on_scroll_changed(value: float) -> void:
+	if value > 0.0:
+		user_scrolled = true
+	_update_accept()
+
+func _update_accept() -> void:
 	if scroll == null or accept_button == null:
 		return
 	var bar = scroll.get_v_scroll_bar()
-	var reached_end = bar.value + bar.page >= bar.max_value - 8.0
+	var reached_end = user_scrolled and bar.max_value > bar.page and bar.value + bar.page >= bar.max_value - 8.0
 	accept_button.disabled = not reached_end
 	accept_button.text = "ПРОЧИТАЛ(А), ВОЙТИ НА СУ" if reached_end else "ПРОКРУТИ ПАМЯТКУ ДО КОНЦА"
 
