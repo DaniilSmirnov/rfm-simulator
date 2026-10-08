@@ -48,6 +48,9 @@ func run() -> void:
 		imported_hatch_complete = imported_hatch_complete and lid is MeshInstance3D and lid.mesh.get_surface_count() > 0
 	check(imported_hatch_complete, "imported hatch moves rear body, glass, trim and lamps together")
 	var boat_static = host.car.get_node_or_null("CarModelDetails/Camping_boat") != null
+	var boat_mesh = host.car.get_node_or_null("CarModelDetails/Camping_boat") as MeshInstance3D
+	check(boat_mesh != null and boat_mesh.transform.basis.z.dot(Vector3.FORWARD) > 0.99, "imported OBJ parts rotate 180 degrees to match game driving direction")
+	check(camping_lid != null and camping_lid.get_node_or_null("Camping_glass_Lid") != null, "rear glazing remains attached to the hatch after correcting forward axis")
 	check(boat_static and camping_lid.get_node_or_null("Camping_boat_Lid") == null, "inflatable roof boat remains fixed when trunk opens")
 	var original_hatch_position = camping_lid.transform if camping_lid != null else Transform3D.IDENTITY
 	RallyProps.update_player_trunk(host.car, true, [true, true, true, true, true], 1.0)
