@@ -956,6 +956,7 @@ func _process(delta: float) -> void:
 		camera.position += room.prediction.visual_offset
 	room.smooth_car_visuals()
 	_update_placement()
+	Props.animate_wheels(car)
 	cargo.update(delta)
 	camp_cooking.update(delta, room.connected and not room.is_host)
 	spectators.update(elapsed, delta, room.connected and not room.is_host)
