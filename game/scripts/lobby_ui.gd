@@ -121,13 +121,23 @@ func _process(_delta: float) -> void:
 		var height = 220.0 if game.playing else minf(size.y - 40, 630)
 		game.menu.offset_top = -height / 2
 		game.menu.offset_bottom = height / 2
-		if not game.playing:
-			game.menu_text.text = "Твой выезд · до 8 игроков в общем лагере"
 		for image in images:
-			image.custom_minimum_size.y = 100 if compact else 170
+			image.custom_minimum_size.y = 90 if compact else 130
 		game.menu_title.add_theme_font_size_override("font_size", 25 if compact else 34)
-		game.menu_help.visible = not compact and not game.playing
 		refresh()
+	# Main menu has no duplicate heading or instructions; game dialogs retain theirs.
+	game.menu_title.visible = game.playing or game.dead or game.finished
+	game.menu_text.visible = game.menu_title.visible
+	if not game.mobile_mode:
+		var minimum = game.menu.get_combined_minimum_size()
+		var extent = Vector2(maxf(minf(size.x - 48, 600 if game.playing else 920), minimum.x), maxf(minf(size.y - 40, 220 if game.playing else 630), minimum.y))
+		var factor = minf(1.0, minf(maxf(size.x - 48, 1) / extent.x, maxf(size.y - 40, 1) / extent.y))
+		game.menu.offset_left = -extent.x / 2
+		game.menu.offset_right = extent.x / 2
+		game.menu.offset_top = -extent.y / 2
+		game.menu.offset_bottom = extent.y / 2
+		game.menu.pivot_offset = extent / 2
+		game.menu.scale = Vector2.ONE * factor
 	if game.room != null:
 		host_pause.visible = game.room.connected and not game.room.is_host and game.room.world_paused and not game.paused and not game.dead and not game.finished
 	return_button.visible = game.playing
