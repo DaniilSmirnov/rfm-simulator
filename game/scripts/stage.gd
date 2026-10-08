@@ -25,6 +25,8 @@ var city: Node3D
 const LENGTH = 840.0
 const STEP = 4.0
 const WIDTH = 7.4
+# Five side-lane rows spaced 0.8 m apart, each stone 0.76 m wide.
+const SIDE_LANE_WIDTH = 3.96
 const TREE_CELL_SIZE = 16.0
 const STAGES = ["Лесной перевал · гравий", "Зимний Турини · снег и лёд", "Виноградники · европейская деревня"]
 var variant = 0
@@ -122,7 +124,7 @@ func roughness(s: float) -> float:
 
 func grip(pos: Vector3) -> float:
 	if urban:
-		return (0.62 if village_forest_detour(road_s(pos)) else (0.86 if village(road_s(pos)) else 1.02)) if road_distance(pos) < WIDTH * 0.55 else 0.58
+		return (0.62 if village_forest_detour(road_s(pos)) else (0.86 if village(road_s(pos)) else 1.02)) if road_distance(pos) < road_width(road_s(pos)) * 0.55 else 0.58
 	if winter:
 		if road_distance(pos) > WIDTH * 0.55:
 			return 0.32
@@ -400,6 +402,9 @@ func draw_base_road_surface(s: float) -> bool:
 	# underneath it where it can show through between individual stones.
 	return not village(s) or village_forest_detour(s)
 
+func road_width(s: float) -> float:
+	return SIDE_LANE_WIDTH if urban and s > 370.0 and s < 500.0 else WIDTH
+
 func road_surface_vertex(s: float, lateral: float) -> Vector3:
 	var p = at(s) + side(s) * lateral
 	p.y = ground(p) + 0.04
@@ -424,8 +429,9 @@ func _build_road() -> void:
 				var begin = s + float(segment) / divisions
 				var end = s + float(segment + 1) / divisions
 				for strip in range(4):
-					var left = -WIDTH * 0.5 + WIDTH * float(strip) / 4.0
-					var right = -WIDTH * 0.5 + WIDTH * float(strip + 1) / 4.0
+					var width = road_width(s)
+					var left = -width * 0.5 + width * float(strip) / 4.0
+					var right = -width * 0.5 + width * float(strip + 1) / 4.0
 					var a = road_surface_vertex(begin, right)
 					var b = road_surface_vertex(begin, left)
 					var c = road_surface_vertex(end, right)

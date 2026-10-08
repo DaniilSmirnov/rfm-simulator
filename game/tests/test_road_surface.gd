@@ -11,6 +11,9 @@ func run() -> void:
 	for variant in [0, 2]:
 		var stage = Stage.new(variant)
 		root.add_child(stage)
+		if variant == 2:
+			check(is_equal_approx(stage.road_width(435.0), 4 * 0.8 + 0.76), "gravel width matches the five cobbled side-lane rows")
+			check(is_equal_approx(stage.road_width(180.0), stage.WIDTH), "country main road retains its width")
 		stage._build_road()
 		var mesh: ArrayMesh = stage.get_node("StageRoadSurface").mesh
 		var arrays = mesh.surface_get_arrays(0)
