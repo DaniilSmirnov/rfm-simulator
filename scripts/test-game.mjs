@@ -32,6 +32,7 @@ run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_demo.
 
 run(process.execPath, [join(root, 'scripts/test-device.mjs')]);
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_mobile.gd']);
+run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_stage_safety_gate.gd']);
 
 run(process.execPath, ['--test', join(root, 'tests/room-core.test.mjs'), join(root, 'tests/room-session.test.mjs')]);
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_room.gd']);
