@@ -145,6 +145,8 @@ func _side_lane_houses() -> void:
 		# A small collision padding protects existing yards without incorrectly
 		# rejecting neighbouring houses whose gardens merely approach each other.
 		for along in [-40.0, -28.0, 28.0, 40.0]:
+			if along > 0.0:
+				continue # Forest rally road uses the outward side of both junctions.
 			for side_value in [-1.0, 1.0]:
 				var p = stage.at(lane_s) + lane_direction * along + lane_normal * side_value * 12.5
 				p.y = stage.ground(p)
@@ -573,7 +575,7 @@ func _forest_spot_allowed(p: Vector3, padding: float = 0.0) -> bool:
 	if s < VILLAGE_START - 55.0 or s > VILLAGE_END + 55.0:
 		return false
 	var distance = stage.road_distance(p)
-	var minimum = 48.0 if stage.village(s) else 92.0
+	var minimum = 8.0 if stage.village_forest_detour(s) else (48.0 if stage.village(s) else 92.0)
 	if distance < minimum + padding or distance > 145.0:
 		return false
 	for spot in stage.clearings:
