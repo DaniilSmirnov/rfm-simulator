@@ -59,4 +59,5 @@ run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_crew_
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_interaction.gd']);
 
 
+run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_drive_prediction.gd']);
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_soundscape.gd']);

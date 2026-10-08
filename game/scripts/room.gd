@@ -1,5 +1,14 @@
 extends Node
 # HTTP transport works with the existing minimal web template (no WebSocket module).
+const Prediction = preload("res://scripts/drive_prediction.gd")
+var prediction = Prediction.new()
+var host_drives: Dictionary = {}
+var prediction_enabled = false
+var input_clock = 0.0
+var authoritative_drives: Dictionary = {}
+var authority_stamp = -1.0
+var drive_budgets: Dictionary = {}
+var visual_children: Dictionary = {}
 const SnapshotMotion = preload("res://scripts/snapshot_motion.gd")
 const SYNC_INTERVAL = 0.1
 var server_offset = 0.0
@@ -195,6 +204,13 @@ func _response(result: int, code: int, _headers: PackedStringArray, bytes: Packe
 	if data.has("server_time"):
 		update_server_clock(float(data.server_time))
 	if request_kind in ["create", "join"]:
+		prediction = Prediction.new()
+		prediction_enabled = false
+		input_clock = 0.0
+		host_drives.clear()
+		drive_budgets.clear()
+		authoritative_drives.clear()
+		authority_stamp = -1.0
 		player_id = data.player
 		token = data.token
 		is_host = data.host
@@ -217,6 +233,11 @@ func _response(result: int, code: int, _headers: PackedStringArray, bytes: Packe
 		game.toast("Комната %s · %s. Передай ID друзьям!" % [room_id, game.car.get_meta("model")])
 		print("ROOM_CONNECTED ", room_id, " host=", is_host)
 	else:
+		if not is_host and data.world is Dictionary:
+			var drive_stamp = float(data.get("world_time", -1))
+			if drive_stamp > authority_stamp:
+				authoritative_drives = data.world.get("driving", {})
+				authority_stamp = drive_stamp
 		_update_peers(data.players)
 		if is_host:
 			for command in data.commands:
@@ -230,6 +251,20 @@ func _response(result: int, code: int, _headers: PackedStringArray, bytes: Packe
 			if data.world is Dictionary:
 				var stamp = float(data.get("world_time", -1))
 				if stamp < 0 or stamp > last_world_time:
+					prediction_enabled = int(data.world.get("drive_protocol", 0)) == 1
+					var drive = data.world.get("driving", {}).get(player_id, {})
+					if prediction_enabled and not drive.is_empty():
+						if not prediction.active:
+							prediction.reset(v(drive.pos), drive.yaw)
+						prediction.context = drive_context(player_id)
+						# Apply world collision geometry before replaying unacknowledged input.
+						game.stage.apply_trees(data.world.get("fallen", []))
+						if game.stage.urban:
+							game.stage.city.apply_snapshot(data.world.get("city_lamps", []))
+						prediction.reconcile(drive, game.stage, game.selected_car)
+						game.condition = prediction.condition
+						game.car.position = prediction.node.position
+						game.heading = prediction.yaw
 					apply_world(data.world, stamp / 1000.0 if stamp >= 0 else -1.0)
 					last_world_time = stamp
 		room_label.text = "ID %s · %d/8 · %s%s" % [room_id, peers.size() + 1, "СОЗДАТЕЛЬ" if is_host else "ЗРИТЕЛЬ", " · ПАУЗА ХОЗЯИНА" if world_paused else ""]
@@ -400,7 +435,7 @@ func lamp_requests() -> Array:
 	return result.slice(0, 8)
 
 func local_state() -> Dictionary:
-	return {"pos": a(game.player_position()), "car": a(game.car.position), "heading": game.heading, "tilt": a(game.car.rotation), "yaw": game.view_yaw, "pitch": game.view_pitch, "in_car": game.in_car, "tow": Input.is_action_pressed("tow") and not game.in_car and not game.paused and not game.dead and not game.finished and game.beers < 30 and game.drink_time < 0 and game.eat_time < 0, "push": a(game.walking_intent()), "speed": game.speed, "beers": game.beers, "trees": tree_requests(), "lamps": lamp_requests(), "beer": game.drink_time, "eat": game.eat_time, "food_kind": game.eat_kind, "food_species": game.food_species, "seated": game.seated, "running": game.running(), "airborne": game.jump_height > 0.01}
+	return {"drive_enabled": prediction_enabled, "drive_inputs": prediction.pending if prediction_enabled else [], "pos": a(game.player_position()), "car": a(game.car.position), "heading": game.heading, "tilt": a(game.car.rotation), "yaw": game.view_yaw, "pitch": game.view_pitch, "in_car": game.in_car, "tow": Input.is_action_pressed("tow") and not game.in_car and not game.paused and not game.dead and not game.finished and game.beers < 30 and game.drink_time < 0 and game.eat_time < 0, "push": a(game.walking_intent()), "speed": game.speed, "beers": game.beers, "trees": tree_requests(), "lamps": lamp_requests(), "beer": game.drink_time, "eat": game.eat_time, "food_kind": game.eat_kind, "food_species": game.food_species, "seated": game.seated, "running": game.running(), "airborne": game.jump_height > 0.01}
 
 func _update_peers(players: Array) -> void:
 	var present = {}
@@ -425,10 +460,50 @@ func _update_peers(players: Array) -> void:
 			if p.state != null:
 				car.position = v(p.state.car)
 				avatar.position = v(p.state.pos)
+		if is_host and p.state != null and (bool(p.state.get("drive_enabled", false)) or host_drives.has(p.id)):
+			if not host_drives.has(p.id):
+				var solver = Prediction.new()
+				solver.reset(game.stage.at(12 + int(p.get("slot", 1)) * 6), atan2(-game.stage.direction(12).x, -game.stage.direction(12).z))
+				drive_budgets[p.id] = {"time": Time.get_ticks_usec(), "ticks": 30.0}
+				host_drives[p.id] = solver
+			var solver = host_drives[p.id]
+			var budget = drive_budgets[p.id]
+			var now = Time.get_ticks_usec()
+			budget.ticks = minf(120.0, budget.ticks + maxf(0, (now - budget.time) / 1000000.0) * 120.0)
+			budget.time = now
+			solver.context = drive_context(str(p.id))
+			if not game.paused and not game.dead and not game.finished:
+				budget.ticks -= solver.accept(p.state.get("drive_inputs", []), game.stage, int(p.get("car_model", 0)), int(budget.ticks))
+				apply_drive_events(solver, true)
+			else:
+				# Acknowledgement prevents pre-pause inputs from playing after resume.
+				for c in p.state.get("drive_inputs", []):
+					if int(c.seq) == solver.ack + 1:
+						solver.ack = int(c.seq)
+			if not p.state.in_car:
+				solver.motion.velocity = Vector3.ZERO
+			p.state.car = a(solver.node.position)
+			if p.state.in_car:
+				p.state.pos = p.state.car
+			p.state.heading = solver.yaw
+			p.state.speed = solver.motion.velocity.dot(Vector3(-sin(solver.yaw), 0, -cos(solver.yaw)))
+			p.state.tilt = a(solver.node.rotation)
+		elif not is_host and p.state != null and authoritative_drives.has(p.id):
+			var drive = authoritative_drives[p.id]
+			p.state.car = drive.pos
+			p.state.heading = drive.yaw
+			p.state.tilt = [drive.pitch, drive.yaw, drive.roll]
+			p.state.speed = v(drive.velocity).dot(Vector3(-sin(drive.yaw), 0, -cos(drive.yaw)))
+			if p.state.in_car:
+				p.state.pos = drive.pos
 		if p.state != null:
 			var peer = peers[p.id]
 			var sample_time = float(p.state_time) / 1000.0 if p.has("state_time") else server_clock()
-			if peer.has("last_state_time") and sample_time <= peer.last_state_time:
+			if is_host and host_drives.has(p.id):
+				sample_time = server_clock()
+			elif not is_host and authoritative_drives.has(p.id):
+				sample_time = authority_stamp / 1000.0
+			if peer.has("last_sample_time") and sample_time <= peer.last_sample_time:
 				continue
 			var switched = peer.state != null and peer.state.in_car != p.state.in_car
 			var tilt = v(p.state.get("tilt", [0, p.state.heading, 0]))
@@ -436,6 +511,7 @@ func _update_peers(players: Array) -> void:
 			peer.car_motion.push(sample_time, v(p.state.car), tilt)
 			peer.avatar_motion.max_speed = 12.0
 			peer.avatar_motion.push(sample_time, v(p.state.pos), Vector3(0, p.state.yaw, 0), switched)
+			peer.last_sample_time = sample_time
 		peers[p.id].state = p.state
 		if p.state != null:
 			peers[p.id].last_state_time = float(p.state_time) / 1000.0 if p.has("state_time") else server_clock()
@@ -444,6 +520,8 @@ func _update_peers(players: Array) -> void:
 			for node in [peers[id].car, peers[id].avatar, peers[id].label]:
 				node.queue_free()
 			peers.erase(id)
+			host_drives.erase(id)
+			drive_budgets.erase(id)
 	game.cargo.release_departed()
 
 func submit(action: String, placement: Dictionary = {}) -> bool:
@@ -529,7 +607,10 @@ func world_state() -> Dictionary:
 	var racers = []
 	for r in game.racers:
 		racers.append({"id": r.id, "role": r.get("role", "racer"), "zero_index": r.get("zero_index", 0), "variant": r.variant, "pos": a(r.node.position), "yaw": r.node.rotation.y, "tilt": a(r.node.rotation), "state": r.state, "recovery_progress": r.get("recovery_progress", 0), "recovery_helpers": r.get("recovery_helpers", 0)})
-	return {"camp_cooking": game.camp_cooking.snapshot(), "cargo": game.cargo.snapshot(), "foraging": game.foraging.snapshot(), "course": game.course.snapshot(), "city_lamps": game.stage.city.snapshot() if game.stage.urban else [], "chair_poses": chair_poses, "flag_poses": flag_poses, "table_yaw": game.camp.rotation.y if game.camp != null else 0.0, "grill_pose": {"pos": a(game.grill.position), "yaw": game.grill.rotation.y} if game.grill != null else null, "fallen": game.stage.tree_snapshot(), "stones": stone_state(), "impacts": game.impact_serials, "camp": a(game.camp.position) if game.camp != null else null, "chairs": game.has_chairs, "cooking": game.cooking, "cook_time": game.cook_time, "grill_servings": game.grill_servings, "npc_servings": game.spectators.snapshot(), "npc_people": game.spectators.actor_snapshot(), "marshals": game.stage.officials.snapshot(), "eaten": game.eaten, "racing": game.racing, "passed": game.passed, "helped": game.helped, "elapsed": game.elapsed, "clearing": game.target_clearing, "paused": game.paused, "dead": game.dead, "finished": game.finished, "title": game.menu_title.text, "text": game.menu_text.text, "racers": racers, "tow": game.tow_target.get_meta("room_id") if game.tow_target != null else -1, "tow_progress": game.tow_progress, "tow_owner": tow_owner, "recovery_links": game.recovery_links, "recovery_helpers": game.recovery_helpers, "notice": game.toast_label.text, "notice_time": game.toast_time}
+	var driving = {}
+	for id in host_drives:
+		driving[id] = host_drives[id].snapshot()
+	return {"drive_protocol": 1, "driving": driving, "camp_cooking": game.camp_cooking.snapshot(), "cargo": game.cargo.snapshot(), "foraging": game.foraging.snapshot(), "course": game.course.snapshot(), "city_lamps": game.stage.city.snapshot() if game.stage.urban else [], "chair_poses": chair_poses, "flag_poses": flag_poses, "table_yaw": game.camp.rotation.y if game.camp != null else 0.0, "grill_pose": {"pos": a(game.grill.position), "yaw": game.grill.rotation.y} if game.grill != null else null, "fallen": game.stage.tree_snapshot(), "stones": stone_state(), "impacts": game.impact_serials, "camp": a(game.camp.position) if game.camp != null else null, "chairs": game.has_chairs, "cooking": game.cooking, "cook_time": game.cook_time, "grill_servings": game.grill_servings, "npc_servings": game.spectators.snapshot(), "npc_people": game.spectators.actor_snapshot(), "marshals": game.stage.officials.snapshot(), "eaten": game.eaten, "racing": game.racing, "passed": game.passed, "helped": game.helped, "elapsed": game.elapsed, "clearing": game.target_clearing, "paused": game.paused, "dead": game.dead, "finished": game.finished, "title": game.menu_title.text, "text": game.menu_text.text, "racers": racers, "tow": game.tow_target.get_meta("room_id") if game.tow_target != null else -1, "tow_progress": game.tow_progress, "tow_owner": tow_owner, "recovery_links": game.recovery_links, "recovery_helpers": game.recovery_helpers, "notice": game.toast_label.text, "notice_time": game.toast_time}
 
 func stone_state() -> Array:
 	var result = []
@@ -544,7 +625,8 @@ func apply_stones(w: Dictionary, sample_time: float = -1.0) -> void:
 	if count > last_impact:
 		game.impact_shake = 0.8
 		if game.in_car:
-			game.condition = maxf(0, game.condition - (count - last_impact) * 0.8)
+			if not prediction_enabled or not prediction.active:
+				game.condition = maxf(0, game.condition - (count - last_impact) * 0.8)
 		game.toast("Гравий из-под колёс! Отойди дальше от края СУ.")
 	last_impact = count
 	var present = {}
@@ -757,3 +839,91 @@ func disconnect_room(message: String) -> void:
 		game.mobile_controls.reset_input()
 	room_label.text = message
 	exit_button.hide()
+
+func predict_drive(delta: float) -> bool:
+	if is_host or not prediction_enabled:
+		return false
+	if not prediction.active:
+		return true
+	input_clock += minf(delta, 0.1)
+	var ticks = int(input_clock / prediction.motion.handling.STEP)
+	input_clock -= ticks * prediction.motion.handling.STEP
+	prediction.context = drive_context(player_id)
+	prediction.predict(ticks, Input.get_axis("back", "forward"), Input.get_axis("left", "right"), Input.is_action_pressed("brake"), game.stage, game.selected_car)
+	apply_drive_events(prediction, false)
+	game.condition = prediction.condition
+	game.car.position = prediction.node.position
+	game.car.rotation = prediction.node.rotation
+	game.heading = prediction.yaw
+	game.speed = prediction.motion.velocity.dot(Vector3(-sin(game.heading), 0, -cos(game.heading)))
+	game.vehicle_motion = prediction.motion
+	prediction.visual_offset *= exp(-delta * 10.0)
+	prediction.visual_yaw *= exp(-delta * 10.0)
+	return true
+
+func drive_context(owner: String) -> Dictionary:
+	var contacts: Array = []
+	for group in game.spectators.groups:
+		contacts.append({"position": group.car.position})
+	for person in game.spectators.people:
+		contacts.append({"position": person.avatar.position})
+	for racer in game.racers:
+		contacts.append({"position": racer.node.position})
+	if owner != player_id:
+		contacts.append({"position": game.car.position})
+		if not game.in_car:
+			contacts.append({"position": game.walker, "person": true})
+	for id in peers:
+		var peer = peers[id]
+		if id == owner or peer.state == null:
+			continue
+		contacts.append({"position": v(peer.state.car)})
+		if not peer.state.in_car:
+			contacts.append({"position": v(peer.state.pos), "person": true})
+	return {"contacts": contacts, "racing": game.racing}
+
+func apply_drive_events(solver, authoritative: bool) -> void:
+	for event in solver.events:
+		match event.kind:
+			"tree": game.knock_tree(event.index, event.velocity)
+			"city": game.knock_city(event.hit, event.velocity)
+			"person":
+				if authoritative:
+					game.die("Легковушка сбила участника вашей компании.")
+			"impact":
+				if not authoritative:
+					game.impact_shake = minf(0.8, float(event.speed) * 0.055)
+					game.toast("Удар! Сбавь скорость.")
+	solver.events.clear()
+	if authoritative and solver.condition <= 0:
+		game.die("Легковушка участника разбита. Совместный выезд окончен.")
+
+func recover_drive() -> bool:
+	if is_host or not prediction_enabled:
+		return false
+	if not prediction.active:
+		game.toast("Дождись синхронизации машины с хозяином.")
+		return true
+	if prediction.pending.size() >= Prediction.LIMIT:
+		game.toast("Дождись восстановления связи, затем верни машину на СУ.")
+		return true
+	prediction.context = drive_context(player_id)
+	prediction.predict(1, 0, 0, false, game.stage, game.selected_car, true)
+	game.toast("Машина возвращена на СУ.")
+	return true
+
+func smooth_car_visuals() -> void:
+	var offset = Vector3.ZERO
+	if connected and prediction_enabled and prediction.active:
+		offset = game.car.basis.inverse() * prediction.visual_offset
+	var correction = Transform3D(Basis(Vector3.UP, prediction.visual_yaw if connected and prediction_enabled else 0.0), offset)
+	var present = {}
+	for child in game.car.get_children():
+		if child is Node3D and not child is CollisionObject3D and not child is CollisionShape3D:
+			var id = child.get_instance_id()
+			child.transform = correction * visual_children.get(id, Transform3D.IDENTITY).affine_inverse() * child.transform
+			visual_children[id] = correction
+			present[id] = true
+	for id in visual_children.keys():
+		if not present.has(id):
+			visual_children.erase(id)
