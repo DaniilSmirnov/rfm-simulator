@@ -25,6 +25,8 @@ var city: Node3D
 const LENGTH = 840.0
 const STEP = 4.0
 const WIDTH = 7.4
+# Five side-lane rows spaced 0.8 m apart, each stone 0.76 m wide.
+const SIDE_LANE_WIDTH = 3.96
 const TREE_CELL_SIZE = 16.0
 const STAGES = ["Лесной перевал · гравий", "Зимний Турини · снег и лёд", "Виноградники · европейская деревня"]
 var variant = 0
@@ -122,7 +124,7 @@ func roughness(s: float) -> float:
 
 func grip(pos: Vector3) -> float:
 	if urban:
-		return (0.62 if village_forest_detour(road_s(pos)) else (0.86 if village(road_s(pos)) else 1.02)) if road_distance(pos) < WIDTH * 0.55 else 0.58
+		return (0.62 if village_forest_detour(road_s(pos)) else (0.86 if village(road_s(pos)) else 1.02)) if road_distance(pos) < road_width(road_s(pos)) * 0.55 else 0.58
 	if winter:
 		if road_distance(pos) > WIDTH * 0.55:
 			return 0.32
@@ -400,20 +402,43 @@ func draw_base_road_surface(s: float) -> bool:
 	# underneath it where it can show through between individual stones.
 	return not village(s) or village_forest_detour(s)
 
+func road_width(s: float) -> float:
+	return SIDE_LANE_WIDTH if urban and s > 370.0 and s < 500.0 else WIDTH
+
+func road_surface_vertex(s: float, lateral: float) -> Vector3:
+	var p = at(s) + side(s) * lateral
+	p.y = ground(p) + 0.04
+	return p
+
+func road_surface_color(p: Vector3, s: float) -> Color:
+	var base = Color("708a9c") if winter else ((Color("857763") if village_forest_detour(s) else Color("525757")) if urban else Color("9d896b"))
+	# Continuous low-frequency shading instead of a random colour per triangle.
+	var shade = sin(p.x * 0.17 + p.z * 0.11) * 0.025 + sin(p.z * 0.29 - p.x * 0.07) * 0.015
+	return base.lightened(shade)
+
 func _build_road() -> void:
 	var st = SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	for i in range(int(LENGTH)):
 		var s = float(i)
-		var a = at(s) + side(s) * WIDTH / 2
-		var b = at(s) - side(s) * WIDTH / 2
-		var c = at(s + 1) + side(s + 1) * WIDTH / 2
-		var d = at(s + 1) - side(s + 1) * WIDTH / 2
 		if draw_base_road_surface(s):
-			for v in [a, b, c, b, d, c]:
-				st.set_color((Color("708a9c") if winter else ((Color("857763") if village_forest_detour(s) else Color("525757")) if urban else Color("9d896b"))).lightened(rng.randf_range(-0.065, 0.045)))
-				v.y = ground(v) + 0.04
-				st.add_vertex(v)
+			# Bound physical segment length as well as station length: the side
+			# lanes cover many metres per station through the village bypass.
+			var divisions = maxi(4, ceili(at(s).distance_to(at(s + 1.0)) / 0.75))
+			for segment in range(divisions):
+				var begin = s + float(segment) / divisions
+				var end = s + float(segment + 1) / divisions
+				for strip in range(4):
+					var width = road_width(s)
+					var left = -width * 0.5 + width * float(strip) / 4.0
+					var right = -width * 0.5 + width * float(strip + 1) / 4.0
+					var a = road_surface_vertex(begin, right)
+					var b = road_surface_vertex(begin, left)
+					var c = road_surface_vertex(end, right)
+					var d = road_surface_vertex(end, left)
+					for v in [a, b, c, b, d, c]:
+						st.set_color(road_surface_color(v, s))
+						st.add_vertex(v)
 		# Broken muddy wheel tracks, shallow puddles.
 		if not urban and i % 12 == 0:
 			for offset in [-1.0, 1.0]:
@@ -432,6 +457,8 @@ func _build_road() -> void:
 				p.y = ground(p)
 				var bank = RallyProps.box(self, p + Vector3(0, 0.23, 0), Vector3(1.7, 0.65, 9.0), Color("e1edf1"))
 				bank.rotation.y = atan2(-direction(s).x, -direction(s).z)
+	# Shared positions and colours allow smooth normals across strip joins.
+	st.index()
 	st.generate_normals()
 	var n = MeshInstance3D.new()
 	n.mesh = st.commit()
@@ -440,6 +467,7 @@ func _build_road() -> void:
 	mat.vertex_color_is_srgb = true
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	n.material_override = mat
+	n.name = "StageRoadSurface"
 	add_child(n)
 
 # Four instanced draw calls for the forest instead of thousands of nodes.

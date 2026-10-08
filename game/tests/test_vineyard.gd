@@ -83,7 +83,7 @@ func run() -> void:
 	check(village_name_labels.size() == 4, "both village signs show Ля Газ в Польен on both faces")
 	check(stage.city.thuja_count > 300, "dense thuja forest surrounds the village")
 	check(stage.woodland_details.get("VillageThujaLower", 0) == stage.city.thuja_count and stage.woodland_details.get("VillageThujaCrown", 0) == stage.city.thuja_count, "thuja forest is rendered through instanced layers")
-	check(stage.city.mixed_tree_count >= 900, "village has a denser forest using the shared summer tree asset")
+	check(stage.city.mixed_tree_count >= 1500, "village has a denser forest using the shared summer tree asset")
 	var shared_tree_layers_match = true
 	for layer in range(4):
 		shared_tree_layers_match = shared_tree_layers_match and stage.woodland_details.get("VillageForestTreeLayer%d" % layer, 0) == stage.city.mixed_tree_count
