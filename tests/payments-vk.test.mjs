@@ -32,7 +32,7 @@ test('only configured testers see one test product; disabled and real mode stay 
   const {env}=setup();
   assert.deepEqual(paymentCatalog(env,'42').filter(p=>p.purchase_enabled).map(p=>p.sku),paidSkus);
   for(const user of ['44','bad'])assert.ok(paymentCatalog(env,user).every(p=>!p.purchase_enabled));
-  for(const mode of ['disabled','production']) assert.ok(paymentCatalog({...env,VK_PAYMENTS_MODE:mode},'42').every(p=>!p.purchase_enabled));
+  for(const mode of ['disabled','unknown']) assert.ok(paymentCatalog({...env,VK_PAYMENTS_MODE:mode},'42').every(p=>!p.purchase_enabled));
   assert.deepEqual((await accountStore(env,'42')).entitlements.skus,[]);
 });
 test('open test access exposes winter purchase to valid VK IDs and keeps live notifications closed',async()=>{
@@ -42,19 +42,20 @@ test('open test access exposes winter purchase to valid VK IDs and keeps live no
   assert.deepEqual((await accountStore(env,user)).entitlements.skus,[]);
  }
  for(const user of ['bad','0','-42','42.5'])assert.ok(paymentCatalog(env,user).every(p=>!p.purchase_enabled));
- for(const mode of ['disabled','production'])assert.ok(paymentCatalog({...env,VK_PAYMENTS_MODE:mode},'44').every(p=>!p.purchase_enabled));
+ for(const mode of ['disabled','unknown'])assert.ok(paymentCatalog({...env,VK_PAYMENTS_MODE:mode},'44').every(p=>!p.purchase_enabled));
  await assert.rejects(paymentCallback(signedCallback({...order,user_id:'44',notification_type:'order_status_change'}),env));
  await paymentCallback(signedCallback({...order,user_id:'44'}),env);
  assert.deepEqual((await accountStore(env,'44')).entitlements.skus,['stage_02']);
  assert.deepEqual((await accountStore(env,'42')).entitlements.skus,[]);
 });
-test('deployed configuration enables only test winter purchase rather than hiding the button',()=>{
+test('deployed configuration enables every paid product at its real price',()=>{
  const config=JSON.parse(readFileSync(new URL('../wrangler.jsonc',import.meta.url),'utf8'));
- assert.equal(config.vars.VK_PAYMENTS_MODE,'test');
- assert.equal(config.vars.VK_PAYMENTS_TEST_USERS,'*');
+ assert.equal(config.vars.VK_PAYMENTS_MODE,'production');
+ assert.equal(config.vars.VK_STAGE_02_TEST_PRICE,undefined);
  const products=paymentCatalog({...config.vars,PAYMENTS:{}},'100500').filter(p=>p.purchase_enabled);
  assert.equal(products.length,paidSkus.length);assert.equal(products[0].sku,'stage_02');
- assert.equal(products[0].payment_mode,'test');assert.equal(products[0].price,1);
+ assert.equal(products[0].payment_mode,'production');
+ for(const p of products)assert.equal(p.price,p.type==='car'?3:20);
 });
 test('signed item lookup has stable SKU item ID and does not grant content',async()=>{
  const {env,data}=setup();
@@ -142,7 +143,7 @@ test('unsupported signed callback reports actual type and deployment marker with
   assert.equal(data.size,0);
   const invalid=[signedCallback(fields,'wrong'),signedCallback({...fields,app_id:'9'}),signedCallback({...fields,item:'car_01'}),signedCallback({...fields,receiver_id:'43'}),signedCallback({...order,user_id:fields.user_id,notification_type:'order_status_change'})];
   for(const raw of invalid) assert.ok((await (await callback(raw)).json()).error);
-  for(const mode of ['disabled','production']) await assert.rejects(paymentCallback(signedCallback(fields),{...env,VK_PAYMENTS_MODE:mode}));
+  for(const mode of ['disabled','unknown']) await assert.rejects(paymentCallback(signedCallback(fields),{...env,VK_PAYMENTS_MODE:mode}));
   await assert.rejects(paymentCallback(signedCallback(fields),{...env,VK_PAYMENTS_TEST_USERS:'42'}));
   const tampered=signedCallback({...fields,notification_type:'get_item_test'}).replace('notification_type=get_item_test','notification_type=get_item');
   assert.equal((await (await callback(tampered)).json()).error.error_code,10);
@@ -208,4 +209,41 @@ test('each paid catalog product has matching metadata, independent ownership and
   assert.deepEqual((await accountStore(env,'43')).entitlements.skus,[]);
  }
  for(const sku of ['unknown','stage_01','car_01']) await assert.rejects(paymentCallback(signedCallback({notification_type:'order_status_change_test',order_id:'999',item_id:sku,item_price:'1',status:'chargeable'}),env));
+});
+
+test('production purchases every paid SKU at catalog price; test rights never grant real content',async()=>{
+ const {env,restart}=setup();await paymentCallback(signedCallback(order),env);
+ env.VK_PAYMENTS_MODE='production';
+ assert.deepEqual((await accountStore(env,'42')).entitlements.skus,[]);
+ const products=paymentCatalog(env,'44').filter(p=>p.purchase_enabled);
+ assert.equal(products.length,9);
+ await assert.rejects(paymentCallback(signedCallback(order),env));
+ for(const [i,p] of products.entries()){
+  const price=p.type==='car'?3:20;
+  assert.equal(p.price,price);
+  assert.equal((await paymentCallback(signedCallback({notification_type:'get_item',item:p.sku,user_id:'44'}),env)).response.price,price);
+  const fields={...order,notification_type:'order_status_change',order_id:String(800+i),user_id:'44',item_id:p.sku,item_price:String(price)};
+  await assert.rejects(paymentCallback(signedCallback({...fields,item_price:'1'}),env));
+  await assert.rejects(paymentCallback(signedCallback({...fields,receiver_id:'42'}),env));
+  await assert.rejects(paymentCallback(signedCallback(fields,'forged'),env));
+  const receipt=await paymentCallback(signedCallback(fields),env);
+  assert.deepEqual(await paymentCallback(signedCallback(fields),env),receipt);
+  await assert.rejects(paymentCallback(signedCallback({...fields,user_id:'42'}),env));
+ }
+ restart();
+ assert.deepEqual((await accountStore(env,'44')).entitlements.skus,products.map(p=>p.sku).sort());
+ env.VK_PAYMENTS_MODE='test';
+ assert.deepEqual((await accountStore(env,'42')).entitlements.skus,['stage_02']);
+ assert.deepEqual((await accountStore(env,'43')).entitlements.skus,[]);
+});
+test('old SQLite schema migrates without losing test orders or mixing production',async()=>{
+ const {env,db,restart}=setup();
+ await paymentCallback(signedCallback(order),env);
+ db.exec("DROP INDEX payment_orders_owner; ALTER TABLE payment_orders RENAME TO orders_new; CREATE TABLE payment_orders(mode TEXT NOT NULL CHECK(mode = 'test'),order_id TEXT NOT NULL,user_id TEXT NOT NULL,sku TEXT NOT NULL,amount INTEGER NOT NULL,app_order_id INTEGER NOT NULL,created_at INTEGER NOT NULL,PRIMARY KEY(mode,order_id)); INSERT INTO payment_orders SELECT * FROM orders_new; DROP TABLE orders_new;");
+ restart();assert.deepEqual((await accountStore(env,'42')).entitlements.skus,['stage_02']);
+ env.VK_PAYMENTS_MODE='production';
+ assert.deepEqual((await accountStore(env,'42')).entitlements.skus,[]);
+ await paymentCallback(signedCallback({...order,notification_type:'order_status_change',item_id:'car_04',item_price:'3'}),env);
+ restart();assert.deepEqual((await accountStore(env,'42')).entitlements.skus,['car_04']);
+ env.VK_PAYMENTS_MODE='test';assert.deepEqual((await accountStore(env,'42')).entitlements.skus,['stage_02']);
 });

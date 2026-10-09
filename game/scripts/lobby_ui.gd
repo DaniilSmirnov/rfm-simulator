@@ -103,10 +103,10 @@ func refresh() -> void:
 	var can_buy_car: bool = car_product.get("purchase_enabled", false) and not allowed("car", game.car_choice.selected)
 	car_purchase_button.visible = can_buy_car and not game.playing
 	car_purchase_button.disabled = service.busy if service != null else true
-	car_purchase_button.text = "ТЕСТ: МАШИНА · %s ГОЛОС(ОВ)" % str(car_product.get("price", ""))
+	car_purchase_button.text = ("ТЕСТ: " if car_product.get("payment_mode") == "test" else "") + "КУПИТЬ МАШИНУ · " + vote_price(int(car_product.get("price", 0)))
 	purchase_button.visible = can_buy and not game.playing
 	purchase_button.disabled = service.busy if service != null else true
-	purchase_button.text = "ТЕСТ: ОТКРЫТЬ СУ · %s ГОЛОС(ОВ)" % str(product.get("price", ""))
+	purchase_button.text = ("ТЕСТ: " if product.get("payment_mode") == "test" else "") + "ОТКРЫТЬ СУ · " + vote_price(int(product.get("price", 0)))
 	check_purchase.visible = service != null and service.profile.get("platform") == "vk" and (can_buy or can_buy_car or not service.purchase_message.is_empty()) and not game.playing
 	purchase_actions.visible = purchase_button.visible or car_purchase_button.visible or check_purchase.visible
 	check_purchase.disabled = service.busy if service != null else true
@@ -117,7 +117,7 @@ func refresh() -> void:
 	for i in range(2):
 		var ok = car_ok if i == 0 else stage_ok
 		var bought = service != null and service.owns("car" if i == 0 else "stage", game.car_choice.selected if i == 0 else game.stage_choice.selected)
-		states[i].text = ("Куплено · доступно для выезда" if bought else "Доступно для выезда") if ok else ("Закрыто · доступна тестовая покупка" if ((i == 1 and can_buy) or (i == 0 and can_buy_car)) else "Закрыто · продажи ещё не открыты")
+		states[i].text = ("Куплено · доступно для выезда" if bought else "Доступно для выезда") if ok else ("Закрыто · доступна покупка" if ((i == 1 and can_buy) or (i == 0 and can_buy_car)) else "Закрыто · продажи ещё не открыты")
 		states[i].add_theme_color_override("font_color", Color("b2bea1") if ok else Color("ffbc83"))
 	background.visible = not game.playing
 	background.texture = null if game.playing else load("res://textures/previews/backdrop_%d.webp" % game.selected_stage)
@@ -164,3 +164,12 @@ func _process(_delta: float) -> void:
 		var active_hud = game.playing and not game.paused and not game.dead and not game.finished and not host_pause.visible
 		game.mobile_top.visible = active_hud
 		game.mobile_bottom.visible = active_hud and not game.info_label.text.is_empty()
+
+func vote_price(price: int) -> String:
+	var ending = "ГОЛОСОВ"
+	if price % 100 < 11 or price % 100 > 14:
+		if price % 10 == 1:
+			ending = "ГОЛОС"
+		elif price % 10 >= 2 and price % 10 <= 4:
+			ending = "ГОЛОСА"
+	return "%d %s" % [price, ending]

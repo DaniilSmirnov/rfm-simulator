@@ -6,7 +6,8 @@ test('catalog has stable unique SKUs; VK has two free stages and three free cars
  assert.equal(catalog.length,14);
  for(let i=0;i<4;i++) assert.equal(canUseContent('stage',i),i===0 || i===3);
  for(let i=0;i<10;i++) assert.equal(canUseContent('car',i),i<3);
- assert.ok(catalog.every(p=>!p.purchase_enabled));
+ assert.ok(catalog.every(p=>p.purchase_enabled === !p.free));
+ for(const p of catalog.filter(p=>!p.free)) assert.equal(p.price,p.type==='car'?3:20);
 });
 test('future verified entitlement grants only the exact known SKU',()=>{
  const rights={mode:'restricted',skus:['car_04','stage_02','unknown']};

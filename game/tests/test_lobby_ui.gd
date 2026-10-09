@@ -36,11 +36,13 @@ func run() -> void:
 	game.select_stage(1)
 	game.platform_service.profile = {"platform": "vk"}
 	game.platform_service.catalog[1].purchase_enabled = true
-	game.platform_service.catalog[1].price = 1
+	game.platform_service.catalog[1].price = 20
+	game.platform_service.catalog[1].payment_mode = "production"
 	game.lobby_ui.refresh()
 	check(not game.lobby_ui.states[1].text.contains("Куплено"), "unpaid stage has no purchase label")
 	check(game.lobby_ui.purchase_button.visible and game.lobby_ui.check_purchase.visible, "test winter stage exposes purchase and reconciliation")
 	game.platform_service.busy = true
+	check(game.lobby_ui.purchase_button.text == "ОТКРЫТЬ СУ · 20 ГОЛОСОВ", "production stage price")
 	game.platform_service.purchase_message = "Ожидаем VK…"
 	game.lobby_ui.refresh()
 	check(game.lobby_ui.purchase_button.disabled and game.lobby_ui.check_purchase.disabled, "pending order blocks double purchase")
@@ -50,10 +52,12 @@ func run() -> void:
 	check(game.lobby_ui.states[1].text.contains("Куплено"), "server ownership shows purchase label")
 	check(not game.room.create_button.disabled and not game.lobby_ui.purchase_button.visible, "confirmed winter ownership unlocks host and hides purchase")
 	game.car_choice.select(3)
-	game.platform_service.catalog[6].purchase_enabled = true
-	game.platform_service.catalog[6].price = 1
+	game.platform_service.catalog[7].purchase_enabled = true
+	game.platform_service.catalog[7].price = 3
+	game.platform_service.catalog[7].payment_mode = "production"
 	game.lobby_ui.refresh()
 	check(game.lobby_ui.car_purchase_button.visible and game.room.create_button.disabled, "locked selected car exposes its own purchase")
+	check(game.lobby_ui.car_purchase_button.text == "КУПИТЬ МАШИНУ · 3 ГОЛОСА", "production car price")
 	game.car_choice.select(0)
 	game.select_stage(0)
 	game.lobby_ui.refresh()
