@@ -1,9 +1,9 @@
 extends RefCounted
 # Packed geometry stays spatially partitioned. Only mutable MultiMeshes are
 # uploaded once per scene; immutable meshes and materials retain shared resources.
-const SCHEMA = 2
+const SCHEMA = 3
 const SOURCES = ["stage", "city", "vineyard", "props", "village_interiors", "church_bell"]
-const STAGE_FIELDS = ["woodland_details", "collectibles", "collectible_parts", "rocks", "trees", "forest_data", "forest_layers", "forest_chunk_slots", "forest_chunk_centers"]
+const STAGE_FIELDS = ["woodland_details", "collectibles", "collectible_parts", "rocks", "trees", "forest_data", "detail_tree_groups", "detail_tree_visuals", "forest_layers", "forest_chunk_slots", "forest_chunk_centers"]
 
 static func fingerprint() -> String:
 	var input = "village:%d" % SCHEMA

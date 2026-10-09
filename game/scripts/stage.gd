@@ -20,6 +20,9 @@ const NATURE_MUSHROOM_STEM = preload("res://models/nature/mushroom_stem.tres")
 var officials: Node3D
 const Officials = preload("res://scripts/course_officials.gd")
 
+const DeepSnow = preload("res://scripts/deep_snow.gd")
+var snow = DeepSnow.new()
+const Snowbanks = preload("res://scripts/snowbanks.gd")
 const Canyon = preload("res://scripts/canyon.gd")
 var canyon: RefCounted
 var desert = false
@@ -66,6 +69,8 @@ var indexed_rock_count = -1
 const ROCK_CELL_SIZE = 16.0
 var trees: Array[Vector3] = []
 var forest_data: Array[Dictionary] = []
+var detail_tree_groups: Dictionary = {}
+var detail_tree_visuals: Dictionary = {}
 var forest_layers: Array[Array] = []
 var forest_chunk_slots: Array[Vector2i] = []
 var forest_chunk_centers: Array[Vector3] = []
@@ -204,6 +209,9 @@ func grip(pos: Vector3) -> float:
 			return lerpf(base, 0.38, clampf(wet, 0.0, 1.0))
 		return base
 	if winter:
+		if snow.is_dug(self, pos): return 0.65
+		if DeepSnow.depth(self, pos) > 0.02:
+			return lerpf(0.24, 0.50, snow.packed(pos))
 		if road_distance(pos) > WIDTH * 0.55:
 			return 0.32
 		return 0.22 if int(road_s(pos) / 32) % 3 == 1 else 0.47
@@ -211,7 +219,14 @@ func grip(pos: Vector3) -> float:
 		return 0.48
 	return 0.42 if int(road_s(pos) / STEP) % 13 == 7 else 0.78
 
+func vehicle_ground(pos: Vector3) -> float:
+	return snow.contact(self, pos) if winter else ground(pos)
+
 func ground(pos: Vector3) -> float:
+	if winter and snow.is_dug(self, pos): return snow.floor_height(self, pos)
+	return base_ground(pos)
+
+func base_ground(pos: Vector3) -> float:
 	if desert:
 		return canyon.ground(self, pos)
 	if urban:
@@ -297,7 +312,7 @@ func terrain_tile_step(cell_x: float, cell_z: float) -> float:
 	var nearest = urban_nearest(p) if urban else {}
 	if urban and nearest.distance < road_width(nearest.s) * 0.5 + 4.0:
 		return 1.0
-	return 2.0 if (variant == 0 or urban) and road_distance(p) < 12.0 else 4.0
+	return 2.0 if ((variant == 0 or urban) and road_distance(p) < 12.0) or (winter and road_distance(p) < 30.0) else 4.0
 
 func terrain_base_vertex_height(x: float, z: float) -> float:
 	var p = Vector3(x, 0, z)
@@ -305,13 +320,13 @@ func terrain_base_vertex_height(x: float, z: float) -> float:
 	if urban:
 		var nearest = urban_nearest(p)
 		margin = lerpf(0.20, 0.25, smoothstep(road_width(nearest.s) * 0.5, road_width(nearest.s) * 0.5 + 3.0, nearest.distance))
-	return ground(p) - margin
+	return base_ground(p) - margin
 
 func terrain_vertex_height(x: float, z: float) -> float:
 	if desert:
 		return canyon.base_ground(self, Vector3(x, 0, z)) - 0.25
 	var value = terrain_base_vertex_height(x, z)
-	if variant != 0 and not urban:
+	if variant != 0 and not urban and not winter:
 		return value
 	var cell_x = floorf(x / 4.0) * 4.0
 	var cell_z = floorf(z / 4.0) * 4.0
@@ -513,7 +528,7 @@ func _build_terrain(cooperative: bool = false) -> void:
 		if cooperative and (z + 920) % 64 == 0:
 			await get_tree().process_frame
 		for x in range(-204, 204, 4):
-			var tile = Vector2i(floori(x / 64.0), floori(z / 64.0)) if urban else Vector2i.ZERO
+			var tile = Vector2i(floori(x / 64.0), floori(z / 64.0)) if urban or winter else Vector2i.ZERO
 			if not builders.has(tile):
 				var builder = SurfaceTool.new()
 				builder.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -550,6 +565,8 @@ func _build_terrain(cooperative: bool = false) -> void:
 		n.mesh = st.commit()
 		n.material_override = mat
 		add_child(n)
+		if winter:
+			snow.register_chunk(self, tile, n)
 
 func draw_base_road_surface(s: float) -> bool:
 	# The village has its own explicit cobblestone mesh; do not leave asphalt
@@ -639,12 +656,6 @@ func _build_road() -> void:
 			p.y = ground(p)
 			var puddle = RallyProps.cylinder(self, p + Vector3(0, 0.10, 0), 1.1, 1.1, 0.025, Color("56645d"), 9)
 			puddle.scale.z = 1.7
-		if winter and i % 8 == 0:
-			for offset in [-4.7, 4.7]:
-				var p = at(s) + side(s) * offset
-				p.y = ground(p)
-				var bank = RallyProps.box(self, p + Vector3(0, 0.23, 0), Vector3(1.7, 0.65, 9.0), Color("e1edf1"))
-				bank.rotation.y = atan2(-direction(s).x, -direction(s).z)
 	# Shared positions and colours allow smooth normals across strip joins.
 	st.index()
 	st.generate_normals()
@@ -657,6 +668,8 @@ func _build_road() -> void:
 	n.material_override = mat
 	n.name = "StageRoadSurface"
 	add_child(n)
+	if winter:
+		Snowbanks.build(self)
 	if urban:
 		for station in [407.0, 412.0, 463.0, 469.0]:
 			var offset = (-0.55 if station < 440.0 else 0.55) if station in [412.0, 463.0] else (0.5 if station < 440.0 else -0.5)
@@ -803,6 +816,13 @@ func update_fallen(delta: float) -> void:
 		var angle = smoothstep(0, 1.3, f.age) * PI * 0.5
 		var basis = Basis(Vector3.UP.cross(f.direction).normalized(), angle)
 		f.basis = basis
+		if detail_tree_visuals.has(index):
+			for part in detail_tree_visuals[index]:
+				var pose: Transform3D = part.pose
+				pose.origin = trees[index] + basis * (pose.origin - trees[index]) - part.center
+				pose.basis = basis * pose.basis
+				part.mesh.set_instance_transform(part.instance, pose)
+			continue
 		var h: float = tree_data.height
 		for layer in range(forest_layers.size()):
 			var radius = 0.2 if layer == 0 else h * (0.28 - (layer - 1) * 0.055)
@@ -920,7 +940,8 @@ func rock_hit(start: Vector3, end: Vector3, radius: float, allow_escape: bool = 
 	var best: Dictionary = {}
 	var earliest = INF
 	for rock in rocks_in_bounds(a.min(b) - Vector2.ONE * radius, a.max(b) + Vector2.ONE * radius):
-		if minf(start.y, end.y) > rock.pos.y + rock.height:
+		var tyre_offset = 0.3 if rock.get("village_stone", false) else 0.0
+		if minf(start.y, end.y) - tyre_offset > rock.pos.y + rock.height:
 			continue
 		var center = flat(rock.pos)
 		var padding: float = rock.radius + radius
@@ -941,7 +962,7 @@ func rock_hit(start: Vector3, end: Vector3, radius: float, allow_escape: bool = 
 			t = (-projection - sqrt(discriminant)) / length_squared
 			if t < 0 or t > 1:
 				continue
-		if lerpf(start.y, end.y, t) > rock.pos.y + rock.height:
+		if lerpf(start.y, end.y, t) - tyre_offset > rock.pos.y + rock.height:
 			continue
 		if t >= earliest:
 			continue
@@ -972,6 +993,21 @@ func woodland_spot(pos: Vector3, padding: float = 0.0) -> bool:
 	return true
 
 func _detail_batch(name: String, mesh: Mesh, poses: Array, colors: Array, indices: Array = []) -> void:
+	var tree_group = "thuja" if name.begins_with("VillageThuja") else ("mixed" if name.begins_with("VillageForestTreeLayer") else "")
+	if not name.contains("_Tile_"):
+		if name in ["VillageThujaLower", "VillageForestTreeLayer0"]:
+			var ids: Array = []
+			for pose in poses:
+				ids.append(trees.size())
+				trees.append(pose.origin - Vector3.UP * pose.basis.y.length() * 0.5)
+				forest_data.append({"height": pose.basis.y.length() / (0.48 if tree_group == "thuja" else 0.64)})
+			detail_tree_groups[tree_group] = ids
+			_rebuild_tree_index()
+		if tree_group != "": indices = detail_tree_groups[tree_group]
+		if urban and name in ["VineyardRoadsideStones", "VillageGravelStones", "VillageForestStones", "VillageStones", "CropGroundStones"]:
+			for pose in poses:
+				var height = pose.basis.y.length()
+				rocks.append({"pos": pose.origin - Vector3.UP * height * 0.5, "radius": maxf(pose.basis.x.length(), pose.basis.z.length()) * 0.5, "height": height, "village_stone": true})
 	if (urban and name in ["MushroomCaps", "FlyAgaricCaps", "ToadstoolCaps", "MushroomStems"]) or name in ["LavenderFoliage", "LavenderStems", "LavenderFlowers", "VillageThujaLower", "VillageThujaMiddle", "VillageThujaCrown", "ForestGrass", "ForestPebbles", "CropGroundGrass", "CropGroundStones", "ForestBushes", "ForestBerryBushes", "ForestBerries", "ForestBushStems", "VineyardGrapes", "VineyardLeaves", "VineyardRoadsideGrass", "VineyardRoadsideStones", "VineyardRoadsideBushes", "VillageForestTreeLayer0", "VillageForestTreeLayer1", "VillageForestTreeLayer2", "VillageForestTreeLayer3", "VillageHorizonTreeLayer0", "VillageHorizonTreeLayer1", "VillageHorizonTreeLayer2", "VillageHorizonTreeLayer3", "VillageGravelGrass", "VillageGravelStones", "VillageGravelBoulders", "VillageForestGrass", "VillageForestStones", "VillageForestBoulders", "VillageForestBushes", "VillageForestBerryBushes", "VillageForestBerries", "VillageGrass", "VillageStones"]:
 		var cells = {}
 		for i in range(poses.size()):
@@ -1006,6 +1042,10 @@ func _detail_batch(name: String, mesh: Mesh, poses: Array, colors: Array, indice
 		pose.origin -= center
 		mm.set_instance_transform(i, pose)
 		mm.set_instance_color(i, colors[i])
+		if tree_group != "":
+			var id: int = indices[i]
+			if not detail_tree_visuals.has(id): detail_tree_visuals[id] = []
+			detail_tree_visuals[id].append({"mesh": mm, "instance": i, "pose": poses[i], "center": center})
 		var source = name.get_slice("_Tile", 0)
 		if source in ["ForestBerries", "VillageForestBerries", "MushroomCaps", "FlyAgaricCaps", "ToadstoolCaps", "MushroomStems", "VineyardGrapes"]:
 			if not collectible_parts.has(source):

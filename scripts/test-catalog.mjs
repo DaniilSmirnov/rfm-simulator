@@ -25,7 +25,7 @@ export const groups = Object.freeze({
   "test_city_physics.gd", "test_vineyard.gd",
   "test_village_terrain_performance.gd", "test_village_viewpoints.gd",
   "test_spectators.gd", "test_rocks.gd", "test_woodland.gd",
-  "test_terrain_seams.gd", "test_road_surface.gd",
+  "test_shovel.gd", "test_deep_snow.gd", "test_snowbanks.gd", "test_terrain_seams.gd", "test_road_surface.gd",
   "test_gravel_relief.gd", "test_canyon.gd",
  ],
 });

@@ -37,6 +37,14 @@ func current() -> Dictionary:
 			offer(items, item.node.global_position + Vector3(0, item.height, 0), item.radius, 3.5, "pack", item.label, item.node.global_position)
 		return select_target(items)
 	if game.cargo.held.has(game.chair_owner()):
+		if game.cargo.held[game.chair_owner()].kind == "shovel" and game.stage.winter:
+			var ray = -game.camera.global_basis.z
+			for distance in range(1, 81):
+				var point = game.camera.global_position + ray * (distance * 0.05)
+				if point.y <= game.stage.snow.visible_height(game.stage, point):
+					if game.stage.snow.can_dig(game.stage, point):
+						offer(items, point, 0.15, 4.0, "dig_snow", "Копать снег", point)
+					break
 		return select_target(items)
 	var owner = game.chair_owner()
 	if game.personal_chairs.has(owner):
@@ -103,7 +111,10 @@ func activate() -> void:
 		"plov": game.eat_plov()
 		"trunk": game.cargo.toggle(target.value)
 		"return_gear": game.cargo.return_item(target.value)
-		"take_gear": game.begin_placement(str(target.value))
+		"take_gear":
+			if str(target.value) == "shovel": game.cargo.take("shovel")
+			else: game.begin_placement(str(target.value))
+		"dig_snow": game.dig_snow(target.value)
 		"pack": game.packing.pack(target.value)
 		"car": game._toggle_car()
 		"sit": game.sit_down()

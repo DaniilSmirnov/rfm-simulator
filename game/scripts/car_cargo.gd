@@ -205,7 +205,7 @@ func offers(items: Array, interaction) -> void:
 			if not stored(KINDS[i], owner):
 				continue
 			var box_point: Vector3 = cars[owner].pos + Props.cargo_point(p, i).rotated(Vector3.UP, cars[owner].heading)
-			interaction.offer(candidates, box_point, 0.42, 3.3, "take_gear", "Взять " + ["стол", "стул", "мангал", "дрова", "казан"][i], KINDS[i])
+			interaction.offer(candidates, box_point, 0.42, 3.3, "take_gear", "Взять " + ["стол", "стул", "мангал", "дрова", "казан", "лопату"][i], KINDS[i])
 
 		# Overlapping forgiving hit zones choose the box nearest the crosshair.
 		if not candidates.is_empty():
