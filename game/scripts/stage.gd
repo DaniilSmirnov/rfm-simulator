@@ -33,6 +33,11 @@ var finnish_forest: RefCounted
 var water: RefCounted
 var forest_life: RefCounted
 var lakeland = false
+const AlpineWinter = preload("res://scripts/alpine_winter.gd")
+const AlpineScenery = preload("res://scripts/alpine_scenery.gd")
+const AlpineLife = preload("res://scripts/alpine_life.gd")
+var alpine: RefCounted
+var alpine_life: RefCounted
 
 const City = preload("res://scripts/vineyard.gd")
 var city: Node3D
@@ -57,7 +62,7 @@ const WIDTH = 7.4
 # Five side-lane rows spaced 0.8 m apart, each stone 0.76 m wide.
 const SIDE_LANE_WIDTH = 3.96
 const TREE_CELL_SIZE = 16.0
-const STAGES = ["Лесной перевал · гравий", "Зимний Турини · снег и лёд", "Виноградники · европейская деревня", "Красный каньон · пустынный грунт", "Финский лес · гравий и озёра"]
+const STAGES = ["Лесной перевал · гравий", "Зимний Турини · асфальт, снег и лёд", "Виноградники · европейская деревня", "Красный каньон · пустынный грунт", "Финский лес · гравий и озёра"]
 var variant = 0
 var winter = false
 var urban = false
@@ -105,6 +110,8 @@ func _init(selected: int = 0) -> void:
 	lakeland = variant == 4
 	if desert:
 		canyon = Canyon.new()
+	if winter:
+		alpine = AlpineWinter.new()
 	if lakeland:
 		finnish_forest = FinnishForest.new()
 		water = Water.new()
@@ -119,7 +126,7 @@ func _init(selected: int = 0) -> void:
 		elif lakeland:
 			points.append(finnish_forest.route(s))
 		elif winter:
-			points.append(Vector3(sin(s / 48.0) * 58.0 + sin(s / 115.0) * 14.0, 18.0 + s * 0.085 + sin(s / 36.0) * 5.0, -s))
+			points.append(alpine.route(s))
 		elif urban:
 			points.append(urban_at(s))
 		else:
@@ -168,6 +175,7 @@ func _init(selected: int = 0) -> void:
 		for i in range(4):
 			var station = 85.0 + i * 190.0
 			snow_camps.append(at(station) + side(station) * (7.2 if i % 2 == 0 else -7.2))
+		AlpineScenery.configure(self)
 		_place_snow_glades()
 
 # Level, tree-free glades beside straights. Snow is left untouched so a crew
@@ -181,7 +189,7 @@ func _place_snow_glades() -> void:
 		var before = direction(station - GLADE_STRAIGHT)
 		var after = direction(station + GLADE_STRAIGHT)
 		var turn = Vector2(before.x, before.z).angle_to(Vector2(after.x, after.z))
-		if absf(turn) < GLADE_MAX_TURN: candidates.append([absf(turn), station])
+		if absf(turn) < GLADE_MAX_TURN and not alpine.glade_blocked(station): candidates.append([absf(turn), station])
 	candidates.sort()
 	for candidate in candidates:
 		var station: float = candidate[1]
@@ -222,6 +230,8 @@ func roughness(s: float) -> float:
 	if urban:
 		return (sin(s * 0.55) * 0.045 + sin(s * 1.7) * 0.018) if village_forest_detour(s) else (sin(s * 3.4) * 0.014 if village(s) else sin(s * 0.8) * 0.018)
 	# Broad crests plus broken ruts; deterministic across all room members.
+	if winter:
+		return alpine.roughness(s)
 	return sin(s * 0.46) * 0.075 + sin(s * 1.13) * 0.035 + pow(maxf(0, cos((s - 32.0) * TAU / 46.0)), 10) * 0.55
 
 # Compact smooth profiles keep junctions and village paving untouched.
@@ -281,7 +291,9 @@ func grip(pos: Vector3) -> float:
 			return lerpf(0.24, 0.50, snow.packed(pos))
 		if road_distance(pos) > WIDTH * 0.55:
 			return 0.32
-		return 0.22 if int(road_s(pos) / 32) % 3 == 1 else 0.47
+		# Monte-Carlo tarmac: dry, wet, snow with dark wheel tracks, black ice.
+		var station = road_s(pos)
+		return alpine.surface_grip(station, (pos - at(station)).dot(side(station)), road_width(station) * 0.5)
 	if road_distance(pos) > WIDTH * 0.55:
 		return 0.48
 	return 0.42 if int(road_s(pos) / STEP) % 13 == 7 else 0.78
@@ -355,7 +367,8 @@ func base_ground(pos: Vector3) -> float:
 	if urban:
 		height = p.y + sin(pos.x * 0.12 + s * 0.04) * 0.025 + slope * 0.08
 	if winter:
-		height += slope * 0.42 + sin(s / 85.0) * slope * 0.15
+		# Corniche cut into the mountain, lacet ladders and the col saddle.
+		height = alpine.land(self, pos, s, distance)
 		for glade in snow_glades:
 			var reach = Vector2(pos.x - glade.x, pos.z - glade.z).length()
 			if reach >= GLADE_BLEND: continue
@@ -526,7 +539,7 @@ func build_async(progress: Callable) -> void:
 	await _build_terrain(true)
 	await progress.call("Дорога", 30)
 	_build_road()
-	await progress.call("Скалы и окружение" if desert else ("Лес и озёра" if lakeland else "Лес и окружение"), 40)
+	await progress.call("Скалы и окружение" if desert else ("Лес и озёра" if lakeland else ("Альпы и окружение" if winter else "Лес и окружение")), 40)
 	await _build_nature(true)
 	await progress.call("Объекты спецучастка", 55)
 	await _build_details(true)
@@ -537,7 +550,7 @@ func _build_nature(cooperative: bool = false) -> void:
 	if desert:
 		return
 	var forest: Array[Dictionary] = []
-	for i in range(100 if urban else (520 if winter else 7600)):
+	for i in range(100 if urban else (900 if winter else 7600)):
 		if cooperative and i % 400 == 0:
 			await get_tree().process_frame
 		var p = Vector3(rng.randf_range(-150, 150), 0, rng.randf_range(-LENGTH - 65, 50))
@@ -548,6 +561,8 @@ func _build_nature(cooperative: bool = false) -> void:
 		if not winter and trail_distance(p) < 3.2:
 			continue
 		if lakeland and (finnish_forest.reserved(p, 1.0) or water.depth(p) > -0.4):
+			continue
+		if winter and (alpine.reserved(p, 2.0) or AlpineScenery.bare_rock(self, p)):
 			continue
 		var in_clearing = false
 		for c in clearings:
@@ -571,6 +586,8 @@ func _build_nature(cooperative: bool = false) -> void:
 			continue
 		if lakeland and (finnish_forest.reserved(p, 1.0) or water.depth(p) > -0.1):
 			continue
+		if winter and alpine.reserved(p, 1.0):
+			continue
 		p.y = ground(p)
 		var radius = rng.randf_range(0.3, 1)
 		var rock = RallyProps.cylinder(self, p + Vector3(0, 0.2, 0), radius, 0.18, 0.65, Color("7d8070"), 5)
@@ -590,6 +607,10 @@ func _build_details(cooperative: bool = false) -> void:
 		water.build(self)
 		finnish_forest.build(self)
 		forest_life.build(self)
+	if winter:
+		AlpineScenery.build(self)
+		alpine_life = AlpineLife.new()
+		alpine_life.build(self)
 	if urban:
 		if cooperative:
 			await _build_city(true)
@@ -613,8 +634,10 @@ func _build_finish() -> void:
 		label.pixel_size = 0.005
 		label.modulate = Color("344537")
 		label.outline_size = 0
+	if winter:
+		AlpineScenery.build_peaks(self)
 	# Distant angular ridges, original meshes.
-	for i in range(0 if urban or desert else 18):
+	for i in range(0 if urban or desert or winter else 18):
 		var p = Vector3((-1 if i % 2 == 0 else 1) * rng.randf_range(220, 340), 30, -i * 65.0)
 		RallyProps.cylinder(self, p, rng.randf_range(120, 180), 0, rng.randf_range(220, 340) if winter else rng.randf_range(130, 210), Color("c3d1db") if winter else Color("697d70"), 5)
 
@@ -654,7 +677,7 @@ func _build_terrain(cooperative: bool = false) -> void:
 					var d = a + Vector3(step, 0, step)
 					for v in [a, b, c, b, d, c]:
 						v.y = terrain_vertex_height(v.x, v.z)
-						var color = Color("e1edf1") if winter else Color(0.32, 0.38, 0.25)
+						var color = alpine.terrain_color(self, v) if winter else Color(0.32, 0.38, 0.25)
 						if desert:
 							color = Color("b56443").lerp(Color("dfac74"), (sin(v.y * 0.65) + 1.0) * 0.5)
 						if lakeland:
@@ -715,6 +738,10 @@ func road_surface_color(p: Vector3, s: float) -> Color:
 	# identical vertices get different colours, creating visible gravel seams.
 	# For the village detour derive the actual station from p, once per colour
 	# calculation, regardless of which adjacent triangle references it.
+	if winter:
+		# Derive the station from the vertex, so shared vertices match.
+		var winter_station = road_s(p)
+		return alpine.road_color(p, winter_station, (p - at(winter_station)).dot(side(winter_station)), road_width(winter_station) * 0.5)
 	var station = road_s(p) if urban else s
 	var base = Color("708a9c") if winter else ((Color("857763") if station >= 381.0 and station <= 489.0 else Color("525757")) if urban else Color("9d896b"))
 	var shade = sin(p.x * 0.17 + p.z * 0.11) * 0.025 + sin(p.z * 0.29 - p.x * 0.07) * 0.015
@@ -735,7 +762,7 @@ func _build_road() -> void:
 			for segment in range(divisions):
 				var begin = s + float(segment) / divisions
 				var end = s + float(segment + 1) / divisions
-				var strips = 8 if desert or village_forest_detour(s) else 4
+				var strips = 12 if winter else (8 if desert or village_forest_detour(s) else 4)
 				for strip in range(strips):
 					var width = road_width(s)
 					var left = -width * 0.5 + width * float(strip) / strips
@@ -762,13 +789,13 @@ func _build_road() -> void:
 							st.add_vertex(v)
 		# Broken muddy wheel tracks, shallow puddles.
 		var ford = lakeland and absf(s - finnish_forest.FORD_STATION) < 30.0
-		if not urban and not desert and not ford and i % 12 == 0:
+		if not urban and not desert and not winter and not ford and i % 12 == 0:
 			for offset in [-1.0, 1.0]:
 				var p = at(s) + side(s) * offset
 				p.y = ground(p)
 				var rut = RallyProps.box(self, p + Vector3(0, 0.07, 0), Vector3(0.5, 0.025, 2.7), Color("586974") if winter else Color("77654c"))
 				rut.rotation.y = atan2(-direction(s).x, -direction(s).z)
-		if not urban and not desert and not ford and i % 52 == 28:
+		if not urban and not desert and not winter and not ford and i % 52 == 28:
 			var p = at(s) + side(s) * 1.5
 			p.y = ground(p)
 			var puddle = RallyProps.cylinder(self, p + Vector3(0, 0.10, 0), 1.1, 1.1, 0.025, Color("56645d"), 9)
@@ -787,6 +814,7 @@ func _build_road() -> void:
 	add_child(n)
 	if winter:
 		Snowbanks.build(self)
+		alpine.build_ice(self)
 	if urban:
 		for station in [407.0, 412.0, 463.0, 469.0]:
 			var offset = (-0.55 if station < 440.0 else 0.55) if station in [412.0, 463.0] else (0.5 if station < 440.0 else -0.5)
@@ -1530,6 +1558,8 @@ func rally_speed(s: float) -> float:
 		return finnish_forest.rally_speed(s)
 	if desert:
 		return 17.0 if s > 240.0 and s < 420.0 else 26.0
+	if winter:
+		return alpine.rally_speed(s)
 	if not urban:
 		return 27.0
 	return 15.0 if village(s) else 27.0
