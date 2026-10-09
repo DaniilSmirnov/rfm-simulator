@@ -1,6 +1,6 @@
 // Synthetic VK messages against a real local workerd and persistent SQLite DO.
 import { spawn } from 'node:child_process';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { once } from 'node:events';
 import { setTimeout as wait } from 'node:timers/promises';
@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import { root } from '../scripts/godot.mjs';
 const secret='integration-test-payment-secret';
 const origin='http://127.0.0.1:8792';
+await mkdir(join(root,'.cache'),{recursive:true});
 const persistence=await mkdtemp(join(root,'.cache','payments-test-'));
 let processHandle, logs='';
 async function start() {
