@@ -14,6 +14,7 @@ const WALK_GRAVITY = 18.0
 var seat_exit = Vector3.ZERO
 var crosshair: Label
 
+const RallyRejoin = preload("res://scripts/rally_rejoin.gd")
 const RallyHandling = preload("res://scripts/rally_handling.gd")
 const RallyTracks = preload("res://scripts/rally_tracks.gd")
 const Props = preload("res://scripts/props.gd")
@@ -1895,6 +1896,10 @@ func _update_racers_step(delta: float) -> void:
 				lateral_accel = bend * race_speed * race_speed
 			var height = node.position.y
 			node.position = race_at(s) + race_side(s) * (racer.line + racer.slide)
+			if racer.has("rejoin_residual"):
+				racer.rejoin_residual = racer.rejoin_residual.move_toward(Vector3.ZERO, delta * maxf(actual_speed, 0.5) * 0.25)
+				node.position += racer.rejoin_residual
+				node.position.y = height
 			node.position.y = height
 			var movement = node.position - racer.previous
 			var path_yaw = atan2(-movement.x, -movement.z) if Vector2(movement.x, movement.z).length() > 0.02 else road_yaw
@@ -1902,11 +1907,14 @@ func _update_racers_step(delta: float) -> void:
 			var desired_yaw = path_yaw + float(racer.get("drift_yaw", 0.0)) + recorded_yaw
 			var yaw = node.rotation.y + clampf(wrapf(desired_yaw - node.rotation.y, -PI, PI), -2.5 * delta, 2.5 * delta)
 			racer.motion.suspension(node, stage, delta, yaw, lateral_accel)
-			if not service and ((s >= racer.focus and racer.kind != "pass") or absf(racer.slide) > 3.4 or absf(racer.line + racer.slide) > Stage.WIDTH * 0.5 + 0.6):
+			if racer.get("role", "racer") in ["racer", "zero"] and ((s >= racer.focus and racer.kind != "pass") or absf(racer.slide) > 3.4 or absf(racer.line + racer.slide) > Traffic.line_limit(self, s) + 0.8):
 				racer.state = "offroad"
 				racer.age = 0
 				if racer.kind == "pass":
 					racer.kind = "crash"
+				racer.self_rejoin = RallyRejoin.eligible(racer)
+				racer.rejoin_time = 0.0
+				racer.rejoin_plan = 0.0
 				RallyHandling.departure(racer, movement / maxf(delta, 0.001), race_side(s), bend)
 				toast("ВЫЛЕТ! Отойди с траектории!")
 			elif s > racer.focus + 45 and not racer.counted:
@@ -1918,7 +1926,9 @@ func _update_racers_step(delta: float) -> void:
 			var dt = delta / steps
 			for step in range(steps):
 				var previous: Vector3 = node.position
-				RallyHandling.free_step(racer, stage, dt)
+				var driving = racer.get("self_rejoin", false) and racer.age > 0.6 and RallyRejoin.step(self, racer, dt)
+				if not driving:
+					RallyHandling.free_step(racer, stage, dt)
 				var contact = stage.rock_hit(previous, node.position, 0.85)
 				var city_contact = stage.city.hit(previous, node.position, 0.85) if stage.urban else {}
 				if not city_contact.is_empty() and (contact.is_empty() or previous.distance_squared_to(city_contact.position) < previous.distance_squared_to(contact.position)):
@@ -1927,10 +1937,13 @@ func _update_racers_step(delta: float) -> void:
 					if contact.has("kind"):
 						knock_city(contact, racer.motion.velocity)
 					node.position = contact.position
-					racer.motion.rock_impulse(contact.normal, node.rotation.y)
+					var impact: float = racer.motion.rock_impulse(contact.normal, node.rotation.y)
+					if impact > 9.0: racer.self_rejoin = false
 					racer.state = "rock_bounce"
 					count_racer(racer)
-			if racer.motion.grounded and racer.motion.velocity.length() < 0.65:
+				if racer.state == "racing":
+					break
+			if racer.state != "racing" and not racer.get("self_rejoin", false) and racer.motion.grounded and racer.motion.velocity.length() < 0.65:
 				racer.motion.velocity = Vector3.ZERO
 				racer.state = "stranded" if racer.kind in ["stuck", "crash"] else "stopped"
 				racer.age = 0.0
@@ -1946,7 +1959,10 @@ func _update_racers_step(delta: float) -> void:
 				racer.motion.velocity = (node.position - racer.previous) / maxf(delta, 0.001)
 				racer.motion.velocity.y = 0
 				node.position = contact.position
-				racer.motion.rock_impulse(contact.normal, node.rotation.y)
+				var impact: float = racer.motion.rock_impulse(contact.normal, node.rotation.y)
+				racer.self_rejoin = RallyRejoin.eligible(racer) and impact <= 9.0
+				racer.rejoin_time = 0.0
+				racer.rejoin_plan = 0.0
 				racer.state = "rock_bounce"
 				racer.age = 0.0
 				count_racer(racer)
@@ -1958,7 +1974,10 @@ func _update_racers_step(delta: float) -> void:
 				node.position = city_hit.position
 				racer.motion.velocity = velocity
 				racer.motion.velocity.y = 0
-				racer.motion.rock_impulse(city_hit.normal, node.rotation.y)
+				var impact: float = racer.motion.rock_impulse(city_hit.normal, node.rotation.y)
+				racer.self_rejoin = RallyRejoin.eligible(racer) and impact <= 9.0
+				racer.rejoin_time = 0.0
+				racer.rejoin_plan = 0.0
 				racer.state = "rock_bounce"
 				racer.age = 0.0
 				count_racer(racer)
@@ -2342,6 +2361,7 @@ func nearby_tow_racer() -> bool:
 	return false
 
 func recover_racer(racer: Dictionary) -> void:
+	racer.erase("rejoin_residual")
 	# Restart ahead of the impact, with no old slide/impulse or swept crash path.
 	racer.s = clampf(race_station(racer.node.position) + 12.0, 0, Stage.LENGTH - 2)
 	racer.node.position = race_at(racer.s)
