@@ -32,6 +32,8 @@ var city: Node3D
 const BakedVillage = preload("res://scripts/baked_village.gd")
 var baked_scene_path = "res://generated/village.scn"
 var loaded_baked = false
+var snow_camps: Array[Vector3] = []
+var snowbank_cells: Dictionary = {}
 # Used only by the offline baker/tests; ordinary gameplay retains no CPU copy.
 var capture_bake_buffers = false
 const LENGTH = 840.0
@@ -131,6 +133,16 @@ func _init(selected: int = 0) -> void:
 		second_turn.y = at(s + 7.0).y + (3.3 if not winter else 2.5)
 		trails.append({"points": [road_entry, first_turn, second_turn, lookout], "width": 2.2})
 
+	if winter:
+		for clearing in clearings:
+			var station = road_s(clearing)
+			var outward = clearing - at(station)
+			outward.y = 0
+			snow_camps.append(clearing + outward.normalized() * 6.0)
+		for i in range(4):
+			var station = 85.0 + i * 190.0
+			snow_camps.append(at(station) + side(station) * (7.2 if i % 2 == 0 else -7.2))
+
 func at(s: float) -> Vector3:
 	s = clampf(s, 0, LENGTH - 0.001)
 	var index = int(s / STEP)
@@ -220,11 +232,11 @@ func grip(pos: Vector3) -> float:
 	return 0.42 if int(road_s(pos) / STEP) % 13 == 7 else 0.78
 
 func vehicle_ground(pos: Vector3) -> float:
-	return snow.contact(self, pos) if winter else ground(pos)
+	return maxf(snow.contact(self, pos), Snowbanks.surface_height(self, pos)) if winter else ground(pos)
 
 func ground(pos: Vector3) -> float:
-	if winter and snow.is_dug(self, pos): return snow.floor_height(self, pos)
-	return base_ground(pos)
+	var height = snow.floor_height(self, pos) if winter and snow.is_dug(self, pos) else base_ground(pos)
+	return maxf(height, Snowbanks.surface_height(self, pos)) if winter else height
 
 func base_ground(pos: Vector3) -> float:
 	if desert:
@@ -276,7 +288,7 @@ func base_ground(pos: Vector3) -> float:
 			if trail_sample.distance < trail.width:
 				var blend = 1.0 - smoothstep(trail.width * 0.55, trail.width, trail_sample.distance)
 				height = lerpf(height, trail_sample.height, blend)
-	return height
+	return height - DeepSnow.camp_depression(self, pos) if winter else height
 
 func village_country_relief(s: float) -> float:
 	return gravel_profile(s, 94.0, 32.0) * 0.65 - gravel_profile(s, 126.0, 28.0) * 0.35 + gravel_profile(s, 224.0, 36.0) * 0.80 + gravel_profile(s, 620.0, 34.0) * 0.70 + gravel_profile(s, 748.0, 30.0) * 0.95 - gravel_profile(s, 786.0, 32.0) * 0.35
@@ -544,7 +556,7 @@ func _build_terrain(cooperative: bool = false) -> void:
 					var d = a + Vector3(step, 0, step)
 					for v in [a, b, c, b, d, c]:
 						v.y = terrain_vertex_height(v.x, v.z)
-						var color = Color("b6c9d3") if winter else Color(0.32, 0.38, 0.25)
+						var color = Color("e1edf1") if winter else Color(0.32, 0.38, 0.25)
 						if desert:
 							color = Color("b56443").lerp(Color("dfac74"), (sin(v.y * 0.65) + 1.0) * 0.5)
 						if variant == 0:

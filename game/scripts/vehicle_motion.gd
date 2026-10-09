@@ -18,6 +18,8 @@ func suspension(node: Node3D, stage, delta: float, yaw: float, lateral_accel: fl
 	var left: float = stage.vehicle_ground(node.position - right * 0.7) if snowy else stage.ground(node.position - right * 0.7)
 	var opposite: float = stage.vehicle_ground(node.position + right * 0.7) if snowy else stage.ground(node.position + right * 0.7)
 	var floor_height: float = (front + rear + left + opposite) * 0.25 + 0.06
+	if snowy:
+		floor_height = maxf(floor_height, stage.Snowbanks.surface_height(stage, node.position) + 0.06)
 	if not initialized:
 		node.position.y = floor_height
 		initialized = true

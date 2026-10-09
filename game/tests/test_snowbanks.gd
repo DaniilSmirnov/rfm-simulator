@@ -41,13 +41,30 @@ func run() -> void:
 			var crest = Banks.vertex(stage, station, edge, 0.5)
 			var outer = Banks.vertex(stage, station, edge, 1.0)
 			follows = follows and absf(toe.y - stage.terrain_surface_height(toe) + 0.035) < 0.0001 and absf(outer.y - stage.terrain_surface_height(outer) + 0.035) < 0.0001
-			rounded = rounded and crest.y - stage.terrain_surface_height(crest) > 0.70
+			if stage.DeepSnow.camp_mask(stage, crest) > 0.999:
+				rounded = rounded and crest.y - stage.terrain_surface_height(crest) > 0.70
 			var near_toe = Banks.vertex(stage, station, edge, 0.01)
 			var height = near_toe.y - stage.terrain_surface_height(near_toe) + 0.035
 			rounded = rounded and height < 0.002
 		check(follows, "both toes meet rendered terrain across the entire stage (side %s)" % edge)
 		check(rounded, "raised rounded crest and gentle toes (side %s)" % edge)
 		check(vertices.size() < 12000 and indices.size() / 3 < 20000, "geometry has a bounded budget (side %s)" % edge)
+	var station = 220.0
+	var crest = Banks.vertex(stage, station, 1.0, 0.5)
+	check(absf(Banks.surface_height(stage, crest) - crest.y) < 0.0001, "bank tyre support matches actual visible mesh")
+	check(stage.vehicle_ground(crest) >= crest.y and stage.ground(crest) >= crest.y, "cars and walkers cannot pass below bank surface")
+	var car = Node3D.new()
+	car.position = crest
+	var motion = preload("res://scripts/vehicle_motion.gd").new()
+	motion.suspension(car, stage, 1.0 / 120, 0.0)
+	check(car.position.y >= crest.y, "vehicle body stays above crest even between wheel samples")
+	car.free()
+	for center in stage.snow_camps:
+		var clear = true
+		for x in [-4.0, 0.0, 4.0]:
+			for z in [-4.0, 0.0, 4.0]:
+				clear = clear and stage.DeepSnow.depth(stage, center + Vector3(x, 0, z)) == 0.0
+		check(clear, "NPC camp furniture footprint starts cleared")
 	stage.free()
 	print("SNOWBANKS RESULT: ", failures, " failures")
 	quit(1 if failures else 0)

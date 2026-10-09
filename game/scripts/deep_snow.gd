@@ -10,13 +10,25 @@ var chunks: Dictionary = {}
 var authoritative = true
 var refresh_clock = 0.0
 
-static func depth(stage, point: Vector3) -> float:
+static func natural_depth(stage, point: Vector3) -> float:
 	if not stage.winter: return 0.0
 	var outside: float = stage.road_distance(point) - (stage.WIDTH * 0.5 + 0.15 + 1.9)
 	var result = smoothstep(0.0, 3.0, outside) * (0.78 + sin(point.x * 0.041 + point.z * 0.029) * 0.10)
 	for clearing in stage.clearings:
 		result *= smoothstep(7.0, 13.0, Vector2(point.x - clearing.x, point.z - clearing.z).length())
 	return result
+
+static func camp_mask(stage, point: Vector3) -> float:
+	var mask = 1.0
+	for center in stage.snow_camps:
+		mask *= smoothstep(6.0, 8.0, Vector2(point.x - center.x, point.z - center.z).length())
+	return mask
+
+static func depth(stage, point: Vector3) -> float:
+	return natural_depth(stage, point) * camp_mask(stage, point) if stage.winter else 0.0
+
+static func camp_depression(stage, point: Vector3) -> float:
+	return natural_depth(stage, point) * (1.0 - camp_mask(stage, point)) if stage.winter else 0.0
 
 func packed(point: Vector3) -> float:
 	var coordinate = Vector2(point.x, point.z) / CELL
@@ -50,7 +62,7 @@ func stamp(stage, point: Vector3, pressure: float) -> void:
 func contact(stage, point: Vector3) -> float:
 	if is_dug(stage, point): return floor_height(stage, point)
 	var thickness = depth(stage, point)
-	if thickness <= 0.001: return stage.ground(point)
+	if thickness <= 0.001: return stage.base_ground(point)
 	var compression = packed(point)
 	# The visible surface drops with compaction, while tyre support gets firmer.
 	return stage.terrain_surface_height(point) - thickness * (0.28 * compression + lerpf(0.65, 0.08, compression))
@@ -102,7 +114,7 @@ func update(delta: float) -> void:
 				depression = (border[2] * packed(border[0]) + border[3] * packed(border[1])) * 0.14
 			if excavated:
 				depression = chunk.depths[i]
-				colors[i] = Color("62594b")
+				colors[i] = Color("e1edf1")
 			vertices[i].y -= depression
 			colors[i] = colors[i].darkened(compression * 0.10)
 		arrays[Mesh.ARRAY_VERTEX] = vertices
