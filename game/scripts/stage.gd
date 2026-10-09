@@ -972,7 +972,7 @@ func woodland_spot(pos: Vector3, padding: float = 0.0) -> bool:
 	return true
 
 func _detail_batch(name: String, mesh: Mesh, poses: Array, colors: Array, indices: Array = []) -> void:
-	if (urban and name in ["MushroomCaps", "FlyAgaricCaps", "ToadstoolCaps", "MushroomStems"]) or name in ["LavenderFoliage", "LavenderStems", "LavenderFlowers", "VillageThujaLower", "VillageThujaMiddle", "VillageThujaCrown", "ForestGrass", "ForestBushes", "ForestBerryBushes", "ForestBerries", "ForestBushStems", "VineyardGrapes", "VineyardLeaves", "VineyardRoadsideGrass", "VineyardRoadsideStones", "VineyardRoadsideBushes", "VillageForestTreeLayer0", "VillageForestTreeLayer1", "VillageForestTreeLayer2", "VillageForestTreeLayer3", "VillageHorizonTreeLayer0", "VillageHorizonTreeLayer1", "VillageHorizonTreeLayer2", "VillageHorizonTreeLayer3", "VillageGravelGrass", "VillageGravelStones", "VillageGravelBoulders", "VillageForestGrass", "VillageForestStones", "VillageForestBoulders", "VillageForestBushes", "VillageForestBerryBushes", "VillageForestBerries", "VillageGrass", "VillageStones"]:
+	if (urban and name in ["MushroomCaps", "FlyAgaricCaps", "ToadstoolCaps", "MushroomStems"]) or name in ["LavenderFoliage", "LavenderStems", "LavenderFlowers", "VillageThujaLower", "VillageThujaMiddle", "VillageThujaCrown", "ForestGrass", "ForestPebbles", "CropGroundGrass", "CropGroundStones", "ForestBushes", "ForestBerryBushes", "ForestBerries", "ForestBushStems", "VineyardGrapes", "VineyardLeaves", "VineyardRoadsideGrass", "VineyardRoadsideStones", "VineyardRoadsideBushes", "VillageForestTreeLayer0", "VillageForestTreeLayer1", "VillageForestTreeLayer2", "VillageForestTreeLayer3", "VillageHorizonTreeLayer0", "VillageHorizonTreeLayer1", "VillageHorizonTreeLayer2", "VillageHorizonTreeLayer3", "VillageGravelGrass", "VillageGravelStones", "VillageGravelBoulders", "VillageForestGrass", "VillageForestStones", "VillageForestBoulders", "VillageForestBushes", "VillageForestBerryBushes", "VillageForestBerries", "VillageGrass", "VillageStones"]:
 		var cells = {}
 		for i in range(poses.size()):
 			var origin: Vector3 = poses[i].origin
@@ -1057,7 +1057,7 @@ func _build_woodland_details(cooperative: bool = false) -> void:
 		var p = Vector3(detail_rng.randf_range(-145, 145), 0, detail_rng.randf_range(-LENGTH, 0))
 		if not woodland_spot(p):
 			continue
-		p.y = ground(p) - 0.20
+		p.y = terrain_surface_height(p) - 0.015
 		var size = detail_rng.randf_range(0.25, 0.65)
 		grass_poses.append(Transform3D(Basis(Vector3.UP, detail_rng.randf() * TAU).scaled(Vector3(size * 1.8, size, size * 1.8)), p))
 		grass_colors.append(shared_grass_color(detail_rng.randf()))
@@ -1082,8 +1082,8 @@ func _build_woodland_details(cooperative: bool = false) -> void:
 		var p = Vector3(detail_rng.randf_range(-135, 135), 0, detail_rng.randf_range(-LENGTH, 0))
 		if not woodland_spot(p):
 			continue
-		p.y = ground(p) - 0.18
 		var radius = detail_rng.randf_range(0.12, 0.35)
+		p.y = terrain_surface_height(p) + radius * 0.35
 		stone_poses.append(shared_stone_pose(p, radius, detail_rng.randf() * TAU))
 		stone_colors.append(shared_stone_color(detail_rng.randf_range(-0.10, 0.12)))
 	# Clumped undergrowth rather than an even carpet; berry bushes use the
@@ -1096,6 +1096,7 @@ func _build_woodland_details(cooperative: bool = false) -> void:
 	var berry_colors: Array = []
 	var bush_stem_poses: Array = []
 	var bush_stem_colors: Array = []
+	var ground_exclusions = {}
 	for i in range(2000):
 		if cooperative and i % 400 == 0:
 			await get_tree().process_frame
@@ -1105,6 +1106,10 @@ func _build_woodland_details(cooperative: bool = false) -> void:
 			continue
 		p.y = ground(p) - 0.22
 		var height = detail_rng.randf_range(0.55, 1.35)
+		var cell = Vector2i(floori(p.x / 4.0), floori(p.z / 4.0))
+		if not ground_exclusions.has(cell):
+			ground_exclusions[cell] = []
+		ground_exclusions[cell].append({"pos": p, "radius": height * 0.9})
 		var bearing = detail_rng.randf() * TAU
 		var berry_bush = i % 3 == 0
 		var berry_begin = berry_poses.size()
@@ -1179,6 +1184,22 @@ func _build_woodland_details(cooperative: bool = false) -> void:
 			twig_colors.append(Color("493c2b"))
 	var boulder = NATURE_BOULDER
 	_detail_batch("ForestBoulders", boulder, boulder_poses, boulder_colors)
+	# Filter after rocks and undergrowth exist, so ground details cannot overlap them.
+	for group in [{"poses": grass_poses, "colors": grass_colors}, {"poses": stone_poses, "colors": stone_colors}]:
+		for index in range(group.poses.size() - 1, -1, -1):
+			var pose: Transform3D = group.poses[index]
+			var point = pose.origin
+			point.y = terrain_surface_height(point)
+			var padding = maxf(pose.basis.x.length(), pose.basis.z.length()) * 0.5
+			var blocked = obstacle_hit(point, point, padding) >= 0 or not rock_hit(point, point, padding, false).is_empty()
+			var cell = Vector2i(floori(point.x / 4.0), floori(point.z / 4.0))
+			for x in range(-1, 2):
+				for z in range(-1, 2):
+					for bush in ground_exclusions.get(cell + Vector2i(x, z), []):
+						blocked = blocked or flat(point).distance_to(flat(bush.pos)) < padding + bush.radius
+			if blocked:
+				group.poses.remove_at(index)
+				group.colors.remove_at(index)
 	_detail_batch("ForestPebbles", shared_stone_mesh(), stone_poses, stone_colors)
 	_detail_batch("ForestGrass", _grass_mesh(), grass_poses, grass_colors)
 	var stem = NATURE_MUSHROOM_STEM

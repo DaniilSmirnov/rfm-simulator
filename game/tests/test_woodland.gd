@@ -13,6 +13,7 @@ func _initialize() -> void:
 	call_deferred("run")
 func run() -> void:
 	var stage = Stage.new()
+	stage.capture_bake_buffers = true
 	root.add_child(stage)
 	stage.build()
 	var unbounded = UnboundedStage.new()
@@ -42,6 +43,20 @@ func run() -> void:
 	check(preserved and unique.size() == stage.trees.size(), "forest chunks preserve every tree once per layer and global collision IDs")
 	check(stage.trees.size() > 5000, "forest has a dense canopy with more than 5000 trees")
 	check(stage.woodland_details.get("ForestGrass", 0) > 20000, "forest floor contains more than 20000 instanced grass tufts")
+	var details_above_ground = true
+	var details_clear = true
+	for tile in stage.find_children("*", "MultiMeshInstance3D", false, false):
+		if not str(tile.name).begins_with("GrassTile") and not str(tile.name).begins_with("ForestPebbles_Tile"):
+			continue
+		var buffer: PackedFloat32Array = tile.get_meta("baked_instances")
+		for i in range(0, tile.multimesh.instance_count, 23):
+			var point = tile.position + Vector3(buffer[i * 16 + 3], buffer[i * 16 + 7], buffer[i * 16 + 11])
+			var ground = stage.terrain_surface_height(point)
+			details_above_ground = details_above_ground and point.y >= ground - 0.02
+			point.y = ground
+			details_clear = details_clear and stage.obstacle_hit(point, point, 0.05) < 0 and stage.rock_hit(point, point, 0.05, false).is_empty()
+	check(details_above_ground, "forest grass and pebbles are placed on the rendered terrain")
+	check(details_clear, "forest ground details avoid trunks and collidable rocks")
 	check(stage.woodland_details.get("MushroomCaps", 0) > 300 and stage.woodland_details.get("AntHills", 0) > 30, "mushroom clusters and ant hills populate the woods")
 	check(stage.woodland_details.get("ForestBoulders", 0) > 150 and stage.woodland_details.get("ForestPebbles", 0) > 1000, "boulders and small stones populate the woods")
 	check(stage.woodland_details.get("ForestBushes", 0) > 1000 and stage.woodland_details.get("ForestBerryBushes", 0) > 400, "ordinary and berry-bearing undergrowth populate the forest")
