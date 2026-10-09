@@ -11,6 +11,8 @@ var check_purchase: Button
 var purchase_status: Label
 var return_button: Button
 var host_pause: PanelContainer
+var help_button: Button
+const SUPPORT_EMAIL = "rallyfansmap@yandex.com"
 var audio_controls: VBoxContainer
 var volume_label: Label
 var volume_slider: HSlider
@@ -40,6 +42,20 @@ func finish(parent: Control) -> void:
 	background.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	background.modulate = Color(0.8, 0.8, 0.8, 1)
 	var ui = game.menu.get_parent()
+	help_button = Button.new()
+	help_button.name = "HelpButton"
+	help_button.text = "Помощь"
+	help_button.tooltip_text = "Написать в поддержку: " + SUPPORT_EMAIL
+	ui.add_child(help_button)
+	help_button.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+	help_button.offset_left = -148
+	help_button.offset_right = -24
+	help_button.offset_top = -68
+	help_button.offset_bottom = -24
+	help_button.pressed.connect(func():
+		if OS.shell_open("mailto:" + SUPPORT_EMAIL) != OK:
+			game.toast("Напишите в поддержку: " + SUPPORT_EMAIL)
+	)
 	# Backdrop fills the viewport independently of the inset HUD root.
 	var backdrop_root = Control.new()
 	backdrop_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -205,6 +221,7 @@ func _process(_delta: float) -> void:
 		host_pause.visible = game.room.connected and not game.room.is_host and game.room.world_paused and not game.paused and not game.dead and not game.finished
 	game.draw_distance_controls.visible = game.playing and game.paused and not game.dead and not game.finished
 	return_button.visible = game.playing
+	help_button.visible = game.menu.visible and (not game.playing or game.paused) and not game.dead and not game.finished
 	audio_controls.visible = game.playing and game.paused and not game.dead and not game.finished
 	if game.mobile_mode:
 		var active_hud = game.playing and not game.paused and not game.dead and not game.finished and not host_pause.visible
