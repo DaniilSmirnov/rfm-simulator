@@ -1,3 +1,4 @@
+import { enforceLimit, LimitError, limitResponse } from './rate-limits.mjs';
 import { accountStore, preparePurchase, paymentCallback, PaymentError, PAYMENT_HANDLER_VERSION } from './payments-vk.mjs';
 export { VkPayments } from './payments-vk.mjs';
 import { AuthError, authenticateLaunch, authenticateSession } from './auth-vk.mjs';
@@ -33,7 +34,11 @@ export class RallyRoom {
       }
       return json(result);
     } catch (error) {
-      if (error instanceof RoomError) return json({ error: error.message }, error.status);
+      if (error instanceof RoomError) {
+        const response = json({ error: error.message, ...(error.status === 429 ? {retry_after:error.retryAfter ?? 10} : {}) }, error.status);
+        if (error.status === 429) response.headers.set("Retry-After", String(error.retryAfter ?? 10));
+        return response;
+      }
       console.error(error);
       return json({ error: 'Сервер комнаты временно недоступен.' }, 500);
     }
@@ -66,6 +71,14 @@ export default {
         return reply({error:{error_code:known ? error.code : 1,error_msg:known ? error.message : 'Платежи временно недоступны.',critical:known ? error.critical : false}});
       }
     }
+    try {
+      const ip = request.headers.get('CF-Connecting-IP') || 'local';
+      await enforceLimit(env, 'API_RATE_LIMIT', 'ip:' + ip);
+      if (url.pathname === '/api/vk/session') await enforceLimit(env, 'AUTH_RATE_LIMIT', 'ip:' + ip);
+      if (url.pathname === '/api/rooms' || /^\/api\/rooms\/[A-F0-9]{6}\/join$/.test(url.pathname)) {
+        await enforceLimit(env, 'ROOM_ENTRY_RATE_LIMIT', 'ip:' + ip);
+      }
+    } catch (error) { return limitResponse(error); }
     const origin = request.headers.get('Origin');
     if (origin && origin !== url.origin) return json({ error: 'Недопустимый источник.' }, 403);
     if (Number(request.headers.get('Content-Length')) > 65536) return json({ error: 'Слишком большое сообщение.' }, 413);
@@ -80,6 +93,7 @@ export default {
       }
       if (url.pathname === '/api/vk/store' || url.pathname === '/api/vk/payments/prepare') {
         const session = await authenticateSession(request, env);
+        await enforceLimit(env, url.pathname === '/api/vk/store' ? 'STORE_RATE_LIMIT' : 'PURCHASE_RATE_LIMIT', 'user:' + session.user);
         if (url.pathname === '/api/vk/store') return json(await accountStore(env,session.user));
         const raw = await request.text();
         if (raw.length > 1024) return json({error:'Слишком большое сообщение.'},413);
@@ -92,6 +106,7 @@ export default {
       if (request.headers.has('Authorization') || request.headers.get('X-Rally-Platform') === 'vk') {
         const session = await authenticateSession(request, env);
         if (url.pathname === '/api/rooms' || /^\/api\/rooms\/[A-F0-9]{6}\/join$/.test(url.pathname)) {
+          await enforceLimit(env, 'ROOM_ENTRY_RATE_LIMIT', 'user:' + session.user);
           const raw = await request.text();
           if (raw.length > 1024) return json({ error: 'Слишком большое сообщение.' }, 413);
           let body;
@@ -103,6 +118,7 @@ export default {
         }
       }
     } catch (error) {
+      if (error instanceof LimitError) return limitResponse(error);
       if (error instanceof PaymentError) return json({error:error.message},error.critical ? 403 : 503);
       if (error instanceof AuthError) return json({ error: error.message }, error.status);
       return json({ error: 'Авторизация временно недоступна.' }, 503);

@@ -187,6 +187,11 @@ func _response(result: int, code: int, _headers: PackedStringArray, bytes: Packe
 	if request_kind == "leave":
 		game.get_tree().reload_current_scene()
 		return
+	if result == HTTPRequest.RESULT_SUCCESS and code == 429 and connected:
+		var retry = clampf(float(data.get("retry_after", 10)) if data is Dictionary else 10.0, 1.0, 60.0)
+		clock = -retry
+		room_label.text = "Слишком много запросов. Повторим через %d сек." % ceili(retry)
+		return
 	if result != HTTPRequest.RESULT_SUCCESS or code != 200 or not data is Dictionary:
 		var message = str(data.get("error", "Нет связи с сервером комнаты.")) if data is Dictionary else "Нет связи с сервером комнаты."
 		if connected and (code in [401, 404, 410] or errors >= 2):
