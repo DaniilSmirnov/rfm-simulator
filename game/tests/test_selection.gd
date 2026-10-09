@@ -92,7 +92,15 @@ func run() -> void:
 	check(city.city.village_houses >= 14 and city.get_node_or_null("VillageChurch") != null, "village has detailed houses and church")
 	check(city.city.thuja_count > 300, "village is enclosed by a dense thuja forest belt")
 	check(city.city.mixed_tree_count >= 900, "village outer forest has increased tree density")
-	check(city.city.vine_count > 2000 and city.collectibles.size() > 2000, "vineyards contain continuous rows and collectible grapes")
+	# The start-side vines were intentionally replaced by lavender. Validate the
+	# current finish-side rows and one collectible grape bunch set per vine,
+	# instead of asserting the old two-sided vineyard population.
+	var grape_collectibles = city.collectibles.filter(func(item): return item.get("name", "") == "виноград")
+	check(city.city.vine_count > 1000 and grape_collectibles.size() == city.city.vine_count
+		and city.find_children("VineyardRow_18_*", "Node3D", true, false).is_empty()
+		and not city.find_children("VineyardRow_585_*", "Node3D", true, false).is_empty()
+		and city.city.lavender_count > 0,
+		"finish-side vineyards keep continuous rows and collectible grapes; start-side fields grow lavender")
 	city.free()
 	guest.select_player_car(2)
 	host.room.request_kind = "create"
