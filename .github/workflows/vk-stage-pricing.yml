@@ -33,7 +33,11 @@ jobs:
       - name: Verify catalog pricing and signed VK payment callbacks
         run: node --test tests/store.test.mjs tests/payments-vk.test.mjs
       - name: Verify Durable Object payment persistence and room gating
-        run: node tests/payments.integration.mjs
+        run: |
+          # Worker dev needs an assets directory even for API-only payment tests.
+          mkdir -p dist
+          printf '<!doctype html><title>VK payment test fixture</title>' > dist/index.html
+          node tests/payments.integration.mjs
       - name: Verify Godot VK stage purchase UI
         run: |
           node --input-type=module <<'JS'
