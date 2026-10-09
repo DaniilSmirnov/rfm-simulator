@@ -6,6 +6,17 @@ func check(ok: bool, title: String) -> void:
 	if not ok: failures += 1
 func _initialize() -> void:
 	call_deferred("run")
+# Small village stones are colliders for tyres but part of the forest floor
+# itself, so grass and pebbles may touch them; real rocks must stay clear.
+func boulder_at(stage, point: Vector3) -> bool:
+	var flat = stage.flat(point)
+	for rock in stage.rocks_in_bounds(flat - Vector2.ONE * 4.0, flat + Vector2.ONE * 4.0):
+		if rock.get("village_stone", false):
+			continue
+		if flat.distance_to(stage.flat(rock.pos)) < float(rock.radius) + 0.05 and point.y <= rock.pos.y + float(rock.height):
+			return true
+	return false
+
 func run() -> void:
 	var game = load("res://main.tscn").instantiate()
 	root.add_child(game)
@@ -117,7 +128,7 @@ func run() -> void:
 			var point = tile.position + Vector3(buffer[index * 16 + 3], buffer[index * 16 + 7], buffer[index * 16 + 11])
 			floor_visible = floor_visible and point.y >= floor_stage.terrain_surface_height(point) - 0.02
 			point.y = floor_stage.terrain_surface_height(point)
-			floor_clear = floor_clear and floor_stage.rock_hit(point, point, 0.05, false).is_empty() and floor_stage.city.crop_clear(point) and floor_stage.city.cemetery_clear(point, 0.05) and not floor_stage.city.paved_at(point, 0.05)
+			floor_clear = floor_clear and not boulder_at(floor_stage, point) and floor_stage.city.crop_clear(point) and floor_stage.city.cemetery_clear(point, 0.05) and not floor_stage.city.paved_at(point, 0.05)
 			for tree in floor_stage.city.tree_positions:
 				floor_clear = floor_clear and floor_stage.flat(point).distance_to(floor_stage.flat(tree)) > 0.7
 			if floor_stage.road_distance(point) < 40.0:

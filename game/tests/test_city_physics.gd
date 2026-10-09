@@ -117,7 +117,10 @@ func run() -> void:
 	racer.role = "opening_police"
 	var police_speed = Traffic.speed_limit(game, racer, racer.s)
 	racer.role = "racer"
-	check(is_equal_approx(battle_speed, Traffic.competition_target(stage, racer.s, racer.pace)) and is_equal_approx(zero_speed, battle_speed), "rally and zero crews use geometry-based pace on the forest bypass")
+	# Village crews follow baked runs; zero crews drive the same run more gently.
+	var run = Traffic.Tracks.sample(racer.get("track_parts", PackedInt32Array()), racer.s)
+	var zero_run = Traffic.Tracks.sample(racer.get("track_parts", PackedInt32Array()), racer.s, false, true)
+	check(not run.is_empty() and is_equal_approx(battle_speed, Traffic.recovery_speed(minf(Traffic.MAX_COMPETITION_SPEED, float(run.speed) * racer.pace), racer)) and is_equal_approx(zero_speed, minf(Traffic.MAX_COMPETITION_SPEED, float(zero_run.speed) * racer.pace)) and zero_speed < battle_speed, "rally and zero crews follow the baked village run on the forest bypass")
 	check(police_speed < 17.0, "course-opening police keeps the village speed limit")
 	game._update_racers(0.1)
 	check(game.racers.size() == 1 and racer.s > 435.0, "rally crew advances through the forest bypass")

@@ -17,12 +17,12 @@ func run() -> void:
 		var model = Props.player_car(variant)
 		root.add_child(model)
 		var hinge = model.get_node_or_null("TrunkHinge")
-		check(hinge != null and hinge.get_child_count() > 0 and model.get_node("TrunkBoxes").get_child_count() == 5, "model %d has opening bodywork and three boxes, wood and cauldron" % variant)
-		Props.update_player_trunk(model, true, [true, false, true, true, true], 0.2)
+		check(hinge != null and hinge.get_child_count() > 0 and model.get_node("TrunkBoxes").get_child_count() == Props.CARGO_KINDS.size(), "model %d has opening bodywork and three boxes, wood, cauldron and shovel" % variant)
+		Props.update_player_trunk(model, true, [true, false, true, true, true, true], 0.2)
 		check(hinge.rotation.x < -0.1 and hinge.rotation.x > -1.18, "model %d opens progressively rather than instantly" % variant)
-		Props.update_player_trunk(model, true, [true, false, true, true, true], 1)
+		Props.update_player_trunk(model, true, [true, false, true, true, true, true], 1)
 		check(model.get_node("TrunkBoxes").visible and not model.get_node("TrunkBoxes").get_child(1).visible, "model %d shows the actual remaining boxes" % variant)
-		Props.update_player_trunk(model, false, [true, true, true, true, true], 1)
+		Props.update_player_trunk(model, false, [true, true, true, true, true, true], 1)
 		check(absf(hinge.rotation.x) < 0.01 and not model.get_node("TrunkBoxes").visible, "model %d closes and covers cargo" % variant)
 		model.free()
 	var host = load("res://main.tscn").instantiate()
@@ -42,7 +42,7 @@ func run() -> void:
 	host.car.position = origin + Vector3(0, 0, 8)
 	host.heading = 0
 	host.begin_placement("table")
-	check(host.placement_preview == null and host.cargo.boxes("local") == [true, true, true, true, true], "cannot place furniture remotely from a closed trunk")
+	check(host.placement_preview == null and host.cargo.boxes("local") == [true, true, true, true, true, true], "cannot place furniture remotely from a closed trunk")
 	for variant in range(Props.PLAYER_MODELS.size()):
 		host.select_player_car(variant)
 		host.car.position = origin + Vector3(0, 0, 8)
@@ -84,7 +84,7 @@ func run() -> void:
 		host.walker = origin
 		var spot = origin + (Vector3(3, 0, 0) if kind == "chairs" else (Vector3(0, 0, -3) if kind == "grill" else Vector3.ZERO))
 		check(host.cargo.deploy(kind, spot, 0), "selected %s deploys at a free spot" % kind)
-	check(host.cargo.boxes("local") == [false, false, false, true, true], "three boxes disappear only when equipment is deployed")
+	check(host.cargo.boxes("local") == [false, false, false, true, true, true], "three boxes disappear only when equipment is deployed")
 	check(not host.cargo.deploy("chairs", origin + Vector3(0, 0, 4), 0) and host.personal_chairs.size() == 1, "placement cannot duplicate an item without acquiring it")
 	host.course.phase = "complete"
 	host.course.pass_index = 2
@@ -97,7 +97,7 @@ func run() -> void:
 		host.walker = trunk(host) + Vector3(5, 0, 0)
 		check(not host.cargo.return_item(trunk(host)), "remote equipment cannot be deposited before approaching")
 		return_box(host)
-	check(host.packing.remaining() == 0 and host.cargo.boxes("local") == [true, true, true, true, true], "all three boxes reappear after the camp is loaded")
+	check(host.packing.remaining() == 0 and host.cargo.boxes("local") == [true, true, true, true, true, true], "all three boxes reappear after the camp is loaded")
 	host.room.connected = true
 	host.room.is_host = true
 	host.room.player_id = "host"
@@ -134,9 +134,9 @@ func run() -> void:
 	command.state.pos = host.room.a(origin)
 	command.placement = {"pos": host.room.a(origin + Vector3(-3, 0, 0)), "yaw": 0}
 	host.room._apply_command(command)
-	check(host.personal_chairs.has("guest") and host.cargo.boxes("guest") == [true, false, true, true, true], "guest placement consumes only their chair box")
+	check(host.personal_chairs.has("guest") and host.cargo.boxes("guest") == [true, false, true, true, true, true], "guest placement consumes only their chair box")
 	guest.room.apply_world(host.room.world_state())
-	check(guest.cargo.opened.get("guest", false) == host.cargo.opened.get("guest", false) and guest.cargo.boxes("guest") == [true, false, true, true, true], "late world snapshot restores automatic trunk state and correct cargo")
+	check(guest.cargo.opened.get("guest", false) == host.cargo.opened.get("guest", false) and guest.cargo.boxes("guest") == [true, false, true, true, true, true], "late world snapshot restores automatic trunk state and correct cargo")
 	guest.cargo.update(1)
 	check(guest.car.get_node("TrunkBoxes").visible and not guest.car.get_node("TrunkBoxes").get_child(1).visible, "guest cargo geometry reflects authoritative inventory")
 	command.action = "grill"

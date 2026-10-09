@@ -88,7 +88,11 @@ func run() -> void:
 	summer.free()
 	var city = Stage.new(2)
 	city.build()
-	check(city.urban and city.clearings.size() == 4 and city.trees.is_empty(), "vineyard stage has four ordinary spectator spots without a separate parking entity")
+	# Village forest trees are collidable and can fall; nothing else adds trees there.
+	var forest_trees = 0
+	for ids in city.detail_tree_groups.values():
+		forest_trees += ids.size()
+	check(city.urban and city.clearings.size() == 4 and forest_trees > 0 and city.trees.size() == forest_trees, "vineyard stage has four ordinary spectator spots and only village forest trees")
 	check(city.city.village_houses >= 14 and city.get_node_or_null("VillageChurch") != null, "village has detailed houses and church")
 	check(city.city.thuja_count > 300, "village is enclosed by a dense thuja forest belt")
 	check(city.city.mixed_tree_count >= 900, "village outer forest has increased tree density")

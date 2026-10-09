@@ -14,7 +14,11 @@ func finish_vehicle(game) -> void:
 	racer.slide = 0.0
 	racer.slide_speed = 0.0
 	racer.line = 0.0
-	game._update_racers(0.15)
+	# Baked village runs can be slow near the line; keep driving until it finishes.
+	for i in range(20):
+		game._update_racers(0.15)
+		if not game.racers.has(racer):
+			break
 func run() -> void:
 	var game = load("res://main.tscn").instantiate()
 	root.add_child(game)
