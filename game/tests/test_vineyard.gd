@@ -61,7 +61,7 @@ func run() -> void:
 	var lavender_tiles = stage.find_children("LavenderBands_*", "MeshInstance3D", false, false)
 	var thuja_tiles = stage.find_children("VillageThujaLower_Tile_*", "MultiMeshInstance3D", false, false)
 	check(lavender_tiles.size() > 8 and thuja_tiles.size() > 4, "lavender and thuja use spatially culled instance tiles")
-	check(lavender_tiles[0].material_override.albedo_texture != null and thuja_tiles[0].visibility_range_end == 160, "lavender has a fine texture and trees have bounded drawing ranges")
+	check(lavender_tiles[0].material_override.albedo_texture != null and thuja_tiles[0].get_meta("draw_distance_base_end", thuja_tiles[0].visibility_range_end) == 160, "lavender has a fine texture and trees retain their authored medium drawing range")
 	var bands_touch_terrain = true
 	for tile in lavender_tiles:
 		var vertices = tile.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]

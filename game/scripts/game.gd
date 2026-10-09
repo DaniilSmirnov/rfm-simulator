@@ -277,6 +277,9 @@ func enable_mobile() -> void:
 	if mobile_mode:
 		return
 	mobile_mode = true
+	draw_distance.apply_device_default(true)
+	draw_distance.apply(stage)
+	_update_draw_distance_buttons()
 	get_window().content_scale_size = Vector2i(960, 540)
 	get_window().content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
 	print("[RFM] Мобильный интерфейс: масштаб окна готов")
@@ -414,7 +417,7 @@ func _ready() -> void:
 	cargo.game = self
 	camp_cooking.game = self
 	rng.randomize()
-	draw_distance.load_settings()
+	draw_distance.load_settings(OS.has_feature("mobile") or "--mobile-controls" in OS.get_cmdline_user_args())
 	_setup_input()
 	stage = Stage.new()
 	add_child(stage)
@@ -908,10 +911,13 @@ func _invite_friends() -> void:
 func _set_draw_distance(index: int) -> void:
 	draw_distance.mode = clampi(index, draw_distance.NEAR, draw_distance.FAR)
 	draw_distance.apply(stage)
-	for button_index in range(draw_distance_buttons.size()):
-		draw_distance_buttons[button_index].set_pressed_no_signal(button_index == draw_distance.mode)
+	_update_draw_distance_buttons()
 	if draw_distance.save_settings() != OK:
 		push_warning("Не удалось сохранить дальность прорисовки")
+
+func _update_draw_distance_buttons() -> void:
+	for index in range(draw_distance_buttons.size()):
+		draw_distance_buttons[index].set_pressed_no_signal(index == draw_distance.mode)
 
 func _menu_action() -> void:
 	if (dead or finished) and room.connected:
