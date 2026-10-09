@@ -12,10 +12,11 @@ var roll = 0.0
 func suspension(node: Node3D, stage, delta: float, yaw: float, lateral_accel: float = 0.0) -> void:
 	var forward = Vector3(-sin(yaw), 0, -cos(yaw))
 	var right = forward.cross(Vector3.UP)
-	var front: float = stage.ground(node.position + forward * 1.15)
-	var rear: float = stage.ground(node.position - forward * 1.15)
-	var left: float = stage.ground(node.position - right * 0.7)
-	var opposite: float = stage.ground(node.position + right * 0.7)
+	var snowy = stage.has_method("vehicle_ground") and stage.winter
+	var front: float = stage.vehicle_ground(node.position + forward * 1.15) if snowy else stage.ground(node.position + forward * 1.15)
+	var rear: float = stage.vehicle_ground(node.position - forward * 1.15) if snowy else stage.ground(node.position - forward * 1.15)
+	var left: float = stage.vehicle_ground(node.position - right * 0.7) if snowy else stage.ground(node.position - right * 0.7)
+	var opposite: float = stage.vehicle_ground(node.position + right * 0.7) if snowy else stage.ground(node.position + right * 0.7)
 	var floor_height: float = (front + rear + left + opposite) * 0.25 + 0.06
 	if not initialized:
 		node.position.y = floor_height
@@ -34,6 +35,14 @@ func suspension(node: Node3D, stage, delta: float, yaw: float, lateral_accel: fl
 	pitch = lerpf(pitch, atan2(front - rear, 2.3), 1.0 - exp(-delta * 9))
 	roll = lerpf(roll, clampf(atan2(opposite - left, 1.4) - lateral_accel * 0.012, -0.24, 0.24), 1.0 - exp(-delta * 8))
 	node.rotation = Vector3(pitch, yaw, roll)
+	if snowy and grounded:
+		var thickness: float = stage.DeepSnow.depth(stage, node.position)
+		if thickness > 0.001:
+			var compression: float = stage.snow.packed(node.position)
+			velocity = velocity.move_toward(Vector3.ZERO, thickness * lerpf(2.2, 0.35, compression) * delta)
+			for wheel in [node.position + forward * 1.15 - right * 0.7, node.position + forward * 1.15 + right * 0.7, node.position - forward * 1.15 - right * 0.7, node.position - forward * 1.15 + right * 0.7]:
+				stage.snow.stamp(stage, wheel, delta * 0.35)
+
 
 static func swept_hit(start: Vector3, end: Vector3, target: Vector3, radius: float) -> bool:
 	var segment = end - start

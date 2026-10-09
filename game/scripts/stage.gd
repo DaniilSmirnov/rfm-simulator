@@ -20,6 +20,8 @@ const NATURE_MUSHROOM_STEM = preload("res://models/nature/mushroom_stem.tres")
 var officials: Node3D
 const Officials = preload("res://scripts/course_officials.gd")
 
+const DeepSnow = preload("res://scripts/deep_snow.gd")
+var snow = DeepSnow.new()
 const Snowbanks = preload("res://scripts/snowbanks.gd")
 const Canyon = preload("res://scripts/canyon.gd")
 var canyon: RefCounted
@@ -205,12 +207,17 @@ func grip(pos: Vector3) -> float:
 			return lerpf(base, 0.38, clampf(wet, 0.0, 1.0))
 		return base
 	if winter:
+		if DeepSnow.depth(self, pos) > 0.02:
+			return lerpf(0.24, 0.50, snow.packed(pos))
 		if road_distance(pos) > WIDTH * 0.55:
 			return 0.32
 		return 0.22 if int(road_s(pos) / 32) % 3 == 1 else 0.47
 	if road_distance(pos) > WIDTH * 0.55:
 		return 0.48
 	return 0.42 if int(road_s(pos) / STEP) % 13 == 7 else 0.78
+
+func vehicle_ground(pos: Vector3) -> float:
+	return snow.contact(self, pos) if winter else ground(pos)
 
 func ground(pos: Vector3) -> float:
 	if desert:
@@ -298,7 +305,7 @@ func terrain_tile_step(cell_x: float, cell_z: float) -> float:
 	var nearest = urban_nearest(p) if urban else {}
 	if urban and nearest.distance < road_width(nearest.s) * 0.5 + 4.0:
 		return 1.0
-	return 2.0 if (variant == 0 or urban) and road_distance(p) < 12.0 else 4.0
+	return 2.0 if ((variant == 0 or urban) and road_distance(p) < 12.0) or (winter and road_distance(p) < 30.0) else 4.0
 
 func terrain_base_vertex_height(x: float, z: float) -> float:
 	var p = Vector3(x, 0, z)
@@ -312,7 +319,7 @@ func terrain_vertex_height(x: float, z: float) -> float:
 	if desert:
 		return canyon.base_ground(self, Vector3(x, 0, z)) - 0.25
 	var value = terrain_base_vertex_height(x, z)
-	if variant != 0 and not urban:
+	if variant != 0 and not urban and not winter:
 		return value
 	var cell_x = floorf(x / 4.0) * 4.0
 	var cell_z = floorf(z / 4.0) * 4.0
@@ -514,7 +521,7 @@ func _build_terrain(cooperative: bool = false) -> void:
 		if cooperative and (z + 920) % 64 == 0:
 			await get_tree().process_frame
 		for x in range(-204, 204, 4):
-			var tile = Vector2i(floori(x / 64.0), floori(z / 64.0)) if urban else Vector2i.ZERO
+			var tile = Vector2i(floori(x / 64.0), floori(z / 64.0)) if urban or winter else Vector2i.ZERO
 			if not builders.has(tile):
 				var builder = SurfaceTool.new()
 				builder.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -551,6 +558,8 @@ func _build_terrain(cooperative: bool = false) -> void:
 		n.mesh = st.commit()
 		n.material_override = mat
 		add_child(n)
+		if winter:
+			snow.register_chunk(self, tile, n)
 
 func draw_base_road_surface(s: float) -> bool:
 	# The village has its own explicit cobblestone mesh; do not leave asphalt

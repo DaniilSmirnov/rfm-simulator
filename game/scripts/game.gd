@@ -1117,6 +1117,9 @@ func _process(delta: float) -> void:
 		course.update(self, delta)
 	elif course.phase in ["countdown", "intermission"]:
 		course.remaining = maxf(0, course.remaining - delta)
+	stage.snow.authoritative = not room.connected or room.is_host
+	if stage.winter:
+		stage.snow.update(delta)
 	stage.update_fallen(delta)
 	_update_sobriety(delta)
 	_update_intoxication(delta)
