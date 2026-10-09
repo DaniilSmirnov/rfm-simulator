@@ -28,7 +28,19 @@ func run() -> void:
 	check(gate.accept_button.disabled, "acknowledgment is initially locked")
 	check(gate.WHERE_TO_STAND.size() == 4 and gate.ALLOWED.size() == 4 and gate.FORBIDDEN.size() == 5, "memo only covers safe viewing locations, allowed and forbidden actions")
 	check(gate.panel.anchor_right == 1.0 and gate.panel.anchor_bottom == 1.0, "safety memo covers the complete viewport")
-	check(gate.scroll.size_flags_horizontal == Control.SIZE_EXPAND_FILL, "safety memo content expands to full width")
+	check(gate.scroll.size_flags_horizontal == Control.SIZE_EXPAND_FILL, "safety memo scroll occupies viewport")
+	check(gate.MAX_READING_WIDTH == 760.0 and gate.content_margins != null, "memo has a centered max-width reading column")
+	check(gate.button_margins != null and gate.button_margins.get_theme_constant("margin_left") == gate.content_margins.get_theme_constant("margin_left"), "acceptance button aligns with text column")
+	check(gate.outer.get_theme_constant("margin_bottom") >= 12, "action footer maintains a minimum bottom safe gutter")
+	var original_width = gate.panel.size.x
+	gate.panel.size = Vector2(1440, 900)
+	gate._update_layout()
+	check(gate.content_margins.get_theme_constant("margin_left") >= 300, "desktop reading column has generous side whitespace")
+	gate.panel.size = Vector2(390, 844)
+	gate._update_layout()
+	check(gate.content_margins.get_theme_constant("margin_left") >= 20, "mobile retains readable horizontal padding")
+	gate.panel.size.x = original_width
+	gate._update_layout()
 	var press_count := [0]
 	gate.accepted.connect(func(): press_count[0] += 1)
 	gate._accept()
