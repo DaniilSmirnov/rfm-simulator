@@ -1303,11 +1303,38 @@ static func gear_box(parent: Node3D, kind: String, point: Vector3 = Vector3.ZERO
 		shovel.name = "Box_shovel"
 		parent.add_child(shovel)
 		shovel.position = point
-		box(shovel, Vector3(0, 0.10, 0), Vector3(0.045, 0.58, 0.045), Color("ad8151"))
-		box(shovel, Vector3(0, -0.28, 0), Vector3(0.24, 0.22, 0.035), Color("8b9aa5"))
-		for x in [-0.09, 0.09]:
-			box(shovel, Vector3(x, 0.43, 0), Vector3(0.03, 0.14, 0.035), Color("414b50"))
-		box(shovel, Vector3(0, 0.50, 0), Vector3(0.20, 0.035, 0.035), Color("414b50"))
+		cylinder(shovel, Vector3(0, 0.10, 0), 0.023, 0.020, 0.64, Color("ad8151"), 12).name = "Shaft"
+		cylinder(shovel, Vector3(0, -0.20, 0), 0.033, 0.025, 0.13, Color("8998a2"), 12)
+		for x in [-0.085, 0.085]:
+			var arm = cylinder(shovel, Vector3(x, 0.47, 0), 0.017, 0.017, 0.15, Color("414b50"), 10)
+			arm.rotation.z = -signf(x) * 0.20
+		var grip = cylinder(shovel, Vector3(0, 0.545, 0), 0.023, 0.023, 0.19, Color("414b50"), 12)
+		grip.rotation.z = PI * 0.5
+		grip.name = "Grip"
+		var surface = SurfaceTool.new()
+		surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+		var rows: Array = []
+		for row in range(4):
+			var points: Array = []
+			for column in range(7):
+				var u = (column - 3) / 3.0
+				var width = 0.14 * (0.85 if row == 3 else 1.0)
+				points.append(Vector3(u * width, -0.235 - row * 0.085 + (absf(u) * 0.025 if row == 3 else 0.0), 0.065 * u * u + (0.025 if row == 0 else 0.0)))
+			rows.append(points)
+		for row in range(3):
+			for column in range(6):
+				for vertex in [rows[row][column], rows[row + 1][column], rows[row][column + 1], rows[row][column + 1], rows[row + 1][column], rows[row + 1][column + 1]]:
+					surface.add_vertex(vertex)
+		surface.generate_normals()
+		var blade = MeshInstance3D.new()
+		blade.name = "Blade"
+		blade.mesh = surface.commit()
+		var steel = material(Color("a4b4bd"))
+		steel.metallic = 0.65
+		steel.roughness = 0.38
+		steel.cull_mode = BaseMaterial3D.CULL_DISABLED
+		blade.material_override = steel
+		shovel.add_child(blade)
 		return shovel
 	if kind == "firewood":
 		var bundle = wood_bundle(parent, point)

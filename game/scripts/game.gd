@@ -139,13 +139,14 @@ func valid_furniture_spot(spot: Vector3, kind: String, ignored_owner: String = "
 func dig_snow(spot: Vector3) -> void:
 	var owner = cargo.actor()
 	if in_car or paused or dead or finished or not cargo.held.has(owner) or cargo.held[owner].kind != "shovel" or walker.distance_to(spot) > 4.0: return
-	if room.submit("dig_snow", {"pos": room.a(spot)}): return
+	var local_actor = owner == chair_owner()
+	if local_actor and cargo.shovel_busy(): return
+	if room.submit("dig_snow", {"pos": room.a(spot)}):
+		cargo.animate_shovel()
+		return
 	if stage.snow.dig(stage, spot):
 		soundscape.placement()
-		if is_instance_valid(cargo.hand_box):
-			var swing = create_tween()
-			swing.tween_property(cargo.hand_box, "rotation:x", -0.65, 0.12)
-			swing.tween_property(cargo.hand_box, "rotation:x", 0.0, 0.18)
+		if local_actor: cargo.animate_shovel()
 	else: toast("Здесь уже расчищено или раскопок слишком много.")
 
 func begin_placement(kind: String) -> void:

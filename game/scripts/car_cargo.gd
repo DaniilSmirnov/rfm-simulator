@@ -7,6 +7,26 @@ var held: Dictionary = {}
 var context: Dictionary = {}
 var hand_box: Node3D
 var hand_kind = ""
+const SHOVEL_POSITION = Vector3(0.22, -0.05, -1.75)
+const SHOVEL_ROTATION = Vector3(-0.25, 0.0, -0.30)
+var shovel_swing: Tween
+
+func animate_shovel() -> void:
+	if not is_instance_valid(hand_box) or hand_kind != "shovel": return
+	if shovel_swing != null and shovel_swing.is_running(): return
+	shovel_swing = game.create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	for pose in [
+		[Vector3(0.14, 0.08, -1.75), Vector3(0.10, -0.10, -0.20), 0.18],
+		[Vector3(0.25, -0.19, -1.80), Vector3(-0.70, 0.08, -0.45), 0.22],
+		[Vector3(0.02, 0.06, -1.75), Vector3(-0.05, -0.35, -0.65), 0.25],
+		[SHOVEL_POSITION, SHOVEL_ROTATION, 0.22],
+	]:
+		shovel_swing.tween_property(hand_box, "position", pose[0], pose[2])
+		shovel_swing.parallel().tween_property(hand_box, "rotation", pose[1], pose[2])
+
+func shovel_busy() -> bool:
+	return shovel_swing != null and shovel_swing.is_running()
+
 
 func actor() -> String:
 	return str(context.get("owner", game.chair_owner()))
@@ -229,12 +249,14 @@ func update(delta: float) -> void:
 	var carry = held.get(owner, {})
 	var kind = str(carry.get("kind", ""))
 	if kind != hand_kind:
+		if shovel_swing != null: shovel_swing.kill()
 		if is_instance_valid(hand_box):
 			hand_box.queue_free()
 		hand_box = null
 		hand_kind = kind
 		if kind != "":
-			hand_box = Props.gear_box(game.camera, kind, Vector3(0, -0.65, -0.9))
+			hand_box = Props.gear_box(game.camera, kind, SHOVEL_POSITION if kind == "shovel" else Vector3(0, -0.65, -0.9))
+			if kind == "shovel": hand_box.rotation = SHOVEL_ROTATION
 	if hand_box != null:
 		hand_box.visible = not game.in_car and game.placement_preview == null and not game.dead and not game.finished
 
