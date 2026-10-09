@@ -94,6 +94,7 @@ func build(cooperative: bool = false) -> void:
 	else:
 		_village_natural_details()
 	_forest_mushrooms()
+	_village_landmarks()
 	_landscape()
 	_flush_batches()
 
@@ -1018,6 +1019,41 @@ func paved_at(p: Vector3, padding: float = 0.0) -> bool:
 		if absf(local.x) <= area.half.x + padding and absf(local.z) <= area.half.y + padding:
 			return true
 	return false
+
+# Landmark groups add variety without creating additional full-size buildings.
+# All objects remain off the rally road, pavements and cemetery.
+func _village_landmarks() -> void:
+	var farm = Node3D.new()
+	farm.name = "VillageFarmyard"
+	stage.add_child(farm)
+	farm.position = stage.village_main_at(545.0) + stage.village_main_side(545.0) * -32.0
+	farm.position.y = stage.ground(farm.position)
+	var wood = Color("84634a")
+	for x in [-2.4, 0.0, 2.4]:
+		Props.box(farm, Vector3(x, 0.52, 0), Vector3(1.6, 1.04, 1.45), wood)
+		for side_value in [-1.0, 1.0]:
+			Props.box(farm, Vector3(x + side_value * 0.72, 0.54, 0), Vector3(0.11, 1.08, 1.45), Color("b28e61"))
+	for x in [-4.0, -2.9]:
+		Props.cylinder(farm, Vector3(x, 0.55, 3.3), 0.42, 0.42, 1.1, Color("8b6547"), 10)
+	Props.box(farm, Vector3(2.0, 0.44, 3.3), Vector3(3.4, 0.25, 1.8), Color("716354"))
+	for x in [0.9, 3.1]:
+		for z in [2.5, 4.1]:
+			var wheel = Props.cylinder(farm, Vector3(x, 0.42, z), 0.36, 0.36, 0.16, Color("303332"), 10)
+			wheel.rotation.z = PI / 2
+	_batch(farm, farm.transform)
+	var cafe = Node3D.new()
+	cafe.name = "VillageCafeTerrace"
+	stage.add_child(cafe)
+	cafe.position = stage.village_main_at(335.0) + stage.village_main_side(335.0) * -10.5
+	cafe.position.y = stage.ground(cafe.position)
+	for index in range(2):
+		var z = float(index) * 2.6 - 1.3
+		Props.cylinder(cafe, Vector3(0, 0.95, z), 0.60, 0.60, 0.09, Color("8d6b50"), 12)
+		Props.cylinder(cafe, Vector3(0, 0.48, z), 0.09, 0.09, 0.92, Color("3c4944"), 8)
+		for side_value in [-1.0, 1.0]:
+			Props.box(cafe, Vector3(side_value * 0.95, 0.48, z), Vector3(0.55, 0.15, 0.55), wood)
+			Props.box(cafe, Vector3(side_value * 1.24, 0.82, z), Vector3(0.12, 0.82, 0.55), wood)
+	_batch(cafe, cafe.transform)
 
 func _village_props() -> void:
 	for station in [335.0, 405.0, 465.0, 540.0]:
