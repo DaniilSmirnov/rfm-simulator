@@ -2,7 +2,7 @@ extends RefCounted
 class_name RallyProps
 const CampingHatchbackAsset = preload("res://scripts/camping_hatchback_asset.gd")
 const FOOD_PORTIONS = 10
-const CARGO_KINDS = ["table", "chairs", "grill", "firewood", "cauldron"]
+const CARGO_KINDS = ["table", "chairs", "grill", "firewood", "cauldron", "shovel"]
 const MUSHROOM_TEXTURES = {
 	"fly_agaric": preload("res://textures/mushrooms/fly_agaric.svg"),
 	"toadstool": preload("res://textures/mushrooms/toadstool.svg"),
@@ -1139,6 +1139,8 @@ static func pose_cauldron(root: Node3D, phase: String, progress: float, servings
 		puff.scale = Vector3.ONE * sin(cycle * PI)
 
 static func cargo_point(profile: Dictionary, index: int) -> Vector3:
+	if index == 5:
+		return Vector3(0, profile.floor + 0.65, profile.rear - 0.30)
 	if index < 3:
 		return Vector3((index - 1) * 0.39, profile.floor + 0.18, profile.rear - 0.30)
 	return Vector3(-0.30 if index == 3 else 0.30, profile.floor + 0.43, profile.rear - 0.33)
@@ -1296,6 +1298,17 @@ static func trunk_profile(variant: int) -> Dictionary:
 	return {"rear": rear, "half": p.width * 0.37, "hinge": (0.35 if variant == 8 else (1.26 if hatch else rear - 0.80)), "floor": 0.70 if hatch else 0.56, "top": p.height - 0.02 if hatch else (0.99 if variant in [3, 6, 9] else 0.94), "hatch": hatch}
 
 static func gear_box(parent: Node3D, kind: String, point: Vector3 = Vector3.ZERO) -> Node3D:
+	if kind == "shovel":
+		var shovel = Node3D.new()
+		shovel.name = "Box_shovel"
+		parent.add_child(shovel)
+		shovel.position = point
+		box(shovel, Vector3(0, 0.10, 0), Vector3(0.045, 0.58, 0.045), Color("ad8151"))
+		box(shovel, Vector3(0, -0.28, 0), Vector3(0.24, 0.22, 0.035), Color("8b9aa5"))
+		for x in [-0.09, 0.09]:
+			box(shovel, Vector3(x, 0.43, 0), Vector3(0.03, 0.14, 0.035), Color("414b50"))
+		box(shovel, Vector3(0, 0.50, 0), Vector3(0.20, 0.035, 0.035), Color("414b50"))
+		return shovel
 	if kind == "firewood":
 		var bundle = wood_bundle(parent, point)
 		bundle.name = "Box_firewood"
@@ -1362,7 +1375,8 @@ static func add_player_trunk(root: Node3D, variant: int) -> Node3D:
 	boxes.name = "TrunkBoxes"
 	root.add_child(boxes)
 	for i in range(CARGO_KINDS.size()):
-		gear_box(boxes, CARGO_KINDS[i], cargo_point(p, i))
+		var item = gear_box(boxes, CARGO_KINDS[i], cargo_point(p, i))
+		if CARGO_KINDS[i] == "shovel": item.rotation.z = PI * 0.5
 	boxes.hide()
 	root.set_meta("trunk_profile", p)
 	return root

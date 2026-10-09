@@ -36,7 +36,7 @@ func suspension(node: Node3D, stage, delta: float, yaw: float, lateral_accel: fl
 	roll = lerpf(roll, clampf(atan2(opposite - left, 1.4) - lateral_accel * 0.012, -0.24, 0.24), 1.0 - exp(-delta * 8))
 	node.rotation = Vector3(pitch, yaw, roll)
 	if snowy and grounded:
-		var thickness: float = stage.DeepSnow.depth(stage, node.position)
+		var thickness: float = stage.snow.loose_depth(stage, node.position)
 		if thickness > 0.001:
 			var compression: float = stage.snow.packed(node.position)
 			velocity = velocity.move_toward(Vector3.ZERO, thickness * lerpf(2.2, 0.35, compression) * delta)

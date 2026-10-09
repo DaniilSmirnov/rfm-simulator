@@ -100,6 +100,11 @@ func flag_count(owner: String = "") -> int:
 	return personal_flags.get(key, []).size()
 
 func valid_furniture_spot(spot: Vector3, kind: String, ignored_owner: String = "") -> bool:
+	if stage.winter:
+		var radius = 0.9 if kind == "table" else 0.55
+		for x in [-radius, 0.0, radius]:
+			for z in [-radius, 0.0, radius]:
+				if stage.snow.loose_depth(stage, spot + Vector3(x, 0, z)) > 0.02: return false
 	if stage.desert and not stage.canyon.camp_supported(stage, spot):
 		return false
 	if spectators != null and spectators.occupied(spot):
@@ -130,6 +135,18 @@ func valid_furniture_spot(spot: Vector3, kind: String, ignored_owner: String = "
 			if spot.distance_to(flag.position) < 1.0:
 				return false
 	return true
+
+func dig_snow(spot: Vector3) -> void:
+	var owner = cargo.actor()
+	if in_car or paused or dead or finished or not cargo.held.has(owner) or cargo.held[owner].kind != "shovel" or walker.distance_to(spot) > 4.0: return
+	if room.submit("dig_snow", {"pos": room.a(spot)}): return
+	if stage.snow.dig(stage, spot):
+		soundscape.placement()
+		if is_instance_valid(cargo.hand_box):
+			var swing = create_tween()
+			swing.tween_property(cargo.hand_box, "rotation:x", -0.65, 0.12)
+			swing.tween_property(cargo.hand_box, "rotation:x", 0.0, 0.18)
+	else: toast("Здесь уже расчищено или раскопок слишком много.")
 
 func begin_placement(kind: String) -> void:
 	if packing.active():
@@ -187,7 +204,7 @@ func cancel_placement() -> void:
 func confirm_placement() -> void:
 	_update_placement()
 	if placement_preview == null or not placement_valid:
-		toast("Здесь поставить нельзя. Отойди от трассы, деревьев и мебели.")
+		toast("Здесь поставить нельзя: расчисти снег и отойди от трассы, деревьев и мебели.")
 		return
 	var kind = placement_kind
 	var spot = placement_preview.position

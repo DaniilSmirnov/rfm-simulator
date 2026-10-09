@@ -2,6 +2,8 @@ extends RefCounted
 # Bounded, shared compaction field. Only the host stamps; prediction reads it.
 const CELL = 2.0
 const MAX_CELLS = 768
+const MAX_DUG = 256
+var dug: Dictionary = {}
 var cells: Dictionary = {}
 var dirty: Dictionary = {}
 var chunks: Dictionary = {}
@@ -28,7 +30,7 @@ func mark(cell: Vector2i) -> void:
 			dirty[Vector2i(floori((cell.x * CELL + x) / 64.0), floori((cell.y * CELL + z) / 64.0))] = true
 
 func stamp(stage, point: Vector3, pressure: float) -> void:
-	if not authoritative or depth(stage, point) < 0.02: return
+	if not authoritative or loose_depth(stage, point) < 0.02: return
 	var center = Vector2i(roundi(point.x / CELL), roundi(point.z / CELL))
 	for x in range(-1, 2):
 		for z in range(-1, 2):
@@ -46,6 +48,7 @@ func stamp(stage, point: Vector3, pressure: float) -> void:
 			mark(cell)
 
 func contact(stage, point: Vector3) -> float:
+	if is_dug(stage, point): return floor_height(stage, point)
 	var thickness = depth(stage, point)
 	if thickness <= 0.001: return stage.ground(point)
 	var compression = packed(point)
@@ -72,8 +75,8 @@ func register_chunk(stage, tile: Vector2i, node: MeshInstance3D) -> void:
 			b.z = z + 4
 		else: continue
 		borders[i] = [a, b, depth(stage, a), depth(stage, b)]
-	chunks[tile] = {"node": node, "arrays": arrays, "depths": depths, "borders": borders}
-	if not cells.is_empty(): dirty[tile] = true
+	chunks[tile] = {"node": node, "arrays": arrays, "depths": depths, "borders": borders, "stage": weakref(stage)}
+	if not cells.is_empty() or not dug.is_empty(): dirty[tile] = true
 
 func update(delta: float) -> void:
 	refresh_clock += delta
@@ -84,23 +87,47 @@ func update(delta: float) -> void:
 		dirty.erase(tile)
 		if not chunks.has(tile): continue
 		var chunk: Dictionary = chunks[tile]
+		var stage = chunk.stage.get_ref()
 		var arrays: Array = chunk.arrays.duplicate()
 		var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX].duplicate()
 		var colors: PackedColorArray = arrays[Mesh.ARRAY_COLOR].duplicate()
+		var excavated = false
 		for i in range(vertices.size()):
+			if i % 3 == 0:
+				excavated = is_dug(stage, (vertices[i] + vertices[i + 1] + vertices[i + 2]) / 3.0)
 			var compression = packed(vertices[i])
 			var depression: float = chunk.depths[i] * 0.28 * compression
 			if chunk.borders.has(i):
 				var border: Array = chunk.borders[i]
 				depression = (border[2] * packed(border[0]) + border[3] * packed(border[1])) * 0.14
+			if excavated:
+				depression = chunk.depths[i]
+				colors[i] = Color("62594b")
 			vertices[i].y -= depression
 			colors[i] = colors[i].darkened(compression * 0.10)
 		arrays[Mesh.ARRAY_VERTEX] = vertices
 		arrays[Mesh.ARRAY_COLOR] = colors
-		var mesh = ArrayMesh.new()
-		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 		var surface = SurfaceTool.new()
-		surface.create_from(mesh, 0)
+		surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+		for i in range(vertices.size()):
+			surface.set_color(colors[i])
+			surface.add_vertex(vertices[i])
+		for i in range(0, vertices.size(), 3):
+			var original: PackedVector3Array = chunk.arrays[Mesh.ARRAY_VERTEX]
+			if not is_dug(stage, (original[i] + original[i + 1] + original[i + 2]) / 3.0): continue
+			for edge in range(3):
+				var a = i + edge
+				var b = i + (edge + 1) % 3
+				var middle = (original[a] + original[b]) * 0.5
+				var center = (original[i] + original[i + 1] + original[i + 2]) / 3.0
+				if is_dug(stage, middle + (middle - center).normalized() * 0.02): continue
+				var top_a = original[a]
+				var top_b = original[b]
+				top_a.y -= chunk.depths[a] * 0.28 * packed(top_a)
+				top_b.y -= chunk.depths[b] * 0.28 * packed(top_b)
+				for point in [top_a, vertices[a], vertices[b], top_a, vertices[b], top_b, top_a, vertices[b], vertices[a], top_a, top_b, vertices[b]]:
+					surface.set_color(Color("cbd4d8"))
+					surface.add_vertex(point)
 		surface.generate_normals()
 		chunk.node.mesh = surface.commit()
 		count += 1
@@ -122,3 +149,64 @@ func apply_snapshot(rows: Array) -> void:
 	for cell in next:
 		if absf(float(next[cell]) - float(cells.get(cell, 0))) > 0.005: mark(cell)
 	cells = next
+
+func polygon(stage, point: Vector3) -> Vector4i:
+	var cx = floorf(point.x / 4.0) * 4.0
+	var cz = floorf(point.z / 4.0) * 4.0
+	var step = int(stage.terrain_tile_step(cx, cz))
+	var x = cx + floorf((point.x - cx) / step) * step
+	var z = cz + floorf((point.z - cz) / step) * step
+	return Vector4i(int(x), int(z), step, 0 if (point.x - x + point.z - z) / step <= 1.0 else 1)
+
+func is_dug(stage, point: Vector3) -> bool:
+	return stage.winter and not dug.is_empty() and dug.has(polygon(stage, point))
+
+func loose_depth(stage, point: Vector3) -> float:
+	return 0.0 if is_dug(stage, point) else depth(stage, point)
+
+func floor_height(stage, point: Vector3) -> float:
+	var key = polygon(stage, point)
+	var u = (point.x - key.x) / key.z
+	var v = (point.z - key.y) / key.z
+	var a = Vector3(key.x, 0, key.y)
+	var b = a + Vector3(key.z, 0, 0)
+	var c = a + Vector3(0, 0, key.z)
+	var d = a + Vector3(key.z, 0, key.z)
+	if key.w == 0:
+		return stage.terrain_surface_height(point) - (depth(stage, a) * (1 - u - v) + depth(stage, b) * u + depth(stage, c) * v)
+	return stage.terrain_surface_height(point) - (depth(stage, d) * (u + v - 1) + depth(stage, c) * (1 - u) + depth(stage, b) * (1 - v))
+
+func visible_height(stage, point: Vector3) -> float:
+	return floor_height(stage, point) if is_dug(stage, point) else stage.terrain_surface_height(point) - depth(stage, point) * 0.28 * packed(point)
+
+func can_dig(stage, point: Vector3) -> bool:
+	return stage.winter and depth(stage, point) > 0.02 and not is_dug(stage, point) and dug.size() < MAX_DUG
+
+func dirty_polygon(key: Vector4i) -> void:
+	for x in [key.x - 1, key.x + key.z + 1]:
+		for z in [key.y - 1, key.y + key.z + 1]:
+			dirty[Vector2i(floori(x / 64.0), floori(z / 64.0))] = true
+
+func dig(stage, point: Vector3) -> bool:
+	if not authoritative or not can_dig(stage, point): return false
+	var key = polygon(stage, point)
+	dug[key] = true
+	dirty_polygon(key)
+	refresh_clock = 0.5
+	return true
+
+func dug_snapshot() -> Array:
+	var rows: Array = []
+	for key in dug: rows.append([key.x, key.y, key.z, key.w])
+	return rows
+
+func apply_dug_snapshot(rows: Array) -> void:
+	var next: Dictionary = {}
+	for row in rows.slice(0, MAX_DUG):
+		if row is Array and row.size() == 4 and int(row[2]) in [2, 4] and int(row[3]) in [0, 1]:
+			next[Vector4i(int(row[0]), int(row[1]), int(row[2]), int(row[3]))] = true
+	for key in dug:
+		if not next.has(key): dirty_polygon(key)
+	for key in next:
+		if not dug.has(key): dirty_polygon(key)
+	dug = next

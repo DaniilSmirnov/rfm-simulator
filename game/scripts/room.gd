@@ -22,7 +22,7 @@ var request_sent_at = 0.0
 var last_world_time = -1.0
 var racer_motion: Dictionary = {}
 const Props = preload("res://scripts/props.gd")
-const SHARED_ACTIONS = ["table", "chairs", "grill", "flag", "eat", "rally", "collect", "mount_mushroom", "eat_mushroom", "eat_berries", "pack", "take_gear", "return_gear", "trunk", "firewood", "cauldron", "plov_cook", "eat_plov", "church_bell"]
+const SHARED_ACTIONS = ["table", "chairs", "grill", "flag", "eat", "rally", "collect", "mount_mushroom", "eat_mushroom", "eat_berries", "pack", "take_gear", "return_gear", "trunk", "firewood", "cauldron", "plov_cook", "eat_plov", "church_bell", "dig_snow"]
 var game: Node3D
 var http: HTTPRequest
 var server = "http://127.0.0.1:8787"
@@ -279,6 +279,7 @@ func _response(result: int, code: int, _headers: PackedStringArray, bytes: Packe
 						if game.stage.winter:
 							game.stage.snow.authoritative = false
 							game.stage.snow.apply_snapshot(data.world.get("snow", []))
+							game.stage.snow.apply_dug_snapshot(data.world.get("snow_dug", []))
 						game.stage.apply_trees(data.world.get("fallen", []))
 						if game.stage.urban:
 							game.stage.city.apply_snapshot(data.world.get("city_lamps", []))
@@ -565,6 +566,8 @@ func _apply_command(c: Dictionary) -> void:
 		"trunk":
 			if spot != Vector3.INF:
 				game.cargo.toggle(spot)
+		"dig_snow":
+			if spot != Vector3.INF: game.dig_snow(spot)
 		"take_gear":
 			var index = int(placement.get("resource_id", -1))
 			if index >= 0 and index < game.cargo.KINDS.size():
@@ -615,7 +618,7 @@ func world_state() -> Dictionary:
 	var driving = {}
 	for id in host_drives:
 		driving[id] = host_drives[id].snapshot()
-	return {"drive_protocol": 1, "driving": driving, "camp_cooking": game.camp_cooking.snapshot(), "cargo": game.cargo.snapshot(), "foraging": game.foraging.snapshot(), "course": game.course.snapshot(), "church_bell": game.stage.city.bell.snapshot() if game.stage.urban and game.stage.city.bell != null else {}, "city_lamps": game.stage.city.snapshot() if game.stage.urban else [], "chair_poses": chair_poses, "flag_poses": flag_poses, "table_yaw": game.camp.rotation.y if game.camp != null else 0.0, "grill_pose": {"pos": a(game.grill.position), "yaw": game.grill.rotation.y} if game.grill != null else null, "snow": game.stage.snow.snapshot() if game.stage.winter else [], "fallen": game.stage.tree_snapshot(), "stones": stone_state(), "impacts": game.impact_serials, "camp": a(game.camp.position) if game.camp != null else null, "chairs": game.has_chairs, "cooking": game.cooking, "cook_time": game.cook_time, "grill_servings": game.grill_servings, "npc_servings": game.spectators.snapshot(), "npc_people": game.spectators.actor_snapshot(), "marshals": game.stage.officials.snapshot(), "eaten": game.eaten, "racing": game.racing, "passed": game.passed, "helped": game.helped, "elapsed": game.elapsed, "paused": game.paused, "dead": game.dead, "finished": game.finished, "title": game.menu_title.text, "text": game.menu_text.text, "racers": racers, "tow": game.tow_target.get_meta("room_id") if game.tow_target != null else -1, "tow_progress": game.tow_progress, "tow_owner": tow_owner, "recovery_links": game.recovery_links, "recovery_helpers": game.recovery_helpers, "notice": game.toast_label.text, "notice_time": game.toast_time}
+	return {"drive_protocol": 1, "driving": driving, "camp_cooking": game.camp_cooking.snapshot(), "cargo": game.cargo.snapshot(), "foraging": game.foraging.snapshot(), "course": game.course.snapshot(), "church_bell": game.stage.city.bell.snapshot() if game.stage.urban and game.stage.city.bell != null else {}, "city_lamps": game.stage.city.snapshot() if game.stage.urban else [], "chair_poses": chair_poses, "flag_poses": flag_poses, "table_yaw": game.camp.rotation.y if game.camp != null else 0.0, "grill_pose": {"pos": a(game.grill.position), "yaw": game.grill.rotation.y} if game.grill != null else null, "snow_dug": game.stage.snow.dug_snapshot(), "snow": game.stage.snow.snapshot() if game.stage.winter else [], "fallen": game.stage.tree_snapshot(), "stones": stone_state(), "impacts": game.impact_serials, "camp": a(game.camp.position) if game.camp != null else null, "chairs": game.has_chairs, "cooking": game.cooking, "cook_time": game.cook_time, "grill_servings": game.grill_servings, "npc_servings": game.spectators.snapshot(), "npc_people": game.spectators.actor_snapshot(), "marshals": game.stage.officials.snapshot(), "eaten": game.eaten, "racing": game.racing, "passed": game.passed, "helped": game.helped, "elapsed": game.elapsed, "paused": game.paused, "dead": game.dead, "finished": game.finished, "title": game.menu_title.text, "text": game.menu_text.text, "racers": racers, "tow": game.tow_target.get_meta("room_id") if game.tow_target != null else -1, "tow_progress": game.tow_progress, "tow_owner": tow_owner, "recovery_links": game.recovery_links, "recovery_helpers": game.recovery_helpers, "notice": game.toast_label.text, "notice_time": game.toast_time}
 
 func stone_state() -> Array:
 	var result = []
@@ -667,6 +670,7 @@ func apply_world(w: Dictionary, sample_time: float = -1.0) -> void:
 	if game.stage.winter:
 		game.stage.snow.authoritative = false
 		game.stage.snow.apply_snapshot(w.get("snow", []))
+		game.stage.snow.apply_dug_snapshot(w.get("snow_dug", []))
 	game.stage.apply_trees(w.get("fallen", []))
 	for f in w.get("fallen", []):
 		game.tree_requests.erase(int(f.id))

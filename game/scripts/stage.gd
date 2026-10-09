@@ -207,6 +207,7 @@ func grip(pos: Vector3) -> float:
 			return lerpf(base, 0.38, clampf(wet, 0.0, 1.0))
 		return base
 	if winter:
+		if snow.is_dug(self, pos): return 0.65
 		if DeepSnow.depth(self, pos) > 0.02:
 			return lerpf(0.24, 0.50, snow.packed(pos))
 		if road_distance(pos) > WIDTH * 0.55:
@@ -220,6 +221,10 @@ func vehicle_ground(pos: Vector3) -> float:
 	return snow.contact(self, pos) if winter else ground(pos)
 
 func ground(pos: Vector3) -> float:
+	if winter and snow.is_dug(self, pos): return snow.floor_height(self, pos)
+	return base_ground(pos)
+
+func base_ground(pos: Vector3) -> float:
 	if desert:
 		return canyon.ground(self, pos)
 	if urban:
@@ -313,7 +318,7 @@ func terrain_base_vertex_height(x: float, z: float) -> float:
 	if urban:
 		var nearest = urban_nearest(p)
 		margin = lerpf(0.20, 0.25, smoothstep(road_width(nearest.s) * 0.5, road_width(nearest.s) * 0.5 + 3.0, nearest.distance))
-	return ground(p) - margin
+	return base_ground(p) - margin
 
 func terrain_vertex_height(x: float, z: float) -> float:
 	if desert:
