@@ -271,6 +271,7 @@ var mobile_bottom: PanelContainer
 var mobile_ui: Control
 var mobile_safe_rect = Rect2()
 var mobile_safe_timer = 0.0
+var lifecycle_pause_sequence = 0
 var mobile_safe_http: HTTPRequest
 
 func enable_mobile() -> void:
@@ -366,7 +367,7 @@ func fit_mobile_dialogs() -> void:
 		dialog.scale = Vector2.ONE * factor
 
 func update_mobile_safe_area(delta: float) -> void:
-	if not mobile_mode or not OS.has_feature("web"):
+	if not OS.has_feature("web"):
 		return
 	if mobile_safe_http == null:
 		mobile_safe_http = HTTPRequest.new()
@@ -389,11 +390,30 @@ func _mobile_safe_response(result: int, code: int, _headers: PackedStringArray, 
 	var data = JSON.parse_string(body.get_string_from_utf8())
 	if not data is Dictionary or not data.has_all(["width", "height", "left", "right", "top", "bottom"]):
 		return
+	var lifecycle = data.get("lifecycle", {})
+	if lifecycle is Dictionary:
+		var sequence = int(lifecycle.get("pause_sequence", 0))
+		if sequence > lifecycle_pause_sequence or lifecycle.get("hidden", false):
+			lifecycle_pause_sequence = sequence
+			if playing and not dead and not finished and safety_gate == null:
+				_set_paused(true)
+	if not mobile_mode:
+		return
 	var extent = get_viewport().get_visible_rect().size
 	var ratio = extent / Vector2(maxf(float(data.width), 1.0), maxf(float(data.height), 1.0))
 	var origin = Vector2(float(data.left), float(data.top)) * ratio
 	var end = extent - Vector2(float(data.right), float(data.bottom)) * ratio
 	apply_mobile_safe_rect(Rect2(origin, end - origin))
+
+func _set_paused(value: bool) -> void:
+	paused = value
+	menu.visible = paused
+	menu_title.text = "Перерыв на природе"
+	menu_text.text = "Пауза. Ралли, мангал и таймеры остановлены.\n\nHome — вернуть машину на дорогу.\nF8 / F9 — показать застревание / вылет.\n\nПродолжить — кнопкой или Esc."
+	start_button.text = "ПРОДОЛЖИТЬ"
+	menu_text.text = "Выезд приостановлен. Продолжить или вернуться в меню." if not room.connected or room.is_host else "Твоя пауза. Остальные игроки продолжают выезд."
+	_update_invite_button()
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if paused or mobile_mode else Input.MOUSE_MODE_CAPTURED
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch and event.pressed and not mobile_mode:
@@ -980,14 +1000,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		mobile_sidebar.visible = not mobile_sidebar.visible
 		return
 	if event.is_action_pressed("pause_demo") and playing and not dead and not finished:
-		paused = not paused
-		menu.visible = paused
-		menu_title.text = "Перерыв на природе"
-		menu_text.text = "Пауза. Ралли, мангал и таймеры остановлены.\n\nHome — вернуть машину на дорогу.\nF8 / F9 — показать застревание / вылет.\n\nПродолжить — кнопкой или Esc."
-		start_button.text = "ПРОДОЛЖИТЬ"
-		menu_text.text = "Выезд приостановлен. Продолжить или вернуться в меню." if not room.connected or room.is_host else "Твоя пауза. Остальные игроки продолжают выезд."
-		_update_invite_button()
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if paused or mobile_mode else Input.MOUSE_MODE_CAPTURED
+		_set_paused(not paused)
 		return
 	if not playing or paused or dead or finished:
 		return
@@ -1059,6 +1072,7 @@ func _update_fps_counter(delta: float) -> void:
 		_set_hud_text(fps_label, "v%s · %d FPS" % [ProjectSettings.get_setting("application/config/version"), fps])
 
 func _process(delta: float) -> void:
+	update_mobile_safe_area(delta)
 	_update_fps_counter(delta)
 	if soundscape != null:
 		soundscape.update(delta)

@@ -43,7 +43,6 @@ func world_blocked() -> bool:
 	return game.room.connected and not game.room.is_host and game.room.world_paused
 
 func _process(_delta: float) -> void:
-	game.update_mobile_safe_area(_delta)
 	game.fit_mobile_dialogs()
 	if not active() or world_blocked() or last_in_car != game.in_car or last_size != size or not landscape():
 		reset_input()

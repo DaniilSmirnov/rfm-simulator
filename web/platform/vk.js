@@ -1,6 +1,7 @@
 (() => {
   let profile, entitlements, session, catalog, purchasing = false, orderOpen = false;
   window.RallyViewport?.attachVK(vkBridge);
+  window.RallyLifecycle?.attachVK(vkBridge);
   // RequestBox, unlike InviteBox, carries a per-invitation requestKey.
   // The key is only a room locator; authorization and room capacity are still
   // enforced by the normal signed VK session and /api/rooms/:id/join endpoint.

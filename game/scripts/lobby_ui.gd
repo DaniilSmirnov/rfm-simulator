@@ -11,6 +11,11 @@ var check_purchase: Button
 var purchase_status: Label
 var return_button: Button
 var host_pause: PanelContainer
+var audio_controls: VBoxContainer
+var volume_label: Label
+var volume_slider: HSlider
+const AUDIO_SETTINGS_PATH = "user://audio_settings.cfg"
+var master_base_db = 0.0
 var last_size = Vector2.ZERO
 var last_playing = false
 
@@ -27,6 +32,7 @@ func add_preview(parent: Control, kind: String) -> void:
 	image.tooltip_text = "Превью машины" if kind == "МАШИНА" else "Превью спецучастка"
 
 func finish(parent: Control) -> void:
+	_build_audio_controls(parent)
 	background = TextureRect.new()
 	background.name = "StageBackdrop"
 	background.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -89,6 +95,44 @@ func finish(parent: Control) -> void:
 	check_purchase.hide()
 	purchase_status.hide()
 	refresh.call_deferred()
+
+func _build_audio_controls(parent: Control) -> void:
+	master_base_db = AudioServer.get_bus_volume_db(AudioServer.get_bus_index("Master"))
+	var settings = ConfigFile.new()
+	var percent = 100.0
+	if settings.load(AUDIO_SETTINGS_PATH) == OK:
+		var saved = settings.get_value("audio", "volume", 100.0)
+		if (saved is float or saved is int) and is_finite(float(saved)):
+			percent = clampf(float(saved), 0.0, 100.0)
+	audio_controls = VBoxContainer.new()
+	audio_controls.name = "AudioSettings"
+	parent.add_child(audio_controls)
+	volume_label = game._label(audio_controls, "", 17, Color("dfb270"))
+	volume_slider = HSlider.new()
+	volume_slider.name = "MasterVolume"
+	volume_slider.min_value = 0
+	volume_slider.max_value = 100
+	volume_slider.step = 1
+	volume_slider.custom_minimum_size = Vector2(0, 44)
+	volume_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	volume_slider.tooltip_text = "Громкость всех звуков. 0 — без звука."
+	audio_controls.add_child(volume_slider)
+	volume_slider.value = percent
+	_apply_volume(percent)
+	volume_slider.value_changed.connect(func(value: float):
+		_apply_volume(value)
+		var config = ConfigFile.new()
+		config.set_value("audio", "volume", value)
+		if config.save(AUDIO_SETTINGS_PATH) != OK:
+			game.toast("Не удалось сохранить громкость.")
+	)
+	audio_controls.hide()
+
+func _apply_volume(percent: float) -> void:
+	var master = AudioServer.get_bus_index("Master")
+	AudioServer.set_bus_mute(master, percent <= 0)
+	AudioServer.set_bus_volume_db(master, master_base_db + linear_to_db(maxf(percent / 100.0, 0.0001)))
+	volume_label.text = "Звук выключен" if percent <= 0 else "Громкость · %d%%" % roundi(percent)
 
 func allowed(kind: String, index: int) -> bool:
 	return game.platform_service == null or game.platform_service.can_use(kind, index)
@@ -161,6 +205,7 @@ func _process(_delta: float) -> void:
 		host_pause.visible = game.room.connected and not game.room.is_host and game.room.world_paused and not game.paused and not game.dead and not game.finished
 	game.draw_distance_controls.visible = game.playing and game.paused and not game.dead and not game.finished
 	return_button.visible = game.playing
+	audio_controls.visible = game.playing and game.paused and not game.dead and not game.finished
 	if game.mobile_mode:
 		var active_hud = game.playing and not game.paused and not game.dead and not game.finished and not host_pause.visible
 		game.mobile_top.visible = active_hud
