@@ -35,7 +35,7 @@ func run() -> void:
 	check(host.ack == 30, "a missing command is not skipped")
 	for i in range(120):
 		client.predict(5, 1.0, 0.0, false, stage, 0)
-	check(client.pending.size() == Predictor.LIMIT, "disconnection backlog stays bounded")
+	check(client.full() and client.backlog_ticks() == Predictor.MAX_PENDING_TICKS and client.outgoing().size() <= Predictor.LIMIT, "disconnection backlog stays bounded by simulated time")
 	client.reset(stage.at(12), 0)
 	host.reset(stage.at(12), 0)
 	for i in range(8):
@@ -56,6 +56,28 @@ func run() -> void:
 		host.accept(client.pending, stage, model)
 		client.reconcile(host.snapshot(), stage, model)
 		check(client.node.position.distance_to(host.node.position) < 0.00001 and client.motion.velocity.distance_to(host.motion.velocity) < 0.00001, "delayed throttle, reverse, steering and braking converge for model %d" % model)
+	# Identical frames merge into one unsent command; merged input replays exactly.
+	var merged = Predictor.new()
+	var plain = Predictor.new()
+	merged.coalesce = true
+	merged.reset(stage.at(60), 0)
+	plain.reset(stage.at(60), 0)
+	host.reset(stage.at(60), 0)
+	for i in range(60):
+		var steer = 0.31 if i < 30 else -0.5
+		merged.predict(2, 1.0, steer, i > 50, stage, 3)
+		plain.predict(2, 1.0, Predictor.quantize(steer), i > 50, stage, 3)
+		if i % 7 == 6:
+			merged.seal()
+	check(merged.pending.size() <= plain.pending.size() / 3 and merged.node.position.distance_to(plain.node.position) < 0.00001, "coalesced frames shrink the queue without changing local physics")
+	check(merged.pending.all(func(c): return int(c.ticks) <= Predictor.MAX_TICKS), "merged commands respect the per-command tick cap")
+	var sent = merged.outgoing().duplicate(true)
+	merged.seal()
+	merged.predict(2, 1.0, -0.5, true, stage, 3)
+	check(merged.pending.size() == sent.size() + 1, "sent commands are never extended after sealing")
+	host.accept(merged.pending, stage, 3)
+	merged.reconcile(host.snapshot(), stage, 3)
+	check(merged.pending.is_empty() and merged.node.position.distance_to(host.node.position) < 0.00001, "host reproduces merged input exactly")
 	client.node.position += Vector3(1, 0, 0)
 	var rendered = client.node.position
 	client.reconcile(host.snapshot(), stage, 9)

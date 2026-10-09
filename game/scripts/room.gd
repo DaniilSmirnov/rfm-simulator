@@ -1,5 +1,6 @@
 extends Node
-# HTTP transport works with the existing minimal web template (no WebSocket module).
+# Room transport: a WebSocket to the room's Durable Object when the engine has
+# the module and the network keeps the socket alive; HTTP polling otherwise.
 const Prediction = preload("res://scripts/drive_prediction.gd")
 var prediction = Prediction.new()
 var host_drives: Dictionary = {}
@@ -53,6 +54,33 @@ var join_button: Button
 var racer_targets: Dictionary = {}
 var last_ui_size = Vector2.ZERO
 var last_mobile = false
+# Slowly changing world parts travel only when their revision changes.
+const COLD_SECTIONS = {
+	"snow": ["snow", "snow_dug"],
+	"trees": ["fallen"],
+	"city": ["city_lamps", "church_bell"],
+	"camp": ["camp", "table_yaw", "chairs", "chair_poses", "flag_poses", "cooking", "grill_pose", "grill_servings", "npc_servings", "eaten"],
+}
+var cold_revs: Dictionary = {}
+var server_cold_revs: Dictionary = {}
+var cold_sent: Dictionary = {}
+# WebSocket ready states, kept numeric so the script parses without the module.
+const SOCKET_OPEN = 1
+const SOCKET_CLOSED = 3
+const SOCKET_CONNECT_TIMEOUT = 6.0
+const SOCKET_RETRY = 5.0
+const SOCKET_MAX_FAILURES = 3
+var socket = null
+var socket_url = ""
+var socket_enabled = true
+var socket_open = false
+var socket_hello = false
+var socket_retry = 0.0
+var socket_failures = 0
+var socket_started_at = 0.0
+var socket_opened_at = 0.0
+var message_id = 0
+var message_times: Dictionary = {}
 
 # In browser builds the Worker serves /api/rooms on the same origin as /vk/.
 # Never attempt to connect to the user's 127.0.0.1 or downgrade HTTPS to HTTP.
@@ -68,6 +96,8 @@ func _ready() -> void:
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--room-server="):
 			server = arg.trim_prefix("--room-server=").trim_suffix("/")
+		if arg == "--room-transport=http":
+			socket_enabled = false
 	http = HTTPRequest.new()
 	http.timeout = 8
 	# Browser fetch already decompresses response bodies.
@@ -217,7 +247,12 @@ func _response(result: int, code: int, _headers: PackedStringArray, bytes: Packe
 		update_server_clock(float(data.server_time))
 	if request_kind in ["create", "join"]:
 		prediction = Prediction.new()
+		prediction.coalesce = true
 		prediction_enabled = false
+		cold_revs.clear()
+		server_cold_revs.clear()
+		cold_sent.clear()
+		socket_failures = 0
 		input_clock = 0.0
 		host_drives.clear()
 		drive_budgets.clear()
@@ -230,6 +265,9 @@ func _response(result: int, code: int, _headers: PackedStringArray, bytes: Packe
 		if is_host:
 			room_id = data.room
 		connected = true
+		socket_url = str(data.get("socket", ""))
+		_close_socket()
+		_open_socket()
 		if converting_solo:
 			_adopt_local_host_state()
 		for control in [name_input, id_input, create_button, join_button]:
@@ -251,49 +289,58 @@ func _response(result: int, code: int, _headers: PackedStringArray, bytes: Packe
 			game._invite_friends()
 		print("ROOM_CONNECTED ", room_id, " host=", is_host)
 	else:
-		if not is_host and data.world is Dictionary:
-			var drive_stamp = float(data.get("world_time", -1))
-			if drive_stamp > authority_stamp:
-				authoritative_drives = data.world.get("driving", {})
-				authority_stamp = drive_stamp
-		_update_peers(data.players)
-		if is_host:
-			for command in data.commands:
-				if not processed.has(command.id):
-					_apply_command(command)
-					processed[command.id] = true
-				if command.id not in acknowledgements:
-					acknowledgements.append(command.id)
-		else:
-			commands = commands.filter(func(c): return c.seq > int(data.accepted))
-			if data.world is Dictionary:
-				var stamp = float(data.get("world_time", -1))
-				if stamp < 0 or stamp > last_world_time:
-					prediction_enabled = int(data.world.get("drive_protocol", 0)) == 1
-					var drive = data.world.get("driving", {}).get(player_id, {})
-					if prediction_enabled and not drive.is_empty():
-						if not prediction.active:
-							prediction.reset(v(drive.pos), drive.yaw)
-						prediction.context = drive_context(player_id)
-						# Apply world collision geometry before replaying unacknowledged input.
-						if game.stage.winter:
-							game.stage.snow.authoritative = false
-							game.stage.snow.apply_snapshot(data.world.get("snow", []))
-							game.stage.snow.apply_dug_snapshot(data.world.get("snow_dug", []))
-						game.stage.apply_trees(data.world.get("fallen", []))
-						if game.stage.urban:
-							game.stage.city.apply_snapshot(data.world.get("city_lamps", []))
-						prediction.reconcile(drive, game.stage, game.selected_car)
-						game.condition = prediction.condition
-						game.car.position = prediction.node.position
-						game.heading = prediction.yaw
-					apply_world(data.world, stamp / 1000.0 if stamp >= 0 else -1.0)
-					last_world_time = stamp
-		room_label.text = "ID %s · %d/8 · %s%s" % [room_id, peers.size() + 1, "СОЗДАТЕЛЬ" if is_host else "ЗРИТЕЛЬ", " · ПАУЗА ХОЗЯИНА" if world_paused else ""]
+		_apply_sync(data)
 
-func update_server_clock(server_msec: float) -> void:
+func _apply_sync(data: Dictionary) -> void:
+	if is_host and data.get("cold_revs") is Dictionary:
+		server_cold_revs = data.cold_revs
+	var world = data.get("world")
+	if not is_host and world is Dictionary:
+		var drive_stamp = float(data.get("world_time", -1))
+		if drive_stamp > authority_stamp:
+			authoritative_drives = world.get("driving", {})
+			authority_stamp = drive_stamp
+	_update_peers(data.players)
+	if is_host:
+		for command in data.commands:
+			if not processed.has(command.id):
+				_apply_command(command)
+				processed[command.id] = true
+			if command.id not in acknowledgements:
+				acknowledgements.append(command.id)
+	else:
+		commands = commands.filter(func(c): return c.seq > int(data.accepted))
+		if world is Dictionary:
+			var stamp = float(data.get("world_time", -1))
+			if stamp < 0 or stamp > last_world_time:
+				prediction_enabled = int(world.get("drive_protocol", 0)) == 1
+				var drive = world.get("driving", {}).get(player_id, {})
+				if prediction_enabled and not drive.is_empty():
+					if not prediction.active:
+						prediction.reset(v(drive.pos), drive.yaw)
+					prediction.context = drive_context(player_id)
+					# Apply world collision geometry before replaying unacknowledged input.
+					var cold = cold_part(world)
+					if cold != null:
+						if "snow" in cold.sections and game.stage.winter:
+							game.stage.snow.authoritative = false
+							game.stage.snow.apply_snapshot(cold.fields.get("snow", []))
+							game.stage.snow.apply_dug_snapshot(cold.fields.get("snow_dug", []))
+						if "trees" in cold.sections:
+							game.stage.apply_trees(cold.fields.get("fallen", []))
+						if "city" in cold.sections and game.stage.urban:
+							game.stage.city.apply_snapshot(cold.fields.get("city_lamps", []))
+					prediction.reconcile(drive, game.stage, game.selected_car)
+					game.condition = prediction.condition
+					game.car.position = prediction.node.position
+					game.heading = prediction.yaw
+				apply_world(world, stamp / 1000.0 if stamp >= 0 else -1.0)
+				last_world_time = stamp
+	room_label.text = "ID %s · %d/8 · %s%s" % [room_id, peers.size() + 1, "СОЗДАТЕЛЬ" if is_host else "ЗРИТЕЛЬ", " · ПАУЗА ХОЗЯИНА" if world_paused else ""]
+
+func update_server_clock(server_msec: float, sent_at: float = -1.0) -> void:
 	var now = Time.get_ticks_usec() / 1000000.0
-	var round_trip = clampf(now - request_sent_at, 0, 2.0)
+	var round_trip = clampf(now - (request_sent_at if sent_at < 0 else sent_at), 0, 2.0)
 	round_trip_ms = round_trip * 1000.0
 	if previous_round_trip >= 0:
 		network_jitter_ms = lerpf(network_jitter_ms, absf(round_trip - previous_round_trip) * 1000.0, 0.2)
@@ -318,17 +365,19 @@ func _process(delta: float) -> void:
 	if not connected or game.loading_world:
 		return
 	clock += delta
-	if not busy and clock >= SYNC_INTERVAL:
+	_poll_socket(delta)
+	if not connected:
+		return
+	if clock >= SYNC_INTERVAL and (socket_open or not busy):
 		clock = fmod(clock, SYNC_INTERVAL)
-		var body = {"token": token, "state": local_state(), "commands": commands}
-		if is_host:
-			body.world = world_state()
-			body.ack = acknowledgements
-		_request("sync", body)
+		if socket_open:
+			_send_socket(sync_body())
+		else:
+			_request("sync", sync_body())
 	diagnostic_clock += delta
 	if diagnostic_clock >= 5.0:
 		diagnostic_clock = 0.0
-		print("[RFM network] RTT=%.0fms jitter=%.0fms peers=%d" % [round_trip_ms, network_jitter_ms, peers.size()])
+		print("[RFM network] RTT=%.0fms jitter=%.0fms peers=%d transport=%s" % [round_trip_ms, network_jitter_ms, peers.size(), "ws" if socket_open else "http"])
 	game.cargo.refresh_opened()
 	for peer in peers.values():
 		if peer.state == null:
@@ -437,7 +486,7 @@ func lamp_requests() -> Array:
 	return result.slice(0, 8)
 
 func local_state() -> Dictionary:
-	return {"drive_enabled": prediction_enabled, "drive_inputs": prediction.pending if prediction_enabled else [], "pos": a(game.player_position()), "car": a(game.car.position), "heading": game.heading, "tilt": a(game.car.rotation), "yaw": game.view_yaw, "pitch": game.view_pitch, "in_car": game.in_car, "tow": Input.is_action_pressed("tow") and not game.in_car and not game.paused and not game.dead and not game.finished and game.beers < 30 and game.drink_time < 0 and game.eat_time < 0, "push": a(game.walking_intent()), "speed": game.speed, "beers": game.beers, "trees": tree_requests(), "lamps": lamp_requests(), "beer": game.drink_time, "eat": game.eat_time, "food_kind": game.eat_kind, "food_species": game.food_species, "seated": game.seated, "running": game.running(), "airborne": game.jump_height > 0.01}
+	return {"drive_enabled": prediction_enabled, "drive_inputs": prediction.outgoing() if prediction_enabled else [], "pos": a(game.player_position()), "car": a(game.car.position), "heading": game.heading, "tilt": a(game.car.rotation), "yaw": game.view_yaw, "pitch": game.view_pitch, "in_car": game.in_car, "tow": Input.is_action_pressed("tow") and not game.in_car and not game.paused and not game.dead and not game.finished and game.beers < 30 and game.drink_time < 0 and game.eat_time < 0, "push": a(game.walking_intent()), "speed": game.speed, "beers": game.beers, "trees": tree_requests(), "lamps": lamp_requests(), "beer": game.drink_time, "eat": game.eat_time, "food_kind": game.eat_kind, "food_species": game.food_species, "seated": game.seated, "running": game.running(), "airborne": game.jump_height > 0.01}
 
 func _update_peers(players: Array) -> void:
 	var present = {}
@@ -613,7 +662,12 @@ func world_state() -> Dictionary:
 	var driving = {}
 	for id in host_drives:
 		driving[id] = host_drives[id].snapshot()
-	return {"drive_protocol": 1, "driving": driving, "camp_cooking": game.camp_cooking.snapshot(), "cargo": game.cargo.snapshot(), "foraging": game.foraging.snapshot(), "course": game.course.snapshot(), "church_bell": game.stage.city.bell.snapshot() if game.stage.urban and game.stage.city.bell != null else {}, "city_lamps": game.stage.city.snapshot() if game.stage.urban else [], "chair_poses": chair_poses, "flag_poses": flag_poses, "table_yaw": game.camp.rotation.y if game.camp != null else 0.0, "grill_pose": {"pos": a(game.grill.position), "yaw": game.grill.rotation.y} if game.grill != null else null, "snow_dug": game.stage.snow.dug_snapshot(), "snow": game.stage.snow.snapshot() if game.stage.winter else [], "fallen": game.stage.tree_snapshot(), "stones": stone_state(), "impacts": game.impact_serials, "camp": a(game.camp.position) if game.camp != null else null, "chairs": game.has_chairs, "cooking": game.cooking, "cook_time": game.cook_time, "grill_servings": game.grill_servings, "npc_servings": game.spectators.snapshot(), "npc_people": game.spectators.actor_snapshot(), "marshals": game.stage.officials.snapshot(), "eaten": game.eaten, "racing": game.racing, "passed": game.passed, "helped": game.helped, "elapsed": game.elapsed, "paused": game.paused, "dead": game.dead, "finished": game.finished, "title": game.menu_title.text, "text": game.menu_text.text, "racers": racers, "tow": game.tow_target.get_meta("room_id") if game.tow_target != null else -1, "tow_progress": game.tow_progress, "tow_owner": tow_owner, "recovery_links": game.recovery_links, "recovery_helpers": game.recovery_helpers, "notice": game.toast_label.text, "notice_time": game.toast_time}
+	var world = {"drive_protocol": 1, "driving": driving, "camp_cooking": game.camp_cooking.snapshot(), "cargo": game.cargo.snapshot(), "foraging": game.foraging.snapshot(), "course": game.course.snapshot(), "church_bell": game.stage.city.bell.snapshot() if game.stage.urban and game.stage.city.bell != null else {}, "city_lamps": game.stage.city.snapshot() if game.stage.urban else [], "chair_poses": chair_poses, "flag_poses": flag_poses, "table_yaw": game.camp.rotation.y if game.camp != null else 0.0, "grill_pose": {"pos": a(game.grill.position), "yaw": game.grill.rotation.y} if game.grill != null else null, "snow_dug": game.stage.snow.dug_snapshot(), "snow": game.stage.snow.snapshot() if game.stage.winter else [], "fallen": game.stage.tree_snapshot(), "stones": stone_state(), "impacts": game.impact_serials, "camp": a(game.camp.position) if game.camp != null else null, "chairs": game.has_chairs, "cooking": game.cooking, "cook_time": game.cook_time, "grill_servings": game.grill_servings, "npc_servings": game.spectators.snapshot(), "npc_people": game.spectators.actor_snapshot(), "marshals": game.stage.officials.snapshot(), "eaten": game.eaten, "racing": game.racing, "passed": game.passed, "helped": game.helped, "elapsed": game.elapsed, "paused": game.paused, "dead": game.dead, "finished": game.finished, "racers": racers, "tow": game.tow_target.get_meta("room_id") if game.tow_target != null else -1, "tow_progress": game.tow_progress, "tow_owner": tow_owner, "recovery_links": game.recovery_links, "recovery_helpers": game.recovery_helpers, "notice": game.toast_label.text, "notice_time": game.toast_time}
+	# The result text is only needed once the shared run ends.
+	if game.dead or game.finished:
+		world.title = game.menu_title.text
+		world.text = game.menu_text.text
+	return world
 
 func stone_state() -> Array:
 	var result = []
@@ -656,48 +710,111 @@ func apply_stones(w: Dictionary, sample_time: float = -1.0) -> void:
 func apply_world(w: Dictionary, sample_time: float = -1.0) -> void:
 	if sample_time < 0:
 		sample_time = server_clock()
-	if game.stage.urban:
-		game.stage.city.apply_snapshot(w.get("city_lamps", []))
+	var cold = cold_part(w)
+	if cold != null:
+		apply_cold(cold.fields, cold.sections)
+		var revisions = w.get("cold_revs", {})
+		if revisions is Dictionary:
+			for section in cold.sections:
+				if revisions.has(section):
+					cold_revs[section] = int(revisions[section])
+	apply_hot(w, sample_time)
+
+# Cold sections arrive inside "cold" when their revision changes. A complete
+# snapshot (tests, late joins through older servers) carries them inline.
+func cold_part(w: Dictionary):
+	if w.get("cold") is Dictionary:
+		var fields = {}
+		for section in w.cold:
+			if w.cold[section] is Dictionary:
+				fields.merge(w.cold[section], true)
+		return {"fields": fields, "sections": w.cold.keys()}
+	if w.has("camp"):
+		return {"fields": w, "sections": COLD_SECTIONS.keys()}
+	return null
+
+static func split_world(full: Dictionary) -> Dictionary:
+	var hot = full.duplicate()
+	var cold = {}
+	var revisions = {}
+	for section in COLD_SECTIONS:
+		var part = {}
+		for key in COLD_SECTIONS[section]:
+			if full.has(key):
+				part[key] = full[key]
+				hot.erase(key)
+		cold[section] = part
+		revisions[section] = JSON.stringify(part).hash()
+	hot.cold_revs = revisions
+	return {"hot": hot, "cold": cold}
+
+func sync_body() -> Dictionary:
+	var body = {"token": token, "state": local_state(), "commands": commands, "cold_revs": cold_revs}
+	if is_host:
+		var parts = split_world(world_state())
+		body.world = parts.hot
+		var now = Time.get_ticks_msec()
+		var cold = {}
+		for section in parts.cold:
+			var revision = int(parts.hot.cold_revs[section])
+			if server_cold_revs.has(section) and int(server_cold_revs[section]) == revision:
+				continue
+			# A section in flight is not repeated until the server could have answered.
+			var sent: Dictionary = cold_sent.get(section, {})
+			if int(sent.get("revision", -1)) == revision and now - int(sent.get("time", 0)) < 1000:
+				continue
+			cold[section] = parts.cold[section]
+			cold_sent[section] = {"revision": revision, "time": now}
+		if not cold.is_empty():
+			body.cold = cold
+		body.ack = acknowledgements
+	# Commands in this body are on the wire and must not be merged further.
+	prediction.seal()
+	return body
+
+func apply_cold(f: Dictionary, sections: Array) -> void:
+	if "city" in sections and game.stage.urban:
+		game.stage.city.apply_snapshot(f.get("city_lamps", []))
 		if game.stage.city.bell != null:
-			game.stage.city.bell.apply_snapshot(w.get("church_bell", {}))
-		for item in w.get("city_lamps", []):
+			game.stage.city.bell.apply_snapshot(f.get("church_bell", {}))
+		for item in f.get("city_lamps", []):
 			game.lamp_requests.erase(int(item.id))
-	if game.stage.winter:
+	if "snow" in sections and game.stage.winter:
 		game.stage.snow.authoritative = false
-		game.stage.snow.apply_snapshot(w.get("snow", []))
-		game.stage.snow.apply_dug_snapshot(w.get("snow_dug", []))
-	game.stage.apply_trees(w.get("fallen", []))
-	for f in w.get("fallen", []):
-		game.tree_requests.erase(int(f.id))
-	apply_stones(w, sample_time)
-	world_paused = w.paused
-	if w.get("notice_time", 0) > 0 and w.get("notice", "") != last_notice:
-		last_notice = w.notice
-		game.toast(last_notice)
+		game.stage.snow.apply_snapshot(f.get("snow", []))
+		game.stage.snow.apply_dug_snapshot(f.get("snow_dug", []))
+	if "trees" in sections:
+		game.stage.apply_trees(f.get("fallen", []))
+		for fallen in f.get("fallen", []):
+			game.tree_requests.erase(int(fallen.id))
+	if not sections.has("camp"):
+		return
+	var camp_position = f.get("camp")
+	var cooking = bool(f.get("cooking", false))
 	# Full snapshots reconcile removals as well as additions.
-	if w.camp == null and game.camp != null:
+	if camp_position == null and game.camp != null:
 		game.packing.remove({"kind": "table", "node": game.camp})
-	if w.has("chair_poses"):
+	if f.has("chair_poses"):
 		for owner in game.personal_chairs.keys():
-			if not w.chair_poses.has(owner):
+			if not f.chair_poses.has(owner):
 				game.packing.remove({"kind": "chair", "owner": owner, "node": game.personal_chairs[owner]})
-	if w.has("flag_poses"):
+	if f.has("flag_poses"):
 		for owner in game.personal_flags.keys():
-			if not w.flag_poses.has(owner):
+			if not f.flag_poses.has(owner):
 				for node in game.personal_flags[owner].duplicate():
 					game.packing.remove({"kind": "flag", "owner": owner, "node": node})
-	if not w.cooking and game.grill != null:
+	if not cooking and game.grill != null:
 		game.packing.remove({"kind": "grill", "node": game.grill})
-	if w.camp != null:
+	if camp_position != null:
 		if game.camp == null:
 			game.camp = Node3D.new()
 			game.add_child(game.camp)
 			Props.table(game.camp)
-		game.camp.position = v(w.camp)
-		game.camp.rotation.y = float(w.get("table_yaw", 0.0))
-	if w.has("flag_poses"):
-		for owner in w.flag_poses:
-			var poses = w.flag_poses[owner]
+		game.camp.position = v(camp_position)
+		game.camp.rotation.y = float(f.get("table_yaw", 0.0))
+	if f.has("flag_poses"):
+		for owner in f.flag_poses:
+			var poses = f.flag_poses[owner]
 			var existing: Array = game.personal_flags.get(owner, [])
 			while existing.size() > poses.size():
 				var old_flag = existing.pop_back()
@@ -711,28 +828,35 @@ func apply_world(w: Dictionary, sample_time: float = -1.0) -> void:
 					existing[i].position = v(pose.pos)
 					existing[i].rotation.y = float(pose.yaw)
 			game.personal_flags[owner] = existing
-	if w.has("chair_poses"):
-		for owner in w.chair_poses:
-			var pose = w.chair_poses[owner]
+	if f.has("chair_poses"):
+		for owner in f.chair_poses:
+			var pose = f.chair_poses[owner]
 			game.apply_chair(owner, v(pose.pos), float(pose.yaw))
 	else:
-		if w.chairs and not game.has_chairs and game.camp != null:
+		if f.get("chairs", false) and not game.has_chairs and game.camp != null:
 			game.apply_chair("legacy", game.camp.position + Vector3(-1.6, 0, 0.7), 0.0)
-	game.has_chairs = w.chairs
-	if w.cooking:
-		var grill_pose = w.get("grill_pose", null)
+	game.has_chairs = bool(f.get("chairs", false))
+	if cooking:
+		var grill_pose = f.get("grill_pose", null)
 		var spot = v(grill_pose.pos) if grill_pose != null else game.camp.position + Vector3(0.3, 0, -2.4)
 		var yaw = float(grill_pose.yaw) if grill_pose != null else 0.0
 		game.start_grill(spot, yaw, true)
-	game.cook_time = w.cook_time
-	game.grill_servings = int(w.get("grill_servings", Props.FOOD_PORTIONS))
+	game.grill_servings = int(f.get("grill_servings", Props.FOOD_PORTIONS))
 	if game.grill != null:
 		Props.set_grill_servings(game.grill, game.grill_servings)
-	game.spectators.apply_snapshot(w.get("npc_servings", []))
+	game.spectators.apply_snapshot(f.get("npc_servings", []))
+	game.eaten = bool(f.get("eaten", false))
+
+func apply_hot(w: Dictionary, sample_time: float) -> void:
+	apply_stones(w, sample_time)
+	world_paused = w.paused
+	if w.get("notice_time", 0) > 0 and w.get("notice", "") != last_notice:
+		last_notice = w.notice
+		game.toast(last_notice)
+	game.cook_time = w.cook_time
 	game.spectators.apply_actor_snapshot(w.get("npc_people", []))
 	game.stage.officials.apply_snapshot(w.get("marshals", []))
 	game.foraging.apply_snapshot(w.get("foraging", {}))
-	game.eaten = w.eaten
 	game.course.apply_snapshot(w.get("course", {}))
 	game.cargo.apply_snapshot(w.get("cargo", {}))
 	game.racing = w.racing
@@ -781,7 +905,7 @@ func apply_world(w: Dictionary, sample_time: float = -1.0) -> void:
 	if (w.dead or w.finished) and not game.dead and not game.finished:
 		game.dead = w.dead
 		game.finished = w.finished
-		game._show_result(w.title, w.text)
+		game._show_result(str(w.get("title", "")), str(w.get("text", "")))
 
 func update_tow(delta: float) -> void:
 	var players = {player_id: local_state()}
@@ -828,6 +952,7 @@ func check_remote_collisions() -> void:
 					return
 
 func leave() -> void:
+	_close_socket()
 	if busy:
 		http.cancel_request()
 		busy = false
@@ -836,6 +961,7 @@ func leave() -> void:
 
 func disconnect_room(message: String) -> void:
 	connected = false
+	_close_socket()
 	game.paused = true
 	game.menu.show()
 	game.menu_title.text = "Комната закрыта"
@@ -846,6 +972,112 @@ func disconnect_room(message: String) -> void:
 	if game.mobile_controls != null:
 		game.mobile_controls.reset_input()
 	room_label.text = message
+
+# The socket carries the same sync bodies and replies as HTTP. The server also
+# pushes fresh snapshots as soon as the host or a guest reports, so a guest's
+# input reaches the host without waiting for the host's next poll.
+func _open_socket() -> void:
+	if not socket_enabled or not connected or socket_url == "" or not ClassDB.class_exists("WebSocketPeer"):
+		return
+	socket = ClassDB.instantiate("WebSocketPeer")
+	socket.inbound_buffer_size = 262144
+	socket.outbound_buffer_size = 262144
+	socket_open = false
+	socket_hello = false
+	socket_started_at = Time.get_ticks_usec() / 1000000.0
+	if socket.connect_to_url(socket_url) != OK:
+		_socket_failed()
+
+func _close_socket() -> void:
+	if socket != null:
+		socket.close()
+	socket = null
+	socket_open = false
+	socket_hello = false
+	message_times.clear()
+
+func _socket_failed() -> void:
+	var was_open = socket_open
+	var lived = Time.get_ticks_usec() / 1000000.0 - (socket_opened_at if was_open else socket_started_at)
+	_close_socket()
+	if not connected:
+		return
+	# A socket that dies right after opening (filtered networks often cut long
+	# connections) counts as a failure; a long healthy session resets the count.
+	socket_failures = 1 if was_open and lived > 60.0 else socket_failures + 1
+	if socket_failures >= SOCKET_MAX_FAILURES:
+		socket_enabled = false
+		print("ROOM_SOCKET disabled, using HTTP")
+	else:
+		socket_retry = SOCKET_RETRY * socket_failures
+		print("ROOM_SOCKET closed, HTTP until retry in %.0fs" % socket_retry)
+	# Continue on HTTP right away.
+	clock = maxf(clock, SYNC_INTERVAL)
+
+func _poll_socket(delta: float) -> void:
+	if socket == null:
+		if socket_retry > 0 and connected:
+			socket_retry -= delta
+			if socket_retry <= 0:
+				_open_socket()
+		return
+	socket.poll()
+	var state = socket.get_ready_state()
+	if state == SOCKET_CLOSED:
+		_socket_failed()
+		return
+	if state != SOCKET_OPEN:
+		if Time.get_ticks_usec() / 1000000.0 - socket_started_at > SOCKET_CONNECT_TIMEOUT:
+			_socket_failed()
+		return
+	if not socket_hello:
+		socket_hello = true
+		socket.send_text(JSON.stringify({"type": "hello", "id": 0, "token": token, "cold_revs": cold_revs}))
+	while socket != null and socket.get_available_packet_count() > 0:
+		_socket_message(socket.get_packet().get_string_from_utf8())
+
+func _send_socket(body: Dictionary) -> void:
+	# Back off instead of queueing when the browser cannot drain the socket.
+	if socket.get_current_outbound_buffered_amount() > 65536:
+		return
+	message_id += 1
+	body.erase("token")
+	body.type = "sync"
+	body.id = message_id
+	message_times[message_id] = Time.get_ticks_usec() / 1000000.0
+	for id in message_times.keys():
+		if id < message_id - 32:
+			message_times.erase(id)
+	if socket.send_text(JSON.stringify(body)) != OK:
+		_socket_failed()
+
+func _socket_message(text: String) -> void:
+	var data = JSON.parse_string(text)
+	if not data is Dictionary or not connected:
+		return
+	match str(data.get("type", "")):
+		"hello":
+			socket_open = true
+			socket_opened_at = Time.get_ticks_usec() / 1000000.0
+			print("ROOM_SOCKET open")
+		"reply":
+			errors = 0
+			var id = int(data.get("id", -1))
+			if message_times.has(id) and data.has("server_time"):
+				update_server_clock(float(data.server_time), message_times[id])
+				message_times.erase(id)
+			_apply_sync(data)
+		"push":
+			_apply_sync(data)
+		"error":
+			var status = int(data.get("status", 500))
+			var message = str(data.get("error", "Нет связи с сервером комнаты."))
+			if status in [401, 404, 410]:
+				disconnect_room(message)
+			elif status == 429:
+				var retry = clampf(float(data.get("retry_after", 10)), 1.0, 60.0)
+				clock = -retry
+				room_label.text = "Слишком много запросов. Повторим через %d сек." % ceili(retry)
 
 func predict_drive(delta: float) -> bool:
 	if is_host or not prediction_enabled:
@@ -911,7 +1143,7 @@ func recover_drive() -> bool:
 	if not prediction.active:
 		game.toast("Дождись синхронизации машины с хозяином.")
 		return true
-	if prediction.pending.size() >= Prediction.LIMIT:
+	if prediction.full():
 		game.toast("Дождись восстановления связи, затем верни машину на СУ.")
 		return true
 	prediction.context = drive_context(player_id)

@@ -47,6 +47,24 @@ func run() -> void:
 	host.cook_time = 19
 	guest.room.apply_world(host.room.world_state())
 	check(guest.has_chairs and guest.cooking and guest.cook_time == 19, "late world snapshot builds chairs and grill")
+	var parts = host.room.split_world(host.room.world_state())
+	check(not parts.hot.has("camp") and not parts.hot.has("snow") and parts.hot.has("racers") and parts.hot.cold_revs.size() == host.room.COLD_SECTIONS.size(), "hot snapshot leaves out slowly changing sections")
+	check(host.room.split_world(host.room.world_state()).hot.cold_revs == parts.hot.cold_revs, "unchanged cold sections keep their revision")
+	guest.room.apply_world(parts.hot)
+	check(guest.camp != null and guest.has_chairs and guest.cooking, "hot-only snapshot keeps the replicated camp")
+	var with_camp = parts.hot.duplicate()
+	with_camp.cold = {"camp": parts.cold.camp}
+	guest.room.apply_world(with_camp)
+	check(int(guest.room.cold_revs.get("camp", -1)) == int(parts.hot.cold_revs.camp) and not guest.room.cold_revs.has("snow"), "guest records only the cold revisions it applied")
+	host.room.server_cold_revs = {}
+	host.room.cold_sent.clear()
+	var upload = host.room.sync_body()
+	check(upload.cold.size() == host.room.COLD_SECTIONS.size() and not upload.world.has("camp"), "host uploads every cold section once")
+	check(not host.room.sync_body().has("cold"), "a section in flight is not uploaded again at once")
+	host.room.server_cold_revs = upload.world.cold_revs.duplicate()
+	host.room.cold_sent.clear()
+	check(not host.room.sync_body().has("cold"), "sections the server holds are not resent")
+	host.cook_time = 19
 	host.in_car = false
 	host.course.phase = "racing"
 	host.spawn_racer("stuck")
@@ -133,7 +151,7 @@ func run() -> void:
 	guest.room.prediction.active = false
 	check(guest.room.recover_drive() and guest.car.transform == original_car, "recovery waits for authority instead of taking the legacy teleport path during handshake")
 	guest.room.prediction.active = true
-	for i in range(guest.room.Prediction.LIMIT):
+	for i in range(guest.room.Prediction.MAX_PENDING):
 		guest.room.prediction.pending.append({"seq": i + 1})
 	var queue_size = guest.room.prediction.pending.size()
 	check(guest.room.recover_drive() and guest.room.prediction.pending.size() == queue_size and guest.car.transform == original_car, "full input queue defers recovery without a local teleport or a success notice")

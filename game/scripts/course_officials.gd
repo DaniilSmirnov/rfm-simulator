@@ -207,7 +207,7 @@ func snapshot() -> Array:
 	var result: Array = []
 	for person in people:
 		var p: Vector3 = person.avatar.position
-		result.append({"id": person.id, "pos": [p.x, p.y, p.z], "yaw": person.avatar.rotation.y, "helper": person.helper, "action": person.action})
+		result.append({"id": person.id, "pos": [snappedf(p.x, 0.01), snappedf(p.y, 0.01), snappedf(p.z, 0.01)], "yaw": snappedf(person.avatar.rotation.y, 0.001), "helper": person.helper, "action": person.action})
 	return result
 
 func apply_snapshot(poses: Array) -> void:

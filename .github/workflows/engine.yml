@@ -50,12 +50,16 @@ jobs:
           path: |
             engine/web-template.zip
             engine/manifest.json
-      - name: Publish verified engine to main
+      # A manual run on a branch publishes to that branch, so engine changes
+      # can be reviewed in their pull request before reaching main.
+      - name: Publish verified engine to the triggering branch
+        env:
+          TARGET_BRANCH: ${{ github.ref_name }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add engine/web-template.zip engine/manifest.json
           git diff --cached --quiet && exit 0
-          git commit -m "Update mini Web engine with Godot 3D physics"
-          git pull --rebase origin main
-          git push origin HEAD:main
+          git commit -m "Update mini Web engine (3D physics, WebSocket)"
+          git pull --rebase origin "$TARGET_BRANCH"
+          git push origin "HEAD:$TARGET_BRANCH"

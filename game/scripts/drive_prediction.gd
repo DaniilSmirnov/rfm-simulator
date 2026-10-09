@@ -1,6 +1,12 @@
 extends RefCounted
 const Motion = preload("res://scripts/vehicle_motion.gd")
+# Commands sent per sync. The backlog itself is bounded by simulated time so
+# merged commands keep about four seconds of input during a network stall.
 const LIMIT = 96
+const MAX_PENDING = 240
+const MAX_PENDING_TICKS = 480
+const MAX_TICKS = 12
+const INPUT_STEP = 1.0 / 32.0
 var motion = Motion.new()
 var node = Node3D.new()
 var yaw = 0.0
@@ -16,6 +22,10 @@ var events: Array[Dictionary] = []
 var replaying = false
 var visual_yaw = 0.0
 var recovery_ack = 0
+# When enabled, identical consecutive input that has not been sent yet is merged
+# into one command instead of producing a command per rendered frame.
+var coalesce = false
+var sealed_seq = 0
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_PREDELETE:
@@ -35,6 +45,7 @@ func reset(position: Vector3, heading: float) -> void:
 	events.clear()
 	visual_yaw = 0.0
 	recovery_ack = 0
+	sealed_seq = 0
 	context.clear()
 	replaying = false
 
@@ -126,11 +137,40 @@ func step(c: Dictionary, stage, model: int) -> void:
 		if offroad and absf(speed) > 5:
 			condition = maxf(0, condition - dt * 0.15)
 
+func backlog_ticks() -> int:
+	var total = 0
+	for c in pending:
+		total += int(c.get("ticks", 0))
+	return total
+
+func full() -> bool:
+	return pending.size() >= MAX_PENDING or backlog_ticks() >= MAX_PENDING_TICKS
+
+# Commands up to the current sequence are on the wire and must not change.
+func seal() -> void:
+	sealed_seq = seq
+
+func outgoing() -> Array:
+	return pending.slice(0, LIMIT)
+
+static func quantize(value: float) -> float:
+	return snappedf(clampf(value, -1.0, 1.0), INPUT_STEP)
+
 func predict(ticks: int, throttle: float, steer: float, brake: bool, stage, model: int, recover: bool = false) -> void:
-	if ticks <= 0 or pending.size() >= LIMIT:
+	if ticks <= 0 or full():
 		return
+	ticks = mini(ticks, MAX_TICKS)
+	if coalesce:
+		throttle = quantize(throttle)
+		steer = quantize(steer)
+		if not recover and not pending.is_empty():
+			var last: Dictionary = pending.back()
+			if int(last.seq) > sealed_seq and not last.get("recover", false) and float(last.throttle) == throttle and float(last.steer) == steer and bool(last.brake) == brake and int(last.ticks) + ticks <= MAX_TICKS:
+				last.ticks = int(last.ticks) + ticks
+				step({"seq": last.seq, "ticks": ticks, "throttle": throttle, "steer": steer, "brake": brake}, stage, model)
+				return
 	seq += 1
-	var c = {"seq": seq, "ticks": mini(ticks, 12), "throttle": throttle, "steer": steer, "brake": brake, "recover": recover}
+	var c = {"seq": seq, "ticks": ticks, "throttle": throttle, "steer": steer, "brake": brake, "recover": recover}
 	pending.append(c)
 	step(c, stage, model)
 

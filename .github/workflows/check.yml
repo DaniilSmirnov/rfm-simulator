@@ -96,6 +96,8 @@ jobs:
       - run: npm run build
       - name: Verify two native multiplayer clients
         run: node scripts/test-multiplayer.mjs
+      - name: Verify two native multiplayer clients over WebSocket
+        run: node scripts/test-multiplayer.mjs --socket
 
       - name: Verify production artifacts
         run: |
@@ -123,7 +125,7 @@ jobs:
 
       - name: Detect physical Web template
         id: physics
-        run: node -e 'const fs = require("node:fs"); fs.appendFileSync(process.env.GITHUB_OUTPUT, "enabled=" + Boolean(JSON.parse(fs.readFileSync("engine/manifest.json")).physics_3d) + "\n");'
+        run: node -e 'const fs = require("node:fs"); const m = JSON.parse(fs.readFileSync("engine/manifest.json")); fs.appendFileSync(process.env.GITHUB_OUTPUT, "enabled=" + Boolean(m.physics_3d) + "\nwebsocket=" + Boolean(m.websocket) + "\n");'
 
       - name: Verify exported physics in Chromium
         if: steps.physics.outputs.enabled == 'true'
@@ -131,6 +133,10 @@ jobs:
           node scripts/test-web-startup.mjs
           node scripts/test-web-physics.mjs
           node scripts/test-multiplayer.mjs --web
+
+      - name: Verify browser multiplayer over WebSocket
+        if: steps.physics.outputs.websocket == 'true'
+        run: node scripts/test-multiplayer.mjs --web --socket
 
       - uses: actions/upload-artifact@v4
         if: always()

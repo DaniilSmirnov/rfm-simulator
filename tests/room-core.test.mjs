@@ -216,7 +216,8 @@ test('pedestrian push intents are bounded and ropes cannot be pulled from a car'
   p = reply.players.find(p => p.id === g.player).state;
   assert.equal(p.tow, false);
   assert.deepEqual(p.push, [0, 0, 0]);
-  reply = r.sync({ token: h.token, state: state(), world: { recovery_helpers: 3, recovery_links: [{ player: g.player, racer: 1, pos: [0, 1, 2] }] } }, 1300);
+  r.sync({ token: h.token, state: state(), world: { recovery_helpers: 3, recovery_links: [{ player: g.player, racer: 1, pos: [0, 1, 2] }] } }, 1300);
+  reply = r.sync({ token: g.token, state: state() }, 1350);
   assert.equal(reply.world.recovery_helpers, 3);
   assert.equal(reply.world.recovery_links.length, 1);
 });
@@ -359,7 +360,8 @@ test('recovery survives transport while extra input fields and forged authority 
   r.sync({token:h.token,state:state(),world:{driving:{[g.player]:{ack:0,pos:[0,0,0]}}}},1100);
   const reply=r.sync({token:g.token,state:{...state(),drive_enabled:true,drive_inputs:[input]},world:{driving:{[g.player]:{ack:999}}}},1200);
   assert.equal(reply.world.driving[g.player].ack,0);
-  assert.deepEqual(reply.players.find(p=>p.id===g.player).state.drive_inputs,[{seq:1,ticks:1,throttle:0,steer:0,brake:false,recover:true}]);
+  const hostReply=r.sync({token:h.token,state:state()},1300);
+  assert.deepEqual(hostReply.players.find(p=>p.id===g.player).state.drive_inputs,[{seq:1,ticks:1,throttle:0,steer:0,brake:false,recover:true}]);
 });
 
 test('long VK shortnames survive room roster without legacy 24-character truncation', () => {
@@ -387,4 +389,53 @@ test('Finnish Forest selection persists for guests and restored rooms', () => {
  assert.equal(g.stage,4);
  assert.equal(new RoomState(structuredClone(r.data)).sync({token:g.token,state:state()},1200).stage,4);
  assert.equal(new RoomState().add('Host', 1000, true, {stage:9}).stage,4,'unknown stages are clamped to the last one');
+});
+
+test('raw drive inputs reach only the host and the host never downloads its own world', () => {
+  const { r, h, g } = setup();
+  const late = r.add('Late', 1000);
+  const input = { seq: 1, ticks: 2, throttle: 1, steer: 0, brake: false };
+  r.sync({ token: h.token, state: state(), world: { elapsed: 1 } }, 1100);
+  r.sync({ token: g.token, state: { ...state(), drive_enabled: true, drive_inputs: [input] } }, 1200);
+  const guestView = r.sync({ token: late.token, state: state() }, 1300);
+  assert.deepEqual(guestView.players.find(p => p.id === g.player).state.drive_inputs, []);
+  assert.equal(guestView.world.elapsed, 1);
+  const hostView = r.sync({ token: h.token, state: state() }, 1400);
+  assert.deepEqual(hostView.players.find(p => p.id === g.player).state.drive_inputs, [input]);
+  assert.equal(hostView.world, undefined);
+  assert.equal(hostView.world_time, 1100);
+});
+
+test('cold world sections are delivered once per revision and inline to clients without revisions', () => {
+  const { r, h, g } = setup();
+  const legacy = r.add('Old', 1000);
+  let host = r.sync({ token: h.token, state: state(), cold_revs: {}, world: { elapsed: 1, cold_revs: { camp: 7, snow: 3 } }, cold: { camp: { camp: [1, 2, 3] }, snow: { snow: [[1, 2, 255]] } } }, 1100);
+  assert.deepEqual(host.cold_revs, { camp: 7, snow: 3 });
+  let guest = r.sync({ token: g.token, state: state(), cold_revs: {} }, 1200);
+  assert.deepEqual(guest.world.cold, { camp: { camp: [1, 2, 3] }, snow: { snow: [[1, 2, 255]] } });
+  guest = r.sync({ token: g.token, state: state(), cold_revs: { camp: 7, snow: 3 } }, 1300);
+  assert.equal(guest.world.cold, undefined);
+  assert.equal(guest.world.elapsed, 1);
+  const old = r.sync({ token: legacy.token, state: state() }, 1300);
+  assert.deepEqual(old.world.camp, [1, 2, 3]);
+  assert.deepEqual(old.world.snow, [[1, 2, 255]]);
+  assert.equal(old.world.cold, undefined);
+  host = r.sync({ token: h.token, state: state(), world: { elapsed: 2, cold_revs: { camp: 7, snow: 4 } } }, 1400);
+  assert.equal(host.cold_revs.snow, 3, 'a revision without its payload is not adopted');
+  assert.deepEqual(r.sync({ token: g.token, state: state(), cold_revs: { camp: 7, snow: 3 } }, 1450).world.cold_revs, { camp: 7, snow: 3 });
+  r.sync({ token: h.token, state: state(), world: { elapsed: 2, cold_revs: { camp: 7, snow: 4 } }, cold: { snow: { snow: [] }, 'Bad key': {} } }, 1500);
+  guest = r.sync({ token: g.token, state: state(), cold_revs: { camp: 7, snow: 3 } }, 1600);
+  assert.deepEqual(guest.world.cold, { snow: { snow: [] } }, 'only the changed section is resent');
+  const restored = new RoomState(structuredClone(r.data));
+  assert.equal(restored.sync({ token: g.token, state: state(), cold_revs: { camp: 7, snow: 4 } }, 1700).world.cold, undefined);
+});
+
+test('pushed views remember the delivered cold revisions', () => {
+  const { r, h, g } = setup();
+  r.sync({ token: h.token, state: state(), world: { cold_revs: { camp: 3 } }, cold: { camp: { chairs: true } } }, 1100);
+  r.sync({ token: g.token, state: state(), cold_revs: {} }, 1150);
+  const player = r.data.players[g.player];
+  player.cold_revs = {};
+  assert.deepEqual(r.view(player, 1200).world.cold, { camp: { chairs: true } });
+  assert.equal(r.view(player, 1250).world.cold, undefined);
 });

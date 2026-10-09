@@ -40,7 +40,7 @@ export const nodeSuites = Object.freeze({
    "tests/audio-recovery.test.mjs"],
   ["scripts/test-device.mjs"],
  ],
- simulation: [["--test", "tests/room-core.test.mjs", "tests/room-session.test.mjs"]],
+ simulation: [["--test", "tests/room-core.test.mjs", "tests/room-socket.test.mjs", "tests/room-session.test.mjs"]],
  world: [],
 });
 export const groupDescriptions = Object.freeze({

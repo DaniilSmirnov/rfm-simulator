@@ -1,4 +1,6 @@
 export const MAX_PLAYERS = 8;
+const COLD_SECTIONS = 16;
+const SECTION = /^[a-z_]{1,24}$/;
 const COMMANDS = new Set(['table', 'chairs', 'grill', 'flag', 'eat', 'rally', 'collect', 'mount_mushroom', 'eat_mushroom', 'eat_berries', 'pack', 'trunk', 'take_gear', 'return_gear', 'firewood', 'cauldron', 'plov_cook', 'eat_plov', 'church_bell', 'dig_snow']);
 const vec = value => Array.isArray(value) && value.length === 3 && value.every(n => Number.isFinite(n) && Math.abs(n) < 3000);
 const number = n => Number.isFinite(n) && Math.abs(n) < 100000;
@@ -59,8 +61,18 @@ export class RoomState {
     p.state = { drive_enabled: s.drive_enabled === true, drive_inputs, pos: s.pos, car: s.car, heading: s.heading, tilt: vec(s.tilt) ? s.tilt : [0, s.heading, 0], yaw: s.yaw, pitch: s.pitch, in_car: s.in_car, tow: s.tow === true && !s.in_car, push: vec(s.push) ? s.push.map((n, i) => i === 1 ? 0 : Math.max(-1, Math.min(1, n))) : [0, 0, 0], speed: number(s.speed) ? Math.max(-50, Math.min(50, s.speed)) : 0, beers: Number.isSafeInteger(s.beers) ? Math.max(0, Math.min(100000, s.beers)) : 0, trees: Array.isArray(s.trees) ? s.trees.slice(0, 8).filter(t => Number.isSafeInteger(t?.id) && t.id >= 0 && t.id < 20000 && vec(t.dir)).map(t => ({ id: t.id, dir: t.dir })) : [], lamps: Array.isArray(s.lamps) ? s.lamps.slice(0, 8).filter(t => Number.isSafeInteger(t?.id) && t.id >= 0 && t.id < 512 && vec(t.dir)).map(t => ({ id: t.id, dir: t.dir })) : [], seated: s.seated === true && !s.in_car, running: s.running === true && !s.in_car && s.seated !== true, airborne: s.airborne === true && !s.in_car && s.seated !== true, food_species: ['edible', 'fly_agaric', 'toadstool'].includes(s.food_species) ? s.food_species : 'edible', food_kind: ['meat', 'mushroom', 'berries', 'plov'].includes(s.food_kind) ? s.food_kind : 'meat', eat: Number.isFinite(s.eat) ? Math.max(-1, Math.min(3.6, s.eat)) : -1, beer: Math.max(-1, Math.min(3.3, Number(s.beer) || 0)) };
     p.seen = now;
     p.state_time = now;
+    this.trackColdRevisions(p, body);
     if (p.id === this.data.host) {
       if (body.world && typeof body.world === 'object' && !Array.isArray(body.world)) { this.data.world = body.world; this.data.world_time = now; }
+      // Slowly changing world sections arrive only when their revision changes.
+      const revisions = body.world?.cold_revs;
+      if (body.cold && typeof body.cold === 'object' && !Array.isArray(body.cold) && revisions && typeof revisions === 'object') {
+        for (const [section, value] of Object.entries(body.cold).slice(0, COLD_SECTIONS)) {
+          if (!SECTION.test(section) || !Number.isSafeInteger(revisions[section])) continue;
+          (this.data.cold ??= {})[section] = value;
+          (this.data.cold_revs ??= {})[section] = revisions[section];
+        }
+      }
       const ack = new Set(Array.isArray(body.ack) ? body.ack.slice(0, 64) : []);
       this.data.commands = this.data.commands.filter(c => !ack.has(c.id));
     } else {
@@ -80,16 +92,54 @@ export class RoomState {
         p.seq = c.seq;
       }
     }
-    const host = this.data.players[this.data.host];
+    return this.view(p, now);
+  }
+  // Snapshot as seen by one participant. Used for sync replies and for
+  // WebSocket pushes, which deliver the same payload without a new request.
+  view(p, now) {
+    const hostId = this.data.host;
+    const isHost = p.id === hostId;
+    const host = this.data.players[hostId];
     const staleHost = !this.data.world_time || now - this.data.world_time > 3500;
-    const world = this.data.world && typeof this.data.world === "object"
+    let world = this.data.world && typeof this.data.world === "object"
       ? (host?.background === true || staleHost
           ? {...this.data.world, paused: true}
           : this.data.world)
       : this.data.world;
-    return { server_time: now, world_time: this.data.world_time ?? 0, stage: this.data.stage ?? 0, host: this.data.host, world, accepted: p.seq,
-      players: Object.values(this.data.players).map(({ id, name, slot, car_model, state_time, state }) => ({ id, name, slot, car_model: car_model ?? slot, state_time: state_time ?? 0, state })),
-      commands: p.id === this.data.host ? this.data.commands : [] };
+    // The host authored the world and never reads it back.
+    if (isHost) world = undefined;
+    else if (world && typeof world === 'object' && this.data.cold) {
+      if (p.cold_mode !== 'split') world = Object.assign({}, ...Object.values(this.data.cold), world);
+      else {
+        // Each section is resent until the participant reports its revision.
+        const cold = {};
+        p.cold_revs ??= {};
+        for (const [section, revision] of Object.entries(this.data.cold_revs ?? {})) {
+          if (p.cold_revs[section] === revision) continue;
+          cold[section] = this.data.cold[section];
+          p.cold_revs[section] = revision;
+        }
+        // Revisions describe what the server holds, not what the host claimed.
+        world = {...world, cold_revs: {...(this.data.cold_revs ?? {})}, ...(Object.keys(cold).length ? {cold} : {})};
+      }
+    }
+    // Raw drive inputs are only needed by the host, which simulates them.
+    const players = Object.values(this.data.players).map(({ id, name, slot, car_model, state_time, state }) => ({ id, name, slot, car_model: car_model ?? slot, state_time: state_time ?? 0,
+      state: state && !isHost && state.drive_inputs?.length ? {...state, drive_inputs: []} : state }));
+    return { server_time: now, world_time: this.data.world_time ?? 0, stage: this.data.stage ?? 0, host: hostId, ...(world === undefined ? {} : {world}), accepted: p.seq,
+      ...(isHost ? {cold_revs: this.data.cold_revs ?? {}} : {}),
+      players, commands: isHost ? this.data.commands : [] };
+  }
+  // New clients report the cold sections they have applied; older clients
+  // receive the slowly changing world inline with every snapshot.
+  trackColdRevisions(p, body) {
+    if (!Object.hasOwn(body, 'cold_revs')) return;
+    p.cold_mode = 'split';
+    p.cold_revs = {};
+    const revisions = body.cold_revs && typeof body.cold_revs === 'object' && !Array.isArray(body.cold_revs) ? body.cold_revs : {};
+    for (const [section, revision] of Object.entries(revisions).slice(0, COLD_SECTIONS)) {
+      if (SECTION.test(section) && Number.isSafeInteger(revision)) p.cold_revs[section] = revision;
+    }
   }
   heartbeat(token, now, background = false) {
     if (this.data.closed) throw new RoomError(410, 'Создатель вышел. Комната закрыта.');

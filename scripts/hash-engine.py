@@ -14,5 +14,7 @@ manifest = json.loads(manifest_path.read_text())
 manifest["template_sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
 manifest["wasm_sha256"] = hashlib.sha256(wasm).hexdigest()
 manifest["physics_3d"] = True
+custom = Path("engine/custom.py").read_text()
+manifest["websocket"] = any(line.replace(" ", "") == "module_websocket_enabled=True" for line in custom.splitlines())
 manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
 print(f"Physics-enabled mini engine: {len(wasm) / 1048576:.2f} MiB decoded, {path.stat().st_size / 1048576:.2f} MiB ZIP")
