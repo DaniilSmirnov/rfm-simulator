@@ -2,6 +2,10 @@ extends RefCounted
 # A local screen effect below the HUD. World snapshots trigger it only for
 # the affected player, and repeated snapshots never extend its duration.
 const DURATION = 10.0
+const POISON_MOVEMENT_MULTIPLIER = 0.5
+
+func movement_multiplier() -> float:
+	return POISON_MOVEMENT_MULTIPLIER if remaining > 0 else 1.0
 var remaining = 0.0
 var serial = 0
 var overlay: ColorRect

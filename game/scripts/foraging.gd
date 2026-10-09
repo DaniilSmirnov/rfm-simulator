@@ -144,7 +144,7 @@ func consume(kind: String, owner: String = "", source: int = -2) -> bool:
 		effects[key] = {"serial": serial, "until": game.elapsed + 10.0}
 		if key == game.chair_owner():
 			game.mushroom_effect.trigger(serial)
-			game.toast("Странный гриб! Цвета инвертированы на 10 секунд.")
+			game.toast("Отравление! Движение замедлено на 10 секунд.")
 	update_visuals()
 	return true
 

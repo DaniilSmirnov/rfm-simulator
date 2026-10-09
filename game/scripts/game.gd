@@ -219,6 +219,9 @@ var sobriety_label: Label
 var sobriety_bar: ProgressBar
 var tree_requests: Dictionary = {}
 var lamp_requests: Dictionary = {}
+var consumption_warning: PanelContainer
+var consumption_warning_text: Label
+var consumption_warning_time = 0.0
 var beers = 0
 var beer_timer = 0.0
 const DRINK_DURATION = 3.3
@@ -704,6 +707,21 @@ func _build_ui() -> void:
 	sobriety_bar.add_theme_stylebox_override("fill", recovery_fill)
 	recovery_box.add_child(sobriety_bar)
 	sobriety_panel.hide()
+	consumption_warning = PanelContainer.new()
+	consumption_warning.name = "ConsumptionWarning"
+	ui.add_child(consumption_warning)
+	consumption_warning.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	consumption_warning.offset_left = 24
+	consumption_warning.offset_right = -24
+	consumption_warning.offset_top = -120
+	consumption_warning.offset_bottom = -12
+	consumption_warning.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	consumption_warning.add_theme_stylebox_override("panel", _panel(Color("23342b")))
+	consumption_warning_text = _label(consumption_warning, "", 18, Color("ffe4a5"))
+	consumption_warning_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	consumption_warning_text.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	consumption_warning_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	consumption_warning.hide()
 	menu = PanelContainer.new()
 	ui.add_child(menu)
 	menu.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
@@ -973,6 +991,7 @@ func _menu_action() -> void:
 		room.connect_room("")
 
 func return_to_main_menu() -> void:
+	consumption_warning_time = 0
 	lobby_ui.return_button.disabled = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	if room.connected:
@@ -1071,7 +1090,14 @@ func _update_fps_counter(delta: float) -> void:
 	if fps > 0:
 		_set_hud_text(fps_label, "v%s · %d FPS" % [ProjectSettings.get_setting("application/config/version"), fps])
 
+func show_consumption_warning(kind: String) -> void:
+	consumption_warning_text.text = "Употребление алкоголя вредит здоровью. Не управляйте транспортом после употребления." if kind == "beer" else "Употребление неизвестных и ядовитых грибов может привести к тяжёлому отравлению и смерти. Не ешьте грибы, в безопасности которых не уверены."
+	consumption_warning_time = 8.0
+	consumption_warning.show()
+
 func _process(delta: float) -> void:
+	consumption_warning_time = maxf(0, consumption_warning_time - delta)
+	consumption_warning.visible = consumption_warning_time > 0 and playing and not paused and not dead and not finished
 	update_mobile_safe_area(delta)
 	_update_fps_counter(delta)
 	if soundscape != null:
@@ -1280,7 +1306,7 @@ func _walk_step(delta: float) -> void:
 	if motion.length() > 1:
 		motion = motion.normalized()
 	var dir = Vector3(motion.x, 0, motion.y).rotated(Vector3.UP, view_yaw)
-	var next = walker + dir * delta * (1.4 if drink_time >= 0 or eat_time >= 0 else (RUN_SPEED if running() else WALK_SPEED))
+	var next = walker + dir * delta * mushroom_effect.movement_multiplier() * (1.4 if drink_time >= 0 or eat_time >= 0 else (RUN_SPEED if running() else WALK_SPEED))
 	next.x = clampf(next.x, -185, 185)
 	next.z = clampf(next.z, -Stage.LENGTH + 5, 10)
 	var old_floor = walker.y - jump_height
@@ -1525,7 +1551,7 @@ func drink_beer() -> bool:
 	beer_prop = Props.beer_hand(avatar_variant)
 	camera.add_child(beer_prop)
 	_update_drinking(0)
-	toast("Открываем банку. За хороший выезд!")
+	show_consumption_warning("beer")
 	return true
 
 func _update_drinking(delta: float) -> void:
@@ -1576,13 +1602,13 @@ func _update_drinking(delta: float) -> void:
 			walker.y = stage.ground(walker)
 			vehicle_motion.velocity = Vector3.ZERO
 			speed = 0
-			toast("Тридцатая банка. Ты упал. Восстановление займёт три минуты.")
+			toast("Тяжёлое опьянение. Ты упал. Восстановление займёт три минуты.")
 		beer_audio.stream = load("res://audio/beer-sip.wav")
 		_play_audio(beer_audio)
 	if drink_time >= DRINK_DURATION:
 		_cancel_drink()
 		if beers < 30:
-			toast("За хороший выезд! X — готовый шашлык. Заезды начнутся автоматически.")
+			toast("Алкоголь ухудшает координацию и реакцию. Не садись за руль.")
 
 func _cancel_drink() -> void:
 	drink_time = -1.0
@@ -1692,7 +1718,10 @@ func eat_foraged(kind: String, source: int = -2) -> bool:
 	Props.style_mushrooms(meat_prop, food_species)
 	camera.add_child(meat_prop)
 	_update_eating(0)
-	toast("Едим ягоды." if kind == "berries" else "Едим гриб с шампура.")
+	if kind == "mushroom":
+		show_consumption_warning("mushroom")
+	else:
+		toast("Едим ягоды.")
 	return true
 
 func commit_meat(source_group: int = -2) -> bool:
@@ -2136,7 +2165,7 @@ func _update_hud() -> void:
 	quest_text = "%s Выбрать место для лагеря\n%s Разложить стол\n%s Поставить стулья\n%s Пожарить и съесть шашлык\n%s Посмотреть %d экипажей" % ["[x]" if camp != null else "[ ]", "[x]" if camp != null else "[ ]", "[x]" if has_chairs else "[ ]", "[x]" if eaten else "[ ]", "[x]" if passed >= RALLY_CREW_LIMIT else "[ ]", RALLY_CREW_LIMIT]
 	if packing.active():
 		quest_text = "Оба прохода завершены\nВернуть вещи в багажники: осталось %d\nБагажник открывается при подходе\nF — взять предмет / вернуть коробку\nЗатем все возвращаются в свои машины" % remaining_items
-	status_text = "ПРОХОД %d/2 · ЭКИПАЖИ %d/%d · ПОМОЩЬ %d\nПИВО %d · ВЫЕЗД %02d:%02d" % [course.pass_index, passed, RALLY_CREW_LIMIT, helped, beers, int(elapsed) / 60, int(elapsed) % 60]
+	status_text = "ПРОХОД %d/2 · ЭКИПАЖИ %d/%d · ПОМОЩЬ %d\nВЫЕЗД %02d:%02d" % [course.pass_index, passed, RALLY_CREW_LIMIT, helped, int(elapsed) / 60, int(elapsed) % 60]
 	if in_car:
 		info_text = "%02d КМ/Ч    ·    ЛЕГКОВУШКА %d%%    ·    %s" % [int(absf(speed) * 3.6), int(condition), "ОБОЧИНА" if stage.road_distance(car.position) > 4 else "ГРАВИЙ / КОЛЕЯ"]
 		hint_text = "WASD / стрелки — газ и руль   ·   Space — тормоз   ·   F — выйти   ·   Home — вернуть на СУ"
@@ -2177,7 +2206,7 @@ func _update_hud() -> void:
 				info_text = "ВЕРНУТЬ ВЕЩИ В БАГАЖНИК · ОСТАЛОСЬ %d" % remaining_items
 			else:
 				var cook_status = "ГОТОВ" if cook_time >= 35 else ("%d%%" % int(cook_time / 35 * 100) if cooking else "НЕТ ОГНЯ")
-				info_text = "ШАШЛЫК %s · %d/10 · ПИВО %d" % [cook_status, grill_servings, beers]
+				info_text = "ШАШЛЫК %s · %d/10" % [cook_status, grill_servings]
 				if camp_cooking.pot != null:
 					info_text += " · ПЛОВ %d/10" % camp_cooking.servings if camp_cooking.phase == "ready" else (" · ПЛОВ %d%%" % int(camp_cooking.cook_time / 45 * 100) if camp_cooking.phase == "cooking" else " · КАЗАН ПУСТ")
 		else:
@@ -2201,7 +2230,7 @@ func _check_finish() -> void:
 		if peer.state == null or not peer.state.in_car:
 			return
 	finished = true
-	_show_result("Раллийный выезд завершён", "Оба прохода посмотрены. Лагерь собран. Все вернулись в машины.\n\nЭкипажи: %d  ·  Помощь: %d\nПиво: %d  ·  Машина: %d%%\n\nДо следующего ралли!" % [RALLY_CREW_LIMIT + passed, helped, beers, condition])
+	_show_result("Раллийный выезд завершён", "Оба прохода посмотрены. Лагерь собран. Все вернулись в машины.\n\nЭкипажи: %d  ·  Помощь: %d\nМашина: %d%%\n\nДо следующего ралли!" % [RALLY_CREW_LIMIT + passed, helped, condition])
 
 func die(reason: String) -> void:
 	dead = true
