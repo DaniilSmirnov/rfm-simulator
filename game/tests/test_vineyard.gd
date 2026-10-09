@@ -43,15 +43,18 @@ func run() -> void:
 	check(horizon_sides[0] >= 100 and horizon_sides[1] >= 100, "generated horizon has dense coverage on each terrain edge")
 	var cafe = stage.get_node("VillageCafeTerrace")
 	var cafe_clear = true
+	var cafe_off_road = true
 	for x in [-2.6, 0.0, 2.6]:
 		for z in [-4.5, 0.0, 4.5]:
 			var point = cafe.transform * Vector3(x, 1.0, z)
+			cafe_off_road = cafe_off_road and not stage.city.paved_at(point, 0.35) and stage.road_distance(point) > 6.65
 			for obstacle in stage.city.obstacles:
 				if obstacle.kind not in ["building", "wall"]:
 					continue
 				var local = stage.city._relative_pose(obstacle.body).affine_inverse() * point
 				cafe_clear = cafe_clear and not (absf(local.x) <= obstacle.half.x and absf(local.y) <= obstacle.half.y and absf(local.z) <= obstacle.half.z)
 	check(cafe_clear, "cafe terrace stays outside neighbouring houses and garden walls")
+	check(cafe_off_road, "entire cafe footprint leaves the road and pavement clear")
 	var route_continuous = true
 	var shoulder_continuous = true
 	for sample in range(300, 570):
@@ -67,10 +70,22 @@ func run() -> void:
 	check(route_continuous, "village and gravel detour have no disconnected station jumps")
 	check(shoulder_continuous, "gravel-road shoulders and terrain have valid interpolated heights")
 	check(stage.woodland_details.get("VillageGravelGrass", 0) >= 700 and stage.woodland_details.get("VillageGravelStones", 0) >= 120, "gravel forest has dedicated nearby grass and stones")
+	var near_gravel_spots = 0
+	for station in [400.0, 410.0, 450.0, 465.0]:
+		for side_value in [-1.0, 1.0]:
+			var point = stage.at(station) + stage.side(station) * side_value * 5.0
+			if stage.city._gravel_detail_allowed(point, 0.4):
+				near_gravel_spots += 1
+		check(not stage.city._gravel_detail_allowed(stage.at(station), 0.4), "road centre rejects roadside vegetation")
+	check(near_gravel_spots >= 2, "gravel grass may grow within five metres of the road centre")
 	var gravel_boulders = stage.rocks.filter(func(rock): return rock.get("gravel_detail", false))
 	check(gravel_boulders.size() == 4, "gravel woodland has four additional collidable boulders")
 	for rock in gravel_boulders:
 		check(stage.road_distance(rock.pos) > 8.0 + rock.radius and stage.city.cemetery_clear(rock.pos, rock.radius) and not stage.city.paved_at(rock.pos, rock.radius), "boulders leave roads paving and cemetery clear")
+	check(stage.get_node_or_null("VillageStreetFurniture_335_-1") == null, "old street furniture leaves the cafe frontage clear")
+	check(stage.city.village_grass_count >= 1000 and stage.city.village_stone_count >= 220, "village has more grass and small stones in free spaces")
+	for station in [569.0, 570.0, 571.0]:
+		check(stage.draw_base_road_surface(station), "vineyard exit has continuous road mesh coverage")
 	var forest_crops_clear = true
 	for p in stage.city.tree_positions:
 		forest_crops_clear = forest_crops_clear and stage.city.crop_clear(p)
