@@ -8,6 +8,12 @@ var panel: Control
 var scroll: ScrollContainer
 var accept_button: Button
 var user_scrolled = false
+var outer: MarginContainer
+var content_margins: MarginContainer
+var button_margins: MarginContainer
+
+const MAX_READING_WIDTH = 760.0
+const MIN_SIDE_PADDING = 20.0
 
 const WHERE_TO_STAND = [
 	"Стой в специально отведённой зрительской зоне, за ограждениями и на безопасном расстоянии от дороги.",
@@ -40,7 +46,7 @@ func _ready() -> void:
 	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	background.mouse_filter = Control.MOUSE_FILTER_STOP
 	panel.add_child(background)
-	var outer = MarginContainer.new()
+	outer = MarginContainer.new()
 	outer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	outer.add_theme_constant_override("margin_left", 0)
 	outer.add_theme_constant_override("margin_right", 0)
@@ -57,17 +63,17 @@ func _ready() -> void:
 	scroll.follow_focus = false
 	scroll.get_v_scroll_bar().value_changed.connect(_on_scroll_changed)
 	layout.add_child(scroll)
-	var margins = MarginContainer.new()
-	margins.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	margins.add_theme_constant_override("margin_left", 24)
+	content_margins = MarginContainer.new()
+	content_margins.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content_margins.add_theme_constant_override("margin_left", 24)
 	margins.add_theme_constant_override("margin_right", 24)
 	margins.add_theme_constant_override("margin_top", 24)
 	margins.add_theme_constant_override("margin_bottom", 24)
-	scroll.add_child(margins)
+	scroll.add_child(content_margins)
 	var text_column = VBoxContainer.new()
 	text_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	text_column.add_theme_constant_override("separation", 16)
-	margins.add_child(text_column)
+	content_margins.add_child(text_column)
 	_add_text(text_column, "ЗРИТЕЛЬ — ЧАСТЬ РАЛЛИ", 15, Color("#ff8b52"))
 	_add_text(text_column, "БЕЗОПАСНОСТЬ НА СУ", 32, Color.WHITE)
 	_add_text(text_column, "Выбирай безопасное место, не мешай проведению гонки и выполняй указания маршалов.", 19)
@@ -86,8 +92,44 @@ func _ready() -> void:
 	accept_button.disabled = true
 	accept_button.custom_minimum_size.y = 64
 	accept_button.pressed.connect(_accept)
-	layout.add_child(accept_button)
+	button_margins = MarginContainer.new()
+	layout.add_child(button_margins)
+	button_margins.add_child(accept_button)
+	panel.resized.connect(_update_layout)
+	_update_layout()
 	scroll.resized.connect(_update_accept)
+	_update_accept()
+
+# Godot runs in a full-viewport canvas. Browsers on notched phones expose
+# CSS safe-area insets (unlike desktop, where all four values are zero).
+func _web_safe_insets() -> Vector4:
+	if not OS.has_feature("web"):
+		return Vector4.ZERO
+	var result = JavaScriptBridge.eval("(function(){const e=document.createElement('div');e.style.cssText='position:fixed;visibility:hidden;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)';document.body.appendChild(e);const c=getComputedStyle(e);const v=[c.paddingLeft,c.paddingTop,c.paddingRight,c.paddingBottom].map(parseFloat);e.remove();return v.map(n=>Number.isFinite(n)?n:0).join(',');})()", true)
+	if typeof(result) != TYPE_STRING:
+		return Vector4.ZERO
+	var parts: PackedStringArray = result.split(",")
+	if parts.size() != 4:
+		return Vector4.ZERO
+	var scale_factor = panel.size.x / maxf(1.0, float(JavaScriptBridge.eval("window.innerWidth", true)))
+	return Vector4(float(parts[0]), float(parts[1]), float(parts[2]), float(parts[3])) * scale_factor
+
+func _update_layout() -> void:
+	if panel == null or outer == null or content_margins == null or button_margins == null:
+		return
+	var insets = _web_safe_insets()
+	var content_width = maxf(1.0, panel.size.x - insets.x - insets.z)
+	# Keep a readable, centered column on desktop and modest gutters on phones.
+	var gutter = maxf(MIN_SIDE_PADDING, (content_width - MAX_READING_WIDTH) * 0.5)
+	for item in [content_margins, button_margins]:
+		item.add_theme_constant_override("margin_left", roundi(gutter))
+		item.add_theme_constant_override("margin_right", roundi(gutter))
+	content_margins.add_theme_constant_override("margin_top", 24)
+	content_margins.add_theme_constant_override("margin_bottom", 24)
+	outer.add_theme_constant_override("margin_left", roundi(insets.x))
+	outer.add_theme_constant_override("margin_right", roundi(insets.z))
+	outer.add_theme_constant_override("margin_top", roundi(insets.y))
+	outer.add_theme_constant_override("margin_bottom", roundi(insets.w + 12))
 	_update_accept()
 
 func _add_text(parent: VBoxContainer, value: String, font_size: int, color: Color = Color("#f6ead1")) -> void:
