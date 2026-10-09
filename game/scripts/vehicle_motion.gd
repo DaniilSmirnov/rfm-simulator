@@ -8,6 +8,9 @@ var grounded = true
 var initialized = false
 var pitch = 0.0
 var roll = 0.0
+# Lakes: fraction of the body under water and how much water is in the cabin.
+var submerged = 0.0
+var flood = 0.0
 
 func suspension(node: Node3D, stage, delta: float, yaw: float, lateral_accel: float = 0.0) -> void:
 	var forward = Vector3(-sin(yaw), 0, -cos(yaw))
@@ -25,10 +28,14 @@ func suspension(node: Node3D, stage, delta: float, yaw: float, lateral_accel: fl
 		initialized = true
 	var steps = maxi(1, int(ceil(delta / (1.0 / 120.0))))
 	var dt = delta / steps
+	var watery = "lakeland" in stage and stage.lakeland
 	for i in range(steps):
 		var compression = floor_height - node.position.y
 		grounded = compression > -0.12
 		var force = maxf(0, 160.0 * (compression + 0.10) - 13.0 * vertical_speed) if grounded else 0.0
+		if watery:
+			# Buoyancy lifts a submerged body; water also damps vertical motion.
+			force += stage.water.vehicle(self, node, dt) - 5.0 * submerged * vertical_speed
 		vertical_speed += (force - 16.0) * dt
 		node.position.y += vertical_speed * dt
 		if node.position.y < floor_height - 0.17:

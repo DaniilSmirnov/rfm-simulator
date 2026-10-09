@@ -24,6 +24,8 @@ func roadside(station: float, preferred_side: float, clearance: float) -> Dictio
 					continue
 				if stage.urban and not stage.city.hit(point, point, clearance, false).is_empty():
 					continue
+				if stage.lakeland and stage.water.depth(point) > -0.3:
+					continue
 				if stage.obstacle_hit(point, point, clearance) >= 0 or not stage.rock_hit(point, point, clearance, false).is_empty():
 					continue
 				var clear = true

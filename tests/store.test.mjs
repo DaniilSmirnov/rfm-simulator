@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import {catalog,canUseContent,canUseStage,validateRoomSelection,vkEntitlements} from '../server/store.mjs';
 test('catalog has stable unique SKUs; VK has one free stage and three free cars',()=>{
  assert.equal(new Set(catalog.map(p=>p.sku)).size,catalog.length);
- assert.equal(catalog.length,14);
- for(let i=0;i<4;i++) assert.equal(canUseContent('stage',i),i===0);
+ assert.equal(catalog.length,15);
+ for(let i=0;i<5;i++) assert.equal(canUseContent('stage',i),i===0);
  for(let i=0;i<10;i++) assert.equal(canUseContent('car',i),i<3);
  assert.ok(catalog.every(p=>p.purchase_enabled === !p.free));
  for(const p of catalog.filter(p=>!p.free)) assert.equal(p.price,p.type==='car'?3:20);
@@ -42,4 +42,17 @@ test('Red Canyon requires its own paid entitlement to host in VK; guests can joi
  assert.equal(validateRoomSelection({stage:3,car_model:0},true,owner),null);
  assert.equal(canUseContent('stage',1,owner),false);
  assert.equal(canUseContent('stage',2,owner),false);
+});
+
+test('Finnish Forest is a separate paid stage; guests can join a host who owns it',()=>{
+ const forest=catalog.find(p=>p.sku==='stage_05');
+ assert.deepEqual(
+  {type:forest.type,content_id:forest.content_id,title:forest.title,free:forest.free,enabled:forest.enabled,purchase_enabled:forest.purchase_enabled,price:forest.price},
+  {type:'stage',content_id:4,title:'Финский лес',free:false,enabled:true,purchase_enabled:true,price:20});
+ const unpaid=vkEntitlements();
+ assert.equal(canUseStage(4,unpaid),false);
+ assert.match(validateRoomSelection({stage:4,car_model:0},true,unpaid),/спецучасток/);
+ assert.equal(validateRoomSelection({stage:4,car_model:0},false,unpaid),null);
+ assert.equal(canUseContent('stage',4,{mode:'restricted',skus:['stage_04']}),false,'canyon ownership does not unlock the forest');
+ assert.equal(canUseContent('stage',4,{mode:'restricted',skus:['stage_05']}),true);
 });

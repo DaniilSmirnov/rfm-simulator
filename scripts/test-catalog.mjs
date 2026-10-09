@@ -26,7 +26,7 @@ export const groups = Object.freeze({
   "test_village_terrain_performance.gd", "test_village_viewpoints.gd",
   "test_spectators.gd", "test_rocks.gd", "test_woodland.gd",
   "test_shovel.gd", "test_deep_snow.gd", "test_snowbanks.gd", "test_terrain_seams.gd", "test_road_surface.gd",
-  "test_gravel_relief.gd", "test_canyon.gd",
+  "test_gravel_relief.gd", "test_canyon.gd", "test_finnish_forest.gd",
  ],
 });
 export const nodeSuites = Object.freeze({
@@ -49,7 +49,7 @@ export const groupDescriptions = Object.freeze({
  world: "all stages, terrain, scenery, route topology and performance",
 });
 export const slowTests = new Set([
- "test_village_terrain_performance.gd", "test_canyon.gd",
+ "test_village_terrain_performance.gd", "test_canyon.gd", "test_finnish_forest.gd",
  "test_selection.gd", "test_world_loading.gd", "test_baked_village.gd",
 ]);
 export function verifyRegistry(files) {

@@ -100,6 +100,7 @@ func _init(selected: int = 0) -> void:
 	if lakeland:
 		finnish_forest = FinnishForest.new()
 		water = Water.new()
+		water.stage = self
 		forest_life = ForestLife.new()
 	if urban:
 		village_church_center = village_main_at(435.0) + village_main_side(435.0) * 43.0
@@ -249,6 +250,15 @@ func grip(pos: Vector3) -> float:
 	if road_distance(pos) > WIDTH * 0.55:
 		return 0.48
 	return 0.42 if int(road_s(pos) / STEP) % 13 == 7 else 0.78
+
+# Walking floor on the lake stage: jetty deck, wading and floating swimmers.
+func walk_floor(pos: Vector3, ground_height: float) -> float:
+	if not lakeland:
+		return ground_height
+	var deck = finnish_forest.deck_height(pos)
+	if deck > ground_height:
+		return deck
+	return water.walk_floor(pos, ground_height)
 
 func vehicle_ground(pos: Vector3) -> float:
 	return maxf(snow.contact(self, pos), Snowbanks.surface_height(self, pos)) if winter else ground(pos)
@@ -462,7 +472,7 @@ func build_async(progress: Callable) -> void:
 	await _build_terrain(true)
 	await progress.call("Дорога", 30)
 	_build_road()
-	await progress.call("Скалы и окружение" if desert else "Лес и окружение", 40)
+	await progress.call("Скалы и окружение" if desert else ("Лес и озёра" if lakeland else "Лес и окружение"), 40)
 	await _build_nature(true)
 	await progress.call("Объекты спецучастка", 55)
 	await _build_details(true)
@@ -483,6 +493,8 @@ func _build_nature(cooperative: bool = false) -> void:
 			continue
 		if not winter and trail_distance(p) < 3.2:
 			continue
+		if lakeland and (finnish_forest.reserved(p, 1.0) or water.depth(p) > -0.4):
+			continue
 		var in_clearing = false
 		for c in clearings:
 			if Vector2(p.x - c.x, p.z - c.z).length() < (11.0 if winter else 8.5):
@@ -500,6 +512,8 @@ func _build_nature(cooperative: bool = false) -> void:
 		var p = at(s) + side(s) * rng.randf_range(-6, 6)
 		if road_distance(p) < 4.3:
 			continue
+		if lakeland and (finnish_forest.reserved(p, 1.0) or water.depth(p) > -0.1):
+			continue
 		p.y = ground(p)
 		var radius = rng.randf_range(0.3, 1)
 		var rock = RallyProps.cylinder(self, p + Vector3(0, 0.2, 0), radius, 0.18, 0.65, Color("7d8070"), 5)
@@ -510,11 +524,15 @@ func _build_details(cooperative: bool = false) -> void:
 	if desert:
 		canyon.build(self)
 		return
-	if variant == 0:
+	if variant == 0 or lakeland:
 		if cooperative:
 			await _build_woodland_details(true)
 		else:
 			_build_woodland_details()
+	if lakeland:
+		water.build(self)
+		finnish_forest.build(self)
+		forest_life.build(self)
 	if urban:
 		if cooperative:
 			await _build_city(true)
@@ -563,7 +581,7 @@ func _build_terrain(cooperative: bool = false) -> void:
 		if cooperative and (z + 920) % 64 == 0:
 			await get_tree().process_frame
 		for x in range(-204, 204, 4):
-			var tile = Vector2i(floori(x / 64.0), floori(z / 64.0)) if urban or winter else Vector2i.ZERO
+			var tile = Vector2i(floori(x / 64.0), floori(z / 64.0)) if urban or winter or lakeland else Vector2i.ZERO
 			if not builders.has(tile):
 				var builder = SurfaceTool.new()
 				builder.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -582,6 +600,8 @@ func _build_terrain(cooperative: bool = false) -> void:
 						var color = Color("e1edf1") if winter else Color(0.32, 0.38, 0.25)
 						if desert:
 							color = Color("b56443").lerp(Color("dfac74"), (sin(v.y * 0.65) + 1.0) * 0.5)
+						if lakeland:
+							color = finnish_forest.terrain_color(self, v, 0.0)
 						if variant == 0:
 							var patch = (sin(v.x * 0.065) * sin(v.z * 0.041) + 1.0) * 0.5
 							color = Color("514a32").lerp(Color("485c36"), patch)
@@ -609,6 +629,8 @@ func draw_base_road_surface(s: float) -> bool:
 	return not village(s) or (urban and ((s >= 381.0 and s <= 488.0) or s >= 569.0))
 
 func road_width(s: float) -> float:
+	if lakeland:
+		return finnish_forest.road_width(s)
 	if desert:
 		var narrow = smoothstep(230.0, 265.0, s) * (1.0 - smoothstep(405.0, 435.0, s))
 		var wash = smoothstep(540.0, 565.0, s) * (1.0 - smoothstep(655.0, 680.0, s))
@@ -627,6 +649,8 @@ func road_surface_vertex(s: float, lateral: float) -> Vector3:
 	return p
 
 func road_surface_color(p: Vector3, s: float) -> Color:
+	if lakeland:
+		return finnish_forest.road_color(p, s, (p - at(s)).dot(side(s)))
 	if desert:
 		return Color("d4a475").lightened(sin(p.z * 0.25 + p.x * 0.10) * 0.025)
 	# The same world-space vertex belongs to adjacent segments whose station
@@ -680,13 +704,14 @@ func _build_road() -> void:
 							st.set_color(road_surface_color(v, s).darkened(0.12))
 							st.add_vertex(v)
 		# Broken muddy wheel tracks, shallow puddles.
-		if not urban and not desert and i % 12 == 0:
+		var ford = lakeland and absf(s - finnish_forest.FORD_STATION) < 30.0
+		if not urban and not desert and not ford and i % 12 == 0:
 			for offset in [-1.0, 1.0]:
 				var p = at(s) + side(s) * offset
 				p.y = ground(p)
 				var rut = RallyProps.box(self, p + Vector3(0, 0.07, 0), Vector3(0.5, 0.025, 2.7), Color("586974") if winter else Color("77654c"))
 				rut.rotation.y = atan2(-direction(s).x, -direction(s).z)
-		if not urban and not desert and i % 52 == 28:
+		if not urban and not desert and not ford and i % 52 == 28:
 			var p = at(s) + side(s) * 1.5
 			p.y = ground(p)
 			var puddle = RallyProps.cylinder(self, p + Vector3(0, 0.10, 0), 1.1, 1.1, 0.025, Color("56645d"), 9)
@@ -1021,6 +1046,8 @@ func forest_relief(pos: Vector3, distance: float) -> float:
 
 func woodland_spot(pos: Vector3, padding: float = 0.0) -> bool:
 	if road_distance(pos) < 9.0 + padding or trail_distance(pos) < 3.2 + padding:
+		return false
+	if lakeland and (finnish_forest.reserved(pos, padding) or water.depth(pos) > -0.3 - padding * 0.3):
 		return false
 	for clearing in clearings:
 		if flat(pos).distance_to(flat(clearing)) < 8.5 + padding:
@@ -1442,6 +1469,8 @@ func urban_nearest(pos: Vector3) -> Dictionary:
 	return {"s": station, "distance": sqrt(best)}
 
 func rally_speed(s: float) -> float:
+	if lakeland:
+		return finnish_forest.rally_speed(s)
 	if desert:
 		return 17.0 if s > 240.0 and s < 420.0 else 26.0
 	if not urban:

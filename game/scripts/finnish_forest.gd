@@ -9,7 +9,7 @@ const LENGTH = 840.0
 # Road elevation (station, metres). Catmull-Rom between keys keeps the road
 # flowing; crests are added below as Gaussian bumps.
 const KEYS = [
-	[-20.0, 60.0], [0.0, 60.0], [60.0, 61.4], [120.0, 64.6], [160.0, 67.6], [200.0, 64.2], [245.0, 60.6],
+	[-20.0, 60.0], [0.0, 60.0], [60.0, 61.4], [120.0, 64.6], [160.0, 65.8], [200.0, 64.2], [245.0, 60.6],
 	[285.0, 57.4], [310.0, 55.9], [350.0, 55.3], [390.0, 56.1], [425.0, 55.8], [460.0, 57.8], [490.0, 61.0],
 	[520.0, 63.6], [548.0, 64.5], [575.0, 64.6], [600.0, 64.5], [625.0, 64.7], [652.0, 65.2], [675.0, 64.2],
 	[705.0, 60.3], [740.0, 59.7], [780.0, 59.9], [820.0, 60.2], [840.0, 60.0], [860.0, 60.0],
@@ -18,8 +18,8 @@ const KEYS = [
 # Station, height and half-width of each crest. The first one is the long
 # "yellow house" jump; the last series is a run of rhythm crests.
 const CRESTS = [
-	[176.0, 1.9, 6.0], [233.0, 1.1, 6.5], [268.0, 1.3, 6.0], [514.0, 0.9, 7.0],
-	[662.0, 1.6, 6.0], [684.0, 1.3, 6.0], [790.0, 0.8, 7.0],
+	[104.0, 1.3, 5.0], [176.0, 2.6, 5.0], [233.0, 1.4, 5.0], [268.0, 1.6, 5.0], [514.0, 1.2, 5.5],
+	[662.0, 2.0, 5.0], [684.0, 1.6, 5.0], [748.0, 1.2, 5.0], [790.0, 1.3, 5.0],
 ]
 const YELLOW_HOUSE_STATION = 176.0
 const YELLOW_HOUSE_SIDE = 1.0
@@ -38,11 +38,11 @@ const CHICANE_END = 518.0
 # Every lake is carved into the terrain; water exists wherever the ground is
 # below the lake's level, so roads, banks and islands all share one truth.
 const LAKES = [
-	{"name": "first", "side": -1.0, "s0": 296.0, "s1": 432.0, "level": 53.1, "depth": 4.6, "shore": 14.5, "width": 76.0, "bank": 13.0, "seed": 1.3,
+	{"name": "first", "side": -1.0, "s0": 296.0, "s1": 432.0, "level": 53.1, "depth": 4.6, "shore": 12.0, "width": 76.0, "bank": 13.0, "seed": 1.3,
 		"islands": [{"s": 366.0, "u": 52.0, "radius": 10.0}, {"s": 396.0, "u": 70.0, "radius": 6.5}]},
 	{"name": "isthmus_west", "side": -1.0, "s0": 548.0, "s1": 652.0, "level": 62.0, "depth": 3.4, "shore": 12.5, "width": 70.0, "bank": 12.0, "seed": 2.1, "islands": []},
 	{"name": "isthmus_east", "side": 1.0, "s0": 548.0, "s1": 652.0, "level": 62.0, "depth": 3.4, "shore": 12.5, "width": 70.0, "bank": 12.0, "seed": 4.7, "islands": []},
-	{"name": "third", "side": 1.0, "s0": 705.0, "s1": 822.0, "level": 57.4, "depth": 4.2, "shore": 14.5, "width": 80.0, "bank": 13.0, "seed": 3.9,
+	{"name": "third", "side": 1.0, "s0": 705.0, "s1": 822.0, "level": 57.4, "depth": 4.2, "shore": 12.5, "width": 80.0, "bank": 13.0, "seed": 3.9,
 		"islands": [{"s": 760.0, "u": 50.0, "radius": 8.0}]},
 ]
 
@@ -54,14 +54,22 @@ const BODIES = [
 	{"name": "third", "level": 57.4, "s0": 693.0, "s1": 834.0, "lat0": 4.0, "lat1": 118.0},
 ]
 
+const Props = preload("res://scripts/props.gd")
+# Buildings and the lakeside jetty; trees, boulders and undergrowth keep clear.
+var reserved_spots: Array[Dictionary] = []
+var yellow_house = Vector3.ZERO
+var sauna = Vector3.ZERO
+var jetty: Dictionary = {}
+var boat: Node3D
+
 # ---------------------------------------------------------------- route
 
 func lateral_route(s: float) -> float:
 	var start = smoothstep(0.0, 70.0, s) * (1.0 - 0.75 * smoothstep(796.0, 836.0, s))
 	var chicane = smoothstep(CHICANE_BEGIN, CHICANE_BEGIN + 14.0, s) * (1.0 - smoothstep(CHICANE_END - 14.0, CHICANE_END, s))
 	var calm = 1.0 - 0.8 * chicane
-	var sweepers = 23.0 * sin(s / 92.0 + 0.4) + 12.0 * sin(s / 47.0 + 1.9) + 4.0 * sin(s / 21.0 + 0.7)
-	return sweepers * start * calm + 7.5 * sin((s - CHICANE_BEGIN) * TAU / 52.0) * chicane
+	var sweepers = 23.0 * sin(s / 92.0 + 0.4) + 12.0 * sin(s / 47.0 + 1.9) + 2.0 * sin(s / 26.0 + 0.7)
+	return sweepers * start * calm + 5.0 * sin((s - CHICANE_BEGIN) * TAU / 70.0) * chicane
 
 func elevation(s: float) -> float:
 	var y = _keyed_elevation(s)
@@ -73,7 +81,7 @@ func elevation(s: float) -> float:
 	return y + sin(s * 0.21) * 0.02
 
 func _keyed_elevation(s: float) -> float:
-	var last = KEYS.size() - 2
+	var last = KEYS.size() - 3
 	var i = 1
 	while i < last and s >= KEYS[i + 1][0]:
 		i += 1
@@ -87,7 +95,7 @@ func route(s: float) -> Vector3:
 
 func rally_speed(s: float) -> float:
 	if s > CHICANE_BEGIN - 22.0 and s < CHICANE_END + 8.0:
-		return 17.0
+		return 14.0
 	if absf(s - FORD_STATION) < 28.0:
 		return 19.0
 	return 28.0
@@ -108,6 +116,49 @@ func configure(stage) -> void:
 		var p = stage.at(spot[0]) + stage.side(spot[0]) * spot[1] * spot[2]
 		p.y = raw_ground(stage, p)
 		stage.clearings.append(p)
+	yellow_house = stage.at(YELLOW_HOUSE_STATION) + Vector3(YELLOW_HOUSE_SIDE * YELLOW_HOUSE_OFFSET, 0, 0)
+	yellow_house.y = raw_ground(stage, yellow_house)
+	reserved_spots.append({"pos": yellow_house, "radius": 9.0})
+	_configure_sauna(stage)
+
+# The sauna stands where the first lake's shore is furthest from the road,
+# with a jetty running straight out into the water.
+func _configure_sauna(stage) -> void:
+	var lake: Dictionary = LAKES[0]
+	var best_s = 0.0
+	var best_u = 0.0
+	for s in range(int(lake.s0) + 24, int(lake.s1) - 24, 2):
+		var u = shore_distance(lake, float(s))
+		if u > best_u:
+			best_u = u
+			best_s = float(s)
+	var side = float(lake.side)
+	var origin = Vector3(stage.at(best_s).x, 0, -best_s)
+	sauna = origin + Vector3(side * (best_u - 6.5), 0, 0)
+	sauna.y = raw_ground(stage, sauna)
+	var start = origin + Vector3(side * (best_u - 1.5), 0, 0)
+	var end = origin + Vector3(side * (best_u + 10.0), 0, 0)
+	jetty = {"start": start, "end": end, "half_width": 0.9, "deck": float(lake.level) + 0.45, "station": best_s, "side": side}
+	reserved_spots.append({"pos": sauna, "radius": 6.5})
+	reserved_spots.append({"pos": (start + end) * 0.5, "radius": 7.5})
+
+func reserved(pos: Vector3, padding: float = 0.0) -> bool:
+	for spot in reserved_spots:
+		if Vector2(pos.x - spot.pos.x, pos.z - spot.pos.z).length() < float(spot.radius) + padding:
+			return true
+	return false
+
+# Deck height for people walking on the jetty; cars and water ignore it.
+func deck_height(pos: Vector3) -> float:
+	if jetty.is_empty():
+		return -1000.0
+	var a = Vector2(jetty.start.x, jetty.start.z)
+	var b = Vector2(jetty.end.x, jetty.end.z)
+	var p = Vector2(pos.x, pos.z)
+	var closest = Geometry2D.get_closest_point_to_segment(p, a, b)
+	if p.distance_to(closest) > float(jetty.half_width):
+		return -1000.0
+	return float(jetty.deck)
 
 func hills(pos: Vector3, distance: float) -> float:
 	var swell = sin(pos.x * 0.036 + pos.z * 0.019) * 1.3 + sin(pos.z * 0.057 - pos.x * 0.027) * 0.8 + sin(pos.x * 0.11) * sin(pos.z * 0.09) * 0.5
@@ -220,7 +271,7 @@ func terrain_color(stage, v: Vector3, variation: float) -> Color:
 	var color = moss.lerp(heath, smoothstep(0.55, 0.9, sin(v.x * 0.021 - v.z * 0.033) * 0.5 + 0.5) * 0.7)
 	if level > -999.0:
 		var above = v.y - level
-		var beach = 1.0 - smoothstep(0.0, 0.8, above)
+		var beach = 1.0 - smoothstep(0.0, 0.45, above)
 		var sand = Color("b9a87c").lerp(Color("a4946b"), patch)
 		color = color.lerp(sand, beach * smoothstep(-0.2, 0.05, above + 0.15))
 		if above < 0.0:
@@ -237,3 +288,118 @@ func road_color(p: Vector3, s: float, lateral: float) -> Color:
 	var track = exp(-pow((absf(lateral) - 1.0) / 0.34, 2.0))
 	var centre = exp(-pow(lateral / 0.55, 2.0))
 	return base.darkened(track * 0.16).lightened(centre * 0.05 + shade)
+
+# ---------------------------------------------------------------- scenery
+
+func build(stage) -> void:
+	_build_yellow_house(stage)
+	_build_jump_boards(stage)
+	_build_sauna(stage)
+
+# Level a building on sloping ground: the floor sits on the highest corner and
+# a stone plinth reaches down to the lowest one, so nothing floats or sinks.
+func _level(stage, node: Node3D, half: Vector2, color: Color) -> void:
+	var low = INF
+	var high = -INF
+	for corner in [Vector3(half.x, 0, half.y), Vector3(-half.x, 0, half.y), Vector3(half.x, 0, -half.y), Vector3(-half.x, 0, -half.y), Vector3.ZERO]:
+		var height = stage.ground(node.position + corner.rotated(Vector3.UP, node.rotation.y))
+		low = minf(low, height)
+		high = maxf(high, height)
+	# Cut slightly into the uphill side instead of standing on a tall plinth.
+	node.position.y = lerpf(low, high, 0.55)
+	var depth = node.position.y - low + 0.5
+	Props.box(node, Vector3(0, 0.3 - depth * 0.5, 0), Vector3(half.x * 2.0 + 0.2, depth + 0.6, half.y * 2.0 + 0.2), color)
+
+func _build_yellow_house(stage) -> void:
+	var house = Node3D.new()
+	house.name = "YellowHouse"
+	stage.add_child(house)
+	house.position = yellow_house
+	var toward = stage.at(YELLOW_HOUSE_STATION) - yellow_house
+	house.rotation.y = atan2(toward.x, toward.z)
+	_level(stage, house, Vector2(4.6, 3.6), Color("6d6a62"))
+	Props.box(house, Vector3(0, 2.25, 0), Vector3(9.0, 3.3, 7.0), Color("e0b53e"))
+	for x in [-4.5, 4.5]:
+		Props.box(house, Vector3(x, 2.25, 0), Vector3(0.18, 3.4, 7.1), Color("f2eee2"))
+	# Gable roof from two slanted slabs, with white trim.
+	for sign in [-1.0, 1.0]:
+		var slab = Props.box(house, Vector3(0, 4.85, sign * 1.95), Vector3(9.8, 0.18, 4.6), Color("7b2f26"))
+		slab.rotation.x = sign * 0.62
+	Props.box(house, Vector3(0, 4.0, 3.52), Vector3(9.0, 0.16, 0.06), Color("f2eee2"))
+	Props.box(house, Vector3(2.6, 5.7, -0.8), Vector3(0.6, 1.4, 0.6), Color("8a3a2c"))
+	for x in [-2.8, 0.0, 2.8]:
+		Props.box(house, Vector3(x, 2.5, 3.52), Vector3(1.1, 1.25, 0.06), Color("f2eee2"))
+		Props.box(house, Vector3(x, 2.5, 3.56), Vector3(0.86, 1.0, 0.04), Color("3b4a52"))
+	Props.box(house, Vector3(-1.4, 1.65, -3.52), Vector3(1.0, 2.1, 0.06), Color("f2eee2"))
+	Props.box(house, Vector3(-1.4, 1.6, -3.56), Vector3(0.8, 1.9, 0.04), Color("5a3b2b"))
+	stage.rocks.append({"pos": yellow_house, "radius": 5.6, "height": 6.0, "building": true})
+	# A wooden shed and a fence line typical of a farmyard by the stage.
+	var shed = yellow_house + Vector3(YELLOW_HOUSE_SIDE * 9.0, 0, -6.0)
+	var barn = Node3D.new()
+	barn.name = "RedShed"
+	stage.add_child(barn)
+	barn.position = shed
+	_level(stage, barn, Vector2(2.0, 1.6), Color("5f5a52"))
+	Props.box(barn, Vector3(0, 2.0, 0), Vector3(4.0, 2.8, 3.2), Color("8b3a2a"))
+	Props.box(barn, Vector3(0, 3.55, 0), Vector3(4.4, 0.25, 3.6), Color("4a4540"))
+	stage.rocks.append({"pos": shed, "radius": 2.6, "height": 3.0, "building": true})
+
+# Spectators traditionally mark how far crews fly over the crest.
+func _build_jump_boards(stage) -> void:
+	for metres in [20, 30, 40, 50, 60]:
+		var s = YELLOW_HOUSE_STATION + float(metres)
+		var p = stage.at(s) + stage.side(s) * -YELLOW_HOUSE_SIDE * 6.6
+		p.y = stage.ground(p)
+		Props.cylinder(stage, p + Vector3(0, 0.6, 0), 0.05, 0.05, 1.2, Color("d9d4c6"), 5)
+		var board = Props.box(stage, p + Vector3(0, 1.25, 0), Vector3(0.9, 0.5, 0.06), Color("f4f2ea"))
+		var direction = stage.direction(s)
+		board.rotation.y = atan2(-direction.x, -direction.z)
+		Props.label_3d(board, Vector3(0, 0, 0.04), "%d м" % metres, 64, 0.005, Color("b0322a"))
+		Props.label_3d(board, Vector3(0, 0, -0.04), "%d м" % metres, 64, 0.005, Color("b0322a"), PI)
+
+func _build_sauna(stage) -> void:
+	var hut = Node3D.new()
+	hut.name = "LakeSauna"
+	stage.add_child(hut)
+	hut.position = sauna
+	var toward_lake = Vector3(float(jetty.side), 0, 0)
+	hut.rotation.y = atan2(toward_lake.x, toward_lake.z)
+	_level(stage, hut, Vector2(2.1, 1.8), Color("5d564c"))
+	for row in range(7):
+		Props.box(hut, Vector3(0, 0.45 + row * 0.32, 0), Vector3(4.0 - (row % 2) * 0.1, 0.3, 3.4 + (row % 2) * 0.1), Color("7a5634").lightened((row % 2) * 0.05))
+	for sign in [-1.0, 1.0]:
+		var slab = Props.box(hut, Vector3(sign * 1.1, 2.95, 0), Vector3(2.5, 0.14, 4.0), Color("3f3a36"))
+		slab.rotation.z = -sign * 0.42
+	Props.box(hut, Vector3(0, 1.2, 1.72), Vector3(0.8, 1.7, 0.06), Color("4a3524"))
+	Props.cylinder(hut, Vector3(1.0, 3.5, -0.8), 0.14, 0.14, 1.3, Color("2f2f2f"), 6)
+	stage.rocks.append({"pos": sauna, "radius": 2.5, "height": 3.2, "building": true})
+	# Jetty: deck planks on posts standing in the lake.
+	var start: Vector3 = jetty.start
+	var end: Vector3 = jetty.end
+	var length = start.distance_to(end)
+	var direction = (end - start).normalized()
+	var deck = float(jetty.deck)
+	var planks = int(length / 0.42)
+	for i in range(planks):
+		var p = start + direction * (i + 0.5) * (length / planks)
+		var plank = Props.box(stage, Vector3(p.x, deck, p.z), Vector3(1.8, 0.07, 0.36), Color("8c6a46").lightened((i % 3) * 0.03))
+		plank.rotation.y = atan2(direction.x, direction.z)
+	for i in range(int(length / 2.2) + 1):
+		var p = start + direction * minf(length, i * 2.2)
+		var across = direction.cross(Vector3.UP).normalized()
+		for sign in [-1.0, 1.0]:
+			var post = p + across * sign * 0.8
+			var bottom = stage.ground(post) - 0.3
+			Props.cylinder(stage, Vector3(post.x, (bottom + deck) * 0.5, post.z), 0.09, 0.09, deck - bottom, Color("5b4733"), 5)
+	# Rowing boat tied at the end of the jetty; it floats on the waves.
+	boat = Node3D.new()
+	boat.name = "RowingBoat"
+	stage.add_child(boat)
+	var moor = end + direction.cross(Vector3.UP).normalized() * 1.9
+	boat.position = Vector3(moor.x, float(LAKES[0].level), moor.z)
+	boat.rotation.y = atan2(direction.x, direction.z)
+	var hull = Props.cylinder(boat, Vector3(0, 0.12, 0), 0.42, 0.62, 0.42, Color("3d5f7a"), 8)
+	hull.scale = Vector3(1.0, 1.0, 2.6)
+	Props.box(boat, Vector3(0, 0.33, 0), Vector3(1.05, 0.05, 0.28), Color("9b7a52"))
+	Props.box(boat, Vector3(0, 0.33, 0.7), Vector3(0.95, 0.05, 0.24), Color("9b7a52"))
+	stage.water.add_floater(boat, -0.22, 1.6)

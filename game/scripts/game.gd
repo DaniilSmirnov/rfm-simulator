@@ -107,6 +107,8 @@ func valid_furniture_spot(spot: Vector3, kind: String, ignored_owner: String = "
 				if stage.snow.loose_depth(stage, spot + Vector3(x, 0, z)) > 0.02: return false
 	if stage.desert and not stage.canyon.camp_supported(stage, spot):
 		return false
+	if stage.lakeland and stage.water.depth(spot) > -0.05:
+		return false # Camp furniture stays on dry land, not in the lake.
 	if spectators != null and spectators.occupied(spot):
 		return false
 	if stage.road_distance(spot) < 6.0:
@@ -589,6 +591,16 @@ func _build_environment() -> void:
 		env.ambient_light_energy = 0.42
 		env.fog_light_color = Color("d6a479")
 		env.fog_density = 0.0008
+	elif stage.lakeland:
+		# Bright northern summer: high pale sky, light haze over the lakes.
+		sky_mat.sky_top_color = Color("5f8fb8")
+		sky_mat.sky_horizon_color = Color("d9e3dd")
+		sky_mat.ground_bottom_color = Color("4e5f45")
+		sky_mat.ground_horizon_color = Color("d9e3dd")
+		env.ambient_light_color = Color("c9d6c8")
+		env.ambient_light_energy = 0.4
+		env.fog_light_color = Color("aebdb4")
+		env.fog_density = 0.0014
 	elif stage.urban:
 		sky_mat.sky_top_color = Color("7e9eae")
 		sky_mat.sky_horizon_color = Color("d7d0bd")
@@ -1139,6 +1151,9 @@ func _process(delta: float) -> void:
 	if stage.winter:
 		stage.snow.update(delta)
 	stage.update_fallen(delta)
+	if stage.lakeland:
+		stage.water.update(delta)
+		stage.forest_life.update(delta, player_position())
 	_update_sobriety(delta)
 	_update_intoxication(delta)
 	if in_car:
@@ -1281,7 +1296,15 @@ func _drive(delta: float) -> void:
 		vehicle_motion.suspension(car, stage, dt, heading, (heading - previous_heading) / dt * speed)
 		if offroad and absf(speed) > 5:
 			condition = maxf(0, condition - dt * 0.15)
+	if stage.lakeland and vehicle_motion.flood > 0.25:
+		# Water in the cabin: the engine drowns unless the car leaves the lake.
+		condition = maxf(0, condition - delta * 6.0 * vehicle_motion.flood)
+		if vehicle_motion.flood > 0.3 and toast_time <= 0:
+			toast("Машина набирает воду! Выезжай на берег или выходи (F).")
 	if condition <= 0:
+		if stage.lakeland and vehicle_motion.flood > 0.25:
+			die("Легковушка утонула в финском озере.\nДальше только пешком.")
+			return
 		die("Легковушка сдалась раньше тебя.\nРазбитый СУ победил подвеску.")
 
 func knock_tree(index: int, direction_hint: Vector3) -> void:
@@ -1334,11 +1357,16 @@ func _walk_step(delta: float) -> void:
 	if motion.length() > 1:
 		motion = motion.normalized()
 	var dir = Vector3(motion.x, 0, motion.y).rotated(Vector3.UP, view_yaw)
-	var next = walker + dir * delta * mushroom_effect.movement_multiplier() * (1.4 if drink_time >= 0 or eat_time >= 0 else (RUN_SPEED if running() else WALK_SPEED))
+	var water_factor = stage.water.walk_factor(walker) if stage.lakeland else 1.0
+	var next = walker + dir * delta * water_factor * mushroom_effect.movement_multiplier() * (1.4 if drink_time >= 0 or eat_time >= 0 else (RUN_SPEED if running() else WALK_SPEED))
 	next.x = clampf(next.x, -185, 185)
 	next.z = clampf(next.z, -Stage.LENGTH + 5, 10)
 	var old_floor = walker.y - jump_height
 	var floor_height = stage.city.walking_floor(next, walker.y) if stage.urban and stage.city.has_method("walking_floor") else stage.ground(next)
+	if stage.lakeland:
+		floor_height = stage.walk_floor(next, floor_height)
+		if stage.water.depth(next) > 0.2 and next.distance_to(walker) > 0.0001:
+			stage.water.wake(get_instance_id(), next, (next - walker) / maxf(delta, 0.001), minf(stage.water.depth(next), 1.0), delta, 0.35)
 	next.y = floor_height if jump_height <= 0 and floor_height >= old_floor - 0.45 else walker.y
 	var hit = (stage.desert and stage.canyon.walk_blocked(stage, next, walker.y)) or (stage.urban and not stage.city.hit(walker, next, 0.3).is_empty()) or not stage.rock_hit(walker, next, 0.3).is_empty() or stage.obstacle_hit(walker, next, 0.3, true) >= 0 or contact_blocked(walker, next, false)
 	if not hit:
@@ -1365,6 +1393,8 @@ func running() -> bool:
 func jump() -> bool:
 	if not playing or in_car or seated or beers >= 30 or paused or dead or finished or drink_time >= 0 or eat_time >= 0 or jump_height > 0.01 or jump_velocity > 0:
 		return false
+	if stage.lakeland and stage.water.depth(walker) > 0.6:
+		return false # No push-off while wading deep or swimming.
 	jump_velocity = JUMP_SPEED
 	return true
 
@@ -1928,6 +1958,10 @@ func _update_racers_step(delta: float) -> void:
 			var desired_yaw = path_yaw + float(racer.get("drift_yaw", 0.0)) + recorded_yaw
 			var yaw = node.rotation.y + clampf(wrapf(desired_yaw - node.rotation.y, -PI, PI), -2.5 * delta, 2.5 * delta)
 			racer.motion.suspension(node, stage, delta, yaw, lateral_accel)
+			if stage.lakeland:
+				var spray_depth = stage.water.depth(node.position)
+				if spray_depth > 0.0:
+					stage.water.wake(node.get_instance_id(), node.position, movement / maxf(delta, 0.001), spray_depth, delta, 1.3)
 			if racer.get("role", "racer") in ["racer", "zero"] and ((s >= racer.focus and racer.kind != "pass") or absf(racer.slide) > 3.4 or absf(racer.line + racer.slide) > Traffic.line_limit(self, s) + 0.8):
 				racer.state = "offroad"
 				racer.age = 0
@@ -2361,6 +2395,10 @@ func _advance_gravel(stone: Dictionary, delta: float) -> bool:
 			stone.velocity -= normal * closing * 1.4
 			stone.velocity *= 0.7
 			stone.bounces = int(stone.get("bounces", 0)) + 1
+	if stage.lakeland and stage.water.depth(next) > 0.0 and next.y < stage.water.level(next):
+		stage.water.splash(Vector3(next.x, stage.water.level(next), next.z), 0.2)
+		stone.node.position = next
+		return false
 	var floor_height = stage.ground(next) + 0.05
 	var alive = true
 	if next.y <= floor_height:

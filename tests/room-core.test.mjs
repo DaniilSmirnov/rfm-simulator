@@ -365,3 +365,13 @@ test('canyon selection persists for guests and restored rooms', () => {
  assert.equal(g.stage,3);
  assert.equal(new RoomState(structuredClone(r.data)).sync({token:g.token,state:state()},1200).stage,3);
 });
+
+test('Finnish Forest selection persists for guests and restored rooms', () => {
+ const r = new RoomState();
+ const h = r.add('Host', 1000, true, {stage:4});
+ const g = r.add('Guest', 1000);
+ assert.equal(h.stage,4);
+ assert.equal(g.stage,4);
+ assert.equal(new RoomState(structuredClone(r.data)).sync({token:g.token,state:state()},1200).stage,4);
+ assert.equal(new RoomState().add('Host', 1000, true, {stage:9}).stage,4,'unknown stages are clamped to the last one');
+});

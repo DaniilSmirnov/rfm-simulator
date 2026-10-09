@@ -14,14 +14,14 @@ func run() -> void:
 	var service = Service.new()
 	root.add_child(service)
 	var products = JSON.parse_string(FileAccess.get_file_as_string("res://data/store_catalog.json"))
-	check(products is Array and products.size() == 14, "four VK stages and ten vehicles in catalog")
+	check(products is Array and products.size() == 15, "five VK stages and ten vehicles in catalog")
 	if not products is Array:
 		quit(1)
 		return
 	service.catalog = products
 	service.entitlements = {"mode":"restricted", "skus":[]}
 	for kind in ["stage", "car"]:
-		var count = 4 if kind == "stage" else 10
+		var count = 5 if kind == "stage" else 10
 		for idx in range(count):
 			var entry = service.product(kind, idx)
 			var is_free = idx == 0 if kind == "stage" else idx < 3
@@ -38,7 +38,7 @@ func run() -> void:
 				service.entitlements.skus = [str(entry.get("sku", ""))]
 				check(service.can_use(kind, idx), "%s %d unlocks after its SKU purchase" % [kind,idx])
 				if kind == "stage":
-					for other in range(4):
+					for other in range(5):
 						if other != idx and other != 0:
 							check(not service.can_use(kind, other), "stage %d purchase does not unlock stage %d" % [idx,other])
 				service.entitlements.skus = []
@@ -46,7 +46,7 @@ func run() -> void:
 				check(service.can_use(kind, idx, true),
 					"guest can enter a host-owned stage %d without own purchase" % idx)
 	service.entitlements = {"mode":"unrestricted","skus":[]}
-	for stage in range(4):
+	for stage in range(5):
 		check(service.can_use("stage",stage),"standalone stage %d remains freely accessible" % stage)
 	for car in range(10):
 		check(service.can_use("car",car),"standalone vehicle %d remains accessible" % car)
