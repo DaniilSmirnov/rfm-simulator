@@ -20,10 +20,19 @@ func run() -> void:
 		if part is Node3D and part.has_meta("rolling_wheel_radius") and not part.get_meta("rolling_wheel_radius") is String:
 			wheel = part
 			break
-	verify(wheel != null, "player car includes rolling wheel mesh")
+	verify(wheel != null, "player car includes rolling wheel pivot")
 	if wheel == null:
+		# A missing wheel must fail promptly instead of crashing and hanging CI.
+		car.free()
 		quit(1)
 		return
+	var wheel_count = 0
+	for part in car.get_children():
+		if part is Node3D and part.has_meta("rolling_wheel_radius"):
+			wheel_count += 1
+	verify(wheel_count == 4, "Granta has four independently rotating wheels")
+	verify(wheel.get_node_or_null("WheelTire") != null and wheel.get_node_or_null("WheelRim") != null,
+		"wheel hub and tyre rotate on the same pivot")
 	props.animate_wheels(car)
 	var start_rotation = wheel.quaternion
 	car.position.z -= 1.0
@@ -50,6 +59,7 @@ func run() -> void:
 			break
 	verify(rally_part != null, "rally car includes rolling wheel mesh")
 	if rally_part == null:
+		rally.free()
 		quit(1)
 		return
 	var before = rally_part.quaternion

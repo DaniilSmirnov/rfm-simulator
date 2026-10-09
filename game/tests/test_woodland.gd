@@ -90,12 +90,19 @@ func run() -> void:
 		var other = Stage.new(variant)
 		root.add_child(other)
 		other.build()
+		# Only the rally forest's *own* detail layers are forbidden outside
+		# stage 0. The village has an intentionally independent mushroom and
+		# berry ecosystem, so MushroomCaps cannot be counted as contamination.
 		var forest_layers_absent = true
-		for layer in ["ForestGrass", "MushroomCaps", "AntHills", "ForestBoulders", "ForestPebbles", "ForestBushes", "ForestBerryBushes", "ForestBerries"]:
+		for layer in ["ForestGrass", "AntHills", "ForestBoulders", "ForestPebbles", "ForestBushes", "ForestBerryBushes", "ForestBerries"]:
 			forest_layers_absent = forest_layers_absent and other.woodland_details.get(layer, 0) == 0
-		check(forest_layers_absent, "forest decoration stays off winter and vineyard stages")
+		check(forest_layers_absent, "stage %d does not leak the rally forest's detail layers" % variant)
+		if variant == 1:
+			check(other.woodland_details.get("MushroomCaps", 0) == 0, "winter has no summer mushrooms")
 		if variant == 2:
 			check(other.woodland_details.get("VineyardLeaves", 0) > 0 and other.woodland_details.get("VineyardGrapes", 0) > 0, "vineyard keeps its own leaves and collectible grapes")
+			check(other.woodland_details.get("VillageForestBerries", 0) > 0 and other.woodland_details.get("VillageForestBushes", 0) > 0, "village outer forest has its own bushes and berries")
+			check(other.woodland_details.get("MushroomCaps", 0) > 0, "village outer forest has edible mushrooms")
 		other.free()
 	print("WOODLAND RESULT: %d failures" % failures)
 	quit(1 if failures else 0)

@@ -574,11 +574,16 @@ func road_surface_vertex(s: float, lateral: float) -> Vector3:
 func road_surface_color(p: Vector3, s: float) -> Color:
 	if desert:
 		return Color("d4a475").lightened(sin(p.z * 0.25 + p.x * 0.10) * 0.025)
-	var base = Color("708a9c") if winter else ((Color("857763") if s >= 381.0 and s <= 489.0 else Color("525757")) if urban else Color("9d896b"))
-	# Continuous low-frequency shading instead of a random colour per triangle.
+	# The same world-space vertex belongs to adjacent segments whose station
+	# parameters differ by one. Shading with the segment's start station made
+	# identical vertices get different colours, creating visible gravel seams.
+	# For the village detour derive the actual station from p, once per colour
+	# calculation, regardless of which adjacent triangle references it.
+	var station = road_s(p) if urban else s
+	var base = Color("708a9c") if winter else ((Color("857763") if station >= 381.0 and station <= 489.0 else Color("525757")) if urban else Color("9d896b"))
 	var shade = sin(p.x * 0.17 + p.z * 0.11) * 0.025 + sin(p.z * 0.29 - p.x * 0.07) * 0.015
-	if village_forest_detour(s):
-		var lateral = (p - at(s)).dot(side(s))
+	if village_forest_detour(station):
+		var lateral = (p - at(station)).dot(side(station))
 		base = base.darkened(exp(-pow((absf(lateral) - 0.80) / 0.28, 2.0)) * 0.18)
 	return base.lightened(shade)
 

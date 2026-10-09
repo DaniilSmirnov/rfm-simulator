@@ -68,23 +68,25 @@ static func build() -> Node3D:
 		_box(root, Vector3(side * 0.88, 1.07, -0.95), Vector3(0.14, 0.055, 0.11), TRIM, "MirrorArm")
 		_box(root, Vector3(side * 0.96, 1.13, -0.95), Vector3(0.24, 0.13, 0.18), PAINT_LIT, "MirrorCap")
 		_box(root, Vector3(side * 1.083, 1.12, -0.95), Vector3(0.015, 0.075, 0.13), CHROME, "MirrorGlass")
-		# Wheel arches and wheels with separate low-poly alloy hubs.
+		# A pivot owns the full wheel assembly, including its spokes. Rotating only
+		# the tyre mesh leaves the visible alloy spokes frozen in place.
 		for index in range(2):
 			var z = -1.35 if index == 0 else 1.40
-			var wheel = Node3D.new()
-			root.add_child(wheel)
-			wheel.position = Vector3(side * 0.89, 0.37, z)
-			wheel.set_meta("rolling_wheel_radius", 0.37)
-			wheel.set_meta("rolling_wheel_axis", Vector3.LEFT)
-			var tire = P.cylinder(wheel, Vector3.ZERO, 0.37, 0.37, 0.29, RUBBER, 16)
+			var wheel_pivot = Node3D.new()
+			wheel_pivot.name = "RollingWheel_%s_%s" % ["L" if side < 0 else "R", "Front" if index == 0 else "Rear"]
+			root.add_child(wheel_pivot)
+			wheel_pivot.position = Vector3(side * 0.89, 0.37, z)
+			wheel_pivot.set_meta("rolling_wheel_radius", 0.37)
+			wheel_pivot.set_meta("rolling_wheel_axis", Vector3.LEFT)
+			var tire = P.cylinder(wheel_pivot, Vector3.ZERO, 0.37, 0.37, 0.29, RUBBER, 16)
 			tire.rotation.z = PI / 2
 			tire.name = "WheelTire"
-			var rim = P.cylinder(wheel, Vector3(side * 0.16, 0, 0), 0.255, 0.255, 0.04, CHROME, 12)
+			var rim = P.cylinder(wheel_pivot, Vector3(side * 0.16, 0, 0), 0.255, 0.255, 0.04, CHROME, 12)
 			rim.rotation.z = PI / 2
 			rim.name = "WheelRim"
 			for spoke in range(6):
 				var angle = spoke * TAU / 6.0
-				P.car_beam(wheel, Vector3(side * 0.19, 0, 0), Vector3(side * 0.19, cos(angle) * 0.21, sin(angle) * 0.21), 0.036, PAINT_SHADE)
+				P.car_beam(wheel_pivot, Vector3(side * 0.19, 0, 0), Vector3(side * 0.19, cos(angle) * 0.21, sin(angle) * 0.21), 0.036, PAINT_SHADE)
 		# Granta-inspired swept headlamps, but no badge or trademarks.
 		P.quad_panel(root, PackedVector3Array([
 			Vector3(side * 0.35, 0.74, -2.143), Vector3(side * 0.77, 0.75, -2.105),

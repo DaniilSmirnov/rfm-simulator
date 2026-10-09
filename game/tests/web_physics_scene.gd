@@ -40,7 +40,11 @@ func _ready() -> void:
 		await get_tree().physics_frame
 	if lamp.position.distance_to(before) > 0.1 and lamp.rotation.length() > 0.01:
 		print("WEB_PHYSICS_PASS: exported rigid body moves and tips")
-		get_tree().quit()
+		# Playwright owns the browser lifetime and closes the page after this
+		# marker. Quitting Godot here destroys WebAudio while an engine audio
+		# callback may still read AudioContext.currentTime, causing a spurious
+		# pageerror *after* physics succeeded. Keep the runtime alive until
+		# the browser closes the test page normally.
 	else:
 		push_error("WEB_PHYSICS_FAIL: exported physics backend is inactive")
 		get_tree().quit(1)
