@@ -583,13 +583,17 @@ func _build_environment() -> void:
 	env.fog_light_color = Color("9ea995")
 	env.fog_density = 0.0018
 	if stage.winter:
-		sky_mat.sky_top_color = Color("779bbd")
-		sky_mat.sky_horizon_color = Color("cbdde7")
-		sky_mat.ground_horizon_color = Color("dce8eb")
-		env.ambient_light_color = Color("c7d9ed")
-		env.ambient_light_energy = 0.27
-		env.fog_light_color = Color("c8dae6")
-		env.fog_density = 0.0012
+		# Crisp Côte d'Azur winter sky over the Alps: deep blue overhead,
+		# a pale haze down the valleys and low, warm January sun.
+		sky_mat.sky_top_color = Color("3f74ad")
+		sky_mat.sky_curve = 0.06
+		sky_mat.sky_horizon_color = Color("d4e3ee")
+		sky_mat.ground_bottom_color = Color("8d9aa6")
+		sky_mat.ground_horizon_color = Color("dfe9f0")
+		env.ambient_light_color = Color("c9dbef")
+		env.ambient_light_energy = 0.34
+		env.fog_light_color = Color("cfdde8")
+		env.fog_density = 0.0011
 	elif stage.desert:
 		sky_mat.sky_top_color = Color("5987ab")
 		sky_mat.sky_horizon_color = Color("e9c69a")
@@ -626,8 +630,9 @@ func _build_environment() -> void:
 	sun.light_color = Color("ffe3b2")
 	sun.light_energy = 0.85
 	if stage.winter:
-		sun.light_color = Color("d5e3f0")
-		sun.light_energy = 0.52
+		sun.rotation_degrees = Vector3(-24, -48, 0)
+		sun.light_color = Color("fff0dc")
+		sun.light_energy = 0.78
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 120
 	add_child(sun)
@@ -1158,6 +1163,8 @@ func _process(delta: float) -> void:
 	stage.snow.authoritative = not room.connected or room.is_host
 	if stage.winter:
 		stage.snow.update(delta)
+		if stage.alpine_life != null:
+			stage.alpine_life.update(delta, player_position())
 	stage.update_fallen(delta)
 	if stage.lakeland:
 		stage.water.update(delta)
