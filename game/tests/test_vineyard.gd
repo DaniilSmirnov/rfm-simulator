@@ -30,6 +30,42 @@ func run() -> void:
 	for p in stage.city.lavender_positions:
 		lavender_clear = lavender_clear and -p.z < 300.0 and stage.road_distance(p) >= 6.0
 	check(lavender_clear, "lavender stays before village and leaves the road clear")
+	# Route invariants: the old village street is distinct from the forest
+	# detour; all road samples and shoulders stay continuous at transitions.
+	check(stage.get_node_or_null("VillageFarmyard") != null and stage.get_node_or_null("VillageCafeTerrace") != null, "village contains distinct farmyard and cafe landmarks")
+	check(stage.get_node_or_null("VillageFarmyard/FarmTrailer") != null, "farmyard has a complete trailer assembly")
+	check(stage.get_node_or_null("VillageCafeTerrace") != null and not stage.find_children("CityDetail_box_*", "MultiMeshInstance3D", false, false).is_empty() and not stage.find_children("CityDetail_cylinder_12_1000_*", "MultiMeshInstance3D", false, false).is_empty(), "cafe furniture and farmyard decorations reuse batched primitive resources")
+	for layer in range(4):
+		check(stage.woodland_details.get("VillageHorizonTreeLayer%d" % layer, 0) >= 100, "distant woodland covers both terrain edges using shared meshes")
+	var horizon_sides = [0, 0]
+	for tile in stage.find_children("VillageHorizonTreeLayer0_Tile_*", "MultiMeshInstance3D", false, false):
+		horizon_sides[0 if tile.position.x < 0 else 1] += tile.multimesh.instance_count
+	check(horizon_sides[0] >= 100 and horizon_sides[1] >= 100, "generated horizon has dense coverage on each terrain edge")
+	var cafe = stage.get_node("VillageCafeTerrace")
+	var cafe_clear = true
+	for x in [-2.6, 0.0, 2.6]:
+		for z in [-4.5, 0.0, 4.5]:
+			var point = cafe.transform * Vector3(x, 1.0, z)
+			for obstacle in stage.city.obstacles:
+				if obstacle.kind not in ["building", "wall"]:
+					continue
+				var local = stage.city._relative_pose(obstacle.body).affine_inverse() * point
+				cafe_clear = cafe_clear and not (absf(local.x) <= obstacle.half.x and absf(local.y) <= obstacle.half.y and absf(local.z) <= obstacle.half.z)
+	check(cafe_clear, "cafe terrace stays outside neighbouring houses and garden walls")
+	var route_continuous = true
+	var shoulder_continuous = true
+	for sample in range(300, 570):
+		var station = float(sample)
+		var next_station = station + 0.1
+		route_continuous = route_continuous and stage.at(station).distance_to(stage.at(next_station)) < 0.65
+		if stage.draw_base_road_surface(station) and stage.draw_base_road_surface(next_station):
+			for side_value in [-1.0, 1.0]:
+				var edge = stage.road_surface_vertex(station, side_value * stage.road_width(station) * 0.5)
+				var ground_height = stage.terrain_surface_height(edge)
+				var next_edge = stage.road_surface_vertex(next_station, side_value * stage.road_width(next_station) * 0.5)
+				shoulder_continuous = shoulder_continuous and is_finite(ground_height) and absf(edge.y - next_edge.y) < 0.5 and absf(ground_height - stage.terrain_surface_height(next_edge)) < 0.5
+	check(route_continuous, "village and gravel detour have no disconnected station jumps")
+	check(shoulder_continuous, "gravel-road shoulders and terrain have valid interpolated heights")
 	var forest_crops_clear = true
 	for p in stage.city.tree_positions:
 		forest_crops_clear = forest_crops_clear and stage.city.crop_clear(p)
@@ -149,6 +185,7 @@ func run() -> void:
 	check(stage.city.thuja_count > 300, "dense thuja forest surrounds the village")
 	check(stage.woodland_details.get("VillageThujaLower", 0) == stage.city.thuja_count and stage.woodland_details.get("VillageThujaCrown", 0) == stage.city.thuja_count, "thuja forest is rendered through instanced layers")
 	check(stage.city.mixed_tree_count >= 1500, "village has a denser forest using the shared summer tree asset")
+	check(stage.city._forest_spot_allowed(stage.at(435.0) + stage.side(435.0) * 165.0) or absf((stage.at(435.0) + stage.side(435.0) * 165.0).x) > 196.0, "gravel woodland clearance extends toward the terrain boundary")
 	var shared_tree_layers_match = true
 	for layer in range(4):
 		shared_tree_layers_match = shared_tree_layers_match and stage.woodland_details.get("VillageForestTreeLayer%d" % layer, 0) == stage.city.mixed_tree_count
@@ -163,9 +200,9 @@ func run() -> void:
 	check(stage.city.forest_grass_count > 1000 and stage.city.forest_stone_count > 200, "mixed forest has dense grass and loose stones")
 	check(stage.city.forest_boulder_count > 25 and stage.rocks.size() >= stage.city.forest_boulder_count, "forest contains collidable boulders")
 	check(stage.city.forest_bush_count > 100 and stage.city.forest_berry_bush_count > 40, "forest has ordinary and berry undergrowth")
-	check(stage.city.mixed_tree_count > 1800 and stage.city.forest_grass_count > 2300 and stage.city.forest_stone_count > 400, "village forest has denser spatially batched trees grass and stones")
+	check(stage.city.mixed_tree_count > 2400 and stage.city.forest_grass_count > 2300 and stage.city.forest_stone_count > 400, "village forest has denser spatially batched trees grass and stones")
 	var mushrooms = stage.collectibles.filter(func(item): return item.kind == "mushrooms")
-	check(mushrooms.size() > 200, "village forest has harvestable mushroom clusters")
+	check(mushrooms.size() > 35 and mushrooms.size() <= 384, "village mushroom population stays moderate and harvestable")
 	var mushroom_contact = true
 	for item in mushrooms:
 		mushroom_contact = mushroom_contact and absf(item.pos.y - stage.terrain_surface_height(item.pos)) < 0.001 and stage.city._forest_spot_allowed(item.pos, 0.2)

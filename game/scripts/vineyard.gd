@@ -60,6 +60,8 @@ func build(cooperative: bool = false) -> void:
 		for side_value in [-1.0, 1.0]:
 			var p = stage.village_main_at(s) + stage.village_main_side(s) * side_value * 14.0
 			var reserved = absf(s - 370) < 11 or absf(s - 500) < 11
+			# Reserve the frontage for the cafe instead of building through its terrace.
+			reserved = reserved or (s == 334 and side_value == -1.0)
 			for parking in stage.clearings:
 				reserved = reserved or stage.flat(p).distance_to(stage.flat(parking)) < 13
 			if not reserved:
@@ -73,6 +75,7 @@ func build(cooperative: bool = false) -> void:
 		for side_value in [-1.0, 1.0]:
 			_lamp(stage.village_main_at(s) + stage.village_main_side(s) * side_value * 6.2, -side_value)
 	_village_props()
+	_village_landmarks()
 	if cooperative:
 		await _vineyards(true)
 	else:
@@ -740,7 +743,7 @@ func _forest_spot_allowed(p: Vector3, padding: float = 0.0) -> bool:
 		return false
 	var distance = stage.road_distance(p)
 	var minimum = 8.0 if stage.village_forest_detour(s) else (48.0 if stage.village(s) else 92.0)
-	if distance < minimum + padding or distance > 145.0:
+	if distance < minimum + padding or distance > (185.0 if stage.village_forest_detour(s) else 145.0):
 		return false
 	for spot in stage.clearings:
 		if stage.flat(p).distance_to(stage.flat(spot)) < 12.0 + padding:
@@ -753,12 +756,13 @@ func _mixed_forest(cooperative: bool = false) -> void:
 	var forest_rng = RandomNumberGenerator.new()
 	forest_rng.seed = 71020265
 	var tree_data: Array[Dictionary] = []
-	for i in range(10500):
+	for i in range(15000):
 		if cooperative and i % 200 == 0:
 			await get_tree().process_frame
 		var s = forest_rng.randf_range(VILLAGE_START - 52.0, VILLAGE_END + 52.0)
 		var side_value = -1.0 if forest_rng.randi() % 2 == 0 else 1.0
-		var lateral = forest_rng.randf_range(48.0, 142.0)
+		# Close the gaps near the gravel stretch; outside it preserve village spacing.
+		var lateral = forest_rng.randf_range(12.0, 185.0) if stage.village_forest_detour(s) else forest_rng.randf_range(48.0, 142.0)
 		var p = stage.at(s) + stage.side(s) * side_value * lateral + stage.direction(s) * forest_rng.randf_range(-4.0, 4.0)
 		if not _forest_spot_allowed(p, 2.0):
 			continue
@@ -770,8 +774,30 @@ func _mixed_forest(cooperative: bool = false) -> void:
 			"shade": forest_rng.randf_range(-0.025, 0.045),
 		})
 		mixed_tree_count += 1
-		if mixed_tree_count >= 2200:
+		if mixed_tree_count >= 3000:
 			break
+	# A non-colliding distant silhouette hides the square edge of the playable
+	# terrain. Separate instances let visibility culling retain the near forest.
+	var horizon_rng = RandomNumberGenerator.new()
+	horizon_rng.seed = 71020269
+	var horizon_trees: Array = []
+	for attempt in range(900):
+		if horizon_trees.size() >= 240:
+			break
+		var z = horizon_rng.randf_range(-560.0, -310.0)
+		var x = (188.0 + horizon_rng.randf_range(-3.5, 3.5)) * (-1.0 if attempt % 2 == 0 else 1.0)
+		var point = Vector3(x, 0, z)
+		if stage.road_distance(point) < 20.0 or not cemetery_clear(point, 4.0):
+			continue
+		point.y = stage.terrain_surface_height(point) - 0.05
+		horizon_trees.append({"position": point, "height": horizon_rng.randf_range(13.0, 22.0), "shade": horizon_rng.randf_range(-0.08, 0.02)})
+	for layer in range(4):
+		var horizon_poses: Array = []
+		var horizon_colors: Array = []
+		for tree in horizon_trees:
+			horizon_poses.append(stage.shared_tree_pose(tree.position, float(tree.height), layer))
+			horizon_colors.append(stage.shared_tree_color(layer, float(tree.shade), false))
+		stage._detail_batch("VillageHorizonTreeLayer%d" % layer, stage.shared_tree_mesh(layer), horizon_poses, horizon_colors)
 	for layer in range(4):
 		var poses: Array = []
 		var colors: Array = []
@@ -966,7 +992,10 @@ func _forest_mushrooms() -> void:
 	var colors = {"edible": [], "fly_agaric": [], "toadstool": []}
 	var stems = []
 	var stem_colors = []
-	for i in range(1100):
+	for i in range(380):
+		# Attempts generate clusters; cap individual mushrooms as well.
+		if caps.edible.size() + caps.fly_agaric.size() + caps.toadstool.size() >= 380:
+			break
 		var s = random.randf_range(290, 610)
 		var p = stage.at(s) + stage.side(s) * random.randf_range(12, 140) * (-1 if i % 2 else 1)
 		if not _forest_spot_allowed(p, 0.5) or not stage.rock_hit(p, p, 0.5, false).is_empty():
@@ -1017,6 +1046,142 @@ func paved_at(p: Vector3, padding: float = 0.0) -> bool:
 		if absf(local.x) <= area.half.x + padding and absf(local.z) <= area.half.y + padding:
 			return true
 	return false
+
+# Landmark groups add variety without creating additional full-size buildings.
+# All objects remain off the rally road, pavements and cemetery.
+# Distinct rural landmarks, built from small reusable details rather than solid boxes.
+# Keep furniture visually rich but batch it with the existing city renderer.
+func _landmark_crate(parent: Node3D, origin: Vector3, yaw: float = 0.0) -> void:
+	var crate = Node3D.new()
+	parent.add_child(crate)
+	crate.position = origin
+	crate.rotation.y = yaw
+	_solid(crate, Vector3(0, 0.42, 0), Vector3(0.94, 0.84, 0.86), "landmark")
+	var timber = Color("a27b51")
+	for y in [0.10, 0.42, 0.72]:
+		for z in [-0.42, 0.42]:
+			Props.box(crate, Vector3(0, y, z), Vector3(0.94, 0.12, 0.08), timber)
+		for x in [-0.45, 0.45]:
+			Props.box(crate, Vector3(x, y, 0), Vector3(0.08, 0.12, 0.83), timber)
+	for x in [-0.43, 0.43]:
+		for z in [-0.39, 0.39]:
+			Props.box(crate, Vector3(x, 0.42, z), Vector3(0.09, 0.78, 0.09), Color("705037"))
+	for x in [-0.25, 0.0, 0.25]:
+		Props.box(crate, Vector3(x, 0.04, 0), Vector3(0.20, 0.08, 0.86), timber.darkened(0.13))
+
+func _landmark_barrel(parent: Node3D, origin: Vector3) -> void:
+	var barrel = Node3D.new()
+	parent.add_child(barrel)
+	barrel.position = origin
+	_solid(barrel, Vector3(0, 0.54, 0), Vector3(0.89, 1.08, 0.89), "landmark")
+	Props.cylinder(barrel, Vector3(0, 0.54, 0), 0.43, 0.38, 1.08, Color("815337"), 12)
+	for height in [0.16, 0.47, 0.84, 1.04]:
+		Props.cylinder(barrel, Vector3(0, height, 0), 0.445, 0.445, 0.045, Color("444c4b"), 12)
+	for angle_index in range(10):
+		var angle = angle_index * TAU / 10.0
+		var stave = Props.box(barrel, Vector3(cos(angle) * 0.40, 0.56, sin(angle) * 0.40), Vector3(0.10, 0.98, 0.035), Color("a3754f"))
+		stave.rotation.y = -angle
+
+func _landmark_cafe_chair(parent: Node3D, origin: Vector3, yaw: float) -> void:
+	var chair = Node3D.new()
+	parent.add_child(chair)
+	chair.position = origin
+	chair.rotation.y = yaw
+	_solid(chair, Vector3(0, 0.55, 0), Vector3(0.69, 1.1, 0.69), "landmark")
+	var iron = Color("303f3e")
+	for x in [-0.29, 0.29]:
+		for z in [-0.29, 0.29]:
+			Props.cylinder(chair, Vector3(x, 0.28, z), 0.035, 0.035, 0.56, iron, 6)
+	Props.box(chair, Vector3(0, 0.57, 0), Vector3(0.68, 0.075, 0.68), Color("9a7352"))
+	for y in [0.78, 1.02]:
+		Props.box(chair, Vector3(0, y, 0.32), Vector3(0.69, 0.085, 0.06), Color("9a7352"))
+	for x in [-0.30, 0.30]:
+		Props.cylinder(chair, Vector3(x, 0.87, 0.32), 0.035, 0.035, 0.66, iron, 6)
+
+func _landmark_cafe_table(parent: Node3D, origin: Vector3) -> void:
+	var table = Node3D.new()
+	parent.add_child(table)
+	table.position = origin
+	_solid(table, Vector3(0, 0.48, 0), Vector3(1.36, 0.96, 1.36), "landmark")
+	Props.cylinder(table, Vector3(0, 0.91, 0), 0.68, 0.68, 0.07, Color("ae8764"), 16)
+	Props.cylinder(table, Vector3(0, 0.85, 0), 0.60, 0.60, 0.05, Color("5b5247"), 16)
+	Props.cylinder(table, Vector3(0, 0.43, 0), 0.055, 0.055, 0.85, Color("303f3e"), 8)
+	Props.cylinder(table, Vector3(0, 0.055, 0), 0.37, 0.37, 0.07, Color("303f3e"), 10)
+	Props.cylinder(table, Vector3(0.22, 1.01, 0.14), 0.10, 0.08, 0.17, Color("f1e2c9"), 10)
+	Props.cylinder(table, Vector3(-0.19, 1.02, -0.13), 0.075, 0.07, 0.19, Color("70916a"), 10)
+	for side_value in [-1.0, 1.0]:
+		_landmark_cafe_chair(table, Vector3(side_value * 1.16, 0, 0), side_value * PI / 2.0)
+
+func _village_landmarks() -> void:
+	var wood = Color("84634a")
+	var farm = Node3D.new()
+	farm.name = "VillageFarmyard"
+	stage.add_child(farm)
+	farm.position = stage.village_main_at(545.0) + stage.village_main_side(545.0) * -32.0
+	farm.position.y = stage.ground(farm.position)
+	# Lean-to vineyard storage shelter with pitched roof and exposed timber frame.
+	for x in [-4.5, 4.5]:
+		for z in [-2.0, 2.0]:
+			_solid(farm, Vector3(x, 1.55, z), Vector3(0.19, 3.1, 0.19), "landmark")
+			Props.box(farm, Vector3(x, 1.55, z), Vector3(0.19, 3.1, 0.19), Color("68503a"))
+	for z in [-2.0, 2.0]:
+		for side_value in [-1.0, 1.0]:
+			var sloped = Props.box(farm, Vector3(side_value * 2.25, 3.45, z), Vector3(4.9, 0.18, 0.17), Color("66503f"))
+			sloped.rotation.z = -side_value * 0.12
+	for side_value in [-1.0, 1.0]:
+		var roof = Props.box(farm, Vector3(side_value * 2.3, 3.69, 0), Vector3(4.95, 0.14, 4.8), Color("86624d"))
+		roof.rotation.z = -side_value * 0.12
+	for index in range(6):
+		_landmark_crate(farm, Vector3(-3.0 + (index % 3) * 1.12, 0, -1.3 + int(index / 3) * 0.89), float(index % 3) * 0.045)
+	for x in [1.8, 3.0]:
+		_landmark_barrel(farm, Vector3(x, 0, -1.1))
+	# Low detailed vineyard cart: planked deck, high rails, axles and towbar.
+	var trailer = Node3D.new()
+	trailer.name = "FarmTrailer"
+	farm.add_child(trailer)
+	trailer.position = Vector3(1.5, 0, 5.0)
+	_solid(trailer, Vector3(0, 0.95, 0), Vector3(3.6, 1.9, 2.6), "landmark")
+	for plank in range(6):
+		Props.box(trailer, Vector3(-1.4 + plank * 0.56, 0.88, 0), Vector3(0.52, 0.12, 2.4), Color("86694e"))
+	for side_value in [-1.0, 1.0]:
+		for z in [-1.0, 1.0]:
+			Props.box(trailer, Vector3(side_value * 1.65, 1.34, z), Vector3(0.12, 0.95, 0.12), wood)
+		Props.box(trailer, Vector3(side_value * 1.65, 1.35, 0), Vector3(0.10, 0.18, 2.6), wood)
+		for z in [-0.8, 0.8]:
+			var wheel = Props.cylinder(trailer, Vector3(side_value * 1.7, 0.48, z), 0.47, 0.47, 0.18, Color("242d2d"), 12)
+			wheel.rotation.z = PI / 2
+			var hub = Props.cylinder(trailer, Vector3(side_value * 1.81, 0.48, z), 0.21, 0.21, 0.19, Color("b2afa2"), 10)
+			hub.rotation.z = PI / 2
+	Props.box(trailer, Vector3(0, 0.78, -2.1), Vector3(0.14, 0.14, 2.3), Color("5e6157"))
+	Props.cylinder(trailer, Vector3(0, 0.78, -3.1), 0.16, 0.16, 0.08, Color("3b4241"), 10)
+	_batch(farm, farm.transform)
+
+	var cafe = Node3D.new()
+	cafe.name = "VillageCafeTerrace"
+	stage.add_child(cafe)
+	cafe.position = stage.village_main_at(335.0) + stage.village_main_side(335.0) * -10.5
+	cafe.position.y = stage.ground(cafe.position)
+	cafe.rotation.y = atan2(-stage.village_main_direction(335.0).x, -stage.village_main_direction(335.0).z)
+	for index in range(2):
+		_landmark_cafe_table(cafe, Vector3(0, 0, float(index) * 2.8 - 1.4))
+	# Striped fabric awning, with a light support frame.
+	for x in [-2.25, 2.25]:
+		_solid(cafe, Vector3(x, 1.84, 0), Vector3(0.10, 3.7, 0.10), "landmark")
+		Props.box(cafe, Vector3(x, 1.84, 0), Vector3(0.10, 3.7, 0.10), Color("5e635f"))
+	for stripe in range(8):
+		var color = Color("e5d1b0") if stripe % 2 == 0 else Color("9a4e47")
+		var strip = Props.box(cafe, Vector3(-2.0 + stripe * 0.56, 3.65, 0), Vector3(0.56, 0.07, 6.9), color)
+		strip.rotation.z = -0.06
+	for z in [-3.1, 3.1]:
+		Props.box(cafe, Vector3(0, 3.66, z), Vector3(4.6, 0.1, 0.11), Color("635b4f"))
+	for x in [-1.8, 1.8]:
+		var pot = Vector3(x, 0, 4.0)
+		Props.cylinder(cafe, pot + Vector3(0, 0.35, 0), 0.38, 0.48, 0.7, Color("a76b4f"), 10)
+		Props.cylinder(cafe, pot + Vector3(0, 0.70, 0), 0.30, 0.30, 0.08, Color("4b382e"), 10)
+		for flower in range(5):
+			var angle = flower * TAU / 5.0
+			Props.box(cafe, pot + Vector3(cos(angle) * 0.2, 1.0, sin(angle) * 0.2), Vector3(0.13, 0.16, 0.13), Color("c6726c"))
+	_batch(cafe, cafe.transform)
 
 func _village_props() -> void:
 	for station in [335.0, 405.0, 465.0, 540.0]:
