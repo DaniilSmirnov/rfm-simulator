@@ -60,6 +60,8 @@ func build(cooperative: bool = false) -> void:
 		for side_value in [-1.0, 1.0]:
 			var p = stage.village_main_at(s) + stage.village_main_side(s) * side_value * 14.0
 			var reserved = absf(s - 370) < 11 or absf(s - 500) < 11
+			# Reserve the frontage for the cafe instead of building through its terrace.
+			reserved = reserved or (s == 334 and side_value == -1.0)
 			for parking in stage.clearings:
 				reserved = reserved or stage.flat(p).distance_to(stage.flat(parking)) < 13
 			if not reserved:
@@ -73,6 +75,7 @@ func build(cooperative: bool = false) -> void:
 		for side_value in [-1.0, 1.0]:
 			_lamp(stage.village_main_at(s) + stage.village_main_side(s) * side_value * 6.2, -side_value)
 	_village_props()
+	_village_landmarks()
 	if cooperative:
 		await _vineyards(true)
 	else:
@@ -94,7 +97,6 @@ func build(cooperative: bool = false) -> void:
 	else:
 		_village_natural_details()
 	_forest_mushrooms()
-	_village_landmarks()
 	_landscape()
 	_flush_batches()
 
@@ -991,6 +993,9 @@ func _forest_mushrooms() -> void:
 	var stems = []
 	var stem_colors = []
 	for i in range(380):
+		# Attempts generate clusters; cap individual mushrooms as well.
+		if caps.edible.size() + caps.fly_agaric.size() + caps.toadstool.size() >= 380:
+			break
 		var s = random.randf_range(290, 610)
 		var p = stage.at(s) + stage.side(s) * random.randf_range(12, 140) * (-1 if i % 2 else 1)
 		if not _forest_spot_allowed(p, 0.5) or not stage.rock_hit(p, p, 0.5, false).is_empty():
@@ -1051,6 +1056,7 @@ func _landmark_crate(parent: Node3D, origin: Vector3, yaw: float = 0.0) -> void:
 	parent.add_child(crate)
 	crate.position = origin
 	crate.rotation.y = yaw
+	_solid(crate, Vector3(0, 0.42, 0), Vector3(0.94, 0.84, 0.86), "landmark")
 	var timber = Color("a27b51")
 	for y in [0.10, 0.42, 0.72]:
 		for z in [-0.42, 0.42]:
@@ -1067,6 +1073,7 @@ func _landmark_barrel(parent: Node3D, origin: Vector3) -> void:
 	var barrel = Node3D.new()
 	parent.add_child(barrel)
 	barrel.position = origin
+	_solid(barrel, Vector3(0, 0.54, 0), Vector3(0.89, 1.08, 0.89), "landmark")
 	Props.cylinder(barrel, Vector3(0, 0.54, 0), 0.43, 0.38, 1.08, Color("815337"), 12)
 	for height in [0.16, 0.47, 0.84, 1.04]:
 		Props.cylinder(barrel, Vector3(0, height, 0), 0.445, 0.445, 0.045, Color("444c4b"), 12)
@@ -1080,6 +1087,7 @@ func _landmark_cafe_chair(parent: Node3D, origin: Vector3, yaw: float) -> void:
 	parent.add_child(chair)
 	chair.position = origin
 	chair.rotation.y = yaw
+	_solid(chair, Vector3(0, 0.55, 0), Vector3(0.69, 1.1, 0.69), "landmark")
 	var iron = Color("303f3e")
 	for x in [-0.29, 0.29]:
 		for z in [-0.29, 0.29]:
@@ -1094,6 +1102,7 @@ func _landmark_cafe_table(parent: Node3D, origin: Vector3) -> void:
 	var table = Node3D.new()
 	parent.add_child(table)
 	table.position = origin
+	_solid(table, Vector3(0, 0.48, 0), Vector3(1.36, 0.96, 1.36), "landmark")
 	Props.cylinder(table, Vector3(0, 0.91, 0), 0.68, 0.68, 0.07, Color("ae8764"), 16)
 	Props.cylinder(table, Vector3(0, 0.85, 0), 0.60, 0.60, 0.05, Color("5b5247"), 16)
 	Props.cylinder(table, Vector3(0, 0.43, 0), 0.055, 0.055, 0.85, Color("303f3e"), 8)
@@ -1113,14 +1122,15 @@ func _village_landmarks() -> void:
 	# Lean-to vineyard storage shelter with pitched roof and exposed timber frame.
 	for x in [-4.5, 4.5]:
 		for z in [-2.0, 2.0]:
+			_solid(farm, Vector3(x, 1.55, z), Vector3(0.19, 3.1, 0.19), "landmark")
 			Props.box(farm, Vector3(x, 1.55, z), Vector3(0.19, 3.1, 0.19), Color("68503a"))
 	for z in [-2.0, 2.0]:
 		for side_value in [-1.0, 1.0]:
 			var sloped = Props.box(farm, Vector3(side_value * 2.25, 3.45, z), Vector3(4.9, 0.18, 0.17), Color("66503f"))
-			sloped.rotation.z = side_value * 0.12
+			sloped.rotation.z = -side_value * 0.12
 	for side_value in [-1.0, 1.0]:
 		var roof = Props.box(farm, Vector3(side_value * 2.3, 3.69, 0), Vector3(4.95, 0.14, 4.8), Color("86624d"))
-		roof.rotation.z = side_value * 0.12
+		roof.rotation.z = -side_value * 0.12
 	for index in range(6):
 		_landmark_crate(farm, Vector3(-3.0 + (index % 3) * 1.12, 0, -1.3 + int(index / 3) * 0.89), float(index % 3) * 0.045)
 	for x in [1.8, 3.0]:
@@ -1130,6 +1140,7 @@ func _village_landmarks() -> void:
 	trailer.name = "FarmTrailer"
 	farm.add_child(trailer)
 	trailer.position = Vector3(1.5, 0, 5.0)
+	_solid(trailer, Vector3(0, 0.95, 0), Vector3(3.6, 1.9, 2.6), "landmark")
 	for plank in range(6):
 		Props.box(trailer, Vector3(-1.4 + plank * 0.56, 0.88, 0), Vector3(0.52, 0.12, 2.4), Color("86694e"))
 	for side_value in [-1.0, 1.0]:
@@ -1150,10 +1161,12 @@ func _village_landmarks() -> void:
 	stage.add_child(cafe)
 	cafe.position = stage.village_main_at(335.0) + stage.village_main_side(335.0) * -10.5
 	cafe.position.y = stage.ground(cafe.position)
+	cafe.rotation.y = atan2(-stage.village_main_direction(335.0).x, -stage.village_main_direction(335.0).z)
 	for index in range(2):
 		_landmark_cafe_table(cafe, Vector3(0, 0, float(index) * 2.8 - 1.4))
 	# Striped fabric awning, with a light support frame.
 	for x in [-2.25, 2.25]:
+		_solid(cafe, Vector3(x, 1.84, 0), Vector3(0.10, 3.7, 0.10), "landmark")
 		Props.box(cafe, Vector3(x, 1.84, 0), Vector3(0.10, 3.7, 0.10), Color("5e635f"))
 	for stripe in range(8):
 		var color = Color("e5d1b0") if stripe % 2 == 0 else Color("9a4e47")
