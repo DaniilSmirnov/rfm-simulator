@@ -107,6 +107,18 @@ func run() -> void:
 	game.lobby_ui._process(0)
 	check(game.mobile_top.visible and game.mobile_bottom.visible, "resuming restores populated HUD")
 	game.room.connected = false
+	game.playing = true
+	game.paused = false
+	var lifecycle = {"width": 960, "height": 540, "left": 0, "right": 0, "top": 0, "bottom": 0, "lifecycle": {"hidden": false, "pause_sequence": 1}}
+	game._mobile_safe_response(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), JSON.stringify(lifecycle).to_utf8_buffer())
+	check(game.paused and game.menu.visible, "rapid hide/restore still pauses the game")
+	game._set_paused(false)
+	game._mobile_safe_response(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), JSON.stringify(lifecycle).to_utf8_buffer())
+	check(not game.paused, "an acknowledged hide does not pause again after Continue")
+	game.mobile_mode = false
+	lifecycle.lifecycle.hidden = true
+	game._mobile_safe_response(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), JSON.stringify(lifecycle).to_utf8_buffer())
+	check(game.paused, "desktop VK lifecycle also pauses gameplay")
 	game.queue_free()
 	await process_frame
 	print("LOBBY_UI failures=", failures)
