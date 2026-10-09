@@ -149,6 +149,7 @@ func run() -> void:
 	check(stage.city.thuja_count > 300, "dense thuja forest surrounds the village")
 	check(stage.woodland_details.get("VillageThujaLower", 0) == stage.city.thuja_count and stage.woodland_details.get("VillageThujaCrown", 0) == stage.city.thuja_count, "thuja forest is rendered through instanced layers")
 	check(stage.city.mixed_tree_count >= 1500, "village has a denser forest using the shared summer tree asset")
+	check(stage.city._forest_spot_allowed(stage.at(435.0) + stage.side(435.0) * 165.0) or absf((stage.at(435.0) + stage.side(435.0) * 165.0).x) > 196.0, "gravel woodland clearance extends toward the terrain boundary")
 	var shared_tree_layers_match = true
 	for layer in range(4):
 		shared_tree_layers_match = shared_tree_layers_match and stage.woodland_details.get("VillageForestTreeLayer%d" % layer, 0) == stage.city.mixed_tree_count
@@ -163,9 +164,9 @@ func run() -> void:
 	check(stage.city.forest_grass_count > 1000 and stage.city.forest_stone_count > 200, "mixed forest has dense grass and loose stones")
 	check(stage.city.forest_boulder_count > 25 and stage.rocks.size() >= stage.city.forest_boulder_count, "forest contains collidable boulders")
 	check(stage.city.forest_bush_count > 100 and stage.city.forest_berry_bush_count > 40, "forest has ordinary and berry undergrowth")
-	check(stage.city.mixed_tree_count > 1800 and stage.city.forest_grass_count > 2300 and stage.city.forest_stone_count > 400, "village forest has denser spatially batched trees grass and stones")
+	check(stage.city.mixed_tree_count > 2400 and stage.city.forest_grass_count > 2300 and stage.city.forest_stone_count > 400, "village forest has denser spatially batched trees grass and stones")
 	var mushrooms = stage.collectibles.filter(func(item): return item.kind == "mushrooms")
-	check(mushrooms.size() > 200, "village forest has harvestable mushroom clusters")
+	check(mushrooms.size() > 35 and mushrooms.size() < 450, "village mushroom population stays moderate and harvestable")
 	var mushroom_contact = true
 	for item in mushrooms:
 		mushroom_contact = mushroom_contact and absf(item.pos.y - stage.terrain_surface_height(item.pos)) < 0.001 and stage.city._forest_spot_allowed(item.pos, 0.2)
