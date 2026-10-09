@@ -3,6 +3,7 @@ extends "res://scripts/city.gd"
 const VILLAGE_START = 300.0
 const VILLAGE_END = 570.0
 var cultivated_cells: Dictionary = {}
+var crop_ground_cells: Dictionary = {}
 var crop_soil: Dictionary = {}
 var crop_heights: Dictionary = {}
 var vine_count = 0
@@ -100,6 +101,10 @@ func build(cooperative: bool = false) -> void:
 		await _village_natural_details(true)
 	else:
 		_village_natural_details()
+	if cooperative:
+		await _crop_ground_details(true)
+	else:
+		_crop_ground_details()
 	_forest_mushrooms()
 	_landscape()
 	_flush_batches()
@@ -426,11 +431,14 @@ func _flush_crop_soil() -> void:
 		stage.add_child(mesh)
 	crop_soil.clear()
 
-func _register_crop(p: Vector3) -> void:
+func _register_crop(p: Vector3, station: float) -> void:
 	var key = Vector2i(floori(p.x / 8.0), floori(p.z / 8.0))
 	if not cultivated_cells.has(key):
 		cultivated_cells[key] = []
 	cultivated_cells[key].append(p)
+	if not crop_ground_cells.has(key):
+		crop_ground_cells[key] = []
+	crop_ground_cells[key].append({"pos": p, "side": stage.village_main_side(station), "direction": stage.village_main_direction(station), "half": Vector2(0.95, 1.5) if station < 300.0 else Vector2(1.3, 3.5)})
 
 func crop_clear(p: Vector3, clearance: float = 6.0) -> bool:
 	var key = Vector2i(floori(p.x / 8.0), floori(p.z / 8.0))
@@ -473,7 +481,7 @@ func _vineyards(cooperative: bool = false) -> void:
 					if blocked:
 						continue
 					p.y = _crop_height(p) - 0.02
-					_register_crop(p)
+					_register_crop(p, s)
 					var yaw = atan2(-stage.village_main_direction(s).x, -stage.village_main_direction(s).z)
 					var pose = Transform3D(stage.terrain_basis(p, yaw, _crop_height), p)
 					var section = Node3D.new()
@@ -528,7 +536,7 @@ func _lavender_fields(cooperative: bool = false) -> void:
 					previous.clear()
 					continue
 				p.y = _crop_height(p)
-				_register_crop(p)
+				_register_crop(p, s)
 				lavender_positions.append(p)
 				lavender_count += 1
 				var section: Array[Vector3] = []
@@ -1035,6 +1043,60 @@ func _village_natural_details(cooperative: bool = false) -> void:
 	stage._detail_batch("VillageGrass", stage._grass_mesh(), grass_poses, grass_colors)
 	stage._detail_batch("VillageStones", stage.shared_stone_mesh(), stone_poses, stone_colors)
 
+
+func _crop_ground_clear(p: Vector3, radius: float) -> bool:
+	if stage.road_distance(p) < stage.WIDTH * 0.5 + radius + 0.8 or paved_at(p, radius) or not _point_clear_of_obstacles(p, radius + 0.4):
+		return false
+	for spot in stage.clearings:
+		if stage.flat(p).distance_to(stage.flat(spot)) < 10.0 + radius:
+			return false
+	var key = Vector2i(floori(p.x / 8.0), floori(p.z / 8.0))
+	for x in range(-1, 2):
+		for z in range(-1, 2):
+			for plant in crop_ground_cells.get(key + Vector2i(x, z), []):
+				var offset = p - plant.pos
+				if absf(offset.dot(plant.side)) < plant.half.x + radius and absf(offset.dot(plant.direction)) < plant.half.y + radius:
+					return false
+	return true
+
+func _crop_ground_details(cooperative: bool = false) -> void:
+	var random = RandomNumberGenerator.new()
+	random.seed = 71020271
+	var occupied = {}
+	for kind in ["Grass", "Stones"]:
+		var poses: Array = []
+		var colors: Array = []
+		for region in [Vector2(22, 280), Vector2(592, 816)]:
+			for attempt in range(2400 if kind == "Grass" else 500):
+				if cooperative and attempt % 100 == 0:
+					await get_tree().process_frame
+				var station = random.randf_range(region.x, region.y)
+				var lateral = 15.0 + random.randi_range(0, 16) * 4.0 + random.randf_range(-0.25, 0.25)
+				var p = stage.village_main_at(station) + stage.village_main_side(station) * lateral * (-1.0 if attempt % 2 == 0 else 1.0)
+				var size = random.randf_range(0.20, 0.40) if kind == "Grass" else random.randf_range(0.10, 0.22)
+				var radius = size * 0.6 if kind == "Grass" else size
+				p.y = stage.terrain_surface_height(p)
+				if not _crop_ground_clear(p, radius) or stage.obstacle_hit(p, p, radius) >= 0 or not stage.rock_hit(p, p, radius, false).is_empty():
+					continue
+				var cell = Vector2i(floori(p.x), floori(p.z))
+				var blocked = false
+				for x in range(-1, 2):
+					for z in range(-1, 2):
+						for detail in occupied.get(cell + Vector2i(x, z), []):
+							blocked = blocked or stage.flat(p).distance_to(stage.flat(detail.pos)) < radius + detail.radius
+				if blocked:
+					continue
+				if not occupied.has(cell):
+					occupied[cell] = []
+				occupied[cell].append({"pos": p, "radius": radius})
+				var yaw = random.randf() * TAU
+				if kind == "Grass":
+					poses.append(Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3(size * 1.8, size, size * 1.8)), p - Vector3.UP * 0.015))
+					colors.append(stage.shared_grass_color(random.randf()))
+				else:
+					poses.append(stage.shared_stone_pose(p + Vector3.UP * size * 0.35, size, yaw))
+					colors.append(stage.shared_stone_color(random.randf_range(-0.1, 0.12)))
+		stage._detail_batch("CropGround" + kind, stage._grass_mesh() if kind == "Grass" else stage.shared_stone_mesh(), poses, colors)
 
 func _forest_mushrooms() -> void:
 	var random = RandomNumberGenerator.new()
