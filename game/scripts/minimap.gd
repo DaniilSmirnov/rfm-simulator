@@ -5,6 +5,9 @@ func _draw() -> void:
 	if not is_instance_valid(game):
 		return
 	draw_style_box(_background(), Rect2(Vector2.ZERO, size))
+	if game.stage.lakeland:
+		for cell in game.stage.water.minimap_cells:
+			draw_circle(project(Vector3(cell.x, 0, cell.y)), 2.6, Color("4f7f9ccc"))
 	for i in range(game.stage.points.size() - 1):
 		draw_line(project(game.stage.points[i]), project(game.stage.points[i + 1]), Color("c4b48d"), 3, true)
 	if game.camp != null:

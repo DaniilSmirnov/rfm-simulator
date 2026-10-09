@@ -242,7 +242,7 @@ test('production purchases every paid SKU at catalog price; test rights never gr
  env.VK_PAYMENTS_MODE='production';
  assert.deepEqual((await accountStore(env,'42')).entitlements.skus,[]);
  const products=paymentCatalog(env,'44').filter(p=>p.purchase_enabled);
- assert.equal(products.length,10);
+ assert.equal(products.length,11);
  await assert.rejects(paymentCallback(signedCallback(order),env));
  for(const [i,p] of products.entries()){
   const price=p.type==='car'?3:20;

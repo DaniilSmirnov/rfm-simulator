@@ -39,6 +39,16 @@
     "price": 20
   },
   {
+    "sku": "stage_05",
+    "type": "stage",
+    "content_id": 4,
+    "title": "Финский лес",
+    "free": false,
+    "enabled": true,
+    "purchase_enabled": true,
+    "price": 20
+  },
+  {
     "sku": "car_01",
     "type": "car",
     "content_id": 0,
