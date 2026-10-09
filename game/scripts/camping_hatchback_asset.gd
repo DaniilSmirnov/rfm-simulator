@@ -17,7 +17,7 @@ const COLORS = {
 
 # Imported wheels are one OBJ mesh. Split its triangles into four wheel pivots,
 # preserving metal/rubber materials while allowing independent rotation.
-static func _wheel_parts(parent: Node3D, mesh: Mesh, part: String, color: Color) -> void:
+static func _wheel_parts(parent: Node3D, mesh: Mesh, part: String, color: Color, tyre_radius: float) -> void:
 	for surface_index in range(mesh.get_surface_count()):
 		var source = MeshDataTool.new()
 		if source.create_from_surface(mesh, surface_index) != OK:
@@ -56,7 +56,9 @@ static func _wheel_parts(parent: Node3D, mesh: Mesh, part: String, color: Color)
 			mat.metallic = 0.15 if part == "wheels_metal" else 0.0
 			mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 			wheel.material_override = mat
-			wheel.set_meta("rolling_wheel_radius", maxf((high.y - low.y) * 0.5, 0.1))
+			# Rims are smaller than tyres, but must rotate at the same angular speed.
+			# Compute both surfaces' radius from the rubber OBJ rather than hub bounds.
+			wheel.set_meta("rolling_wheel_radius", tyre_radius)
 			wheel.set_meta("rolling_wheel_axis", Vector3.RIGHT)
 			parent.add_child(wheel)
 
@@ -77,13 +79,18 @@ static func build() -> Node3D:
 	var roof = Node3D.new()
 	roof.name = "RoofHatchback"
 	root.add_child(roof)
+	var tyre_mesh: Mesh = load(ASSET_ROOT + "wheels_rubber.obj")
+	if tyre_mesh == null:
+		root.free()
+		return null
+	var tyre_radius = tyre_mesh.get_aabb().size.y * 0.5
 	for part in PARTS:
 		var mesh: Mesh = load(ASSET_ROOT + part + ".obj")
 		if mesh == null:
 			root.free()
 			return null
 		if part in ["wheels_metal", "wheels_rubber"]:
-			_wheel_parts(details, mesh, part, COLORS[part])
+			_wheel_parts(details, mesh, part, COLORS[part], tyre_radius)
 			continue
 		var surface = MeshInstance3D.new()
 		surface.name = "BodyShellHatchback" if part == "body" else "Camping_" + part
