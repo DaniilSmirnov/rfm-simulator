@@ -48,6 +48,7 @@ try {
  await start();
  let session=await login();assert.deepEqual(session.entitlements.skus,[]);
  assert.equal((await api('/api/rooms',{stage:1,car_model:0},session.session.token)).status,403);
+ assert.equal((await api('/api/rooms',{stage:3,car_model:0},session.session.token)).status,403,'new canyon must be locked on first login');
  assert.equal((await api('/api/vk/payments/prepare',{sku:'stage_02'},session.session.token)).status,200);
  assert.equal((await callback({notification_type:'get_item_test',item:'stage_02'})).response.price,1);
  assert.equal((await callback(order,'forged')).error.error_code,10);
@@ -64,13 +65,15 @@ try {
  assert.deepEqual((await login('43')).entitlements.skus,[]);
  assert.equal((await callback({...order,user_id:'43',order_id:'9002'})).error.critical,true);
  assert.equal((await api('/api/rooms',{stage:1,car_model:0},session.session.token)).status,200);
- for(const [i,sku] of ['stage_03','car_04'].entries()) {
+ // The same signed VK callback flow also sells stage_04 (Red Canyon).
+ for(const [i,sku] of ['stage_03','stage_04','car_04'].entries()) {
   assert.equal((await api('/api/vk/payments/prepare',{sku},session.session.token)).status,200);
   const receipt=await callback({...order,order_id:String(9100+i),item_id:sku,item:sku});
   assert.equal(receipt.response.order_id,9100+i);
  }
  session=await login();
- assert.deepEqual(session.entitlements.skus,['car_04','stage_02','stage_03']);
+ assert.deepEqual(session.entitlements.skus,['car_04','stage_02','stage_03','stage_04']);
  assert.equal((await api('/api/rooms',{stage:2,car_model:3},session.session.token)).status,200);
+ assert.equal((await api('/api/rooms',{stage:3,car_model:3},session.session.token)).status,200,'confirmed canyon purchase permits hosting');
  console.log('PASS: real SQLite-backed payment DO; concurrent duplicate callbacks, restart, login recovery and server room gating');
 } finally {await stop();await rm(persistence,{recursive:true,force:true});}
