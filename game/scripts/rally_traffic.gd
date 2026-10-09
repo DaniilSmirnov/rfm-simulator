@@ -1,5 +1,6 @@
 extends RefCounted
 # Host-side rally line selection. Guests consume the existing pose snapshots.
+const Tracks = preload("res://scripts/rally_tracks.gd")
 const CLEARANCE = 2.85
 const MAX_LINE = 3.05
 const BRAKE = 18.0
@@ -33,7 +34,8 @@ static func competition_target(stage: Node3D, progress: float, pace: float = 1.0
 static func speed_limit(game: Node3D, racer: Dictionary, s: float) -> float:
 	var role = str(racer.get("role", "racer"))
 	if role in ["racer", "zero"]:
-		var target = competition_target(game.stage, s, racer.get("pace", 1.0), game.course.pass_index == 2)
+		var reference = Tracks.sample(racer.get("track_parts", PackedInt32Array()), s, game.course.pass_index == 2, role == "zero")
+		var target = minf(MAX_COMPETITION_SPEED, float(reference.speed) * racer.get("pace", 1.0)) if not reference.is_empty() else competition_target(game.stage, s, racer.get("pace", 1.0), game.course.pass_index == 2)
 		return recovery_speed(target, racer) if role == "racer" else target
 	return maxf(0.0, game.race_speed(s) * racer.get("pace", 1.0))
 
@@ -45,9 +47,10 @@ static func recovery_speed(target: float, racer: Dictionary) -> float:
 static func plan(game: Node3D, racer: Dictionary) -> Dictionary:
 	var stage = game.stage
 	var s: float = racer.s
+	racer.track_reference = Tracks.sample(racer.get("track_parts", PackedInt32Array()), s, game.course.pass_index == 2, racer.get("role", "racer") == "zero")
 	var limit: float = speed_limit(game, racer, s)
 	var current: float = racer.get("line", 0.0) + racer.slide
-	var base = clampf(nominal(racer, s), -1.45, 1.45)
+	var base = float(racer.track_reference.line) if not racer.track_reference.is_empty() else clampf(nominal(racer, s), -1.45, 1.45)
 	var positions: Array[Dictionary] = [{"pos": game.car.position, "speed": 0.0}]
 	for peer in game.room.peers.values():
 		if peer.state != null:
