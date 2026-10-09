@@ -58,11 +58,16 @@ static func church(city, root: Node3D) -> void:
 	block(city, root, Vector3(0, 4.5, 10.3), Vector3(10, 9, 0.4), STONE)
 	door_wall(city, root, -8.3, 10, 9, false)
 	floor_panel(city, root, Vector3(0, 0.10, 1), 9.6, 19)
-	city._roof(root, 11, 22, 9, 6, Color("875441"))
+	# Terminate the nave roof before the tower stairwell, including tile courses.
+	var nave_roof = Node3D.new()
+	nave_roof.name = "NaveRoof"
+	root.add_child(nave_roof)
+	nave_roof.position.z = 1.2
+	city._roof(nave_roof, 11, 18, 9, 6, Color("875441"))
 	for z in [-5.0, -2.5, 0.0, 2.5, 5.0]:
 		for x in [-2.8, 2.8]:
 			block(city, root, Vector3(x, 0.5, z), Vector3(2.4, 0.18, 0.7), WOOD)
-			block(city, root, Vector3(x, 0.9, z + 0.3), Vector3(2.4, 0.8, 0.15), WOOD)
+			block(city, root, Vector3(x, 0.9, z - 0.3), Vector3(2.4, 0.8, 0.15), WOOD)
 			for leg in [-0.9, 0.9]:
 				Props.box(root, Vector3(x + leg, 0.25, z), Vector3(0.12, 0.5, 0.5), WOOD)
 	block(city, root, Vector3(0, 0.6, 8.5), Vector3(3, 1.0, 1.3), Color("eee4c9"))
