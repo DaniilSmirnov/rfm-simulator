@@ -39,7 +39,12 @@ func run() -> void:
 			var radius = float(wheel.get_meta("rolling_wheel_radius"))
 			check(radius > 0.20 and radius < 0.80, "vehicle %d wheel radius is plausible" % index)
 			var relative = car.to_local(wheel.global_position)
-			axle_positions[Vector2i(roundi(relative.x * 10), roundi(relative.z * 10))] = true
+			var key = Vector2i(roundi(relative.x * 10), roundi(relative.z * 10))
+			if axle_positions.has(key):
+				check(absf(float(axle_positions[key]) - radius) < 0.02,
+					"vehicle %d rim and tyre rotate at the same angular speed" % index)
+			else:
+				axle_positions[key] = radius
 		check(axle_positions.size() >= 4, "vehicle %d has two separate axles and both sides" % index)
 		var hinge = car.get_node_or_null("TrunkHinge")
 		var boxes = car.get_node_or_null("TrunkBoxes")
