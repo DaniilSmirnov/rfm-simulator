@@ -818,44 +818,6 @@ func _mixed_forest(cooperative: bool = false) -> void:
 			colors.append(stage.shared_tree_color(layer, float(tree.shade), false))
 		stage._detail_batch("VillageForestTreeLayer%d" % layer, stage.shared_tree_mesh(layer), poses, colors)
 
-	var grass_poses: Array = []
-	var grass_colors: Array = []
-	for i in range(6500):
-		if cooperative and i % 200 == 0:
-			await get_tree().process_frame
-		var s = forest_rng.randf_range(VILLAGE_START - 52.0, VILLAGE_END + 52.0)
-		var side_value = -1.0 if forest_rng.randi() % 2 == 0 else 1.0
-		var p = stage.at(s) + stage.side(s) * side_value * forest_rng.randf_range(48.0, 142.0)
-		if not _forest_spot_allowed(p):
-			continue
-		p.y = stage.terrain_surface_height(p) - 0.03
-		var size = forest_rng.randf_range(0.28, 0.70)
-		grass_poses.append(Transform3D(Basis(Vector3.UP, forest_rng.randf() * TAU).scaled(Vector3(size * 1.8, size, size * 1.8)), p))
-		grass_colors.append(stage.shared_grass_color(forest_rng.randf()))
-		forest_grass_count += 1
-		if forest_grass_count >= 2900:
-			break
-	stage._detail_batch("VillageForestGrass", stage._grass_mesh(), grass_poses, grass_colors)
-
-	var stone_poses: Array = []
-	var stone_colors: Array = []
-	for i in range(1400):
-		if cooperative and i % 200 == 0:
-			await get_tree().process_frame
-		var s = forest_rng.randf_range(VILLAGE_START - 50.0, VILLAGE_END + 50.0)
-		var side_value = -1.0 if forest_rng.randi() % 2 == 0 else 1.0
-		var p = stage.at(s) + stage.side(s) * side_value * forest_rng.randf_range(50.0, 140.0)
-		if not _forest_spot_allowed(p):
-			continue
-		p.y = stage.terrain_surface_height(p)
-		var radius = forest_rng.randf_range(0.12, 0.38)
-		stone_poses.append(stage.shared_stone_pose(p + Vector3(0, radius * 0.22, 0), radius, forest_rng.randf() * TAU))
-		stone_colors.append(stage.shared_stone_color(forest_rng.randf_range(-0.10, 0.12)))
-		forest_stone_count += 1
-		if forest_stone_count >= 520:
-			break
-	stage._detail_batch("VillageForestStones", stage.shared_stone_mesh(), stone_poses, stone_colors)
-
 	var boulder_poses: Array = []
 	var boulder_colors: Array = []
 	for i in range(260):
@@ -928,6 +890,69 @@ func _mixed_forest(cooperative: bool = false) -> void:
 	stage._detail_batch("VillageForestBushes", bush_mesh, bush_poses, bush_colors)
 	stage._detail_batch("VillageForestBerryBushes", bush_mesh, berry_bush_poses, berry_bush_colors)
 	stage._detail_batch("VillageForestBerries", berry_mesh, berry_poses, berry_colors)
+	# Generate the floor from the actual canopy, after rocks and bushes exist.
+	if cooperative:
+		await _village_forest_floor(bush_poses + berry_bush_poses, true)
+	else:
+		_village_forest_floor(bush_poses + berry_bush_poses)
+
+
+func _village_forest_floor(bushes: Array, cooperative: bool = false) -> void:
+	var exclusions = {}
+	for tree in tree_positions:
+		var cell = Vector2i(floori(tree.x / 4.0), floori(tree.z / 4.0))
+		if not exclusions.has(cell):
+			exclusions[cell] = []
+		exclusions[cell].append({"pos": tree, "radius": 0.7})
+	for pose in bushes:
+		var point: Vector3 = pose.origin
+		var cell = Vector2i(floori(point.x / 4.0), floori(point.z / 4.0))
+		if not exclusions.has(cell):
+			exclusions[cell] = []
+		exclusions[cell].append({"pos": point, "radius": maxf(pose.basis.x.length(), pose.basis.z.length()) * 0.6})
+	var random = RandomNumberGenerator.new()
+	random.seed = 71020272
+	for kind in ["Grass", "Stones"]:
+		var poses: Array = []
+		var colors: Array = []
+		var limit = 6000 if kind == "Grass" else 1000
+		for attempt in range(limit * 4):
+			if poses.size() >= limit or tree_positions.is_empty():
+				break
+			if cooperative and attempt % 100 == 0:
+				await get_tree().process_frame
+			var center = tree_positions[attempt % tree_positions.size()]
+			var angle = random.randf() * TAU
+			var point = center + Vector3(cos(angle), 0, sin(angle)) * random.randf_range(1.5, 8.0)
+			var size = random.randf_range(0.35, 0.75) if kind == "Grass" else random.randf_range(0.15, 0.38)
+			var radius = size * 0.5 if kind == "Grass" else size
+			if absf(point.x) > 196.0 - radius or stage.road_distance(point) < stage.road_width(stage.road_s(point)) * 0.5 + radius + 1.0 or paved_at(point, radius) or not crop_clear(point, 6.0 + radius) or not cemetery_clear(point, radius) or not _point_clear_of_obstacles(point, radius + 0.5):
+				continue
+			point.y = stage.terrain_surface_height(point)
+			if not stage.rock_hit(point, point, radius, false).is_empty():
+				continue
+			var blocked = false
+			for spot in stage.clearings:
+				blocked = blocked or stage.flat(point).distance_to(stage.flat(spot)) < 12.0 + radius
+			var cell = Vector2i(floori(point.x / 4.0), floori(point.z / 4.0))
+			for x in range(-1, 2):
+				for z in range(-1, 2):
+					for object in exclusions.get(cell + Vector2i(x, z), []):
+						blocked = blocked or stage.flat(point).distance_to(stage.flat(object.pos)) < radius + object.radius
+			if blocked:
+				continue
+			var yaw = random.randf() * TAU
+			if kind == "Grass":
+				poses.append(Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3(size * 1.8, size, size * 1.8)), point - Vector3.UP * 0.015))
+				colors.append(stage.shared_grass_color(random.randf()))
+			else:
+				poses.append(stage.shared_stone_pose(point + Vector3.UP * size * 0.35, size, yaw))
+				colors.append(stage.shared_stone_color(random.randf_range(-0.1, 0.12)))
+		if kind == "Grass":
+			forest_grass_count = poses.size()
+		else:
+			forest_stone_count = poses.size()
+		stage._detail_batch("VillageForest" + kind, stage._grass_mesh() if kind == "Grass" else stage.shared_stone_mesh(), poses, colors)
 
 func _gravel_detail_allowed(p: Vector3, padding: float, boulder: bool = false) -> bool:
 	if boulder:
