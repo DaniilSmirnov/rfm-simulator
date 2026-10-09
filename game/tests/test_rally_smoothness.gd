@@ -28,6 +28,7 @@ func drive(fps: int, reverse: bool = false) -> Dictionary:
 	game.rally_audio = AudioStreamPlayer3D.new()
 	game.add_child(game.rally_audio)
 	game.in_car = true
+	game.rng.seed = 20261009
 	var r = game._add_course_vehicle(Node3D.new(), 1, "pass", 0)
 	game.course.pass_index = 2 if reverse else 1
 	r.s = 330.0 if reverse else 350.0
@@ -54,7 +55,7 @@ func drive(fps: int, reverse: bool = false) -> Dictionary:
 			worst = velocity - r.drive_speed
 			if worst > 5: print("SPEED s=",r.s," measured=",velocity," target=",r.drive_speed," slide=",r.slide)
 		measured = measured and velocity < r.drive_speed * 1.3 + 1.0
-		slide = maxf(slide, absf(r.slide))
+		slide = maxf(slide, maxf(absf(r.slide), absf(float(r.get("track_reference", {}).get("yaw", 0.0)))))
 	check(smooth, "heading and acceleration are bounded at %d FPS" % fps)
 	check(measured, "world-space speed matches intended speed at %d FPS" % fps)
 	check(r.state == "racing" and r.s > 400, "crew negotiates village junctions at %d FPS" % fps)

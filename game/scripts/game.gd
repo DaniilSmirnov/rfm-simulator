@@ -15,6 +15,7 @@ var seat_exit = Vector3.ZERO
 var crosshair: Label
 
 const RallyHandling = preload("res://scripts/rally_handling.gd")
+const RallyTracks = preload("res://scripts/rally_tracks.gd")
 const Props = preload("res://scripts/props.gd")
 const Stage = preload("res://scripts/stage.gd")
 const Spectators = preload("res://scripts/spectators.gd")
@@ -1816,6 +1817,7 @@ func _add_course_vehicle(node: Node3D, id: int, kind: String, variant: int, role
 	node.set_meta("room_id", id)
 	var driver = Traffic.profile(id)
 	var racer = {"bias": driver.bias, "phase": driver.phase, "pace": driver.pace, "line": 0.0, "drive_speed": race_speed(s) * driver.pace, "avoiding": false, "avoid_line": 0.0, "role": role, "zero_index": zero_index, "id": id, "node": node, "s": s, "focus": focus, "kind": kind, "state": "racing", "offset": 0.0, "age": 0.0, "counted": false, "start": Vector3.ZERO, "target": Vector3.ZERO, "variant": variant, "motion": Motion.new(), "previous": node.position, "slide": 0.0, "slide_speed": 0.0}
+	racer.track_parts = RallyTracks.choose(stage, rng, role)
 	racers.append(racer)
 	return racer
 
@@ -1879,14 +1881,20 @@ func _update_racers_step(delta: float) -> void:
 			var ahead = race_direction(s + 7)
 			var bend = wrapf(atan2(-ahead.x, -ahead.z) - road_yaw, -PI, PI) / maxf(Vector2((race_at(s + 7) - race_at(s)).x, (race_at(s + 7) - race_at(s)).z).length(), 1.0)
 			var lateral_accel = 0.0
+			var reference = RallyTracks.sample(racer.get("track_parts", PackedInt32Array()), s, course.pass_index == 2, racer.get("role", "racer") == "zero")
 			if not service:
-				lateral_accel = RallyHandling.slide(racer, bend, race_speed, stage.grip(node.position), delta)
+				# Free-road tyre slip is already recorded. Keep live correction while
+				# avoiding blockers and preserve externally applied lateral momentum.
+				lateral_accel = RallyHandling.slide(racer, bend if reference.is_empty() or traffic.avoiding else 0.0, race_speed, stage.grip(node.position), delta)
+			if not reference.is_empty() and not traffic.avoiding:
+				lateral_accel = bend * race_speed * race_speed
 			var height = node.position.y
 			node.position = race_at(s) + race_side(s) * (racer.line + racer.slide)
 			node.position.y = height
 			var movement = node.position - racer.previous
 			var path_yaw = atan2(-movement.x, -movement.z) if Vector2(movement.x, movement.z).length() > 0.02 else road_yaw
-			var desired_yaw = path_yaw + float(racer.get("drift_yaw", 0.0))
+			var recorded_yaw = float(reference.get("yaw", 0.0)) * clampf(actual_speed / maxf(float(reference.get("speed", 1.0)), 1.0), 0.0, 1.0)
+			var desired_yaw = path_yaw + float(racer.get("drift_yaw", 0.0)) + recorded_yaw
 			var yaw = node.rotation.y + clampf(wrapf(desired_yaw - node.rotation.y, -PI, PI), -2.5 * delta, 2.5 * delta)
 			racer.motion.suspension(node, stage, delta, yaw, lateral_accel)
 			if not service and ((s >= racer.focus and racer.kind != "pass") or absf(racer.slide) > 3.4 or absf(racer.line + racer.slide) > Stage.WIDTH * 0.5 + 0.6):
