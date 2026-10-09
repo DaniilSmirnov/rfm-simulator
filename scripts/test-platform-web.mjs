@@ -65,7 +65,7 @@ try {
   page.on('console',m=>{const t=m.text();logs.push(t);console.log('[platform]',t);if(t.includes('[RFM Platform] profile '))profile=JSON.parse(t.split('[RFM Platform] profile ')[1]);if(t.includes('[RFM Platform] access '))access=JSON.parse(t.split('[RFM Platform] access ')[1]);if(/SCRIPT ERROR|FATAL:|RuntimeError:|ERROR: Cannot open file|ERROR: Failed loading scene/.test(t))failure=t;});
   page.on('pageerror',e=>failure=String(e));
   page.on('crash',()=>failure='Browser renderer crashed');
-  if(isVk) await page.route('**/vk-bridge.js',route=>route.fulfill({contentType:'application/javascript',body:'window.vkBridge={subscribe:fn=>window.testVKConfig=fn,send:async method=>{if(method!=="VKWebAppInit")throw Error("Unexpected bridge method");return {result:true};}};'}));
+  if(isVk) await page.route('**/vk-bridge.js',route=>route.fulfill({contentType:'application/javascript',body:'window.testVKSubscriptions=[];window.testVKConfig=event=>window.testVKSubscriptions.forEach(fn=>fn(event));window.vkBridge={subscribe:fn=>window.testVKSubscriptions.push(fn),send:async method=>{if(method!=="VKWebAppInit")throw Error("Unexpected bridge method");return {result:true};}};'}));
   await page.goto('http://127.0.0.1:'+server.address().port+mount+(isVk?'?'+signedLaunch():''));
   const deadline=Date.now()+90000;
   while((!profile||!access)&&!failure&&Date.now()<deadline)await page.waitForTimeout(250);
