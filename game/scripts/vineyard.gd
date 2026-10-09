@@ -93,6 +93,10 @@ func build(cooperative: bool = false) -> void:
 	else:
 		_mixed_forest()
 	if cooperative:
+		await _gravel_forest_details(true)
+	else:
+		_gravel_forest_details()
+	if cooperative:
 		await _village_natural_details(true)
 	else:
 		_village_natural_details()
@@ -916,6 +920,44 @@ func _mixed_forest(cooperative: bool = false) -> void:
 	stage._detail_batch("VillageForestBushes", bush_mesh, bush_poses, bush_colors)
 	stage._detail_batch("VillageForestBerryBushes", bush_mesh, berry_bush_poses, berry_bush_colors)
 	stage._detail_batch("VillageForestBerries", berry_mesh, berry_poses, berry_colors)
+
+func _gravel_forest_details(cooperative: bool = false) -> void:
+	# Keep the road and its shoulders clear; fill the nearby woodland on both sides.
+	var random = RandomNumberGenerator.new()
+	random.seed = 71020270
+	for kind in ["Grass", "Stones", "Boulders"]:
+		var poses: Array = []
+		var colors: Array = []
+		var limit = 800 if kind == "Grass" else (140 if kind == "Stones" else 4)
+		for attempt in range(2400):
+			if poses.size() >= limit:
+				break
+			if cooperative and attempt % 100 == 0:
+				await get_tree().process_frame
+			var station = random.randf_range(392.0, 478.0)
+			var side_value = -1.0 if attempt % 2 == 0 else 1.0
+			var lateral = random.randf_range(10.0, 26.0)
+			var point = stage.at(station) + stage.side(station) * side_value * lateral
+			var radius = random.randf_range(0.9, 1.5) if kind == "Boulders" else 0.4
+			if not _forest_spot_allowed(point, radius) or not stage.rock_hit(point, point, radius + 0.3, false).is_empty():
+				continue
+			point.y = stage.terrain_surface_height(point)
+			var yaw = random.randf() * TAU
+			if kind == "Grass":
+				var size = random.randf_range(0.3, 0.65)
+				poses.append(Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3(size * 1.8, size, size * 1.8)), point - Vector3.UP * 0.03))
+				colors.append(stage.shared_grass_color(random.randf()))
+			elif kind == "Stones":
+				radius = random.randf_range(0.12, 0.35)
+				poses.append(stage.shared_stone_pose(point + Vector3.UP * radius * 0.22, radius, yaw))
+				colors.append(stage.shared_stone_color(random.randf_range(-0.1, 0.12)))
+			else:
+				var height = random.randf_range(1.0, 1.8)
+				poses.append(Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3(radius * 2.0, height, radius * 1.65)), point + Vector3.UP * height * 0.35))
+				colors.append(Color("697064").lightened(random.randf_range(-0.12, 0.12)))
+				stage.rocks.append({"pos": point, "radius": radius, "height": height * 0.9, "forest": true, "gravel_detail": true})
+		var mesh = stage._grass_mesh() if kind == "Grass" else (stage.shared_stone_mesh() if kind == "Stones" else stage.NATURE_BOULDER)
+		stage._detail_batch("VillageGravel" + kind, mesh, poses, colors)
 
 func village_detail_allowed(p: Vector3) -> bool:
 	var s = stage.road_s(p)
