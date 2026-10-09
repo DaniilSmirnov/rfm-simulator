@@ -1,0 +1,23 @@
+name: Debug tests
+on:
+  push:
+    branches: [ci-debug-tests]
+permissions:
+  contents: read
+jobs:
+  debug:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      LIBGL_ALWAYS_SOFTWARE: "true"
+      TESTS: test_selection.gd test_vineyard.gd test_city_physics.gd test_trunk.gd test_course_schedule.gd test_rally_traffic.gd
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node scripts/debug-tests.mjs
