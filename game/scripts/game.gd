@@ -74,6 +74,7 @@ var dead = false
 var finished = false
 var paused = false
 var safety_gate: CanvasLayer
+var safety_safe_insets = Vector4.ZERO
 var has_chairs = false
 var personal_chairs: Dictionary = {}
 var personal_flags: Dictionary = {}
@@ -401,12 +402,15 @@ func _mobile_safe_response(result: int, code: int, _headers: PackedStringArray, 
 			lifecycle_pause_sequence = sequence
 			if playing and not dead and not finished and safety_gate == null:
 				_set_paused(true)
-	if not mobile_mode:
-		return
 	var extent = get_viewport().get_visible_rect().size
 	var ratio = extent / Vector2(maxf(float(data.width), 1.0), maxf(float(data.height), 1.0))
 	var origin = Vector2(float(data.left), float(data.top)) * ratio
 	var end = extent - Vector2(float(data.right), float(data.bottom)) * ratio
+	safety_safe_insets = Vector4(origin.x, origin.y, extent.x-end.x, extent.y-end.y)
+	if safety_gate != null and is_instance_valid(safety_gate):
+		safety_gate.set_safe_insets(safety_safe_insets)
+	if not mobile_mode:
+		return
 	apply_mobile_safe_rect(Rect2(origin, end - origin))
 
 func _set_paused(value: bool) -> void:
@@ -906,6 +910,7 @@ func _show_stage_safety_gate() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	safety_gate = preload("res://scripts/stage_safety_gate.gd").new()
 	add_child(safety_gate)
+	safety_gate.set_safe_insets(safety_safe_insets)
 	safety_gate.accepted.connect(_accept_stage_safety_gate)
 
 func _accept_stage_safety_gate() -> void:
