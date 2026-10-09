@@ -103,7 +103,19 @@ func run() -> void:
 	Input.action_press("forward")
 	game._walk(0.5)
 	Input.action_release("forward")
-	check(absf(game.walker.x - previous.x) < 0.01, "walking cannot cross a solid rock")
+	# _walk() now advances in 60 Hz substeps, so walking toward the rock
+	# correctly moves the player up to its collision radius instead of
+	# cancelling the whole 0.5-second input at the starting position.
+	var rock_clearance: float = game.stage.rocks[0].radius + 0.3
+	var walker_clearance = Vector2(game.walker.x - origin.x, game.walker.z - origin.z).length()
+	check(game.walker.x >= previous.x - 0.001 and game.walker.x < origin.x
+		and walker_clearance >= rock_clearance - 0.015,
+		"walking stops at a solid rock without tunneling, while approaching remains possible")
+	var stopped = game.walker
+	Input.action_press("forward")
+	game._walk(0.5)
+	Input.action_release("forward")
+	check(game.walker.distance_to(stopped) < 0.02, "repeated walking does not penetrate the solid rock")
 	check(not game.valid_furniture_spot(origin, "table"), "furniture cannot be placed inside rocks")
 	game.walker = origin + Vector3(0, 0, 12)
 	game.course.phase = "racing"
