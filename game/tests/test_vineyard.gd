@@ -102,6 +102,30 @@ func run() -> void:
 		for plant in plants:
 			rows_clear = rows_clear and not stage.city._crop_ground_clear(plant.pos, 0.2)
 	check(rows_clear, "all cultivated row footprints reject grass and stones")
+	var floor_stage = Stage.new(2)
+	floor_stage.capture_bake_buffers = true
+	root.add_child(floor_stage)
+	floor_stage.build()
+	var floor_visible = true
+	var floor_clear = true
+	var near_floor_count = 0
+	for tile in floor_stage.find_children("VillageForest*_Tile_*", "MultiMeshInstance3D", false, false):
+		if not str(tile.name).begins_with("VillageForestGrass") and not str(tile.name).begins_with("VillageForestStones"):
+			continue
+		var buffer: PackedFloat32Array = tile.get_meta("baked_instances")
+		for index in range(0, tile.multimesh.instance_count, 13):
+			var point = tile.position + Vector3(buffer[index * 16 + 3], buffer[index * 16 + 7], buffer[index * 16 + 11])
+			floor_visible = floor_visible and point.y >= floor_stage.terrain_surface_height(point) - 0.02
+			point.y = floor_stage.terrain_surface_height(point)
+			floor_clear = floor_clear and floor_stage.rock_hit(point, point, 0.05, false).is_empty() and floor_stage.city.crop_clear(point) and floor_stage.city.cemetery_clear(point, 0.05) and not floor_stage.city.paved_at(point, 0.05)
+			for tree in floor_stage.city.tree_positions:
+				floor_clear = floor_clear and floor_stage.flat(point).distance_to(floor_stage.flat(tree)) > 0.7
+			if floor_stage.road_distance(point) < 40.0:
+				near_floor_count += 1
+	check(floor_visible and floor_clear, "village forest floor is visible and avoids trunks rocks crops and paving")
+	check(near_floor_count > 10, "village forest floor includes visible patches near the gravel route")
+	check(floor_stage.city.forest_grass_count >= 5500 and floor_stage.city.forest_stone_count >= 900, "village canopy has dense grass and stones throughout")
+	floor_stage.free()
 	var forest_crops_clear = true
 	for p in stage.city.tree_positions:
 		forest_crops_clear = forest_crops_clear and stage.city.crop_clear(p)
