@@ -43,7 +43,43 @@ func run() -> void:
 	check(is_equal_approx(vertices[4].y, stage.terrain_vertex_height(key.x + key.z, key.y + key.z)), "neighbour polygon mesh stays untouched")
 	var root = Node3D.new()
 	var shovel = Props.gear_box(root, "shovel")
-	check(Props.CARGO_KINDS.has("shovel") and shovel.get_child_count() == 5, "cargo shovel has blade shaft and handle geometry")
+	check(Props.CARGO_KINDS.has("shovel") and shovel.has_node("Blade") and shovel.has_node("Shaft") and shovel.has_node("Grip"), "cargo shovel has blade shaft and handle geometry")
+	var cargo = preload("res://scripts/car_cargo.gd").new()
+	var poses = [
+		[cargo.SHOVEL_POSITION, cargo.SHOVEL_ROTATION],
+		[Vector3(0.14, 0.08, -1.75), Vector3(0.10, -0.10, -0.20)],
+		[Vector3(0.25, -0.19, -1.80), Vector3(-0.70, 0.08, -0.45)],
+		[Vector3(0.02, 0.06, -1.75), Vector3(-0.05, -0.35, -0.65)],
+	]
+	poses.append([cargo.SHOVEL_POSITION, cargo.SHOVEL_ROTATION])
+	var samples: Array = []
+	for phase in range(poses.size() - 1):
+		for step in range(17):
+			var weight = step / 16.0
+			samples.append([poses[phase][0].lerp(poses[phase + 1][0], weight), poses[phase][1].lerp(poses[phase + 1][1], weight)])
+	for aspect in [1280.0 / 720, 844.0 / 390, 390.0 / 844]:
+		var fits = true
+		for pose in samples:
+			var transform = Transform3D(Basis.from_euler(pose[1]), pose[0])
+			for part in shovel.get_children():
+				var bounds: AABB = part.get_aabb()
+				for corner in range(8):
+					var vertex: Vector3 = transform * (part.transform * bounds.get_endpoint(corner))
+					fits = fits and vertex.z < -0.05 and absf(vertex.y) < -vertex.z * tan(deg_to_rad(68.0 / 2)) and absf(vertex.x) < -vertex.z * tan(deg_to_rad(68.0 / 2)) * aspect
+		check(fits, "whole shovel stays in camera frame throughout digging, aspect %.2f" % aspect)
+	var tween_owner = Node3D.new()
+	get_root().add_child(tween_owner)
+	cargo.game = tween_owner
+	cargo.hand_box = shovel
+	cargo.hand_kind = "shovel"
+	cargo.animate_shovel()
+	check(cargo.shovel_busy(), "digging animation starts")
+	var active_swing = cargo.shovel_swing
+	cargo.animate_shovel()
+	check(cargo.shovel_swing == active_swing, "repeated input cannot stack digging animations")
+	for tick in range(24): cargo.shovel_swing.custom_step(0.05)
+	check(shovel.position.is_equal_approx(cargo.SHOVEL_POSITION) and shovel.rotation.is_equal_approx(cargo.SHOVEL_ROTATION), "digging animation returns to full-length resting pose")
+	tween_owner.free()
 	var game = preload("res://scripts/game.gd").new()
 	game.stage = stage
 	check(not game.valid_furniture_spot(neighbour, "table"), "furniture cannot be placed in untouched snow")
