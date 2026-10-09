@@ -66,6 +66,11 @@ func run() -> void:
 				shoulder_continuous = shoulder_continuous and is_finite(ground_height) and absf(edge.y - next_edge.y) < 0.5 and absf(ground_height - stage.terrain_surface_height(next_edge)) < 0.5
 	check(route_continuous, "village and gravel detour have no disconnected station jumps")
 	check(shoulder_continuous, "gravel-road shoulders and terrain have valid interpolated heights")
+	check(stage.woodland_details.get("VillageGravelGrass", 0) >= 700 and stage.woodland_details.get("VillageGravelStones", 0) >= 120, "gravel forest has dedicated nearby grass and stones")
+	var gravel_boulders = stage.rocks.filter(func(rock): return rock.get("gravel_detail", false))
+	check(gravel_boulders.size() == 4, "gravel woodland has four additional collidable boulders")
+	for rock in gravel_boulders:
+		check(stage.road_distance(rock.pos) > 8.0 + rock.radius and stage.city.cemetery_clear(rock.pos, rock.radius) and not stage.city.paved_at(rock.pos, rock.radius), "boulders leave roads paving and cemetery clear")
 	var forest_crops_clear = true
 	for p in stage.city.tree_positions:
 		forest_crops_clear = forest_crops_clear and stage.city.crop_clear(p)
