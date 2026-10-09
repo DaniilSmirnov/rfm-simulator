@@ -1,0 +1,49 @@
+name: VK stage pricing
+on:
+  pull_request:
+    paths:
+      - "game/data/store_catalog.json"
+      - "game/tests/test_lobby_ui.gd"
+      - "game/tests/test_vk_access.gd"
+      - "server/store.mjs"
+      - "server/payments-vk.mjs"
+      - "tests/store.test.mjs"
+      - "tests/payments-vk.test.mjs"
+      - "tests/payments.integration.mjs"
+      - ".github/workflows/vk-stage-pricing.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  vk-paid-content:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 14
+    env:
+      WRANGLER_SEND_METRICS: "false"
+      LIBGL_ALWAYS_SOFTWARE: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Verify catalog pricing and signed VK payment callbacks
+        run: node --test tests/store.test.mjs tests/payments-vk.test.mjs
+      - name: Verify Durable Object payment persistence and room gating
+        run: |
+          # Worker dev needs an assets directory even for API-only payment tests.
+          mkdir -p dist
+          printf '<!doctype html><title>VK payment test fixture</title>' > dist/index.html
+          node tests/payments.integration.mjs
+      - name: Verify Godot VK stage purchase UI
+        run: |
+          node --input-type=module <<'JS'
+          import { getGodot, run } from './scripts/godot.mjs';
+          const godot = await getGodot();
+          run(godot, ['--headless','--editor','--path','game','--import']);
+          run(godot, ['--headless','--path','game','--script','res://tests/test_vk_access.gd']);
+          run(godot, ['--headless','--path','game','--script','res://tests/test_lobby_ui.gd']);
+          JS

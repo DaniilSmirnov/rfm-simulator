@@ -33,9 +33,10 @@
     "type": "stage",
     "content_id": 3,
     "title": "Красный каньон",
-    "free": true,
+    "free": false,
     "enabled": true,
-    "purchase_enabled": false
+    "purchase_enabled": true,
+    "price": 20
   },
   {
     "sku": "car_01",
