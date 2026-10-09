@@ -26,6 +26,13 @@ const Snowbanks = preload("res://scripts/snowbanks.gd")
 const Canyon = preload("res://scripts/canyon.gd")
 var canyon: RefCounted
 var desert = false
+const FinnishForest = preload("res://scripts/finnish_forest.gd")
+const Water = preload("res://scripts/water.gd")
+const ForestLife = preload("res://scripts/forest_life.gd")
+var finnish_forest: RefCounted
+var water: RefCounted
+var forest_life: RefCounted
+var lakeland = false
 
 const City = preload("res://scripts/vineyard.gd")
 var city: Node3D
@@ -42,7 +49,7 @@ const WIDTH = 7.4
 # Five side-lane rows spaced 0.8 m apart, each stone 0.76 m wide.
 const SIDE_LANE_WIDTH = 3.96
 const TREE_CELL_SIZE = 16.0
-const STAGES = ["Лесной перевал · гравий", "Зимний Турини · снег и лёд", "Виноградники · европейская деревня", "Красный каньон · пустынный грунт"]
+const STAGES = ["Лесной перевал · гравий", "Зимний Турини · снег и лёд", "Виноградники · европейская деревня", "Красный каньон · пустынный грунт", "Финский лес · гравий и озёра"]
 var variant = 0
 var winter = false
 var urban = false
@@ -87,14 +94,21 @@ func _init(selected: int = 0) -> void:
 	winter = variant == 1
 	urban = variant == 2
 	desert = variant == 3
+	lakeland = variant == 4
 	if desert:
 		canyon = Canyon.new()
+	if lakeland:
+		finnish_forest = FinnishForest.new()
+		water = Water.new()
+		forest_life = ForestLife.new()
 	if urban:
 		village_church_center = village_main_at(435.0) + village_main_side(435.0) * 43.0
 	for i in range(int(LENGTH / STEP) + 1):
 		var s = i * STEP
 		if desert:
 			points.append(canyon.route(s))
+		elif lakeland:
+			points.append(finnish_forest.route(s))
 		elif winter:
 			points.append(Vector3(sin(s / 48.0) * 58.0 + sin(s / 115.0) * 14.0, 18.0 + s * 0.085 + sin(s / 36.0) * 5.0, -s))
 		elif urban:
@@ -108,6 +122,9 @@ func _init(selected: int = 0) -> void:
 			gravel_landform_frames.append({"centre": flat(at(crest.x)), "forward": forward, "across": Vector2(-forward.y, forward.x), "height": crest.y, "length": crest.z})
 	if desert:
 		canyon.configure(self)
+		return
+	if lakeland:
+		finnish_forest.configure(self)
 		return
 	for s in [140.0, 310.0, 505.0, 690.0]:
 		if winter:
@@ -204,6 +221,8 @@ func gravel_relief(pos: Vector3, s: float) -> float:
 	return (bank + bumps + ruts + puddles) * edge * blend + village_gravel_landform(pos) * smoothstep(382.0, 390.0, s) * (1.0 - smoothstep(480.0, 488.0, s))
 
 func grip(pos: Vector3) -> float:
+	if lakeland:
+		return finnish_forest.grip(self, pos)
 	if desert:
 		return 0.48 if road_distance(pos) > road_width(road_s(pos)) * 0.5 or (road_s(pos) > 550.0 and road_s(pos) < 670.0) else 0.74
 	if urban:
@@ -239,6 +258,8 @@ func ground(pos: Vector3) -> float:
 	return maxf(height, Snowbanks.surface_height(self, pos)) if winter else height
 
 func base_ground(pos: Vector3) -> float:
+	if lakeland:
+		return finnish_forest.ground(self, pos)
 	if desert:
 		return canyon.ground(self, pos)
 	if urban:
@@ -324,7 +345,9 @@ func terrain_tile_step(cell_x: float, cell_z: float) -> float:
 	var nearest = urban_nearest(p) if urban else {}
 	if urban and nearest.distance < road_width(nearest.s) * 0.5 + 4.0:
 		return 1.0
-	return 2.0 if ((variant == 0 or urban) and road_distance(p) < 12.0) or (winter and road_distance(p) < 30.0) else 4.0
+	if lakeland and finnish_forest.shoreline_near(road_s(p), p.x - at(road_s(p)).x):
+		return 2.0
+	return 2.0 if ((variant == 0 or urban or lakeland) and road_distance(p) < 12.0) or (winter and road_distance(p) < 30.0) else 4.0
 
 func terrain_base_vertex_height(x: float, z: float) -> float:
 	var p = Vector3(x, 0, z)
@@ -338,7 +361,7 @@ func terrain_vertex_height(x: float, z: float) -> float:
 	if desert:
 		return canyon.base_ground(self, Vector3(x, 0, z)) - 0.25
 	var value = terrain_base_vertex_height(x, z)
-	if variant != 0 and not urban and not winter:
+	if variant != 0 and not urban and not winter and not lakeland:
 		return value
 	var cell_x = floorf(x / 4.0) * 4.0
 	var cell_z = floorf(z / 4.0) * 4.0
