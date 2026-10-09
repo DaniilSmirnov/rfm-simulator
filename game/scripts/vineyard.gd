@@ -662,7 +662,7 @@ func _thuja_forest(cooperative: bool = false) -> void:
 					blocked = blocked or stage.flat(p).distance_to(stage.flat(spot)) < 10.0
 				for obstacle in obstacles:
 					blocked = blocked or stage.flat(p).distance_to(stage.flat(_relative_pose(obstacle.body).origin)) < 7.0
-				if blocked or not crop_clear(p) or paved_at(p, 2.0) or stage.road_distance(p) < 8.0:
+				if blocked or not cemetery_clear(p, 2.0) or not crop_clear(p) or paved_at(p, 2.0) or stage.road_distance(p) < 8.0:
 					continue
 				p.y = stage.terrain_surface_height(p) - 0.03
 				tree_positions.append(p)
@@ -687,7 +687,7 @@ func _thuja_forest(cooperative: bool = false) -> void:
 			var blocked = false
 			for spot in stage.clearings:
 				blocked = blocked or stage.flat(p).distance_to(stage.flat(spot)) < 10.0
-			if blocked or not crop_clear(p) or paved_at(p, 2.0) or stage.road_distance(p) < 8.0:
+			if blocked or not cemetery_clear(p, 2.0) or not crop_clear(p) or paved_at(p, 2.0) or stage.road_distance(p) < 8.0:
 				continue
 			p.y = stage.terrain_surface_height(p) - 0.03
 			tree_positions.append(p)
@@ -721,12 +721,19 @@ func _point_clear_of_obstacles(p: Vector3, padding: float = 0.0) -> bool:
 			return false
 	return true
 
+func cemetery_clear(p: Vector3, padding: float = 0.0) -> bool:
+	# The lawn is 32 x 24 m. Reserve its corners and an extra crown margin.
+	if cemetery_center == Vector3.ZERO:
+		return true
+	var offset = p - cemetery_center
+	return absf(offset.x) > 18.0 + padding or absf(offset.z) > 14.0 + padding
+
 func _forest_spot_allowed(p: Vector3, padding: float = 0.0) -> bool:
 	if absf(p.x) > 196.0 - padding:
 		return false
 	if not crop_clear(p, 6.0 + padding) or paved_at(p, padding):
 		return false
-	if cemetery_center != Vector3.ZERO and stage.flat(p).distance_to(stage.flat(cemetery_center)) < 20.0 + padding:
+	if not cemetery_clear(p, padding):
 		return false
 	var s = stage.road_s(p)
 	if s < VILLAGE_START - 55.0 or s > VILLAGE_END + 55.0:
@@ -753,7 +760,7 @@ func _mixed_forest(cooperative: bool = false) -> void:
 		var side_value = -1.0 if forest_rng.randi() % 2 == 0 else 1.0
 		var lateral = forest_rng.randf_range(48.0, 142.0)
 		var p = stage.at(s) + stage.side(s) * side_value * lateral + stage.direction(s) * forest_rng.randf_range(-4.0, 4.0)
-		if not _forest_spot_allowed(p, 1.6):
+		if not _forest_spot_allowed(p, 2.0):
 			continue
 		p.y = stage.terrain_surface_height(p) - 0.03
 		tree_positions.append(p)
