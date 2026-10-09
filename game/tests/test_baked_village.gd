@@ -44,6 +44,21 @@ func run() -> void:
 	check(baked.loaded_baked, "village uses prepared scene")
 	check(render_signature(generated) == render_signature(baked), "terrain, spatial blocks and every MultiMesh transform survive serialization")
 	check(generated.collectibles == baked.collectibles and generated.trees == baked.trees and generated.rocks.size() == baked.rocks.size(), "deterministic collectible/tree/rock identities survive loading")
+	check(baked.trees.size() > 0 and baked.detail_tree_visuals.size() == baked.trees.size(), "near village forest and thuja have collision and falling visuals")
+	for id in [0, baked.detail_tree_groups.mixed[0]]:
+		var tree: Vector3 = baked.trees[id]
+		check(baked.obstacle_hit(tree + Vector3(-2, 0, 0), tree + Vector3(2, 0, 0), 0.85) >= 0, "loaded village tree blocks swept car contact")
+		check(baked.fell(id, Vector3.RIGHT), "loaded village tree can be knocked down")
+		baked.update_fallen(1.3)
+		check(baked.fallen[id].age == 1.3, "all loaded tree parts accept falling animation")
+	var stones = baked.rocks.filter(func(rock): return rock.get("village_stone", false))
+	check(not stones.is_empty(), "visible village stones are registered as collision obstacles")
+	if not stones.is_empty():
+		var stone: Dictionary = stones[0]
+		var p: Vector3 = stone.pos + Vector3.UP * stone.height * 0.5
+		check(not baked.rock_hit(p - Vector3(2, 0, 0), p + Vector3(2, 0, 0), 0.85, false).is_empty(), "loaded village stone blocks swept car contact")
+		p.y = baked.ground(p) + 0.06
+		check(not baked.rock_hit(p - Vector3(2, 0, 0), p + Vector3(2, 0, 0), 0.85, false).is_empty(), "tyres reach village stones below the car origin")
 	check(generated.city.walk_surfaces == baked.city.walk_surfaces and generated.city.viewpoints == baked.city.viewpoints, "stairs, roof support and viewpoints survive loading")
 	check(generated.city.obstacles.size() == baked.city.obstacles.size(), "all static collision volumes and lamps survive loading")
 	var random = RandomNumberGenerator.new()
@@ -61,6 +76,10 @@ func run() -> void:
 		reports.append([title, amount])
 		await process_frame)
 	check(other.loaded_baked and reports.size() >= 3, "asynchronous load reports progress before gameplay")
+	check(other.fallen.is_empty() and other.detail_tree_visuals[0][0].mesh != baked.detail_tree_visuals[0][0].mesh, "loaded rooms do not share mutable falling tree resources")
+	other.apply_trees(baked.tree_snapshot())
+	other.update_fallen(1.3)
+	check(other.fallen.size() == baked.fallen.size(), "village tree falls replicate to another loaded stage")
 	var id = -1
 	for i in range(baked.collectibles.size()):
 		if baked.collectibles[i].get("name", "") == "виноград":

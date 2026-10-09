@@ -69,6 +69,8 @@ var indexed_rock_count = -1
 const ROCK_CELL_SIZE = 16.0
 var trees: Array[Vector3] = []
 var forest_data: Array[Dictionary] = []
+var detail_tree_groups: Dictionary = {}
+var detail_tree_visuals: Dictionary = {}
 var forest_layers: Array[Array] = []
 var forest_chunk_slots: Array[Vector2i] = []
 var forest_chunk_centers: Array[Vector3] = []
@@ -814,6 +816,13 @@ func update_fallen(delta: float) -> void:
 		var angle = smoothstep(0, 1.3, f.age) * PI * 0.5
 		var basis = Basis(Vector3.UP.cross(f.direction).normalized(), angle)
 		f.basis = basis
+		if detail_tree_visuals.has(index):
+			for part in detail_tree_visuals[index]:
+				var pose: Transform3D = part.pose
+				pose.origin = trees[index] + basis * (pose.origin - trees[index]) - part.center
+				pose.basis = basis * pose.basis
+				part.mesh.set_instance_transform(part.instance, pose)
+			continue
 		var h: float = tree_data.height
 		for layer in range(forest_layers.size()):
 			var radius = 0.2 if layer == 0 else h * (0.28 - (layer - 1) * 0.055)
@@ -931,7 +940,8 @@ func rock_hit(start: Vector3, end: Vector3, radius: float, allow_escape: bool = 
 	var best: Dictionary = {}
 	var earliest = INF
 	for rock in rocks_in_bounds(a.min(b) - Vector2.ONE * radius, a.max(b) + Vector2.ONE * radius):
-		if minf(start.y, end.y) > rock.pos.y + rock.height:
+		var tyre_offset = 0.3 if rock.get("village_stone", false) else 0.0
+		if minf(start.y, end.y) - tyre_offset > rock.pos.y + rock.height:
 			continue
 		var center = flat(rock.pos)
 		var padding: float = rock.radius + radius
@@ -952,7 +962,7 @@ func rock_hit(start: Vector3, end: Vector3, radius: float, allow_escape: bool = 
 			t = (-projection - sqrt(discriminant)) / length_squared
 			if t < 0 or t > 1:
 				continue
-		if lerpf(start.y, end.y, t) > rock.pos.y + rock.height:
+		if lerpf(start.y, end.y, t) - tyre_offset > rock.pos.y + rock.height:
 			continue
 		if t >= earliest:
 			continue
@@ -983,6 +993,21 @@ func woodland_spot(pos: Vector3, padding: float = 0.0) -> bool:
 	return true
 
 func _detail_batch(name: String, mesh: Mesh, poses: Array, colors: Array, indices: Array = []) -> void:
+	var tree_group = "thuja" if name.begins_with("VillageThuja") else ("mixed" if name.begins_with("VillageForestTreeLayer") else "")
+	if not name.contains("_Tile_"):
+		if name in ["VillageThujaLower", "VillageForestTreeLayer0"]:
+			var ids: Array = []
+			for pose in poses:
+				ids.append(trees.size())
+				trees.append(pose.origin - Vector3.UP * pose.basis.y.length() * 0.5)
+				forest_data.append({"height": pose.basis.y.length() / (0.48 if tree_group == "thuja" else 0.64)})
+			detail_tree_groups[tree_group] = ids
+			_rebuild_tree_index()
+		if tree_group != "": indices = detail_tree_groups[tree_group]
+		if urban and name in ["VineyardRoadsideStones", "VillageGravelStones", "VillageForestStones", "VillageStones", "CropGroundStones"]:
+			for pose in poses:
+				var height = pose.basis.y.length()
+				rocks.append({"pos": pose.origin - Vector3.UP * height * 0.5, "radius": maxf(pose.basis.x.length(), pose.basis.z.length()) * 0.5, "height": height, "village_stone": true})
 	if (urban and name in ["MushroomCaps", "FlyAgaricCaps", "ToadstoolCaps", "MushroomStems"]) or name in ["LavenderFoliage", "LavenderStems", "LavenderFlowers", "VillageThujaLower", "VillageThujaMiddle", "VillageThujaCrown", "ForestGrass", "ForestPebbles", "CropGroundGrass", "CropGroundStones", "ForestBushes", "ForestBerryBushes", "ForestBerries", "ForestBushStems", "VineyardGrapes", "VineyardLeaves", "VineyardRoadsideGrass", "VineyardRoadsideStones", "VineyardRoadsideBushes", "VillageForestTreeLayer0", "VillageForestTreeLayer1", "VillageForestTreeLayer2", "VillageForestTreeLayer3", "VillageHorizonTreeLayer0", "VillageHorizonTreeLayer1", "VillageHorizonTreeLayer2", "VillageHorizonTreeLayer3", "VillageGravelGrass", "VillageGravelStones", "VillageGravelBoulders", "VillageForestGrass", "VillageForestStones", "VillageForestBoulders", "VillageForestBushes", "VillageForestBerryBushes", "VillageForestBerries", "VillageGrass", "VillageStones"]:
 		var cells = {}
 		for i in range(poses.size()):
@@ -1017,6 +1042,10 @@ func _detail_batch(name: String, mesh: Mesh, poses: Array, colors: Array, indice
 		pose.origin -= center
 		mm.set_instance_transform(i, pose)
 		mm.set_instance_color(i, colors[i])
+		if tree_group != "":
+			var id: int = indices[i]
+			if not detail_tree_visuals.has(id): detail_tree_visuals[id] = []
+			detail_tree_visuals[id].append({"mesh": mm, "instance": i, "pose": poses[i], "center": center})
 		var source = name.get_slice("_Tile", 0)
 		if source in ["ForestBerries", "VillageForestBerries", "MushroomCaps", "FlyAgaricCaps", "ToadstoolCaps", "MushroomStems", "VineyardGrapes"]:
 			if not collectible_parts.has(source):
