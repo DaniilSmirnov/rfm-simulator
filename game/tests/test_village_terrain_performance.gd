@@ -55,6 +55,10 @@ func run():
    largest_gap = maxf(largest_gap, absf(gap))
    contact = contact and gap>0 and gap<0.50
  check(contact,'road follows refined terrain (largest gap %.3f m)' % largest_gap)
+ for junction in [381.0, 382.0, 488.0, 489.0]:
+  for lateral in [-1.8, 0.0, 1.8]:
+   check(absf(stage.road_surface_vertex(junction, lateral).y - 2.0775) < 0.001, 'gravel junction meets cobblestone height')
+ check(stage.draw_base_road_surface(381) and stage.draw_base_road_surface(382) and stage.draw_base_road_surface(488), 'gravel overlaps cobblestone ends without a missing segment')
  stage._build_terrain()
  var tiles = stage.find_children('TerrainTile_*','MeshInstance3D',false,false)
  var triangles = 0

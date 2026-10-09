@@ -2,8 +2,8 @@ import { Buffer } from 'node:buffer';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { catalog } from './store.mjs';
 
-export const PAYMENT_HANDLER_VERSION = 'vk-test-callback-v5';
-const paidProduct = sku => catalog.find(p => p.sku === sku && p.enabled && !p.free);
+export const PAYMENT_HANDLER_VERSION = 'vk-content-callback-v6';
+const paidProduct = sku => catalog.find(p => p.sku === sku && p.enabled && !p.free && p.purchase_enabled && Number.isSafeInteger(p.price) && p.price > 0);
 
 export class PaymentError extends Error {
   constructor(code, message, critical = true) { super(message); this.code = code; this.critical = critical; }
@@ -13,11 +13,21 @@ const id = value => typeof value === 'string' && /^[1-9]\d{0,14}$/.test(value) &
 export function testBuyer(env, user) {
   return env.VK_PAYMENTS_MODE === 'test' && id(user) &&
     (env.VK_PAYMENTS_TEST_USERS || '').split(',').map(s => s.trim()).some(s => s === '*' || s === user) &&
-    /^[1-9]\d{0,3}$/.test(env.VK_STAGE_02_TEST_PRICE || '') && !!env.PAYMENTS;
+    (env.VK_STAGE_02_TEST_PRICE === undefined || /^[1-9]\d{0,3}$/.test(env.VK_STAGE_02_TEST_PRICE)) && !!env.PAYMENTS;
+}
+function buyerMode(env, user) {
+  if (!id(user) || !env.PAYMENTS) return null;
+  if (env.VK_PAYMENTS_MODE === 'production') return 'production';
+  return testBuyer(env, user) ? 'test' : null;
+}
+function productPrice(env, product, mode) {
+  return mode === 'test' && env.VK_STAGE_02_TEST_PRICE !== undefined
+    ? Number(env.VK_STAGE_02_TEST_PRICE) : product.price;
 }
 export function paymentCatalog(env, user) {
-  return catalog.map(p => ({...p, purchase_enabled: !!paidProduct(p.sku) && testBuyer(env, user),
-    ...(!!paidProduct(p.sku) && testBuyer(env, user) ? {payment_mode:'test', price:Number(env.VK_STAGE_02_TEST_PRICE)} : {})}));
+  const mode = buyerMode(env, user);
+  return catalog.map(p => ({...p, purchase_enabled: !!paidProduct(p.sku) && !!mode,
+    ...(paidProduct(p.sku) && mode ? {payment_mode:mode, price:productPrice(env,p,mode)} : {})}));
 }
 export async function ledger(env, action, body) {
   const object = env.PAYMENTS.get(env.PAYMENTS.idFromName(`vk:${env.VK_APP_ID}`));
@@ -27,11 +37,12 @@ export async function ledger(env, action, body) {
   return data;
 }
 export async function accountStore(env, user) {
-  const skus = testBuyer(env, user) ? (await ledger(env, 'rights', {user,mode:'test'})).skus : [];
+  const mode = buyerMode(env, user);
+  const skus = mode ? (await ledger(env, 'rights', {user,mode})).skus : [];
   return {entitlements:{mode:'restricted',skus},catalog:paymentCatalog(env,user)};
 }
 export async function preparePurchase(env, user, sku) {
-  if (!testBuyer(env,user) || !paidProduct(sku)) reject('Тестовая покупка недоступна.');
+  if (!buyerMode(env,user) || !paidProduct(sku)) reject('Покупка недоступна.');
   const store = await accountStore(env,user);
   return {...store,item:sku,owned:store.entitlements.skus.includes(sku)};
 }
@@ -49,21 +60,24 @@ export function verifyCallback(raw, env) {
   const canonical = Object.keys(values).filter(k=>k!=='sig').sort().map(k=>`${k}=${values[k]}`).join('');
   const expected = createHash('md5').update(canonical + env.VK_APP_SECRET,'utf8').digest('hex');
   if (!timingSafeEqual(Buffer.from(signature),Buffer.from(expected))) throw new PaymentError(10,'Некорректная подпись.');
-  if (values.app_id !== env.VK_APP_ID || !testBuyer(env,values.user_id)) reject('Тестовые платежи недоступны для этого аккаунта.');
+  if (values.app_id !== env.VK_APP_ID || !buyerMode(env,values.user_id)) reject('Платежи недоступны для этого аккаунта.');
   if (values.receiver_id && values.receiver_id !== values.user_id) reject('Подарки не поддерживаются.');
   return values;
 }
 export async function paymentCallback(raw, env) {
   const p = verifyCallback(raw,env);
-  // Item metadata is read-only; only the explicitly test order callback can grant rights.
+  const mode = buyerMode(env,p.user_id);
+  // Metadata never grants rights; orders must match the configured mode.
+  if (mode === 'production' && p.notification_type?.endsWith('_test')) reject('Тестовый платёж не может открыть настоящий контент.');
   if (p.notification_type === 'get_item_test' || p.notification_type === 'get_item') {
     const product = paidProduct(p.item);
     if (!product) reject('Товар не существует.');
-    return {response:{item_id:product.sku,title:product.title + ' (тест)',photo_url:'',price:Number(env.VK_STAGE_02_TEST_PRICE)}};
+    return {response:{item_id:product.sku,title:product.title + (mode === 'test' ? ' (тест)' : ''),photo_url:'',price:productPrice(env,product,mode)}};
   }
-  if (p.notification_type !== 'order_status_change_test') {
+  const orderType = mode === 'test' ? 'order_status_change_test' : 'order_status_change';
+  if (p.notification_type !== orderType) {
     const received = typeof p.notification_type === 'string' ? p.notification_type.slice(0, 64) : null;
-    reject(`Неподдерживаемый notification_type=${JSON.stringify(received)}. Ожидается get_item, get_item_test или order_status_change_test. Обработчик: ${PAYMENT_HANDLER_VERSION}.`);
+    reject(`Неподдерживаемый notification_type=${JSON.stringify(received)}. Ожидается ${orderType}. Обработчик: ${PAYMENT_HANDLER_VERSION}.`);
   }
   if (p.status !== 'chargeable') throw new PaymentError(100,'Неподдерживаемый статус заказа.');
   // VK sends the SKU as item_id and the price as item_price. Keep legacy
@@ -75,7 +89,7 @@ export async function paymentCallback(raw, env) {
       (p.amount !== undefined && (!id(p.amount) || p.amount !== amount))) {
     reject('Некорректный заказ или стоимость.');
   }
-  const receipt = await ledger(env,'grant',{mode:'test',order:p.order_id,user:p.user_id,sku,amount:Number(amount),expected_price:Number(env.VK_STAGE_02_TEST_PRICE)});
+  const receipt = await ledger(env,'grant',{mode,order:p.order_id,user:p.user_id,sku,amount:Number(amount),expected_price:productPrice(env,paidProduct(sku),mode)});
   return {response:receipt};
 }
 
@@ -90,10 +104,23 @@ export class VkPayments {
   async initialize() {
     const sql = this.storage.sql;
     sql.exec(`CREATE TABLE IF NOT EXISTS payment_orders (
-      mode TEXT NOT NULL CHECK(mode = 'test'), order_id TEXT NOT NULL,
+      mode TEXT NOT NULL CHECK(mode IN ('test', 'production')), order_id TEXT NOT NULL,
       user_id TEXT NOT NULL, sku TEXT NOT NULL, amount INTEGER NOT NULL CHECK(amount > 0),
       app_order_id INTEGER NOT NULL, created_at INTEGER NOT NULL,
       PRIMARY KEY(mode, order_id))`);
+    const schema = [...sql.exec("SELECT sql FROM sqlite_master WHERE name = 'payment_orders'")][0].sql;
+    if (!schema.includes("'production'")) {
+      this.storage.transactionSync(() => {
+        sql.exec('ALTER TABLE payment_orders RENAME TO payment_orders_v1');
+        sql.exec(`CREATE TABLE payment_orders (
+          mode TEXT NOT NULL CHECK(mode IN ('test', 'production')), order_id TEXT NOT NULL,
+          user_id TEXT NOT NULL, sku TEXT NOT NULL, amount INTEGER NOT NULL CHECK(amount > 0),
+          app_order_id INTEGER NOT NULL, created_at INTEGER NOT NULL,
+          PRIMARY KEY(mode, order_id))`);
+        sql.exec('INSERT INTO payment_orders SELECT * FROM payment_orders_v1');
+        sql.exec('DROP TABLE payment_orders_v1');
+      });
+    }
     sql.exec('CREATE INDEX IF NOT EXISTS payment_orders_owner ON payment_orders(mode, user_id, sku)');
     sql.exec('CREATE TABLE IF NOT EXISTS payment_migrations (name TEXT PRIMARY KEY)');
     if ([...sql.exec("SELECT name FROM payment_migrations WHERE name = 'kv_orders_v1'")].length) return;
@@ -123,7 +150,7 @@ export class VkPayments {
     try {
       await this.ready;
       const p = await request.json();
-      if (p.mode !== 'test' || !id(p.user)) reject('Некорректный аккаунт.');
+      if (!['test','production'].includes(p.mode) || !id(p.user)) reject('Некорректный аккаунт.');
       const sql = this.storage.sql;
       if (new URL(request.url).pathname === '/rights') {
         return Response.json({skus:[...sql.exec('SELECT DISTINCT sku FROM payment_orders WHERE mode = ? AND user_id = ? ORDER BY sku',p.mode,p.user)].map(row=>row.sku)});
@@ -135,7 +162,7 @@ export class VkPayments {
           if (previous.user_id !== p.user || previous.sku !== p.sku || previous.amount !== p.amount) reject('Конфликт заказа.');
           return {order_id:Number(previous.order_id),app_order_id:previous.app_order_id};
         }
-        if (p.amount !== p.expected_price) reject('Некорректная стоимость.');
+        if (p.amount !== (p.mode === 'production' ? paidProduct(p.sku).price : p.expected_price)) reject('Некорректная стоимость.');
         sql.exec('INSERT INTO payment_orders VALUES (?, ?, ?, ?, ?, ?, ?)',p.mode,p.order,p.user,p.sku,p.amount,Number(p.order),Date.now());
         return {order_id:Number(p.order),app_order_id:Number(p.order)};
       });

@@ -15,7 +15,8 @@
     "title": "Зимний Турини",
     "free": false,
     "enabled": true,
-    "purchase_enabled": false
+    "purchase_enabled": true,
+    "price": 20
   },
   {
     "sku": "stage_03",
@@ -24,7 +25,8 @@
     "title": "Виноградники",
     "free": false,
     "enabled": true,
-    "purchase_enabled": false
+    "purchase_enabled": true,
+    "price": 20
   },
   {
     "sku": "stage_04",
@@ -69,7 +71,8 @@
     "title": "Классический седан",
     "free": false,
     "enabled": true,
-    "purchase_enabled": false
+    "purchase_enabled": true,
+    "price": 3
   },
   {
     "sku": "car_05",
@@ -78,7 +81,8 @@
     "title": "Лёгкий седан",
     "free": false,
     "enabled": true,
-    "purchase_enabled": false
+    "purchase_enabled": true,
+    "price": 3
   },
   {
     "sku": "car_06",
@@ -87,7 +91,8 @@
     "title": "Дорожный седан",
     "free": false,
     "enabled": true,
-    "purchase_enabled": false
+    "purchase_enabled": true,
+    "price": 3
   },
   {
     "sku": "car_07",
@@ -96,7 +101,8 @@
     "title": "Семейный седан",
     "free": false,
     "enabled": true,
-    "purchase_enabled": false
+    "purchase_enabled": true,
+    "price": 3
   },
   {
     "sku": "car_08",
@@ -105,7 +111,8 @@
     "title": "Туристический кроссовер",
     "free": false,
     "enabled": true,
-    "purchase_enabled": false
+    "purchase_enabled": true,
+    "price": 3
   },
   {
     "sku": "car_09",
@@ -114,7 +121,8 @@
     "title": "Походный хэтчбек",
     "free": false,
     "enabled": true,
-    "purchase_enabled": false
+    "purchase_enabled": true,
+    "price": 3
   },
   {
     "sku": "car_10",
@@ -123,6 +131,7 @@
     "title": "Спортивный седан",
     "free": false,
     "enabled": true,
-    "purchase_enabled": false
+    "purchase_enabled": true,
+    "price": 3
   }
 ]
