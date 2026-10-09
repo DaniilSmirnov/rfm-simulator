@@ -81,6 +81,7 @@ func run() -> void:
 		check(forward.dot(-game.stage.direction(game.stage.LENGTH)) > 0.99, "reverse car faces the opposite direction immediately")
 		finish_vehicle(game)
 		for index in range(3):
+			print("DEBUG schedule variant=%d index=%d phase=%s zero=%d racers=%s" % [variant, index, game.course.phase, game.course.zero_index, game.racers.map(func(r): return "%s/%s/s%.1f" % [r.get("role", "racer"), r.state, r.s])])
 			check(game.course.phase == "zero" and game.course.zero_index == index + 1, "reverse pass repeats the safety convoy")
 			finish_vehicle(game)
 		game.course.update(game, 5)

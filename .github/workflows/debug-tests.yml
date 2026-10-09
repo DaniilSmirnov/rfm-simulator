@@ -10,7 +10,7 @@ jobs:
     timeout-minutes: 30
     env:
       LIBGL_ALWAYS_SOFTWARE: "true"
-      TESTS: test_selection.gd test_vineyard.gd test_city_physics.gd test_trunk.gd test_course_schedule.gd test_rally_traffic.gd
+      TESTS: test_selection.gd test_vineyard.gd test_city_physics.gd test_course_schedule.gd
     steps:
       - uses: actions/checkout@v4
         with:

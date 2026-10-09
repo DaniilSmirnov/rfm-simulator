@@ -88,6 +88,7 @@ func run() -> void:
 	summer.free()
 	var city = Stage.new(2)
 	city.build()
+	print("DEBUG selection urban=%s clearings=%d trees=%d" % [city.urban, city.clearings.size(), city.trees.size()])
 	check(city.urban and city.clearings.size() == 4 and city.trees.is_empty(), "vineyard stage has four ordinary spectator spots without a separate parking entity")
 	check(city.city.village_houses >= 14 and city.get_node_or_null("VillageChurch") != null, "village has detailed houses and church")
 	check(city.city.thuja_count > 300, "village is enclosed by a dense thuja forest belt")

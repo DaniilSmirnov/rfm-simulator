@@ -115,10 +115,16 @@ func run() -> void:
 		var buffer: PackedFloat32Array = tile.get_meta("baked_instances")
 		for index in range(0, tile.multimesh.instance_count, 13):
 			var point = tile.position + Vector3(buffer[index * 16 + 3], buffer[index * 16 + 7], buffer[index * 16 + 11])
+			if point.y < floor_stage.terrain_surface_height(point) - 0.02 and floor_visible:
+				print("DEBUG vineyard buried %s tile=%s y=%.3f surface=%.3f" % [point, tile.name, point.y, floor_stage.terrain_surface_height(point)])
 			floor_visible = floor_visible and point.y >= floor_stage.terrain_surface_height(point) - 0.02
 			point.y = floor_stage.terrain_surface_height(point)
+			if floor_clear and not (floor_stage.rock_hit(point, point, 0.05, false).is_empty() and floor_stage.city.crop_clear(point) and floor_stage.city.cemetery_clear(point, 0.05) and not floor_stage.city.paved_at(point, 0.05)):
+				print("DEBUG vineyard blocked %s tile=%s rock=%s crop=%s cemetery=%s paved=%s" % [point, tile.name, not floor_stage.rock_hit(point, point, 0.05, false).is_empty(), floor_stage.city.crop_clear(point), floor_stage.city.cemetery_clear(point, 0.05), floor_stage.city.paved_at(point, 0.05)])
 			floor_clear = floor_clear and floor_stage.rock_hit(point, point, 0.05, false).is_empty() and floor_stage.city.crop_clear(point) and floor_stage.city.cemetery_clear(point, 0.05) and not floor_stage.city.paved_at(point, 0.05)
 			for tree in floor_stage.city.tree_positions:
+				if floor_clear and floor_stage.flat(point).distance_to(floor_stage.flat(tree)) <= 0.7:
+					print("DEBUG vineyard trunk %s tile=%s tree=%s" % [point, tile.name, tree])
 				floor_clear = floor_clear and floor_stage.flat(point).distance_to(floor_stage.flat(tree)) > 0.7
 			if floor_stage.road_distance(point) < 40.0:
 				near_floor_count += 1

@@ -117,6 +117,7 @@ func run() -> void:
 	racer.role = "opening_police"
 	var police_speed = Traffic.speed_limit(game, racer, racer.s)
 	racer.role = "racer"
+	print("DEBUG city battle=%.4f target=%.4f zero=%.4f police=%.4f pace=%.3f" % [battle_speed, Traffic.competition_target(stage, racer.s, racer.pace), zero_speed, police_speed, racer.pace])
 	check(is_equal_approx(battle_speed, Traffic.competition_target(stage, racer.s, racer.pace)) and is_equal_approx(zero_speed, battle_speed), "rally and zero crews use geometry-based pace on the forest bypass")
 	check(police_speed < 17.0, "course-opening police keeps the village speed limit")
 	game._update_racers(0.1)
