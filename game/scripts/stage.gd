@@ -40,6 +40,14 @@ const BakedVillage = preload("res://scripts/baked_village.gd")
 var baked_scene_path = "res://generated/village.scn"
 var loaded_baked = false
 var snow_camps: Array[Vector3] = []
+var snow_glades: Array[Vector3] = []
+const GLADE_COUNT = 6
+const GLADE_OFFSET = 14.0
+const GLADE_FLAT = 6.5
+const GLADE_BLEND = 12.0
+const GLADE_STRAIGHT = 18.0
+const GLADE_MAX_TURN = 0.45
+const GLADE_SPACING = 30.0
 var snowbank_cells: Dictionary = {}
 # Used only by the offline baker/tests; ordinary gameplay retains no CPU copy.
 var capture_bake_buffers = false
@@ -160,6 +168,33 @@ func _init(selected: int = 0) -> void:
 		for i in range(4):
 			var station = 85.0 + i * 190.0
 			snow_camps.append(at(station) + side(station) * (7.2 if i % 2 == 0 else -7.2))
+		_place_snow_glades()
+
+# Level, tree-free glades beside straights. Snow is left untouched so a crew
+# has a reason to take the shovel and dig its own camp out of the drift.
+func _place_snow_glades() -> void:
+	var taken: Array[float] = []
+	for point in clearings + snow_camps: taken.append(road_s(point))
+	var candidates: Array = []
+	for i in range(int((LENGTH - 80.0) / 4.0)):
+		var station = 40.0 + i * 4.0
+		var before = direction(station - GLADE_STRAIGHT)
+		var after = direction(station + GLADE_STRAIGHT)
+		var turn = Vector2(before.x, before.z).angle_to(Vector2(after.x, after.z))
+		if absf(turn) < GLADE_MAX_TURN: candidates.append([absf(turn), station])
+	candidates.sort()
+	for candidate in candidates:
+		var station: float = candidate[1]
+		var free = true
+		for other in taken: free = free and absf(other - station) > GLADE_SPACING
+		if not free: continue
+		taken.append(station)
+		var side_sign = 1.0 if snow_glades.size() % 2 == 0 else -1.0
+		var center = at(station) + side(station) * side_sign * GLADE_OFFSET
+		# Level with the inner edge, so the glade is a shelf off the shoulder.
+		center.y = base_ground(at(station) + side(station) * side_sign * (GLADE_OFFSET - GLADE_FLAT))
+		snow_glades.append(center)
+		if snow_glades.size() >= GLADE_COUNT: break
 
 func at(s: float) -> Vector3:
 	s = clampf(s, 0, LENGTH - 0.001)
@@ -267,6 +302,19 @@ func ground(pos: Vector3) -> float:
 	var height = snow.floor_height(self, pos) if winter and snow.is_dug(self, pos) else base_ground(pos)
 	return maxf(height, Snowbanks.surface_height(self, pos)) if winter else height
 
+# Feet break through loose snow; tyre tracks and excavations hold the walker up.
+func walking_ground(pos: Vector3) -> float:
+	var height = ground(pos)
+	if not winter: return height
+	var loose = snow.loose_depth(self, pos)
+	if loose <= 0.02: return height
+	# Packed tyre tracks are firm: feet stop at the track's visible dip.
+	var sunk = height - loose * lerpf(DeepSnow.FOOT_SINK, 0.28, snow.packed(pos))
+	return maxf(sunk, Snowbanks.surface_height(self, pos))
+
+func snow_sink(pos: Vector3) -> float:
+	return maxf(0.0, ground(pos) - walking_ground(pos)) if winter else 0.0
+
 func base_ground(pos: Vector3) -> float:
 	if lakeland:
 		return finnish_forest.ground(self, pos)
@@ -308,6 +356,12 @@ func base_ground(pos: Vector3) -> float:
 		height = p.y + sin(pos.x * 0.12 + s * 0.04) * 0.025 + slope * 0.08
 	if winter:
 		height += slope * 0.42 + sin(s / 85.0) * slope * 0.15
+		for glade in snow_glades:
+			var reach = Vector2(pos.x - glade.x, pos.z - glade.z).length()
+			if reach >= GLADE_BLEND: continue
+			# Never lift or lower the ploughed road beside a glade.
+			var level = (1.0 - smoothstep(GLADE_FLAT, GLADE_BLEND, reach)) * smoothstep(WIDTH * 0.5 + 0.5, WIDTH * 0.5 + 2.5, distance)
+			height = lerpf(height, glade.y, level)
 	for clearing in clearings:
 		var d = Vector2(pos.x - clearing.x, pos.z - clearing.z).length()
 		height = lerpf(clearing.y, height, smoothstep(7.0 if winter else 5.5, 16.0 if winter else 11.5, d))
@@ -498,6 +552,9 @@ func _build_nature(cooperative: bool = false) -> void:
 		var in_clearing = false
 		for c in clearings:
 			if Vector2(p.x - c.x, p.z - c.z).length() < (11.0 if winter else 8.5):
+				in_clearing = true
+		for c in snow_glades:
+			if Vector2(p.x - c.x, p.z - c.z).length() < GLADE_FLAT + 3.0:
 				in_clearing = true
 		if in_clearing:
 			continue

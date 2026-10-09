@@ -68,9 +68,11 @@ export class RoomState {
         if (!Number.isSafeInteger(c.seq) || c.seq <= p.seq || !COMMANDS.has(c.action)) continue;
         if (this.data.commands.length >= 64) throw new RoomError(429, 'Подожди выполнения предыдущих действий.');
         const placement = {};
-        if (c.placement && vec(c.placement.pos) && number(c.placement.yaw) && Math.hypot(...c.placement.pos.map((v, i) => v - p.state.pos[i])) <= 5) {
+        // Point actions such as digging carry no yaw; a missing yaw means 0, an invalid one rejects the spot.
+        const yaw = c.placement?.yaw === undefined ? 0 : c.placement.yaw;
+        if (c.placement && vec(c.placement.pos) && number(yaw) && Math.hypot(...c.placement.pos.map((v, i) => v - p.state.pos[i])) <= 5) {
           placement.pos = c.placement.pos;
-          placement.yaw = c.placement.yaw;
+          placement.yaw = yaw;
         }
         if (Number.isSafeInteger(c.placement?.resource_id) && c.placement.resource_id >= 0 && c.placement.resource_id < 10000) placement.resource_id = c.placement.resource_id;
         if (Number.isSafeInteger(c.placement?.source) && c.placement.source >= -1 && c.placement.source < 100) placement.source = c.placement.source;

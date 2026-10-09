@@ -45,18 +45,15 @@ func run() -> void:
 	var shovel = Props.gear_box(root, "shovel")
 	check(Props.CARGO_KINDS.has("shovel") and shovel.has_node("Blade") and shovel.has_node("Shaft") and shovel.has_node("Grip"), "cargo shovel has blade shaft and handle geometry")
 	var cargo = preload("res://scripts/car_cargo.gd").new()
-	var poses = [
-		[cargo.SHOVEL_POSITION, cargo.SHOVEL_ROTATION],
-		[Vector3(0.14, 0.08, -1.75), Vector3(0.10, -0.10, -0.20)],
-		[Vector3(0.25, -0.19, -1.80), Vector3(-0.70, 0.08, -0.45)],
-		[Vector3(0.02, 0.06, -1.75), Vector3(-0.05, -0.35, -0.65)],
-	]
-	poses.append([cargo.SHOVEL_POSITION, cargo.SHOVEL_ROTATION])
+	var poses = [[cargo.SHOVEL_POSITION, cargo.SHOVEL_ROTATION]]
+	for pose in cargo.DIG_POSES: poses.append([pose[0], pose[1]])
 	var samples: Array = []
 	for phase in range(poses.size() - 1):
+		var from = Quaternion.from_euler(poses[phase][1])
+		var to = Quaternion.from_euler(poses[phase + 1][1])
 		for step in range(17):
 			var weight = step / 16.0
-			samples.append([poses[phase][0].lerp(poses[phase + 1][0], weight), poses[phase][1].lerp(poses[phase + 1][1], weight)])
+			samples.append([poses[phase][0].lerp(poses[phase + 1][0], weight), from.slerp(to, weight).get_euler()])
 	for aspect in [1280.0 / 720, 844.0 / 390, 390.0 / 844]:
 		var fits = true
 		for pose in samples:
@@ -78,7 +75,15 @@ func run() -> void:
 	cargo.animate_shovel()
 	check(cargo.shovel_swing == active_swing, "repeated input cannot stack digging animations")
 	for tick in range(24): cargo.shovel_swing.custom_step(0.05)
-	check(shovel.position.is_equal_approx(cargo.SHOVEL_POSITION) and shovel.rotation.is_equal_approx(cargo.SHOVEL_ROTATION), "digging animation returns to full-length resting pose")
+	check(shovel.position.is_equal_approx(cargo.SHOVEL_POSITION) and shovel.quaternion.angle_to(Quaternion.from_euler(cargo.SHOVEL_ROTATION)) < 0.001, "digging animation returns to full-length resting pose")
+	check(not shovel.get_node("SnowLoad").visible, "thrown snow leaves the blade empty at rest")
+	var rest = Transform3D(Basis.from_euler(cargo.SHOVEL_ROTATION), cargo.SHOVEL_POSITION)
+	var grip_point: Vector3 = rest * Vector3(0, 0.545, 0)
+	var blade_point: Vector3 = rest * Vector3(0, -0.49, 0)
+	check(grip_point.z > blade_point.z + 0.7 and grip_point.x > blade_point.x and blade_point.y / -blade_point.z > grip_point.y / -grip_point.z, "grip is held near the camera with the blade on the snow ahead")
+	var plunge: Array = cargo.DIG_POSES[1]
+	var plunge_tip: Vector3 = Transform3D(Basis.from_euler(plunge[1]), plunge[0]) * Vector3(0, -0.49, 0)
+	check(plunge_tip.y < blade_point.y - 0.2 and plunge[3], "plunge drives the blade down into the drift and scoops snow")
 	tween_owner.free()
 	var game = preload("res://scripts/game.gd").new()
 	game.stage = stage
@@ -91,6 +96,25 @@ func run() -> void:
 	stage.trees.clear()
 	stage.rocks.clear()
 	check(game.valid_furniture_spot(point, "table"), "cleared footprint accepts furniture")
+	# Walking into an untouched drift sinks the player and points them to the shovel.
+	game.toast_label = Label.new()
+	game.walker = stage.at(400) + stage.side(400) * 12.0
+	game.walker.y = stage.walking_ground(game.walker)
+	check(game.snow_wading() > 0.8, "player wades deep in an untouched drift")
+	game._snow_hint(0.1)
+	check("лопату" in game.toast_label.text and "багажник" in game.toast_label.text, "drift tells an empty-handed player to fetch the shovel")
+	game.toast_label.text = ""
+	game._snow_hint(0.1)
+	check(game.toast_label.text == "", "drift hint is not repeated every frame")
+	game.walker = stage.at(400)
+	game.walker.y = stage.walking_ground(game.walker)
+	game._snow_hint(30.0)
+	check(game.snow_wading() == 0.0 and game.toast_label.text == "", "ploughed road neither slows nor warns")
+	game.cargo.held["local"] = {"kind": "shovel", "owner": "local", "returning": false}
+	game.walker = stage.at(400) + stage.side(400) * 12.0
+	game._snow_hint(0.1)
+	check("F" in game.toast_label.text, "player holding the shovel is told how to dig")
+	game.toast_label.free()
 	game.stage = null
 	game.free()
 	stage.free()

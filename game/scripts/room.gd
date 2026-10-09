@@ -347,7 +347,7 @@ func _process(delta: float) -> void:
 		var kind = str(carry.get("kind", ""))
 		if kind != "" and kind != peer.held_kind:
 			peer.held_box.queue_free()
-			peer.held_box = Props.gear_box(peer.avatar, kind, Vector3(0, 1.0, -0.5))
+			peer.held_box = Props.carried_gear(peer.avatar, kind)
 			peer.held_kind = kind
 		peer.held_box.visible = kind != "" and not peer.state.in_car
 		var sitting = bool(peer.state.get("seated", false)) and not peer.state.in_car
@@ -387,11 +387,7 @@ func _process(delta: float) -> void:
 			var lift = smoothstep(0.8, 1.25, peer.drink_time) * (1.0 - smoothstep(2.5, 3.3, peer.drink_time))
 			peer.arm.rotation.x = lerpf(0.5, 1.6, lift)
 			peer.can.rotation.x = 0.35 * lift
-		if peer.held_box.visible and not peer.can.visible and not peer.skewer.visible:
-			peer.arm.rotation.x = -0.9
-			peer.avatar.get_node("LeftArm").rotation.x = -0.9
-		else:
-			peer.avatar.get_node("LeftArm").rotation.x = 0.0
+		Props.pose_carry(peer.avatar, peer.held_kind, peer.held_box.visible and not peer.can.visible and not peer.skewer.visible)
 		peer.label.position = peer.car.position + Vector3(0, 2.8, 0) if peer.state.in_car else peer.avatar.position + Vector3(0, 2.3, 0)
 	if not is_host:
 		if not world_paused and not game.paused and not game.dead and not game.finished:
@@ -454,8 +450,7 @@ func _update_peers(players: Array) -> void:
 			game.add_child(car)
 			var avatar = Props.player_avatar(int(p.get("slot", 0)))
 			game.add_child(avatar)
-			var carried_box = Props.gear_box(avatar, "table", Vector3(0, 1.0, -0.5))
-			carried_box.name = "CarriedBox"
+			var carried_box = Props.carried_gear(avatar, "table")
 			carried_box.hide()
 			var arm = avatar.get_node("RightArm")
 			var can = arm.get_node("BeerCan")

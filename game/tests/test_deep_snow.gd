@@ -25,6 +25,8 @@ func run() -> void:
 		motion.suspension(actor, stage, 1.0 / 120, 0)
 	check(stage.snow.packed(point) > 0.7, "vehicle weight compacts snow under the wheels")
 	check(stage.vehicle_ground(point) > fresh + 0.12 and stage.grip(point) > grip + 0.1, "packed track gives firmer support and better traction")
+	var fresh_drift = stage.at(400) + stage.side(400) * 12.0
+	check(stage.snow_sink(point) < stage.snow_sink(fresh_drift) * 0.6, "packed tyre track carries the walker better than fresh snow")
 	var guest = Stage.new(1)
 	guest.snow.authoritative = false
 	guest.snow.apply_snapshot(stage.snow.snapshot())
@@ -65,6 +67,25 @@ func run() -> void:
 	var packed_before = stage.snow.packed(point)
 	motion.suspension(actor, stage, 1.0 / 120, 0)
 	check(stage.snow.packed(point) == packed_before, "airborne vehicle cannot compact snow")
+	# Walkers break through loose snow; packed tracks and the road hold them up.
+	var drift = stage.at(400) + stage.side(400) * 12.0
+	check(stage.snow_sink(drift) > 0.45 and stage.walking_ground(drift) < stage.terrain_surface_height(drift) - 0.3, "walker sinks thigh-deep into an untouched drift")
+	check(stage.snow_sink(stage.at(400)) == 0.0, "walker stays on top of the ploughed road")
+	# Flat glades beside straights keep deep snow and no trees.
+	check(stage.snow_glades.size() >= 5, "winter stage has several roadside glades")
+	for glade in stage.snow_glades:
+		var lowest = INF
+		var highest = -INF
+		for a in range(12):
+			for r in [0.0, 2.5, 5.0]:
+				var h = stage.base_ground(glade + Vector3(cos(a * 0.52), 0, sin(a * 0.52)) * r)
+				lowest = minf(lowest, h)
+				highest = maxf(highest, h)
+		var s = stage.road_s(glade)
+		var near_road = absf(glade.y - stage.ground(stage.at(s))) < 2.5
+		var clear = true
+		for tree in stage.trees: clear = clear and Vector2(tree.x - glade.x, tree.z - glade.z).length() > stage.GLADE_FLAT
+		check(highest - lowest < 0.02 and near_road and stage.DeepSnow.depth(stage, glade) > 0.6 and stage.road_distance(glade) > 9.0 and clear, "glade at %.0f is level, near the road, snowy and tree-free" % s)
 	actor.free()
 	node.free()
 	stage.free()
