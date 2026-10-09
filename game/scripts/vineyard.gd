@@ -753,12 +753,13 @@ func _mixed_forest(cooperative: bool = false) -> void:
 	var forest_rng = RandomNumberGenerator.new()
 	forest_rng.seed = 71020265
 	var tree_data: Array[Dictionary] = []
-	for i in range(10500):
+	for i in range(15000):
 		if cooperative and i % 200 == 0:
 			await get_tree().process_frame
 		var s = forest_rng.randf_range(VILLAGE_START - 52.0, VILLAGE_END + 52.0)
 		var side_value = -1.0 if forest_rng.randi() % 2 == 0 else 1.0
-		var lateral = forest_rng.randf_range(48.0, 142.0)
+		# Close the gaps near the gravel stretch; outside it preserve village spacing.
+		var lateral = forest_rng.randf_range(12.0, 145.0) if stage.village_forest_detour(s) else forest_rng.randf_range(48.0, 142.0)
 		var p = stage.at(s) + stage.side(s) * side_value * lateral + stage.direction(s) * forest_rng.randf_range(-4.0, 4.0)
 		if not _forest_spot_allowed(p, 2.0):
 			continue
@@ -770,7 +771,7 @@ func _mixed_forest(cooperative: bool = false) -> void:
 			"shade": forest_rng.randf_range(-0.025, 0.045),
 		})
 		mixed_tree_count += 1
-		if mixed_tree_count >= 2200:
+		if mixed_tree_count >= 3000:
 			break
 	for layer in range(4):
 		var poses: Array = []
@@ -966,7 +967,7 @@ func _forest_mushrooms() -> void:
 	var colors = {"edible": [], "fly_agaric": [], "toadstool": []}
 	var stems = []
 	var stem_colors = []
-	for i in range(1100):
+	for i in range(380):
 		var s = random.randf_range(290, 610)
 		var p = stage.at(s) + stage.side(s) * random.randf_range(12, 140) * (-1 if i % 2 else 1)
 		if not _forest_spot_allowed(p, 0.5) or not stage.rock_hit(p, p, 0.5, false).is_empty():
