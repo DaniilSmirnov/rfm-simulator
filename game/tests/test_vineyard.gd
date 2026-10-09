@@ -109,6 +109,12 @@ func run() -> void:
 			var point = stage.village_main_at(lane_station) + stage.village_main_side(lane_station) * along
 			check(is_equal_approx(stage.ground(point), 2.0775), "side-lane wheel contact matches cobblestone top")
 	check(not stage.city._forest_spot_allowed(stage.city.cemetery_center), "mixed forest generation preserves the cemetery clearing")
+	var cemetery_empty = true
+	for tree in stage.city.tree_positions:
+		cemetery_empty = cemetery_empty and stage.city.cemetery_clear(tree, 2.0)
+	check(cemetery_empty, "all generated trees keep their crowns outside the cemetery")
+	for corner in [Vector3(-16, 0, -12), Vector3(16, 0, -12), Vector3(-16, 0, 12), Vector3(16, 0, 12)]:
+		check(not stage.city.cemetery_clear(stage.city.cemetery_center + corner, 2.0), "cemetery corners are included in the forest exclusion")
 	check(stage.city.side_lane_house_count >= 8, "both secondary village streets have additional houses")
 	check(stage.city.village_sign_count == 2, "village has name signs at both entrance and exit")
 	var village_name_labels = stage.find_children("*", "Label3D", true, false).filter(func(label): return str(label.text) == "Ля Газ в Польен")

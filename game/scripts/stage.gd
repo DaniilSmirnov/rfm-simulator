@@ -43,6 +43,7 @@ var winter = false
 var urban = false
 var village_church_center = Vector3.ZERO
 var points: PackedVector3Array = []
+var gravel_landform_frames: Array[Dictionary] = []
 var road_segment_starts = PackedVector2Array()
 var road_segment_deltas = PackedVector2Array()
 var road_segment_inverse_lengths = PackedFloat64Array()
@@ -95,6 +96,9 @@ func _init(selected: int = 0) -> void:
 			points.append(Vector3(sin(s / 90.0) * 38.0 + sin(s / 38.0) * 9.0, 5.0 + s * 0.024 + sin(s / 58.0) * 3.7, -s))
 	if urban:
 		_index_urban_route()
+		for crest in [Vector3(423.0, 1.05, 36.0), Vector3(450.0, 0.75, 32.0)]:
+			var forward = flat(direction(crest.x)).normalized()
+			gravel_landform_frames.append({"centre": flat(at(crest.x)), "forward": forward, "across": Vector2(-forward.y, forward.x), "height": crest.y, "length": crest.z})
 	if desert:
 		canyon.configure(self)
 		return
@@ -155,6 +159,17 @@ func gravel_profile(s: float, center: float, half_length: float) -> float:
 	var t = absf(s - center) / half_length
 	return (1.0 + cos(t * PI)) * 0.5 if t < 1.0 else 0.0
 
+func village_gravel_landform(pos: Vector3) -> float:
+	# The road crosses a broad hill, rather than sitting on a narrow ramp.
+	# World-space profiles are shared by tyre contact and surrounding terrain.
+	var height = 0.0
+	for frame in gravel_landform_frames:
+		var offset = flat(pos) - frame.centre
+		var along = offset.dot(frame.forward)
+		var lateral = offset.dot(frame.across)
+		height += gravel_profile(along, 0.0, frame.length) * gravel_profile(lateral, 0.0, 24.0) * frame.height
+	return height
+
 func gravel_relief(pos: Vector3, s: float) -> float:
 	if not village_forest_detour(s):
 		return 0.0
@@ -162,15 +177,14 @@ func gravel_relief(pos: Vector3, s: float) -> float:
 	var edge = 1.0 - smoothstep(road_width(s) * 0.45, road_width(s) * 0.75, absf(lateral))
 	var blend = smoothstep(386.0, 398.0, s) * (1.0 - smoothstep(474.0, 484.0, s))
 	var bank = lateral * sin(s * 0.095) * 0.10
-	var bumps = sin(s * 1.8) * 0.08 + sin(s * 0.77 + lateral * 1.5) * 0.10
-	var ramps = gravel_profile(s, 423.0, 12.0) * 1.15 + gravel_profile(s, 450.0, 12.0) * 0.85
+	var bumps = sin(s * 0.65) * 0.025 + sin(s * 0.32 + lateral * 0.75) * 0.035
 	var wheel_rut = exp(-pow((absf(lateral) - 0.80) / 0.24, 2.0))
 	var ruts = -wheel_rut * (0.09 + 0.04 * sin(s * 0.6))
 	var puddles = -gravel_profile(s, 407.0, 2.2) * 0.13 * exp(-pow((lateral - 0.5) / 0.7, 2.0))
 	puddles -= gravel_profile(s, 469.0, 2.2) * 0.14 * exp(-pow((lateral + 0.5) / 0.7, 2.0))
 	puddles -= gravel_profile(s, 412.0, 2.4) * 0.16 * exp(-pow((lateral + 0.55) / 0.8, 2.0))
 	puddles -= gravel_profile(s, 463.0, 2.6) * 0.18 * exp(-pow((lateral - 0.55) / 0.8, 2.0))
-	return (bank + bumps + ramps + ruts + puddles) * edge * blend
+	return (bank + bumps + ruts + puddles) * edge * blend + village_gravel_landform(pos) * smoothstep(382.0, 390.0, s) * (1.0 - smoothstep(480.0, 488.0, s))
 
 func grip(pos: Vector3) -> float:
 	if desert:
@@ -268,7 +282,7 @@ func village_hill_height(pos: Vector3) -> float:
 	var village_blend = smoothstep(250.0, 320.0, station) * (1.0 - smoothstep(550.0, 640.0, station))
 	var road_blend = smoothstep(190.0, 300.0, station) * (1.0 - smoothstep(570.0, 710.0, station))
 	var axis_height = axis.y - (1.0 - road_blend) * (sin(station / 14.0) * 0.32 + gravel_profile(station, 178.0, 14.0) * 1.1 + gravel_profile(station, 686.0, 16.0) * 1.25)
-	return axis_height + hillside * (1.0 - village_blend) + sin(pos.x * 0.016 + pos.z * 0.010) * minf(hillside * 0.08, 0.20) * (1.0 - village_blend) + village_forest_microrelief(pos)
+	return axis_height + hillside * (1.0 - village_blend) + sin(pos.x * 0.016 + pos.z * 0.010) * minf(hillside * 0.08, 0.20) * (1.0 - village_blend) + village_forest_microrelief(pos) + village_gravel_landform(pos)
 
 # Trees must touch the *rendered* terrain, not the continuous ground()
 # function. Terrain is triangulated in 4 m cells (2 m near forest roads)
