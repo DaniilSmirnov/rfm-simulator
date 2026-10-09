@@ -51,6 +51,19 @@ func run() -> void:
 	game.lobby_ui.refresh()
 	check(game.lobby_ui.states[1].text.contains("Куплено"), "server ownership shows purchase label")
 	check(not game.room.create_button.disabled and not game.lobby_ui.purchase_button.visible, "confirmed winter ownership unlocks host and hides purchase")
+	# Red Canyon is a separate paid VK map, not covered by a winter purchase.
+	game.select_stage(3)
+	game.lobby_ui.refresh()
+	check(not game.platform_service.can_use("stage", 3), "unpaid canyon locked after buying winter stage")
+	check(game.room.create_button.disabled and not game.room.join_button.disabled, "unpaid canyon cannot host but can join another owner's room")
+	check(game.lobby_ui.purchase_button.visible and game.lobby_ui.purchase_button.text == "ОТКРЫТЬ СУ · 20 ГОЛОСОВ", "canyon exposes 20-vote purchase")
+	game.platform_service.entitlements.skus.append("stage_04")
+	game.lobby_ui.refresh()
+	check(game.platform_service.can_use("stage", 3) and not game.room.create_button.disabled, "owned canyon unlocks new room")
+	check(game.lobby_ui.states[1].text.contains("Куплено") and not game.lobby_ui.purchase_button.visible, "purchased canyon hides purchase button")
+	game.platform_service.entitlements.skus.erase("stage_04")
+	game.select_stage(1)
+	game.lobby_ui.refresh()
 	game.car_choice.select(3)
 	game.platform_service.catalog[7].purchase_enabled = true
 	game.platform_service.catalog[7].price = 3
