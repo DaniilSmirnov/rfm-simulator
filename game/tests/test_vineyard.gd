@@ -33,6 +33,8 @@ func run() -> void:
 	# Route invariants: the old village street is distinct from the forest
 	# detour; all road samples and shoulders stay continuous at transitions.
 	check(stage.get_node_or_null("VillageFarmyard") != null and stage.get_node_or_null("VillageCafeTerrace") != null, "village contains distinct farmyard and cafe landmarks")
+	check(stage.get_node_or_null("VillageFarmyard/FarmTrailer") != null, "farmyard has a complete trailer assembly")
+	check(stage.get_node_or_null("VillageCafeTerrace") != null and stage.city.meshes.has("box") and stage.city.meshes.has("cylinder_12_1000"), "cafe furniture and farmyard decorations reuse batched primitive resources")
 	for layer in range(4):
 		check(stage.woodland_details.get("VillageHorizonTreeLayer%d" % layer, 0) >= 100, "distant woodland covers both terrain edges using shared meshes")
 	var route_continuous = true
