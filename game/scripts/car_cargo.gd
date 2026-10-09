@@ -7,22 +7,32 @@ var held: Dictionary = {}
 var context: Dictionary = {}
 var hand_box: Node3D
 var hand_kind = ""
-const SHOVEL_POSITION = Vector3(0.22, -0.05, -1.75)
-const SHOVEL_ROTATION = Vector3(-0.25, 0.0, -0.30)
+# First-person snow shovel: grip low on the right close to the camera, shaft
+# running forward to a blade resting on the snow ahead. Poses were solved from
+# grip/blade-tip targets and stay inside a portrait phone frame.
+const SHOVEL_POSITION = Vector3(0.035, -0.518, -1.327)
+const SHOVEL_ROTATION = Vector3(-1.352, -3.000, 0.0)
+# Wind up, drive the blade into the drift, lever a load out, throw it to the left.
+# [position, rotation, seconds, snow on the blade after this pose]
+const DIG_POSES = [
+	[Vector3(0.024, -0.360, -1.260), Vector3(-1.421, -1.432, -1.571), 0.16, false],
+	[Vector3(0.026, -0.718, -1.424), Vector3(-1.077, -2.987, 0.0), 0.17, true],
+	[Vector3(0.029, -0.432, -1.359), Vector3(-1.500, 0.132, 3.142), 0.24, true],
+	[Vector3(-0.135, -0.283, -1.326), Vector3(-0.170, -1.184, -1.678), 0.15, false],
+	[SHOVEL_POSITION, SHOVEL_ROTATION, 0.24, false],
+]
 var shovel_swing: Tween
 
 func animate_shovel() -> void:
 	if not is_instance_valid(hand_box) or hand_kind != "shovel": return
 	if shovel_swing != null and shovel_swing.is_running(): return
 	shovel_swing = game.create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	for pose in [
-		[Vector3(0.14, 0.08, -1.75), Vector3(0.10, -0.10, -0.20), 0.18],
-		[Vector3(0.25, -0.19, -1.80), Vector3(-0.70, 0.08, -0.45), 0.22],
-		[Vector3(0.02, 0.06, -1.75), Vector3(-0.05, -0.35, -0.65), 0.25],
-		[SHOVEL_POSITION, SHOVEL_ROTATION, 0.22],
-	]:
+	var load = hand_box.get_node_or_null("SnowLoad")
+	for pose in DIG_POSES:
+		# Quaternions slerp the shortest way; Euler tweens would spin near vertical.
 		shovel_swing.tween_property(hand_box, "position", pose[0], pose[2])
-		shovel_swing.parallel().tween_property(hand_box, "rotation", pose[1], pose[2])
+		shovel_swing.parallel().tween_property(hand_box, "quaternion", Quaternion.from_euler(pose[1]), pose[2])
+		if load != null: shovel_swing.tween_callback(load.set_visible.bind(pose[3]))
 
 func shovel_busy() -> bool:
 	return shovel_swing != null and shovel_swing.is_running()
@@ -250,6 +260,7 @@ func update(delta: float) -> void:
 	var kind = str(carry.get("kind", ""))
 	if kind != hand_kind:
 		if shovel_swing != null: shovel_swing.kill()
+		shovel_swing = null
 		if is_instance_valid(hand_box):
 			hand_box.queue_free()
 		hand_box = null

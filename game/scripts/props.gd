@@ -1335,6 +1335,10 @@ static func gear_box(parent: Node3D, kind: String, point: Vector3 = Vector3.ZERO
 		steel.cull_mode = BaseMaterial3D.CULL_DISABLED
 		blade.material_override = steel
 		shovel.add_child(blade)
+		# Heap of snow carried on the blade while digging; hidden at rest.
+		var load = faceted(shovel, Vector3(0, -0.34, 0.075), Vector3(0.22, 0.17, 0.11), Color("eef5f7"), 8, 4)
+		load.name = "SnowLoad"
+		load.hide()
 		return shovel
 	if kind == "firewood":
 		var bundle = wood_bundle(parent, point)
@@ -1350,6 +1354,39 @@ static func gear_box(parent: Node3D, kind: String, point: Vector3 = Vector3.ZERO
 	var titles = {"table": "СТОЛ", "chairs": "СТУЛ", "grill": "МАНГАЛ", "cauldron": "КАЗАН"}
 	label_3d(root, Vector3(0, 0.02, 0.246), titles.get(kind, kind), 36, 0.0018, Color("18292e"), 0)
 	return root
+
+# Third-person carrying. The avatar faces -Z; shoulders sit at y 1.29, x ±0.34
+# and arms hang 0.63 m, so a forward lift of ~0.8 rad puts both hands at the
+# sides of a box held against the belly.
+const CARRY_BOX_POSITION = Vector3(0, 0.93, -0.40)
+const CARRY_SHOVEL_POSITION = Vector3(0.20, 0.92, -0.42)
+const CARRY_ARM_LIFT = 0.80
+const CARRY_ARM_HUG = 0.08
+
+static func carried_gear(avatar: Node3D, kind: String) -> Node3D:
+	var node = gear_box(avatar, kind, CARRY_SHOVEL_POSITION if kind == "shovel" else CARRY_BOX_POSITION)
+	node.name = "CarriedBox"
+	if kind == "shovel":
+		# Shaft across the body, blade low and ahead, like walking with a shovel.
+		node.rotation = Vector3(0.55, 0.0, 0.35)
+	else:
+		# Turn the labelled face away from the carrier so others can read it.
+		node.rotation.y = PI
+	return node
+
+static func pose_carry(avatar: Node3D, kind: String, carrying: bool) -> void:
+	var left = avatar.get_node("LeftArm")
+	var right = avatar.get_node("RightArm")
+	if not carrying:
+		left.rotation = Vector3.ZERO
+		return
+	if kind == "shovel":
+		right.rotation = Vector3(0.70, 0.0, 0.0)
+		left.rotation = Vector3(0.95, 0.0, -0.30)
+		return
+	# Forward (+X rotation swings a hanging arm towards -Z) and slightly inward.
+	left.rotation = Vector3(CARRY_ARM_LIFT, 0.0, CARRY_ARM_HUG)
+	right.rotation = Vector3(CARRY_ARM_LIFT, 0.0, -CARRY_ARM_HUG)
 
 static func add_player_trunk(root: Node3D, variant: int) -> Node3D:
 	var p = trunk_profile(variant)

@@ -41,4 +41,19 @@ func _initialize() -> void:
 		check(is_zero_approx(other.get_node("RightArm").rotation.x), "Independent animation transforms")
 		other.free()
 		avatar.free()
+	# Carried boxes are held in front (-Z) with both hands reaching forward to them.
+	for kind in ["table", "chairs", "grill", "cauldron", "shovel"]:
+		var carrier = Props.player_avatar(0)
+		var box = Props.carried_gear(carrier, kind)
+		Props.pose_carry(carrier, kind, true)
+		var hands: Array = []
+		for side in ["LeftArm", "RightArm"]:
+			var arm: Node3D = carrier.get_node(side)
+			hands.append(arm.transform * Vector3(0, -0.6, 0))
+		check(box.position.z < -0.3 and hands[0].z < -0.3 and hands[1].z < -0.3, "%s carried in front with both hands forward" % kind)
+		if kind != "shovel":
+			check(absf(hands[0].x) < 0.34 and absf(hands[1].x) < 0.34 and absf(hands[0].y - box.position.y) < 0.2, "%s held between the hands at belly height" % kind)
+		Props.pose_carry(carrier, kind, false)
+		check(carrier.get_node("LeftArm").rotation.is_zero_approx(), "%s: left arm drops when nothing is carried" % kind)
+		carrier.free()
 	quit(1 if failed else 0)

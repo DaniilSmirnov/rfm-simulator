@@ -3,6 +3,8 @@ extends RefCounted
 const CELL = 2.0
 const MAX_CELLS = 768
 const MAX_DUG = 256
+# Share of loose snow depth a walker wades through (about thigh-deep in forest).
+const FOOT_SINK = 0.72
 var dug: Dictionary = {}
 var cells: Dictionary = {}
 var dirty: Dictionary = {}

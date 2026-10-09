@@ -9,6 +9,13 @@ var jump_height = 0.0
 var jump_velocity = 0.0
 const WALK_SPEED = 4.3
 const RUN_SPEED = 7.2
+const DeepSnowRules = preload("res://scripts/deep_snow.gd")
+# Wading through a full drift halves walking speed; hint once per drift entry.
+const SNOW_WADE_SPEED = 0.5
+const SNOW_HINT_DEPTH = 0.25
+const SNOW_HINT_COOLDOWN = 20.0
+var snow_hint_clock = 0.0
+var snow_stuck = false
 const JUMP_SPEED = 5.5
 const WALK_GRAVITY = 18.0
 var seat_exit = Vector3.ZERO
@@ -143,13 +150,14 @@ func dig_snow(spot: Vector3) -> void:
 	if in_car or paused or dead or finished or not cargo.held.has(owner) or cargo.held[owner].kind != "shovel" or walker.distance_to(spot) > 4.0: return
 	var local_actor = owner == chair_owner()
 	if local_actor and cargo.shovel_busy(): return
-	if room.submit("dig_snow", {"pos": room.a(spot)}):
+	# The room server keeps a spot only together with a yaw.
+	if room.submit("dig_snow", {"pos": room.a(spot), "yaw": 0.0}):
 		cargo.animate_shovel()
 		return
 	if stage.snow.dig(stage, spot):
 		soundscape.placement()
 		if local_actor: cargo.animate_shovel()
-	else: toast("Здесь уже расчищено или раскопок слишком много.")
+	elif local_actor: toast("Здесь уже расчищено или раскопок слишком много.")
 
 func begin_placement(kind: String) -> void:
 	if packing.active():
@@ -1358,11 +1366,12 @@ func _walk_step(delta: float) -> void:
 		motion = motion.normalized()
 	var dir = Vector3(motion.x, 0, motion.y).rotated(Vector3.UP, view_yaw)
 	var water_factor = stage.water.walk_factor(walker) if stage.lakeland else 1.0
-	var next = walker + dir * delta * water_factor * mushroom_effect.movement_multiplier() * (1.4 if drink_time >= 0 or eat_time >= 0 else (RUN_SPEED if running() else WALK_SPEED))
+	var wading = snow_wading()
+	var next = walker + dir * delta * water_factor * mushroom_effect.movement_multiplier() * lerpf(1.0, SNOW_WADE_SPEED, wading) * (1.4 if drink_time >= 0 or eat_time >= 0 else (RUN_SPEED if running() else WALK_SPEED))
 	next.x = clampf(next.x, -185, 185)
 	next.z = clampf(next.z, -Stage.LENGTH + 5, 10)
 	var old_floor = walker.y - jump_height
-	var floor_height = stage.city.walking_floor(next, walker.y) if stage.urban and stage.city.has_method("walking_floor") else stage.ground(next)
+	var floor_height = stage.city.walking_floor(next, walker.y) if stage.urban and stage.city.has_method("walking_floor") else stage.walking_ground(next)
 	if stage.lakeland:
 		floor_height = stage.walk_floor(next, floor_height)
 		if stage.water.depth(next) > 0.2 and next.distance_to(walker) > 0.0001:
@@ -1386,6 +1395,24 @@ func _walk_step(delta: float) -> void:
 			jump_velocity = 0
 		remaining -= step
 	walker.y = floor_height + jump_height
+	_snow_hint(delta)
+
+# 0 on firm ground, 1 when wading through a full-depth forest drift.
+func snow_wading() -> float:
+	if stage == null or not stage.winter or jump_height > 0.01: return 0.0
+	return clampf(stage.snow_sink(walker) / (DeepSnowRules.FOOT_SINK * 0.78), 0.0, 1.0)
+
+func _snow_hint(delta: float) -> void:
+	snow_hint_clock = maxf(0.0, snow_hint_clock - delta)
+	var deep = stage.winter and stage.snow_sink(walker) > SNOW_HINT_DEPTH and jump_height <= 0.01
+	if deep and not snow_stuck and snow_hint_clock <= 0.0:
+		var carry = cargo.held.get(chair_owner(), {})
+		if str(carry.get("kind", "")) == "shovel":
+			toast("Глубокий снег. Наведи лопату на сугроб и нажми F, чтобы расчистить место.")
+		else:
+			toast("Ты провалился в сугроб! Возьми лопату из багажника и расчисти место под лагерь.")
+		snow_hint_clock = SNOW_HINT_COOLDOWN
+	snow_stuck = deep
 
 func running() -> bool:
 	return not in_car and not seated and beers < 30 and not paused and not dead and not finished and drink_time < 0 and eat_time < 0 and Input.is_action_pressed("sprint") and (absf(Input.get_axis("left", "right")) + absf(Input.get_axis("forward", "back"))) > 0.01
@@ -1445,7 +1472,7 @@ func _toggle_car() -> void:
 		vehicle_motion.velocity = Vector3.ZERO
 		speed = 0
 		walker = car.position + Vector3(-2.1, 0, 0).rotated(Vector3.UP, heading)
-		walker.y = stage.ground(walker)
+		walker.y = stage.walking_ground(walker)
 		view_yaw = heading
 		toast("Z — стол, C — стулья, G — мангал. Устанавливай вне СУ.")
 	elif walker.distance_to(car.position) < 4:
