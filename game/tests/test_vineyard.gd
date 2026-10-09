@@ -86,6 +86,22 @@ func run() -> void:
 	check(stage.city.village_grass_count >= 1000 and stage.city.village_stone_count >= 220, "village has more grass and small stones in free spaces")
 	for station in [569.0, 570.0, 571.0]:
 		check(stage.draw_base_road_surface(station), "vineyard exit has continuous road mesh coverage")
+	check(stage.woodland_details.get("CropGroundGrass", 0) > 1500 and stage.woodland_details.get("CropGroundStones", 0) > 300, "crop fields have grass and stones between rows")
+	for region in [Vector2(22, 280), Vector2(592, 816)]:
+		var grass_count = 0
+		var stone_count = 0
+		for node in stage.find_children("CropGround*_Tile_*", "MultiMeshInstance3D", false, false):
+			if -node.position.z >= region.x - 64 and -node.position.z <= region.y + 64:
+				if str(node.name).begins_with("CropGroundGrass"):
+					grass_count += node.multimesh.instance_count
+				else:
+					stone_count += node.multimesh.instance_count
+		check(grass_count > 500 and stone_count > 100, "both lavender and vineyards contain ground details")
+	var rows_clear = true
+	for plants in stage.city.crop_ground_cells.values():
+		for plant in plants:
+			rows_clear = rows_clear and not stage.city._crop_ground_clear(plant.pos, 0.2)
+	check(rows_clear, "all cultivated row footprints reject grass and stones")
 	var forest_crops_clear = true
 	for p in stage.city.tree_positions:
 		forest_crops_clear = forest_crops_clear and stage.city.crop_clear(p)
