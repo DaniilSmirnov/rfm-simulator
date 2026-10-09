@@ -41,6 +41,12 @@ const execute=(name,command,args,timeoutMs)=>{
  if(summary.length)console.log(summary.join('\n').slice(-8000));
  results.push({name,pass,elapsedMs,exitCode:result.status,signal:result.signal||null,
   error:result.error?.message||null});
+ // Surface failures as annotations, readable without downloading job logs.
+ if(!pass && process.env.GITHUB_ACTIONS){
+  const relevant=tailLines.filter(x=>/FAIL|ERROR|Error|error|Assertion|not ok|RESULT/.test(x)).slice(-25);
+  const text=(relevant.length?relevant:tailLines.slice(-25)).join('\n').slice(-6000);
+  console.log('::error title=FAIL '+name.replace(/[:,\n]/g,' ')+'::'+text.replace(/%/g,'%25').replace(/\r/g,'%0D').replace(/\n/g,'%0A'));
+ }
  return pass;
 };
 

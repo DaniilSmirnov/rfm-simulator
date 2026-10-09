@@ -190,6 +190,10 @@ try {
   console.log(`PASS: ${web?'two Chromium clients (mobile guest)':'two Godot clients'}: ${socketMode?'WebSocket with 150ms RTT':'delayed HTTP, 2 lost responses'}, prediction, braking, convergence, pause/resume, recovery, exit/re-entry, leave/rejoin`);
 } catch (error) {
   console.error(logs.filter(x => !x.includes('NETWORK_SAMPLE ')).slice(-100).join('\n'));
+  if(process.env.GITHUB_ACTIONS) {
+    const text=[String(error?.message??error).slice(0,2000),...logs.filter(x=>!x.includes('NETWORK_SAMPLE ')).slice(-30)].join('\n').slice(-6000);
+    console.log(`::error title=Multiplayer ${web?'web':'native'}${socketMode?' socket':''}::`+text.replace(/%/g,'%25').replace(/\r/g,'%0D').replace(/\n/g,'%0A'));
+  }
   throw error;
 } finally {
   await writeFile(join(root,'network-test.log'),logs.join('\n'));
