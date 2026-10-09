@@ -1008,6 +1008,9 @@ func _detail_batch(name: String, mesh: Mesh, poses: Array, colors: Array, indice
 	node.position = center
 	if name.begins_with("GrassTile") or name.contains("_Tile_"):
 		node.visibility_range_end = 70 if name.begins_with("VineyardGrapes") else (110 if name.begins_with("LavenderFlowers") or name.begins_with("LavenderStems") else 160)
+		# The sparse silhouette must survive even the near preset (420 * 0.7).
+		if name.begins_with("VillageHorizonTreeLayer"):
+			node.visibility_range_end = 420
 		node.visibility_range_end_margin = 15
 		if urban and name.begins_with("Mushroom") or urban and name.begins_with("FlyAgaric") or urban and name.begins_with("Toadstool"):
 			node.visibility_range_end = 70
