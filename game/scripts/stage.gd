@@ -20,6 +20,7 @@ const NATURE_MUSHROOM_STEM = preload("res://models/nature/mushroom_stem.tres")
 var officials: Node3D
 const Officials = preload("res://scripts/course_officials.gd")
 
+const Snowbanks = preload("res://scripts/snowbanks.gd")
 const Canyon = preload("res://scripts/canyon.gd")
 var canyon: RefCounted
 var desert = false
@@ -639,12 +640,6 @@ func _build_road() -> void:
 			p.y = ground(p)
 			var puddle = RallyProps.cylinder(self, p + Vector3(0, 0.10, 0), 1.1, 1.1, 0.025, Color("56645d"), 9)
 			puddle.scale.z = 1.7
-		if winter and i % 8 == 0:
-			for offset in [-4.7, 4.7]:
-				var p = at(s) + side(s) * offset
-				p.y = ground(p)
-				var bank = RallyProps.box(self, p + Vector3(0, 0.23, 0), Vector3(1.7, 0.65, 9.0), Color("e1edf1"))
-				bank.rotation.y = atan2(-direction(s).x, -direction(s).z)
 	# Shared positions and colours allow smooth normals across strip joins.
 	st.index()
 	st.generate_normals()
@@ -657,6 +652,8 @@ func _build_road() -> void:
 	n.material_override = mat
 	n.name = "StageRoadSurface"
 	add_child(n)
+	if winter:
+		Snowbanks.build(self)
 	if urban:
 		for station in [407.0, 412.0, 463.0, 469.0]:
 			var offset = (-0.55 if station < 440.0 else 0.55) if station in [412.0, 463.0] else (0.5 if station < 440.0 else -0.5)
