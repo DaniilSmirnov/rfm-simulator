@@ -37,6 +37,8 @@ func run() -> void:
 	stage.snow.register_chunk(stage, tile, node)
 	stage.snow.update(0.5)
 	var vertices: PackedVector3Array = node.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	var colors: PackedColorArray = node.mesh.surface_get_arrays(0)[Mesh.ARRAY_COLOR]
+	check(colors[0].r > 0.85 and colors[0].g > 0.85 and colors[0].b > 0.85, "excavated snow floor remains white")
 	check(vertices.size() > 6 and vertices[0].y < stage.terrain_vertex_height(key.x, key.y) - 0.3, "dug polygon has lowered floor and snow side walls")
 	check(is_equal_approx(vertices[4].y, stage.terrain_vertex_height(key.x + key.z, key.y + key.z)), "neighbour polygon mesh stays untouched")
 	var root = Node3D.new()

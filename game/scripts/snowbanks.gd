@@ -11,7 +11,7 @@ static func vertex(stage, station: float, edge: float, fraction: float) -> Vecto
 	var taper = smoothstep(0.0, 6.0, station) * (1.0 - smoothstep(stage.LENGTH - 6.0, stage.LENGTH, station))
 	var height = 0.90 + sin(station * 0.055 + edge * 0.8) * 0.06 + sin(station * 0.019) * 0.04
 	# A squared sine meets the landscape with a horizontal tangent at both toes.
-	point.y = stage.terrain_surface_height(point) - 0.035 + height * pow(sin(PI * fraction), 2.0) * taper
+	point.y = stage.terrain_surface_height(point) - 0.035 + height * pow(sin(PI * fraction), 2.0) * taper * stage.DeepSnow.camp_mask(stage, point)
 	return point
 
 static func mesh(stage, edge: float) -> ArrayMesh:
@@ -37,7 +37,43 @@ static func mesh(stage, edge: float) -> ArrayMesh:
 	surface.generate_normals()
 	return surface.commit()
 
+static func surface_height(stage, point: Vector3) -> float:
+	var result = -INF
+	var cell = Vector2i(floori(point.x / 4.0), floori(point.z / 4.0))
+	for triangle in stage.snowbank_cells.get(cell, []):
+		var a: Vector3 = triangle[0]
+		var b: Vector3 = triangle[1]
+		var c: Vector3 = triangle[2]
+		var ab = Vector2(b.x - a.x, b.z - a.z)
+		var ac = Vector2(c.x - a.x, c.z - a.z)
+		var ap = Vector2(point.x - a.x, point.z - a.z)
+		var determinant = ab.cross(ac)
+		if absf(determinant) < 0.000001: continue
+		var u = ap.cross(ac) / determinant
+		var v = ab.cross(ap) / determinant
+		if u >= -0.00001 and v >= -0.00001 and u + v <= 1.00001:
+			result = maxf(result, a.y + (b.y - a.y) * u + (c.y - a.y) * v)
+	return result
+
+static func index_surface(stage, mesh: ArrayMesh) -> void:
+	var arrays = mesh.surface_get_arrays(0)
+	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+	for i in range(0, indices.size(), 3):
+		var triangle = [vertices[indices[i]], vertices[indices[i + 1]], vertices[indices[i + 2]]]
+		var low = Vector2(INF, INF)
+		var high = Vector2(-INF, -INF)
+		for p in triangle:
+			low = low.min(Vector2(p.x, p.z))
+			high = high.max(Vector2(p.x, p.z))
+		for x in range(floori(low.x / 4), floori(high.x / 4) + 1):
+			for z in range(floori(low.y / 4), floori(high.y / 4) + 1):
+				var key = Vector2i(x, z)
+				if not stage.snowbank_cells.has(key): stage.snowbank_cells[key] = []
+				stage.snowbank_cells[key].append(triangle)
+
 static func build(stage) -> void:
+	stage.snowbank_cells.clear()
 	var material = StandardMaterial3D.new()
 	material.albedo_color = Color("e1edf1")
 	material.roughness = 1.0
@@ -45,5 +81,6 @@ static func build(stage) -> void:
 		var node = MeshInstance3D.new()
 		node.name = "SnowbankLeft" if edge < 0 else "SnowbankRight"
 		node.mesh = mesh(stage, edge)
+		index_surface(stage, node.mesh)
 		node.material_override = material
 		stage.add_child(node)
