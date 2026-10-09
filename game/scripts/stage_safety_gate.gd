@@ -11,6 +11,7 @@ var user_scrolled = false
 var outer: MarginContainer
 var content_margins: MarginContainer
 var button_margins: MarginContainer
+var safe_insets = Vector4.ZERO
 
 const MAX_READING_WIDTH = 760.0
 const MIN_SIDE_PADDING = 20.0
@@ -66,9 +67,9 @@ func _ready() -> void:
 	content_margins = MarginContainer.new()
 	content_margins.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	content_margins.add_theme_constant_override("margin_left", 24)
-	margins.add_theme_constant_override("margin_right", 24)
-	margins.add_theme_constant_override("margin_top", 24)
-	margins.add_theme_constant_override("margin_bottom", 24)
+	content_margins.add_theme_constant_override("margin_right", 24)
+	content_margins.add_theme_constant_override("margin_top", 24)
+	content_margins.add_theme_constant_override("margin_bottom", 24)
 	scroll.add_child(content_margins)
 	var text_column = VBoxContainer.new()
 	text_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -100,24 +101,19 @@ func _ready() -> void:
 	scroll.resized.connect(_update_accept)
 	_update_accept()
 
-# Godot runs in a full-viewport canvas. Browsers on notched phones expose
-# CSS safe-area insets (unlike desktop, where all four values are zero).
-func _web_safe_insets() -> Vector4:
-	if not OS.has_feature("web"):
-		return Vector4.ZERO
-	var result = JavaScriptBridge.eval("(function(){const e=document.createElement('div');e.style.cssText='position:fixed;visibility:hidden;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)';document.body.appendChild(e);const c=getComputedStyle(e);const v=[c.paddingLeft,c.paddingTop,c.paddingRight,c.paddingBottom].map(parseFloat);e.remove();return v.map(n=>Number.isFinite(n)?n:0).join(',');})()", true)
-	if typeof(result) != TYPE_STRING:
-		return Vector4.ZERO
-	var parts: PackedStringArray = result.split(",")
-	if parts.size() != 4:
-		return Vector4.ZERO
-	var scale_factor = panel.size.x / maxf(1.0, float(JavaScriptBridge.eval("window.innerWidth", true)))
-	return Vector4(float(parts[0]), float(parts[1]), float(parts[2]), float(parts[3])) * scale_factor
+# The mini engine has no JavaScript eval. The game's existing browser-local
+# viewport transport supplies hardware/VK/visual viewport insets in UI units.
+func set_safe_insets(value: Vector4) -> void:
+	var next = Vector4(maxf(0, value.x), maxf(0, value.y), maxf(0, value.z), maxf(0, value.w))
+	if next == safe_insets:
+		return
+	safe_insets = next
+	_update_layout()
 
 func _update_layout() -> void:
 	if panel == null or outer == null or content_margins == null or button_margins == null:
 		return
-	var insets = _web_safe_insets()
+	var insets = safe_insets
 	var content_width = maxf(1.0, panel.size.x - insets.x - insets.z)
 	# Keep a readable, centered column on desktop and modest gutters on phones.
 	var gutter = maxf(MIN_SIDE_PADDING, (content_width - MAX_READING_WIDTH) * 0.5)
@@ -150,7 +146,8 @@ func _update_accept() -> void:
 	if scroll == null or accept_button == null:
 		return
 	var bar = scroll.get_v_scroll_bar()
-	var reached_end = user_scrolled and bar.max_value > bar.page and bar.value + bar.page >= bar.max_value - 8.0
+	var fits = bar.page > 0.0 and bar.max_value <= bar.page
+	var reached_end = fits or (user_scrolled and bar.value + bar.page >= bar.max_value - 8.0)
 	accept_button.disabled = not reached_end
 	accept_button.text = "ПРОЧИТАЛ(А), ВОЙТИ НА СУ" if reached_end else "ПРОКРУТИ ПАМЯТКУ ДО КОНЦА"
 
