@@ -17,7 +17,11 @@ jobs:
   tests-and-visuals:
     name: Tests and visuals
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 22
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [core, simulation, world]
     env:
       WRANGLER_SEND_METRICS: "false"
       LIBGL_ALWAYS_SOFTWARE: "true"
@@ -30,31 +34,41 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm test
+      - name: Run isolated and audited Godot test shard
+        run: node scripts/test-game.mjs --shard=${{ matrix.shard }}
 
       - name: Render desktop and mobile lobby
+        if: matrix.shard == 'world'
         run: xvfb-run -a .cache/godot/Godot_v4.4.1-stable_linux.x86_64 --path game --script res://tests/lobby_preview.gd
       - name: Render lightweight menu and staged loading
+        if: matrix.shard == 'world'
         run: xvfb-run -a .cache/godot/Godot_v4.4.1-stable_linux.x86_64 --path game --script res://tests/memory_preview.gd
       - name: Render text flag faces
+        if: matrix.shard == 'world'
         run: xvfb-run -a .cache/godot/Godot_v4.4.1-stable_linux.x86_64 --path game --rendering-method gl_compatibility --script res://tests/flag_preview.gd
       - name: Render imported reference-style characters
+        if: matrix.shard == 'world'
         run: xvfb-run -a .cache/godot/Godot_v4.4.1-stable_linux.x86_64 --path game --rendering-method gl_compatibility --script res://tests/character_preview.gd
       - name: Render cooking stages
+        if: matrix.shard == 'world'
         run: xvfb-run -a .cache/godot/Godot_v4.4.1-stable_linux.x86_64 --path game --rendering-method gl_compatibility --script res://tests/cooking_preview.gd
       - name: Render landscape mobile controls
+        if: matrix.shard == 'world'
         run: xvfb-run -a .cache/godot/Godot_v4.4.1-stable_linux.x86_64 --path game --rendering-method gl_compatibility --script res://tests/mobile_preview.gd
       - name: Render vineyard and village reference views
+        if: matrix.shard == 'world'
         run: xvfb-run -a .cache/godot/Godot_v4.4.1-stable_linux.x86_64 --path game --rendering-method gl_compatibility --script res://tests/city_preview.gd
       - name: Render mushroom textures and verify color inversion
+        if: matrix.shard == 'world'
         run: xvfb-run -a .cache/godot/Godot_v4.4.1-stable_linux.x86_64 --path game --rendering-method gl_compatibility --script res://tests/mushroom_preview.gd
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: visual-previews
+          name: visual-previews-${{ matrix.shard }}
           include-hidden-files: true
           path: |
+            .cache/test-results/*.json
             .cache/ui-screens/*.png
             flag-*.png
             character-preview.png
