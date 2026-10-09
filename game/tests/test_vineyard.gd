@@ -30,6 +30,24 @@ func run() -> void:
 	for p in stage.city.lavender_positions:
 		lavender_clear = lavender_clear and -p.z < 300.0 and stage.road_distance(p) >= 6.0
 	check(lavender_clear, "lavender stays before village and leaves the road clear")
+	# Route invariants: the old village street is distinct from the forest
+	# detour; all road samples and shoulders stay continuous at transitions.
+	check(stage.get_node_or_null("VillageFarmyard") != null and stage.get_node_or_null("VillageCafeTerrace") != null, "village contains distinct farmyard and cafe landmarks")
+	for layer in range(4):
+		check(stage.woodland_details.get("VillageHorizonTreeLayer%d" % layer, 0) >= 100, "distant woodland covers both terrain edges using shared meshes")
+	var route_continuous = true
+	var shoulder_continuous = true
+	for sample in range(300, 570):
+		var station = float(sample)
+		var next_station = station + 0.5
+		route_continuous = route_continuous and stage.at(station).distance_to(stage.at(next_station)) < 12.0
+		if stage.draw_base_road_surface(station) and stage.draw_base_road_surface(next_station):
+			for side_value in [-1.0, 1.0]:
+				var edge = stage.road_surface_vertex(station, side_value * stage.road_width(station) * 0.5)
+				var ground_height = stage.terrain_surface_height(edge)
+				shoulder_continuous = shoulder_continuous and is_finite(edge.y) and is_finite(ground_height)
+	check(route_continuous, "village and gravel detour have no disconnected station jumps")
+	check(shoulder_continuous, "gravel-road shoulders and terrain have valid interpolated heights")
 	var forest_crops_clear = true
 	for p in stage.city.tree_positions:
 		forest_crops_clear = forest_crops_clear and stage.city.crop_clear(p)
