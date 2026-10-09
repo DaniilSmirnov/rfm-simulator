@@ -77,7 +77,7 @@ static func build() -> Node3D:
 			root.add_child(wheel_pivot)
 			wheel_pivot.position = Vector3(side * 0.89, 0.37, z)
 			wheel_pivot.set_meta("rolling_wheel_radius", 0.37)
-			wheel_pivot.set_meta("rolling_wheel_axis", Vector3.RIGHT)
+			wheel_pivot.set_meta("rolling_wheel_axis", Vector3.LEFT)
 			var tire = P.cylinder(wheel_pivot, Vector3.ZERO, 0.37, 0.37, 0.29, RUBBER, 16)
 			tire.rotation.z = PI / 2
 			tire.name = "WheelTire"

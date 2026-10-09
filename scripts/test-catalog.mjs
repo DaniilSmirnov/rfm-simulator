@@ -20,7 +20,7 @@ export const groups = Object.freeze({
   "test_crew_limit.gd", "test_drive_prediction.gd",
  ],
  world: [
-  "test_baked_village.gd", "test_navigation_budget.gd",
+  "test_baked_village.gd", "test_village_landmarks.gd", "test_navigation_budget.gd",
   "test_crowd_navigation.gd", "test_run_jump_npc.gd", "test_course_officials.gd",
   "test_city_physics.gd", "test_vineyard.gd",
   "test_village_terrain_performance.gd", "test_village_viewpoints.gd",
