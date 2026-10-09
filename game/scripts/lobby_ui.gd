@@ -159,6 +159,7 @@ func _process(_delta: float) -> void:
 		game.menu.scale = Vector2.ONE * factor
 	if game.room != null:
 		host_pause.visible = game.room.connected and not game.room.is_host and game.room.world_paused and not game.paused and not game.dead and not game.finished
+	game.draw_distance_controls.visible = game.playing and game.paused and not game.dead and not game.finished
 	return_button.visible = game.playing
 	if game.mobile_mode:
 		var active_hud = game.playing and not game.paused and not game.dead and not game.finished and not host_pause.visible

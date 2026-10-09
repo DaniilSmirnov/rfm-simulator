@@ -58,6 +58,7 @@ run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_vk_in
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_lobby_ui.gd']);
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_minimap.gd']);
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_resource_cache.gd']);
+run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_draw_distance.gd']);
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_world_loading.gd']);
 run(godot, ['--headless', '--path', project, '--script', 'res://tests/test_network_motion.gd']);
 
