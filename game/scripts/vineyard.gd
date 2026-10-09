@@ -921,6 +921,12 @@ func _mixed_forest(cooperative: bool = false) -> void:
 	stage._detail_batch("VillageForestBerryBushes", bush_mesh, berry_bush_poses, berry_bush_colors)
 	stage._detail_batch("VillageForestBerries", berry_mesh, berry_poses, berry_colors)
 
+func _gravel_detail_allowed(p: Vector3, padding: float, boulder: bool = false) -> bool:
+	if boulder:
+		return _forest_spot_allowed(p, padding)
+	var station = stage.road_s(p)
+	return stage.village_forest_detour(station) and stage.road_distance(p) > stage.road_width(station) * 0.5 + 0.75 + padding and not paved_at(p, padding) and cemetery_clear(p, padding) and crop_clear(p, padding + 1.0) and _point_clear_of_obstacles(p, padding + 0.5)
+
 func _gravel_forest_details(cooperative: bool = false) -> void:
 	# Keep the road and its shoulders clear; fill the nearby woodland on both sides.
 	var random = RandomNumberGenerator.new()
@@ -936,10 +942,10 @@ func _gravel_forest_details(cooperative: bool = false) -> void:
 				await get_tree().process_frame
 			var station = random.randf_range(392.0, 478.0)
 			var side_value = -1.0 if attempt % 2 == 0 else 1.0
-			var lateral = random.randf_range(10.0, 26.0)
+			var lateral = random.randf_range(10.0, 26.0) if kind == "Boulders" else random.randf_range(3.5, 10.0)
 			var point = stage.at(station) + stage.side(station) * side_value * lateral
 			var radius = random.randf_range(0.9, 1.5) if kind == "Boulders" else 0.4
-			if not _forest_spot_allowed(point, radius) or not stage.rock_hit(point, point, radius + 0.3, false).is_empty():
+			if not _gravel_detail_allowed(point, radius, kind == "Boulders") or not stage.rock_hit(point, point, radius + 0.3, false).is_empty():
 				continue
 			point.y = stage.terrain_surface_height(point)
 			var yaw = random.randf() * TAU
@@ -960,12 +966,15 @@ func _gravel_forest_details(cooperative: bool = false) -> void:
 		stage._detail_batch("VillageGravel" + kind, mesh, poses, colors)
 
 func village_detail_allowed(p: Vector3) -> bool:
-	var s = stage.road_s(p)
+	var nearest = stage.village_main_nearest(p)
+	var s = float(nearest.s)
 	if not stage.village(s):
 		return false
 	if paved_at(p, 0.9):
 		return false
-	var distance = stage.road_distance(p)
+	var distance = float(nearest.distance)
+	if stage.road_distance(p) <= stage.road_width(stage.road_s(p)) * 0.5 + 0.9:
+		return false
 	# Main cobblestone road, kerbs and both sidewalks.
 	if distance <= 6.65:
 		return false
@@ -991,7 +1000,7 @@ func _village_natural_details(cooperative: bool = false) -> void:
 	var grass_colors: Array = []
 	var stone_poses: Array = []
 	var stone_colors: Array = []
-	for i in range(2600):
+	for i in range(4400):
 		if cooperative and i % 200 == 0:
 			await get_tree().process_frame
 		var s = detail_rng.randf_range(VILLAGE_START + 3.0, VILLAGE_END - 3.0)
@@ -1005,9 +1014,9 @@ func _village_natural_details(cooperative: bool = false) -> void:
 		grass_colors.append(stage.shared_grass_color(detail_rng.randf()))
 		village_detail_positions.append(p)
 		village_grass_count += 1
-		if village_grass_count >= 720:
+		if village_grass_count >= 1200:
 			break
-	for i in range(1400):
+	for i in range(2400):
 		if cooperative and i % 200 == 0:
 			await get_tree().process_frame
 		var s = detail_rng.randf_range(VILLAGE_START + 4.0, VILLAGE_END - 4.0)
@@ -1021,7 +1030,7 @@ func _village_natural_details(cooperative: bool = false) -> void:
 		stone_colors.append(stage.shared_stone_color(detail_rng.randf_range(-0.10, 0.10)))
 		village_detail_positions.append(p)
 		village_stone_count += 1
-		if village_stone_count >= 150:
+		if village_stone_count >= 260:
 			break
 	stage._detail_batch("VillageGrass", stage._grass_mesh(), grass_poses, grass_colors)
 	stage._detail_batch("VillageStones", stage.shared_stone_mesh(), stone_poses, stone_colors)
@@ -1201,7 +1210,7 @@ func _village_landmarks() -> void:
 	var cafe = Node3D.new()
 	cafe.name = "VillageCafeTerrace"
 	stage.add_child(cafe)
-	cafe.position = stage.village_main_at(335.0) + stage.village_main_side(335.0) * -10.5
+	cafe.position = stage.village_main_at(335.0) + stage.village_main_side(335.0) * -12.0
 	cafe.position.y = stage.ground(cafe.position)
 	cafe.rotation.y = atan2(-stage.village_main_direction(335.0).x, -stage.village_main_direction(335.0).z)
 	for index in range(2):
@@ -1210,10 +1219,13 @@ func _village_landmarks() -> void:
 	for x in [-2.25, 2.25]:
 		_solid(cafe, Vector3(x, 1.84, 0), Vector3(0.10, 3.7, 0.10), "landmark")
 		Props.box(cafe, Vector3(x, 1.84, 0), Vector3(0.10, 3.7, 0.10), Color("5e635f"))
+	var awning = Node3D.new()
+	cafe.add_child(awning)
+	awning.position.y = 3.65
+	awning.rotation.z = -0.06
 	for stripe in range(8):
 		var color = Color("e5d1b0") if stripe % 2 == 0 else Color("9a4e47")
-		var strip = Props.box(cafe, Vector3(-2.0 + stripe * 0.56, 3.65, 0), Vector3(0.56, 0.07, 6.9), color)
-		strip.rotation.z = -0.06
+		var strip = Props.box(awning, Vector3(-1.96 + stripe * 0.56, 0, 0), Vector3(0.56, 0.07, 6.9), color)
 	for z in [-3.1, 3.1]:
 		Props.box(cafe, Vector3(0, 3.66, z), Vector3(4.6, 0.1, 0.11), Color("635b4f"))
 	for x in [-1.8, 1.8]:
@@ -1224,10 +1236,13 @@ func _village_landmarks() -> void:
 			var angle = flower * TAU / 5.0
 			Props.box(cafe, pot + Vector3(cos(angle) * 0.2, 1.0, sin(angle) * 0.2), Vector3(0.13, 0.16, 0.13), Color("c6726c"))
 	_batch(cafe, cafe.transform)
+	village_prop_count += 8
 
 func _village_props() -> void:
 	for station in [335.0, 405.0, 465.0, 540.0]:
 		for side_value in [-1.0, 1.0]:
+			if station == 335.0 and side_value == -1.0:
+				continue # Cafe furniture occupies this frontage.
 			var root = Node3D.new()
 			root.name = "VillageStreetFurniture_%d_%d" % [int(station), int(side_value)]
 			stage.add_child(root)

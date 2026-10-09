@@ -554,7 +554,7 @@ func _build_terrain(cooperative: bool = false) -> void:
 func draw_base_road_surface(s: float) -> bool:
 	# The village has its own explicit cobblestone mesh; do not leave asphalt
 	# underneath it where it can show through between individual stones.
-	return not village(s) or (urban and s >= 381.0 and s <= 488.0)
+	return not village(s) or (urban and ((s >= 381.0 and s <= 488.0) or s >= 569.0))
 
 func road_width(s: float) -> float:
 	if desert:
@@ -568,6 +568,9 @@ func road_surface_vertex(s: float, lateral: float) -> Vector3:
 	var surface_lift = 0.04
 	if urban and s > 370.0 and s < 500.0:
 		surface_lift *= smoothstep(382.0, 386.0, s) * (1.0 - smoothstep(484.0, 488.0, s))
+	if urban and s >= 569.0 and s <= 573.0:
+		# Overlap the final cobblestone row, then meet the vineyard road smoothly.
+		surface_lift = lerpf(-0.015, 0.04, smoothstep(569.0, 573.0, s))
 	p.y = ground(p) + surface_lift
 	return p
 
