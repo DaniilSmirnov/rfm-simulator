@@ -163,7 +163,7 @@ func gravel_relief(pos: Vector3, s: float) -> float:
 	var blend = smoothstep(386.0, 398.0, s) * (1.0 - smoothstep(474.0, 484.0, s))
 	var bank = lateral * sin(s * 0.095) * 0.10
 	var bumps = sin(s * 1.8) * 0.08 + sin(s * 0.77 + lateral * 1.5) * 0.10
-	var ramps = gravel_profile(s, 423.0, 7.0) * 1.15 + gravel_profile(s, 450.0, 6.0) * 0.85
+	var ramps = gravel_profile(s, 423.0, 12.0) * 1.15 + gravel_profile(s, 450.0, 12.0) * 0.85
 	var wheel_rut = exp(-pow((absf(lateral) - 0.80) / 0.24, 2.0))
 	var ruts = -wheel_rut * (0.09 + 0.04 * sin(s * 0.6))
 	var puddles = -gravel_profile(s, 407.0, 2.2) * 0.13 * exp(-pow((lateral - 0.5) / 0.7, 2.0))
@@ -215,6 +215,9 @@ func ground(pos: Vector3) -> float:
 		var road_height = p.y + roughness(s)
 		if village_forest_detour(s):
 			road_height += gravel_relief(pos, s)
+		if s > 370.0 and s < 500.0:
+			var connection = smoothstep(382.0, 390.0, s) * (1.0 - smoothstep(480.0, 488.0, s))
+			road_height = lerpf(2.0775, road_height, connection)
 		# The distant landscape must not change elevation when the nearest road
 		# switches from the countryside to the lower village forest bypass.
 		var height = lerpf(road_height, village_hill_height(pos), smoothstep(road_width(s) * 0.5 + 1.0, 24.0, distance))
@@ -247,14 +250,14 @@ func ground(pos: Vector3) -> float:
 	return height
 
 func village_country_relief(s: float) -> float:
-	return gravel_profile(s, 94.0, 16.0) * 0.65 - gravel_profile(s, 126.0, 14.0) * 0.35 + gravel_profile(s, 224.0, 18.0) * 0.80 + gravel_profile(s, 620.0, 17.0) * 0.70 + gravel_profile(s, 748.0, 15.0) * 0.95 - gravel_profile(s, 786.0, 16.0) * 0.35
+	return gravel_profile(s, 94.0, 32.0) * 0.65 - gravel_profile(s, 126.0, 28.0) * 0.35 + gravel_profile(s, 224.0, 36.0) * 0.80 + gravel_profile(s, 620.0, 34.0) * 0.70 + gravel_profile(s, 748.0, 30.0) * 0.95 - gravel_profile(s, 786.0, 32.0) * 0.35
 
 func village_forest_microrelief(pos: Vector3) -> float:
 	# Geographic mask, independent of nearest route segment: no switching cliffs.
 	var s = -pos.z
 	var edge = absf(pos.x - village_main_at(clampf(s, 0, LENGTH)).x)
 	var mask = smoothstep(270.0, 310.0, s) * (1.0 - smoothstep(570.0, 620.0, s)) * smoothstep(36.0, 58.0, edge)
-	return (sin(pos.x * 0.13) * sin(pos.z * 0.15) * 0.28 + sin(pos.x * 0.31 + pos.z * 0.16) * 0.14) * mask
+	return (sin(pos.x * 0.13) * sin(pos.z * 0.15) * 0.28 + sin(pos.x * 0.31 + pos.z * 0.16) * 0.14 + sin(pos.z * 0.035 + pos.x * 0.02) * 0.45) * mask
 
 func village_hill_height(pos: Vector3) -> float:
 	var station = clampf(-pos.z, 0.0, LENGTH - 0.001)
@@ -264,7 +267,7 @@ func village_hill_height(pos: Vector3) -> float:
 	var hillside = (sqrt(excess * excess + 1296.0) - 36.0) * 0.045
 	var village_blend = smoothstep(250.0, 320.0, station) * (1.0 - smoothstep(550.0, 640.0, station))
 	var road_blend = smoothstep(190.0, 300.0, station) * (1.0 - smoothstep(570.0, 710.0, station))
-	var axis_height = axis.y - (1.0 - road_blend) * (sin(station / 14.0) * 0.32 + gravel_profile(station, 178.0, 9.0) * 1.1 + gravel_profile(station, 686.0, 6.5) * 1.25 + village_country_relief(station))
+	var axis_height = axis.y - (1.0 - road_blend) * (sin(station / 14.0) * 0.32 + gravel_profile(station, 178.0, 14.0) * 1.1 + gravel_profile(station, 686.0, 16.0) * 1.25)
 	return axis_height + hillside * (1.0 - village_blend) + sin(pos.x * 0.016 + pos.z * 0.010) * minf(hillside * 0.08, 0.20) * (1.0 - village_blend) + village_forest_microrelief(pos)
 
 # Trees must touch the *rendered* terrain, not the continuous ground()
@@ -537,7 +540,7 @@ func _build_terrain(cooperative: bool = false) -> void:
 func draw_base_road_surface(s: float) -> bool:
 	# The village has its own explicit cobblestone mesh; do not leave asphalt
 	# underneath it where it can show through between individual stones.
-	return not village(s) or village_forest_detour(s)
+	return not village(s) or (urban and s >= 381.0 and s <= 488.0)
 
 func road_width(s: float) -> float:
 	if desert:
@@ -548,13 +551,16 @@ func road_width(s: float) -> float:
 
 func road_surface_vertex(s: float, lateral: float) -> Vector3:
 	var p = at(s) + side(s) * lateral
-	p.y = ground(p) + 0.04
+	var surface_lift = 0.04
+	if urban and s > 370.0 and s < 500.0:
+		surface_lift *= smoothstep(382.0, 386.0, s) * (1.0 - smoothstep(484.0, 488.0, s))
+	p.y = ground(p) + surface_lift
 	return p
 
 func road_surface_color(p: Vector3, s: float) -> Color:
 	if desert:
 		return Color("d4a475").lightened(sin(p.z * 0.25 + p.x * 0.10) * 0.025)
-	var base = Color("708a9c") if winter else ((Color("857763") if village_forest_detour(s) else Color("525757")) if urban else Color("9d896b"))
+	var base = Color("708a9c") if winter else ((Color("857763") if s >= 381.0 and s <= 489.0 else Color("525757")) if urban else Color("9d896b"))
 	# Continuous low-frequency shading instead of a random colour per triangle.
 	var shade = sin(p.x * 0.17 + p.z * 0.11) * 0.025 + sin(p.z * 0.29 - p.x * 0.07) * 0.015
 	if village_forest_detour(s):
@@ -1191,7 +1197,7 @@ func village_main_at(s: float) -> Vector3:
 	var village_blend = smoothstep(190.0, 300.0, s) * (1.0 - smoothstep(570.0, 710.0, s))
 	var country_x = sin(s / 85.0) * 34.0 + sin(s / 43.0) * 10.0
 	var village_x = sin((s - 300.0) / 100.0) * 14.0
-	var height = 2.0 + (1.0 - village_blend) * (7.0 + sin(s / 95.0) * 3.0 + s * 0.004 + sin(s / 14.0) * 0.32 + gravel_profile(s, 178.0, 9.0) * 1.1 + gravel_profile(s, 686.0, 6.5) * 1.25 + village_country_relief(s))
+	var height = 2.0 + (1.0 - village_blend) * (7.0 + sin(s / 95.0) * 3.0 + s * 0.004 + sin(s / 14.0) * 0.32 + gravel_profile(s, 178.0, 14.0) * 1.1 + gravel_profile(s, 686.0, 16.0) * 1.25 + village_country_relief(s))
 	return Vector3(lerpf(country_x, village_x, village_blend), height, -s)
 
 func village_main_direction(s: float) -> Vector3:
