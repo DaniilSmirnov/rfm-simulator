@@ -740,7 +740,7 @@ func _forest_spot_allowed(p: Vector3, padding: float = 0.0) -> bool:
 		return false
 	var distance = stage.road_distance(p)
 	var minimum = 8.0 if stage.village_forest_detour(s) else (48.0 if stage.village(s) else 92.0)
-	if distance < minimum + padding or distance > 145.0:
+	if distance < minimum + padding or distance > (185.0 if stage.village_forest_detour(s) else 145.0):
 		return false
 	for spot in stage.clearings:
 		if stage.flat(p).distance_to(stage.flat(spot)) < 12.0 + padding:
@@ -759,7 +759,7 @@ func _mixed_forest(cooperative: bool = false) -> void:
 		var s = forest_rng.randf_range(VILLAGE_START - 52.0, VILLAGE_END + 52.0)
 		var side_value = -1.0 if forest_rng.randi() % 2 == 0 else 1.0
 		# Close the gaps near the gravel stretch; outside it preserve village spacing.
-		var lateral = forest_rng.randf_range(12.0, 145.0) if stage.village_forest_detour(s) else forest_rng.randf_range(48.0, 142.0)
+		var lateral = forest_rng.randf_range(12.0, 185.0) if stage.village_forest_detour(s) else forest_rng.randf_range(48.0, 142.0)
 		var p = stage.at(s) + stage.side(s) * side_value * lateral + stage.direction(s) * forest_rng.randf_range(-4.0, 4.0)
 		if not _forest_spot_allowed(p, 2.0):
 			continue
