@@ -503,56 +503,62 @@ func _vineyards(cooperative: bool = false) -> void:
 
 # Low flowering rows replace the start-side vines; no trellises or grapes.
 func _lavender_fields(cooperative: bool = false) -> void:
-	var foliage: Array = []
-	var foliage_colors: Array = []
-	var flowers: Array = []
-	var flower_colors: Array = []
-	var stems: Array = []
-	var stem_colors: Array = []
-	var leaf_mesh = SphereMesh.new()
-	leaf_mesh.radial_segments = 6
-	leaf_mesh.rings = 3
-	var flower_mesh = SphereMesh.new()
-	flower_mesh.radial_segments = 6
-	flower_mesh.rings = 3
-	var stem_mesh = CylinderMesh.new()
-	stem_mesh.bottom_radius = 1.0
-	stem_mesh.top_radius = 0.75
-	stem_mesh.height = 1.0
-	stem_mesh.radial_segments = 5
-	stem_mesh.rings = 1
+	# Continuous rounded flowering bands, divided into local culling tiles.
+	var builders = {}
+	var profile = [Vector2(-0.95, 0.02), Vector2(-0.65, 0.28), Vector2(-0.30, 0.53), Vector2(0, 0.60), Vector2(0.30, 0.53), Vector2(0.65, 0.28), Vector2(0.95, 0.02)]
 	for side_value in [-1.0, 1.0]:
 		for row in range(18):
 			if cooperative:
 				await get_tree().process_frame
+			var previous: Array[Vector3] = []
 			for station in range(18, 286, 2):
 				var s = float(station) + (0.4 if row % 2 else 0.0)
 				var p = stage.village_main_at(s) + stage.village_main_side(s) * side_value * (13.0 + row * 4.0)
-				var blocked = stage.road_distance(p) < 6.0 or -p.z < 12.0 or -p.z >= VILLAGE_START - 10.0
+				var blocked = stage.road_distance(p) < 7.0 or -p.z < 12.0 or -p.z >= VILLAGE_START - 10.0
 				for parking in stage.clearings:
-					blocked = blocked or stage.flat(p).distance_to(stage.flat(parking)) < 10.0
+					blocked = blocked or stage.flat(p).distance_to(stage.flat(parking)) < 11.0
 				if blocked:
+					previous.clear()
 					continue
-				p.y = _crop_height(p) - 0.015
+				p.y = _crop_height(p)
 				_register_crop(p)
 				lavender_positions.append(p)
 				lavender_count += 1
-				var yaw = atan2(-stage.village_main_direction(s).x, -stage.village_main_direction(s).z)
-				var basis = stage.terrain_basis(p, yaw, _crop_height)
-				foliage.append(Transform3D(basis.scaled(Vector3(0.62, 0.30, 0.90)), p + basis * Vector3(0, 0.15, 0)))
-				foliage_colors.append(Color("617660").lightened(float((station + row) % 5) * 0.015))
-				for spike in range(5):
-					var angle = spike * TAU / 5.0 + row * 0.7
-					var base = p + basis * Vector3(cos(angle) * 0.19, 0, sin(angle) * 0.28)
-					base.y = _crop_height(base) - 0.02
-					var height = 0.52 + float(posmod(station + row + spike, 5)) * 0.035
-					stems.append(Transform3D(basis.scaled(Vector3(0.012, height, 0.012)), base + basis * Vector3(0, height * 0.5, 0)))
-					stem_colors.append(Color("697b51"))
-					flowers.append(Transform3D(basis.scaled(Vector3(0.13, 0.26, 0.13)), base + basis * Vector3(0, height, 0)))
-					flower_colors.append(Color("8053a6").lerp(Color("b28bc9"), float(posmod(station * 3 + row + spike, 7)) / 9.0))
-	stage._detail_batch("LavenderFoliage", leaf_mesh, foliage, foliage_colors)
-	stage._detail_batch("LavenderStems", stem_mesh, stems, stem_colors)
-	stage._detail_batch("LavenderFlowers", flower_mesh, flowers, flower_colors)
+				var section: Array[Vector3] = []
+				for shape in profile:
+					var vertex = p + stage.village_main_side(s) * shape.x
+					vertex.y = _crop_height(vertex) + shape.y * (1.0 + sin(s * 0.47 + row) * 0.035)
+					section.append(vertex)
+				if not previous.is_empty():
+					var tile = Vector2i(floor(p.x / 64.0), floor(p.z / 64.0))
+					if not builders.has(tile):
+						var builder = SurfaceTool.new()
+						builder.begin(Mesh.PRIMITIVE_TRIANGLES)
+						builders[tile] = builder
+					var builder: SurfaceTool = builders[tile]
+					for strip in range(profile.size() - 1):
+						var color = Color("526849") if strip == 0 or strip == profile.size() - 2 else Color("8654b5").lerp(Color("b089d0"), (sin(s * 0.08 + row) + 1.0) * 0.15)
+						for vertex in [previous[strip], section[strip + 1], section[strip], previous[strip], previous[strip + 1], section[strip + 1]]:
+							builder.set_color(color)
+							builder.set_uv(Vector2(vertex.x, vertex.z) * 0.85)
+							builder.add_vertex(vertex)
+				previous = section
+	var material = StandardMaterial3D.new()
+	material.vertex_color_use_as_albedo = true
+	material.vertex_color_is_srgb = true
+	material.albedo_texture = preload("res://textures/nature/lavender.svg")
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	for tile in builders:
+		var builder: SurfaceTool = builders[tile]
+		builder.index()
+		builder.generate_normals()
+		var node = MeshInstance3D.new()
+		node.name = "LavenderBands_%d_%d" % [tile.x, tile.y]
+		node.mesh = builder.commit()
+		node.material_override = material
+		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		stage.add_child(node)
+	stage.woodland_details.LavenderBands = lavender_count
 
 func _roadside_station_allowed(s: float, buffer: float = 8.0) -> bool:
 	return s < VILLAGE_START - buffer or s > VILLAGE_END + buffer

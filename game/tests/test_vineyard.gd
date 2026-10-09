@@ -25,7 +25,7 @@ func run() -> void:
 	check(stage.shared_tree_mesh(0).resource_path.ends_with("tree_trunk.tres") and stage.shared_stone_mesh().resource_path.ends_with("stone.tres"), "summer stage uses external tree and stone geometry")
 	check(stage.city.vine_count > 1000 and stage.get_node_or_null("VillageChurch") != null, "vineyard stage includes vines and church")
 	check(stage.city.lavender_count > 4000, "start side contains dense lavender rows")
-	check(stage.woodland_details.get("LavenderFlowers", 0) == stage.city.lavender_count * 5, "lavender flower spikes use spatial instance batches")
+	check(stage.woodland_details.get("LavenderBands", 0) == stage.city.lavender_count, "lavender flowers form spatially divided bands")
 	var lavender_clear = true
 	for p in stage.city.lavender_positions:
 		lavender_clear = lavender_clear and -p.z < 300.0 and stage.road_distance(p) >= 6.0
@@ -58,10 +58,18 @@ func run() -> void:
 	for station in [407.0, 412.0, 463.0, 469.0]:
 		check(stage.get_node_or_null("GravelPuddle_%d" % int(station)) != null, "gravel has water in physical depressions")
 
-	var lavender_tiles = stage.find_children("LavenderFlowers_Tile_*", "MultiMeshInstance3D", false, false)
+	var lavender_tiles = stage.find_children("LavenderBands_*", "MeshInstance3D", false, false)
 	var thuja_tiles = stage.find_children("VillageThujaLower_Tile_*", "MultiMeshInstance3D", false, false)
 	check(lavender_tiles.size() > 8 and thuja_tiles.size() > 4, "lavender and thuja use spatially culled instance tiles")
-	check(lavender_tiles[0].visibility_range_end == 110 and thuja_tiles[0].visibility_range_end == 160, "small flowers and trees have bounded drawing ranges")
+	check(lavender_tiles[0].material_override.albedo_texture != null and thuja_tiles[0].visibility_range_end == 160, "lavender has a fine texture and trees have bounded drawing ranges")
+	var bands_touch_terrain = true
+	for tile in lavender_tiles:
+		var vertices = tile.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+		for index in range(0, vertices.size(), 29):
+			var v: Vector3 = vertices[index]
+			var gap = v.y - stage.terrain_surface_height(v)
+			bands_touch_terrain = bands_touch_terrain and gap >= 0.015 and gap <= 0.63
+	check(bands_touch_terrain, "lavender bands follow the rendered terrain")
 	var microdetail_tiles = stage.find_children("CityDetail_*_no_shadow", "MultiMeshInstance3D", false, false)
 	check(microdetail_tiles.size() > 4 and microdetail_tiles[0].cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF, "paving and thin decorative geometry omit shadow passes")
 	var grape_positions = stage.collectibles.filter(func(item): return item.get("name", "") == "виноград")
