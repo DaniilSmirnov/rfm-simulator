@@ -46,6 +46,9 @@ func capture(game: Node, index: int, name: String) -> void:
 		cameras[index].far = 400
 		target = game.stage.at(290)
 		cameras[index].position = game.stage.at(260) + Vector3(4, 32, 18)
+	elif index == 1 and game.stage.winter:
+		preload("res://tools/export_winter_screenshots.gd").frame_overview(game.stage, cameras[index])
+		target = game.stage.at(255) + Vector3(0, 1.0, 0)
 	elif index == 1 and game.stage.urban:
 		cameras[index].far = 500
 		target = game.stage.village_main_at(435) + game.stage.village_main_side(435) * 20.0
