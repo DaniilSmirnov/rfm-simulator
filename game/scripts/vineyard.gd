@@ -774,6 +774,28 @@ func _mixed_forest(cooperative: bool = false) -> void:
 		mixed_tree_count += 1
 		if mixed_tree_count >= 3000:
 			break
+	# A non-colliding distant silhouette hides the square edge of the playable
+	# terrain. Separate instances let visibility culling retain the near forest.
+	var horizon_rng = RandomNumberGenerator.new()
+	horizon_rng.seed = 71020269
+	var horizon_trees: Array = []
+	for attempt in range(900):
+		if horizon_trees.size() >= 240:
+			break
+		var z = horizon_rng.randf_range(-560.0, -310.0)
+		var x = (188.0 + horizon_rng.randf_range(-3.5, 3.5)) * (-1.0 if attempt % 2 == 0 else 1.0)
+		var point = Vector3(x, 0, z)
+		if stage.road_distance(point) < 20.0 or not cemetery_clear(point, 4.0):
+			continue
+		point.y = stage.terrain_surface_height(point) - 0.05
+		horizon_trees.append({"position": point, "height": horizon_rng.randf_range(13.0, 22.0), "shade": horizon_rng.randf_range(-0.08, 0.02)})
+	for layer in range(4):
+		var horizon_poses: Array = []
+		var horizon_colors: Array = []
+		for tree in horizon_trees:
+			horizon_poses.append(stage.shared_tree_pose(tree.position, float(tree.height), layer))
+			horizon_colors.append(stage.shared_tree_color(layer, float(tree.shade), false))
+		stage._detail_batch("VillageHorizonTreeLayer%d" % layer, stage.shared_tree_mesh(layer), horizon_poses, horizon_colors)
 	for layer in range(4):
 		var poses: Array = []
 		var colors: Array = []
