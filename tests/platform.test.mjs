@@ -224,6 +224,9 @@ test('VK invite opens a real DOM dialog and calls the picker only after its nati
  assert.ok(doc.find('Выбрать друга в VK'));
  doc.find('Выбрать друга в VK').click();
  await new Promise(resolve=>setImmediate(resolve));
+ assert.deepEqual(calls.map(x=>x[0]),['VKWebAppInit','VKWebAppGetFriends'],'selecting a friend must not launch another dialog without a click');
+ assert.equal(doc.find('Отправить приглашение').disabled,false);
+ await doc.find('Отправить приглашение').click();
  assert.deepEqual(calls.map(x=>x[0]),['VKWebAppInit','VKWebAppGetFriends','VKWebAppShowRequestBox']);
  assert.deepEqual(JSON.parse(JSON.stringify(calls[1][1])),{multi:false});
  assert.equal(calls[2][1].uid,4567);
@@ -246,6 +249,9 @@ test('unsupported native VK friend picker leaves a usable room link and share fa
  doc.find('Выбрать друга в VK').click();
  await new Promise(resolve=>setImmediate(resolve));
  assert.ok(doc.body.children.length===1,'dialog stays available after unsupported Bridge call');
+ assert.equal(doc.find('Отправить приглашение').disabled,true);
+ await doc.find('Отправить приглашение').click();
+ assert.equal(calls.some(([method])=>method==='VKWebAppShowRequestBox'),false);
  assert.ok(doc.find('Поделиться ссылкой через VK'));
  doc.find('Поделиться ссылкой через VK').click();
  await new Promise(resolve=>setImmediate(resolve));
@@ -254,6 +260,30 @@ test('unsupported native VK friend picker leaves a usable room link and share fa
  doc.find('Скопировать ссылку на комнату').click();
  await new Promise(resolve=>setImmediate(resolve));
  assert.deepEqual(copied,['https://vk.com/app54809523#rfm_room_AABB22']);
+});
+test('VK invitation cancellation, retry and duplicate clicks keep truthful state',async()=>{
+ const doc=fakeDocument(),calls=[];
+ let selection={users:[{id:4567}]},finish;
+ const {context:c}=await setup('vk',{document:doc,RallyBoot:{setStage(){}},
+  vkBridge:{send:method=>{
+   calls.push(method);
+   if(method==='VKWebAppGetFriends')return Promise.resolve(selection);
+   if(method==='VKWebAppShowRequestBox')return new Promise(resolve=>{finish=resolve;});
+   return Promise.resolve({});
+  }},fetch:async()=>Response.json({profile:{platform:'vk',nickname:'fan',verified:true},entitlements:{skus:[]},session:{token:'verified',expires_at:Math.floor(Date.now()/1000)+3600}})});
+ await c.RallyPlatform.inviteFriend('ABC123');
+ await doc.find('Выбрать друга в VK').click();
+ const pending=doc.find('Отправить приглашение').click();
+ await doc.find('Отправить приглашение').click();
+ assert.equal(calls.filter(v=>v==='VKWebAppShowRequestBox').length,1);
+ assert.equal(doc.find('Выбрать друга в VK').disabled,true);
+ finish({success:false});await pending;
+ assert.ok(doc.find('Отправка не подтверждена. Попробуй снова или поделись ссылкой.'));
+ assert.equal(doc.find('Отправить приглашение').disabled,false);
+ selection={users:[]};await doc.find('Выбрать друга в VK').click();
+ assert.equal(doc.find('Отправить приглашение').disabled,true,'cancelling a new selection clears the previous recipient');
+ await c.RallyPlatform.inviteFriend('AABB22');
+ assert.equal(doc.body.children.length,1,'reopening replaces the stale room dialog');
 });
 test('VK invitation launch keys route only correctly formatted room ids',async()=>{
  const fakeServer=async()=>Response.json({profile:{platform:'vk',nickname:'fan',verified:true},entitlements:{skus:[]},session:{token:'verified',expires_at:Math.floor(Date.now()/1000)+3600}});

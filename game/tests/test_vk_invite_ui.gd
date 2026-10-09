@@ -28,6 +28,16 @@ func run() -> void:
 	game.platform_service.profile = {"platform": "vk", "verified": true}
 	game._update_invite_button()
 	check(game.invite_button.visible, "authenticated VK stage shows invitation button")
+	# Exercise the actual Button.pressed connection, not just button visibility.
+	game.room.busy = true
+	game.invite_button.pressed.emit()
+	check(game.invite_status.visible and game.invite_status.text.contains("Подожди"), "press shows a visible status instead of silently returning while room is busy")
+	game.room.busy = false
+	game.invite_after_room_create = true
+	game.invite_button.disabled = true
+	game.room.request_kind = "create"
+	game.room._response(HTTPRequest.RESULT_SUCCESS, 409, PackedStringArray(), JSON.stringify({"error": "Комната недоступна"}).to_utf8_buffer())
+	check(not game.invite_after_room_create and not game.invite_button.disabled and game.invite_status.visible and game.invite_status.text.contains("Комната недоступна"), "failed room creation displays the server error and permits retry")
 	game.dead = true
 	game._update_invite_button()
 	check(not game.invite_button.visible, "invitation hidden after death")

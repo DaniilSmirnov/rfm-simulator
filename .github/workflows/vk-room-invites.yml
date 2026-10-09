@@ -7,6 +7,11 @@ on:
       - game/scripts/platform_service.gd
       - game/scripts/game.gd
       - game/scripts/room.gd
+      - game/tests/test_room_origin.gd
+      - game/scripts/room_origin_probe.gd
+      - game/scripts/room_origin_probe.tscn
+      - scripts/build-web.mjs
+      - scripts/test-platform-web.mjs
       - game/tests/test_vk_invite_ui.gd
       - tests/platform.test.mjs
       - .github/workflows/vk-room-invites.yml
@@ -35,4 +40,5 @@ jobs:
           const godot = await getGodot();
           run(godot, ['--headless', '--editor', '--path', 'game', '--import']);
           run(godot, ['--headless', '--path', 'game', '--script', 'res://tests/test_vk_invite_ui.gd']);
+          run(godot, ['--headless', '--path', 'game', '--script', 'res://tests/test_room_origin.gd']);
           JS

@@ -18,6 +18,7 @@ function signedLaunch() {
  return new URLSearchParams({...params,sign:createHmac('sha256',testEnv.VK_APP_SECRET).update(canonical).digest('base64url')}).toString();
 }
 let authorizedRoomRequests=0;
+let roomOriginProbeRequests=0;
 let platformNetworkRequests=0;
 const server=createServer(async(req,res)=>{
  const path=new URL(req.url,'http://localhost').pathname;
@@ -32,7 +33,14 @@ const server=createServer(async(req,res)=>{
  if(isVk && path==='/api/rooms') {
   try {
    await authenticateSession(new Request('http://localhost/api/rooms',{headers:req.headers}),testEnv);
-   authorizedRoomRequests++;res.writeHead(200,{'Content-Type':'application/json'}).end('{}');
+   let raw=''; for await(const chunk of req)raw+=chunk;
+   if(raw.includes('"car_model"') && raw.includes('"name"')) {
+    roomOriginProbeRequests++;
+    res.writeHead(409,{'Content-Type':'application/json'}).end('{"error":"VK_ROOM_ORIGIN_PROBE_REJECTED"}');
+   } else {
+    authorizedRoomRequests++;
+    res.writeHead(200,{'Content-Type':'application/json'}).end('{}');
+   }
   } catch(error) {res.writeHead(error.status||500).end();}
   return;
  }
@@ -41,7 +49,10 @@ const server=createServer(async(req,res)=>{
  if (assetPath === null) {res.writeHead(404).end();return;}
  try {
   let body=await readFile(join(root,target,assetPath||'index.html'));
-  if(!assetPath)body=Buffer.from(body.toString().replace('RallyDevice.configure(GODOT_CONFIG);','GODOT_CONFIG.args.unshift("res://scripts/platform_probe.tscn"); RallyDevice.configure(GODOT_CONFIG);'));
+  if(!assetPath){
+  const scene=new URL(req.url,'http://localhost').searchParams.has('room_probe')?'res://scripts/room_origin_probe.tscn':'res://scripts/platform_probe.tscn';
+  body=Buffer.from(body.toString().replace('RallyDevice.configure(GODOT_CONFIG);',`GODOT_CONFIG.args.unshift("${scene}"); RallyDevice.configure(GODOT_CONFIG);`));
+ }
   res.writeHead(200,{'Content-Type':path.endsWith('.js')?'application/javascript':!assetPath?'text/html':path.endsWith('.svg')?'image/svg+xml':'application/octet-stream'}).end(body);
  } catch {res.writeHead(404).end();}
 });
@@ -83,6 +94,25 @@ try {
   }
   await page.locator('#status').waitFor({state:'detached',timeout:10000});
   console.log('PLATFORM_WEB_PASS',target,mobile?'mobile':'desktop',profile.nickname);
+  await context.close();
+ }
+ if(isVk){
+  // A real exported Godot HTTPRequest must reach the same-origin Worker.
+  // Previous tests issued JS fetch calls only and missed the localhost default.
+  const context=await browser.newContext({viewport:{width:1280,height:720}});
+  const page=await context.newPage();
+  const logs=[];
+  page.on('console',msg=>{logs.push(msg.text());});
+  page.on('pageerror',error=>{logs.push('PAGEERROR '+String(error));});
+  await page.route('**/vk-bridge.js',route=>route.fulfill({contentType:'application/javascript',body:'window.vkBridge={subscribe:()=>{},send:async method=>{if(method!=="VKWebAppInit")throw Error("Unexpected bridge method");return {result:true};}};'}));
+  await page.goto('http://127.0.0.1:'+server.address().port+mount+'?'+signedLaunch()+'&room_probe=1');
+  const timeout=Date.now()+60000;
+  while(!logs.some(x=>x.includes('VK_ROOM_ORIGIN_PASS')||x.includes('ROOM_ORIGIN_FAIL')) && Date.now()<timeout){
+   await page.waitForTimeout(250);
+  }
+  assert.ok(logs.some(x=>x.includes('VK_ROOM_ORIGIN_PASS')),'Godot room origin smoke failed: '+logs.slice(-20).join('\n'));
+  assert.equal(roomOriginProbeRequests,1,'real Godot HTTPRequest must reach verified same-origin room creation');
+  console.log('ROOM_ORIGIN_WEB_PASS',target);
   await context.close();
  }
 } finally {await browser.close();await new Promise(resolve=>server.close(resolve));}

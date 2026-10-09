@@ -182,32 +182,61 @@
         typeof error?.message === 'string' ? error.message : 'недоступно в этом VK-клиенте';
       status.textContent = label+': '+reason+'. Используй ссылку ниже.';
     };
-    const pickFriend = button('Выбрать друга в VK',() => {
+    let selectedFriend = null, nativeBusy = false;
+    const setNativeBusy = value => {
+      nativeBusy = value;
+      pickFriend.disabled = value;
+      sendInvite.disabled = value || !selectedFriend;
+      share.disabled = value;
+    };
+    const sendInvite = button('Отправить приглашение',async () => {
+      if (nativeBusy || !selectedFriend) return;
+      setNativeBusy(true);
+      status.textContent = 'Подтверди отправку приглашения в VK…';
+      try {
+        // A separate click preserves activation for the second native dialog.
+        const result = await vkBridge.send('VKWebAppShowRequestBox',{
+          uid:selectedFriend.id,message:'Заходи смотреть ралли со мной в Rally Fans Simulator!',
+          requestKey:keyForRoom(id),
+        });
+        status.textContent = result?.success === true ?
+          'Приглашение отправлено! Друг войдёт в комнату '+id+'.' :
+          'Отправка не подтверждена. Попробуй снова или поделись ссылкой.';
+      } catch (error) { vkError('VK не открыл приглашение',error); }
+      finally { setNativeBusy(false); }
+    },true);
+    sendInvite.disabled = true;
+    const pickFriend = button('Выбрать друга в VK',async () => {
+      if (nativeBusy) return;
+      selectedFriend = null;
+      setNativeBusy(true);
       status.textContent = 'Открываем друзей VK…';
-      // Directly inside the browser's user gesture, without fetch()/await.
-      vkBridge.send('VKWebAppGetFriends',{multi:false}).then(selection => {
-        const uid = Number(selection?.users?.[0]?.id);
+      try {
+        // Directly inside the browser's user gesture, without fetch()/await.
+        const selection = await vkBridge.send('VKWebAppGetFriends',{multi:false});
+        const friend = selection?.users?.[0];
+        const uid = Number(friend?.id);
         if (!Number.isSafeInteger(uid) || uid <= 0) {
           status.textContent = 'Друг не выбран. Можно попробовать снова или отправить ссылку.';
           return;
         }
-        status.textContent = 'Подтверди отправку приглашения в VK…';
-        return vkBridge.send('VKWebAppShowRequestBox',{
-          uid,message:'Заходи смотреть ралли со мной в Rally Fans Simulator!',
-          requestKey:keyForRoom(id),
-        }).then(result => {
-          status.textContent = result?.success === true ?
-            'Приглашение отправлено! Друг войдёт в комнату '+id+'.' :
-            'Отправка не подтверждена. Попробуй снова или поделись ссылкой.';
-        });
-      }).catch(error=>vkError('VK не открыл приглашение',error));
-    },true);
-    const share = button('Поделиться ссылкой через VK',() => {
+        selectedFriend = {id:uid};
+        const name = [friend.first_name,friend.last_name].filter(v=>typeof v==='string').join(' ');
+        status.textContent = (name ? 'Выбран: '+name+'. ' : 'Друг выбран. ') +
+          'Нажми «Отправить приглашение».';
+      } catch (error) { vkError('VK не открыл выбор друга',error); }
+      finally { setNativeBusy(false); }
+    });
+    const share = button('Поделиться ссылкой через VK',async () => {
+      if (nativeBusy) return;
+      setNativeBusy(true);
       status.textContent = 'Открываем отправку ссылки…';
-      vkBridge.send('VKWebAppShare',{link}).then(() => {
+      try {
+        await vkBridge.send('VKWebAppShare',{link});
         status.textContent = 'Проверь отправляемую ссылку: она должна содержать '+id+
           '. Некоторые версии VK игнорируют ссылку — в таком случае скопируй её ниже.';
-      }).catch(error=>vkError('VK не открыл отправку ссылки',error));
+      } catch (error) { vkError('VK не открыл отправку ссылки',error); }
+      finally { setNativeBusy(false); }
     });
     const copy = button('Скопировать ссылку на комнату',async()=>{
       try {
@@ -226,7 +255,7 @@
       }
     });
     const close = button('Закрыть',()=>{overlay.remove(); if(inviteDialog===overlay)inviteDialog=null;});
-    panel.append(title,hint,pickFriend,share,urlInput,copy,status,close);
+    panel.append(title,hint,pickFriend,sendInvite,share,urlInput,copy,status,close);
     overlay.append(panel);
     document.body.append(overlay);
     return {status:'opened'};
