@@ -35,9 +35,21 @@ export class RoomState {
     if (host) this.data.host = id;
     return { player: id, token: p.token, host, name: p.name, slot, car_model, stage: this.data.stage ?? 0 };
   }
+  rateLimit(player, action, now, limit, period) {
+    player.limits ??= {};
+    let bucket = player.limits[action];
+    if (!bucket || now >= bucket.until) bucket = player.limits[action] = {count:0, until:now + period};
+    if (bucket.count >= limit) {
+      const error = new RoomError(429, 'Слишком много запросов. Подождите немного.');
+      error.retryAfter = Math.max(1, Math.ceil((bucket.until - now) / 1000));
+      throw error;
+    }
+    bucket.count++;
+  }
   sync(body, now) {
     if (this.data.closed) throw new RoomError(410, 'Создатель вышел. Комната закрыта.');
     const p = this.member(body.token);
+    this.rateLimit(p, "sync", now, 150, 10000);
     const s = body.state;
     if (!s || !vec(s.pos) || !vec(s.car) || !number(s.heading) || !number(s.yaw) || !number(s.pitch) || typeof s.in_car !== 'boolean') throw new RoomError(400, 'Некорректное состояние игрока.');
     const drive_inputs = (Array.isArray(s.drive_inputs) ? s.drive_inputs.slice(0, 96) : []).filter(c =>
@@ -80,6 +92,7 @@ export class RoomState {
   heartbeat(token, now, background = false) {
     if (this.data.closed) throw new RoomError(410, 'Создатель вышел. Комната закрыта.');
     const player = this.member(token);
+    this.rateLimit(player, "heartbeat", now, 30, 60000);
     player.seen = now;
     if (player.id === this.data.host) player.background = background === true;
     return { alive: true };

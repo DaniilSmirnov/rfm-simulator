@@ -45,7 +45,15 @@
       ]
     }
   ],
+  "ratelimits": [
+    {"name":"API_RATE_LIMIT", "namespace_id":"5480952301", "simple":{"limit":6000,"period":60}},
+    {"name":"AUTH_RATE_LIMIT", "namespace_id":"5480952302", "simple":{"limit":120,"period":60}},
+    {"name":"ROOM_ENTRY_RATE_LIMIT", "namespace_id":"5480952303", "simple":{"limit":30,"period":60}},
+    {"name":"STORE_RATE_LIMIT", "namespace_id":"5480952304", "simple":{"limit":120,"period":60}},
+    {"name":"PURCHASE_RATE_LIMIT", "namespace_id":"5480952305", "simple":{"limit":12,"period":60}}
+  ],
   "vars": {
+    "RATE_LIMIT_ENABLED": "true",
     "VK_APP_ID": "54809523",
     "VK_PAYMENTS_MODE": "production"
   },
