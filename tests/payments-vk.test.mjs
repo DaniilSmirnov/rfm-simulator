@@ -166,6 +166,32 @@ test('actual VK test order grants once with SKU and item_price and rejects incon
  }
  assert.equal(data.size,1);
 });
+test('Red Canyon SKU gives VK metadata for 20 votes and ownership only after verified callback',async()=>{
+ const {env,data,restart}=setup();
+ env.VK_PAYMENTS_MODE='production';
+ const store=paymentCatalog(env,'42');
+ const product=store.find(p=>p.sku==='stage_04');
+ assert.equal(product.price,20);
+ assert.equal(product.payment_mode,'production');
+ assert.equal(product.purchase_enabled,true);
+ assert.equal((await accountStore(env,'42')).entitlements.skus.includes('stage_04'),false);
+ const meta=await paymentCallback(signedCallback({notification_type:'get_item',user_id:'42',item:'stage_04'}),env);
+ assert.deepEqual(meta.response,{item_id:'stage_04',title:'Красный каньон',photo_url:'',price:20});
+ assert.equal(data.size,0,'item lookup never grants ownership');
+ const order={notification_type:'order_status_change',order_id:'39393',item_id:'stage_04',item_price:'20',status:'chargeable',user_id:'42'};
+ await assert.rejects(paymentCallback(signedCallback({...order,item_price:'19'}),env));
+ await assert.rejects(paymentCallback(signedCallback({...order,item_id:'stage_03'}),env));
+ assert.equal(data.size,0,'wrong amount and product must not grant canyon');
+ const receipt=await paymentCallback(signedCallback(order),env);
+ assert.deepEqual(receipt,{response:{order_id:39393,app_order_id:39393}});
+ assert.deepEqual(await paymentCallback(signedCallback(order),env),receipt,'replayed callback does not double-charge or corrupt state');
+ restart();
+ assert.deepEqual((await accountStore(env,'42')).entitlements.skus,['stage_04']);
+ assert.deepEqual((await accountStore(env,'43')).entitlements.skus,[]);
+ env.VK_PAYMENTS_MODE='test';
+ assert.deepEqual((await accountStore(env,'42')).entitlements.skus,[],'test mode does not inherit real canyon purchases');
+});
+
 test('legacy numeric item and amount remain compatible with SKU callbacks',async()=>{
  const {env}=setup();
  const legacy={notification_type:'order_status_change_test',order_id:'701',item_id:'2',amount:'1',status:'chargeable'};
@@ -216,7 +242,7 @@ test('production purchases every paid SKU at catalog price; test rights never gr
  env.VK_PAYMENTS_MODE='production';
  assert.deepEqual((await accountStore(env,'42')).entitlements.skus,[]);
  const products=paymentCatalog(env,'44').filter(p=>p.purchase_enabled);
- assert.equal(products.length,9);
+ assert.equal(products.length,10);
  await assert.rejects(paymentCallback(signedCallback(order),env));
  for(const [i,p] of products.entries()){
   const price=p.type==='car'?3:20;
