@@ -44,6 +44,25 @@ static func recovery_speed(target: float, racer: Dictionary) -> float:
 	var loss = absf(float(racer.get("slide", 0.0))) * 0.22 + absf(float(racer.get("slide_speed", 0.0))) * 0.12
 	return target * clampf(1.0 - loss, 0.5, 1.0)
 
+static func line_limit(game, progress: float) -> float:
+	var station: float = game.stage.LENGTH - progress if game.course.pass_index == 2 else progress
+	return game.stage.road_width(station) * 0.5 + 1.4
+
+static func corner_line(game, racer: Dictionary, base: float) -> float:
+	if not racer.get("role", "racer") in ["racer", "zero"]: return base
+	var before: Vector3 = game.race_direction(racer.s)
+	var after: Vector3 = game.race_direction(racer.s + 10.0)
+	var bend = wrapf(atan2(-after.x, -after.z) - atan2(-before.x, -before.z), -PI, PI)
+	var limit = line_limit(game, racer.s)
+	var cut = clampf(-bend * 9.0, -limit, limit)
+	if racer.get("role", "racer") == "zero": cut *= 0.65
+	# Cache obstacle probes: static shoulder checks need not run each physics step.
+	if absf(cut) <= absf(base): return base
+	if absf(racer.s - float(racer.get("cut_station", -100.0))) > 2.0:
+		racer.cut_station = racer.s
+		racer.cut_line = cut if _clear_path(game, racer, cut, 24.0) else base
+	return float(racer.get("cut_line", base))
+
 static func plan(game: Node3D, racer: Dictionary) -> Dictionary:
 	var stage = game.stage
 	var s: float = racer.s
@@ -51,6 +70,7 @@ static func plan(game: Node3D, racer: Dictionary) -> Dictionary:
 	var limit: float = speed_limit(game, racer, s)
 	var current: float = racer.get("line", 0.0) + racer.slide
 	var base = float(racer.track_reference.line) if not racer.track_reference.is_empty() else clampf(nominal(racer, s), -1.45, 1.45)
+	base = corner_line(game, racer, base)
 	var positions: Array[Dictionary] = [{"pos": game.car.position, "speed": 0.0}]
 	for peer in game.room.peers.values():
 		if peer.state != null:
@@ -73,7 +93,7 @@ static func plan(game: Node3D, racer: Dictionary) -> Dictionary:
 		if absf(object.pos.y - center.y) > 4:
 			continue
 		var lateral: float = (object.pos - center).dot(game.race_side(station))
-		if absf(lateral) > MAX_LINE + CLEARANCE:
+		if absf(lateral) > line_limit(game, station) + CLEARANCE:
 			continue
 		# A car pulling away does not require overtaking. Close cars remain
 		# blockers so a leader braking in this frame cannot be rear-ended.
