@@ -250,6 +250,9 @@ var status_label: Label
 var menu: PanelContainer
 var menu_title: Label
 var menu_text: Label
+var draw_distance = preload("res://scripts/draw_distance.gd").new()
+var draw_distance_controls: VBoxContainer
+var draw_distance_buttons: Array[Button] = []
 var start_button: Button
 var minimap: Control
 var engine_audio: AudioStreamPlayer
@@ -411,11 +414,13 @@ func _ready() -> void:
 	cargo.game = self
 	camp_cooking.game = self
 	rng.randomize()
+	draw_distance.load_settings()
 	_setup_input()
 	stage = Stage.new()
 	add_child(stage)
 	if not defer_world:
 		stage.build()
+		draw_distance.apply(stage)
 		world_ready = true
 	print("[RFM] Лёгкое меню: карта будет подготовлена при входе" if defer_world else "[RFM] Рельеф и объекты карты готовы")
 	_build_environment()
@@ -694,6 +699,25 @@ func _build_ui() -> void:
 	menu_text = _label(mv, "", 17)
 	menu_title.hide()
 	menu_text.hide()
+	draw_distance_controls = VBoxContainer.new()
+	draw_distance_controls.name = "DrawDistanceSettings"
+	mv.add_child(draw_distance_controls)
+	_label(draw_distance_controls, "Дальность прорисовки", 17, Color("dfb270"))
+	var distance_row = HBoxContainer.new()
+	distance_row.add_theme_constant_override("separation", 8)
+	draw_distance_controls.add_child(distance_row)
+	for index in range(draw_distance.LABELS.size()):
+		var button = Button.new()
+		button.text = draw_distance.LABELS[index]
+		button.toggle_mode = true
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		button.custom_minimum_size.y = 44
+		button.add_theme_font_size_override("font_size", 17)
+		button.set_pressed_no_signal(index == draw_distance.mode)
+		button.pressed.connect(_set_draw_distance.bind(index))
+		distance_row.add_child(button)
+		draw_distance_buttons.append(button)
+	draw_distance_controls.hide()
 	selection_controls = VBoxContainer.new()
 	selection_controls.add_theme_constant_override("separation", 8)
 	mv.add_child(selection_controls)
@@ -789,6 +813,7 @@ func prepare_world() -> void:
 	loading_world = true
 	loading_screen.show_loading()
 	await stage.build_async(loading_screen.stage_progress)
+	draw_distance.apply(stage)
 	await loading_screen.stage_progress("Зрители и лагерь", 85)
 	await spectators.rebuild(true)
 	await loading_screen.stage_progress("Машина", 95)
@@ -879,6 +904,14 @@ func _invite_friends() -> void:
 		return
 	invite_button.disabled = true
 	platform_service.invite_friend(room.room_id)
+
+func _set_draw_distance(index: int) -> void:
+	draw_distance.mode = clampi(index, draw_distance.NEAR, draw_distance.FAR)
+	draw_distance.apply(stage)
+	for button_index in range(draw_distance_buttons.size()):
+		draw_distance_buttons[button_index].set_pressed_no_signal(button_index == draw_distance.mode)
+	if draw_distance.save_settings() != OK:
+		push_warning("Не удалось сохранить дальность прорисовки")
 
 func _menu_action() -> void:
 	if (dead or finished) and room.connected:
@@ -1557,6 +1590,7 @@ func select_stage(variant: int, hosted_guest: bool = false) -> void:
 	add_child(stage)
 	if not defer_world:
 		stage.build()
+		draw_distance.apply(stage)
 		spectators.rebuild()
 	else:
 		world_ready = false
