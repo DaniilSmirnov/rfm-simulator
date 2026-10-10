@@ -336,3 +336,16 @@ test('room deep link hash restores the exact room id without changing verified V
  }});
  assert.equal((await c.RallyPlatform.getBootstrap()).invite_room,'AB12EF');
 });
+
+test('native room editor transport is local and does not wait for platform authorization',async()=>{
+ const {context:c,forwarded}=await setup('standalone');
+ c.RallyPlatform.target='vk';
+ c.RallyRoomInput={sync:state=>({text:state.text,revision:1})};
+ const r=await c.fetch('/__rally_room_input',{method:'POST',body:JSON.stringify({text:'ABC123'})});
+ assert.deepEqual(await r.json(),{text:'ABC123',revision:1});
+ assert.equal(forwarded.length,0);
+ assert.equal((await c.fetch('/__rally_room_input')).status,405);
+ assert.equal((await c.fetch('/__rally_room_input',{method:'POST',body:'bad'})).status,400);
+ c.RallyPlatform.target='standalone';
+ assert.equal((await c.fetch('/__rally_room_input',{method:'POST',body:'{}'})).status,404);
+});

@@ -11,6 +11,15 @@
       catch { return Response.json({error:'Сессия VK истекла. Откройте игру заново через VK.'}, {status:401}); }
       return networkFetch(authorized);
     }
+    if (url.origin === origin && url.pathname === '/__rally_room_input') {
+      if (request.method !== 'POST') return Response.json({error:'POST required'}, {status:405});
+      if (RallyPlatform.target !== 'vk' || !window.RallyRoomInput) return Response.json({error:'Unavailable'}, {status:404});
+      try {
+        const state = await request.json();
+        if (!state || typeof state !== 'object') return Response.json({error:'Invalid state'}, {status:400});
+        return Response.json(window.RallyRoomInput.sync(state));
+      } catch { return Response.json({error:'Invalid state'}, {status:400}); }
+    }
     if (url.origin === origin && url.pathname === '/__rally_viewport') {
       if (request.method !== 'GET') return Response.json({error:'GET required'}, {status:405});
       if (!window.RallyViewport) return Response.json({error:'Viewport unavailable'}, {status:503});
