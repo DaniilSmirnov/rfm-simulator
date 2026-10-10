@@ -13,7 +13,7 @@ func offer(items: Array, point: Vector3, radius: float, reach: float, action: St
 	items.append({"action": action, "label": label, "value": value, "depth": depth, "aim_error": offset.distance_to(forward * depth) / depth})
 
 func current() -> Dictionary:
-	if not game.playing or game.paused or game.dead or game.finished or game.drink_time >= 0 or game.eat_time >= 0 or (game.room.connected and not game.room.is_host and game.room.world_paused):
+	if not game.playing or game.paused or game.dead or game.finished or game.drink_time >= 0 or game.eat_time >= 0 or (game.room.is_guest() and game.room.world_paused):
 		return {}
 	if game.in_car:
 		return {"action": "car", "label": "Выйти из машины"} if absf(game.speed) <= 1 else {}

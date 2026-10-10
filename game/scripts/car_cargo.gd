@@ -42,7 +42,7 @@ func actor() -> String:
 	return str(context.get("owner", game.chair_owner()))
 
 func available() -> bool:
-	return game.playing and not game.in_car and not game.paused and not game.dead and not game.finished and game.beers < 30 and (not context.is_empty() or (game.drink_time < 0 and game.eat_time < 0))
+	return game.playing and not game.actor_in_car() and not game.paused and not game.dead and not game.finished and game.actor_beers() < 30 and (not context.is_empty() or (game.drink_time < 0 and game.eat_time < 0))
 
 func poses() -> Dictionary:
 	var result = {}
@@ -62,7 +62,7 @@ func point(pose: Dictionary) -> Vector3:
 
 func near(owner: String) -> bool:
 	var cars = poses()
-	return cars.has(owner) and game.walker.distance_to(point(cars[owner])) < 3.3
+	return cars.has(owner) and game.actor_pos().distance_to(point(cars[owner])) < 3.3
 
 # The lid opens in a broad proximity zone; only its rear access area reserves F.
 # Side doors remain usable even when the lid is open for a nearby spectator.
@@ -72,7 +72,7 @@ func at_open_trunk(owner: String) -> bool:
 		return false
 	var pose: Dictionary = cars[owner]
 	var profile = Props.trunk_profile(int(pose.variant))
-	var offset: Vector3 = (game.walker - pose.pos).rotated(Vector3.UP, -float(pose.heading))
+	var offset: Vector3 = (game.actor_pos() - pose.pos).rotated(Vector3.UP, -float(pose.heading))
 	return offset.z >= profile.rear - 0.75 and absf(offset.x) <= profile.half + 0.85
 
 func owner_of(item: Dictionary) -> String:
@@ -105,8 +105,8 @@ func refresh_opened() -> void:
 	var cars = poses()
 	var visitors: Array = []
 	if game.playing and not game.dead and not game.finished:
-		if not game.in_car and game.beers < 30:
-			visitors.append(game.walker)
+		if not game.actor_in_car() and game.actor_beers() < 30:
+			visitors.append(game.actor_pos())
 		for id in game.room.peers:
 			if not context.is_empty() and id == actor():
 				continue
@@ -146,7 +146,7 @@ func take(kind: String) -> bool:
 		return held[owner].kind == kind and not held[owner].returning
 	# Moving an existing item does not produce another box or duplicate equipment.
 	for item in game.packing.items():
-		if (item.kind == kind or (kind == "chairs" and item.kind == "chair")) and owner_of(item) == owner and game.walker.distance_to(item.node.global_position) < 3.5:
+		if (item.kind == kind or (kind == "chairs" and item.kind == "chair")) and owner_of(item) == owner and game.actor_pos().distance_to(item.node.global_position) < 3.5:
 			if game.room.submit("take_gear", {"resource_id": KINDS.find(kind)}):
 				return true
 			held[owner] = {"kind": kind, "owner": owner, "returning": false}
@@ -164,7 +164,7 @@ func take(kind: String) -> bool:
 
 func deploy(kind: String, spot: Vector3, yaw: float) -> bool:
 	var owner = actor()
-	if not available() or game.packing.active() or not held.has(owner) or held[owner].kind != kind or held[owner].returning or game.walker.distance_to(spot) > 5:
+	if not available() or game.packing.active() or not held.has(owner) or held[owner].kind != kind or held[owner].returning or game.actor_pos().distance_to(spot) > 5:
 		return false
 	var existing = game.camp if kind == "table" else (game.grill if kind == "grill" else (game.camp_cooking.fire if kind == "firewood" else (game.camp_cooking.pot if kind == "cauldron" else null)))
 	if existing != null and str(existing.get_meta("gear_owner", owner)) != owner:
@@ -269,7 +269,7 @@ func update(delta: float) -> void:
 			hand_box = Props.gear_box(game.camera, kind, SHOVEL_POSITION if kind == "shovel" else Vector3(0, -0.65, -0.9))
 			if kind == "shovel": hand_box.rotation = SHOVEL_ROTATION
 	if hand_box != null:
-		hand_box.visible = not game.in_car and game.placement_preview == null and not game.dead and not game.finished
+		hand_box.visible = not game.actor_in_car() and game.placement_preview == null and not game.dead and not game.finished
 
 func snapshot() -> Dictionary:
 	refresh_opened()

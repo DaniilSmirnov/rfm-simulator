@@ -1,7 +1,24 @@
-export const MAX_PLAYERS = 8;
-const COLD_SECTIONS = 16;
+import protocol from '../game/data/net_protocol.json' with { type: 'json' };
+import { catalog } from './store.mjs';
+// Limits and the action list come from the protocol file the game reads too.
+export { protocol };
+export const MAX_PLAYERS = protocol.max_players;
+const LIMIT = protocol.limits;
+const COLD_SECTIONS = LIMIT.cold_sections;
 const SECTION = /^[a-z_]{1,24}$/;
-const COMMANDS = new Set(['table', 'chairs', 'grill', 'flag', 'eat', 'rally', 'collect', 'mount_mushroom', 'eat_mushroom', 'eat_berries', 'pack', 'trunk', 'take_gear', 'return_gear', 'firewood', 'cauldron', 'plov_cook', 'eat_plov', 'church_bell', 'dig_snow']);
+const COMMANDS = new Set(protocol.actions);
+// Content counts follow the catalog: a new stage or car needs no server change.
+export const STAGE_COUNT = catalog.filter(p => p.type === 'stage').length;
+export const CAR_COUNT = catalog.filter(p => p.type === 'car').length;
+// The host's world is the game's own snapshot; the server checks its shape:
+// a bounded number of plain top-level keys and a bounded serialized size.
+const WORLD_KEY = /^[a-z_]{1,32}$/;
+const WORLD_KEYS = 96;
+export function validWorld(world) {
+  if (!world || typeof world !== 'object' || Array.isArray(world)) return false;
+  const keys = Object.keys(world);
+  return keys.length <= WORLD_KEYS && keys.every(key => WORLD_KEY.test(key));
+}
 const vec = value => Array.isArray(value) && value.length === 3 && value.every(n => Number.isFinite(n) && Math.abs(n) < 3000);
 const number = n => Number.isFinite(n) && Math.abs(n) < 100000;
 export class RoomError extends Error {
@@ -25,17 +42,25 @@ export class RoomState {
   add(name, now, host = false, options = {}) {
     if (!host && (!this.data.host || this.data.closed)) throw new RoomError(404, 'Комната не найдена или закрыта.');
     if (host && this.data.host) throw new RoomError(409, 'Этот ID занят.');
-    if (Object.keys(this.data.players).length >= MAX_PLAYERS) throw new RoomError(409, 'Комната заполнена: максимум 8 игроков.');
+    if (Object.keys(this.data.players).length >= MAX_PLAYERS) throw new RoomError(409, `Комната заполнена: максимум ${MAX_PLAYERS} игроков.`);
     const used = new Set(Object.values(this.data.players).map(p => p.slot));
     let slot = 0;
     while (used.has(slot)) slot++;
-    const car_model = Number.isSafeInteger(options.car_model) && options.car_model >= 0 && options.car_model < 10 ? options.car_model : slot;
-    if (host) this.data.stage = Number.isSafeInteger(options.stage) ? Math.max(0, Math.min(4, options.stage)) : 0;
+    const car_model = Number.isSafeInteger(options.car_model) && options.car_model >= 0 && options.car_model < CAR_COUNT ? options.car_model : slot;
+    if (host) this.data.stage = Number.isSafeInteger(options.stage) ? Math.max(0, Math.min(STAGE_COUNT - 1, options.stage)) : 0;
     const id = crypto.randomUUID();
-    const p = { id, slot, car_model, token: crypto.randomUUID(), name: String(name || 'Овощ').replace(/[\u0000-\u001f]/g, '').trim().slice(0, 64) || 'Овощ', seen: now, state: null, seq: 0 };
+    const p = { id, slot, car_model, token: crypto.randomUUID(), name: String(name || 'Овощ').replace(/[\u0000-\u001f]/g, '').trim().slice(0, protocol.name_max_length) || 'Овощ', seen: now, state: null, seq: 0, protocol: Number.isSafeInteger(options.protocol) ? options.protocol : 0 };
     this.data.players[id] = p;
     if (host) this.data.host = id;
     return { player: id, token: p.token, host, name: p.name, slot, car_model, stage: this.data.stage ?? 0 };
+  }
+  // A guest's car is simulated by the host as soon as that guest has received
+  // the host's world. Protocol 2 clients cannot opt out afterwards; older
+  // clients keep reporting the flag themselves.
+  driveEnabled(p, s) {
+    if (p.id === this.data.host) return false;
+    if ((p.protocol ?? 0) >= 2) return p.world_seen === true || s.drive_enabled === true;
+    return s.drive_enabled === true;
   }
   rateLimit(player, action, now, limit, period) {
     player.limits ??= {};
@@ -54,16 +79,19 @@ export class RoomState {
     this.rateLimit(p, "sync", now, 150, 10000);
     const s = body.state;
     if (!s || !vec(s.pos) || !vec(s.car) || !number(s.heading) || !number(s.yaw) || !number(s.pitch) || typeof s.in_car !== 'boolean') throw new RoomError(400, 'Некорректное состояние игрока.');
-    const drive_inputs = (Array.isArray(s.drive_inputs) ? s.drive_inputs.slice(0, 96) : []).filter(c =>
-      Number.isSafeInteger(c?.seq) && c.seq > 0 && Number.isSafeInteger(c.ticks) && c.ticks >= 1 && c.ticks <= 12
+    const drive_inputs = (Array.isArray(s.drive_inputs) ? s.drive_inputs.slice(0, LIMIT.drive_inputs_per_sync) : []).filter(c =>
+      Number.isSafeInteger(c?.seq) && c.seq > 0 && Number.isSafeInteger(c.ticks) && c.ticks >= 1 && c.ticks <= LIMIT.ticks_per_input
       && Number.isFinite(c.throttle) && Math.abs(c.throttle) <= 1 && Number.isFinite(c.steer) && Math.abs(c.steer) <= 1 && typeof c.brake === 'boolean')
       .map(({seq,ticks,throttle,steer,brake,recover}) => ({seq,ticks,throttle,steer,brake, ...(recover === true ? {recover: true} : {})}));
-    p.state = { drive_enabled: s.drive_enabled === true, drive_inputs, pos: s.pos, car: s.car, heading: s.heading, tilt: vec(s.tilt) ? s.tilt : [0, s.heading, 0], yaw: s.yaw, pitch: s.pitch, in_car: s.in_car, tow: s.tow === true && !s.in_car, push: vec(s.push) ? s.push.map((n, i) => i === 1 ? 0 : Math.max(-1, Math.min(1, n))) : [0, 0, 0], speed: number(s.speed) ? Math.max(-50, Math.min(50, s.speed)) : 0, beers: Number.isSafeInteger(s.beers) ? Math.max(0, Math.min(100000, s.beers)) : 0, trees: Array.isArray(s.trees) ? s.trees.slice(0, 8).filter(t => Number.isSafeInteger(t?.id) && t.id >= 0 && t.id < 20000 && vec(t.dir)).map(t => ({ id: t.id, dir: t.dir })) : [], lamps: Array.isArray(s.lamps) ? s.lamps.slice(0, 8).filter(t => Number.isSafeInteger(t?.id) && t.id >= 0 && t.id < 512 && vec(t.dir)).map(t => ({ id: t.id, dir: t.dir })) : [], seated: s.seated === true && !s.in_car, running: s.running === true && !s.in_car && s.seated !== true, airborne: s.airborne === true && !s.in_car && s.seated !== true, food_species: ['edible', 'fly_agaric', 'toadstool'].includes(s.food_species) ? s.food_species : 'edible', food_kind: ['meat', 'mushroom', 'berries', 'plov'].includes(s.food_kind) ? s.food_kind : 'meat', eat: Number.isFinite(s.eat) ? Math.max(-1, Math.min(3.6, s.eat)) : -1, beer: Math.max(-1, Math.min(3.3, Number(s.beer) || 0)) };
+    p.state = { drive_enabled: this.driveEnabled(p, s), drive_inputs, pos: s.pos, car: s.car, heading: s.heading, tilt: vec(s.tilt) ? s.tilt : [0, s.heading, 0], yaw: s.yaw, pitch: s.pitch, in_car: s.in_car, tow: s.tow === true && !s.in_car, push: vec(s.push) ? s.push.map((n, i) => i === 1 ? 0 : Math.max(-1, Math.min(1, n))) : [0, 0, 0], speed: number(s.speed) ? Math.max(-50, Math.min(50, s.speed)) : 0, beers: Number.isSafeInteger(s.beers) ? Math.max(0, Math.min(100000, s.beers)) : 0, trees: Array.isArray(s.trees) ? s.trees.slice(0, LIMIT.object_requests_per_sync).filter(t => Number.isSafeInteger(t?.id) && t.id >= 0 && t.id < 20000 && vec(t.dir)).map(t => ({ id: t.id, dir: t.dir })) : [], lamps: Array.isArray(s.lamps) ? s.lamps.slice(0, LIMIT.object_requests_per_sync).filter(t => Number.isSafeInteger(t?.id) && t.id >= 0 && t.id < 512 && vec(t.dir)).map(t => ({ id: t.id, dir: t.dir })) : [], seated: s.seated === true && !s.in_car, running: s.running === true && !s.in_car && s.seated !== true, airborne: s.airborne === true && !s.in_car && s.seated !== true, food_species: ['edible', 'fly_agaric', 'toadstool'].includes(s.food_species) ? s.food_species : 'edible', food_kind: ['meat', 'mushroom', 'berries', 'plov'].includes(s.food_kind) ? s.food_kind : 'meat', eat: Number.isFinite(s.eat) ? Math.max(-1, Math.min(protocol.durations.eat, s.eat)) : -1, beer: Math.max(-1, Math.min(protocol.durations.drink, Number(s.beer) || 0)) };
     p.seen = now;
     p.state_time = now;
     this.trackColdRevisions(p, body);
     if (p.id === this.data.host) {
-      if (body.world && typeof body.world === 'object' && !Array.isArray(body.world)) { this.data.world = body.world; this.data.world_time = now; }
+      if (body.world !== undefined) {
+        if (!validWorld(body.world)) throw new RoomError(400, 'Некорректный снимок мира.');
+        this.data.world = body.world; this.data.world_time = now;
+      }
       // Slowly changing world sections arrive only when their revision changes.
       const revisions = body.world?.cold_revs;
       if (body.cold && typeof body.cold === 'object' && !Array.isArray(body.cold) && revisions && typeof revisions === 'object') {
@@ -73,12 +101,12 @@ export class RoomState {
           (this.data.cold_revs ??= {})[section] = revisions[section];
         }
       }
-      const ack = new Set(Array.isArray(body.ack) ? body.ack.slice(0, 64) : []);
+      const ack = new Set(Array.isArray(body.ack) ? body.ack.slice(0, LIMIT.acknowledgements_per_sync) : []);
       this.data.commands = this.data.commands.filter(c => !ack.has(c.id));
     } else {
-      for (const c of (Array.isArray(body.commands) ? body.commands.slice(0, 8) : [])) {
+      for (const c of (Array.isArray(body.commands) ? body.commands.slice(0, LIMIT.commands_per_sync) : [])) {
         if (!Number.isSafeInteger(c.seq) || c.seq <= p.seq || !COMMANDS.has(c.action)) continue;
-        if (this.data.commands.length >= 64) throw new RoomError(429, 'Подожди выполнения предыдущих действий.');
+        if (this.data.commands.length >= LIMIT.queued_commands) throw new RoomError(429, 'Подожди выполнения предыдущих действий.');
         const placement = {};
         // Point actions such as digging carry no yaw; a missing yaw means 0, an invalid one rejects the spot.
         const yaw = c.placement?.yaw === undefined ? 0 : c.placement.yaw;
@@ -107,6 +135,8 @@ export class RoomState {
           : this.data.world)
       : this.data.world;
     // The host authored the world and never reads it back.
+    // From the first world a guest receives, the host simulates its car.
+    if (!isHost && world && typeof world === 'object') p.world_seen = true;
     if (isHost) world = undefined;
     else if (world && typeof world === 'object' && this.data.cold) {
       if (p.cold_mode !== 'split') world = Object.assign({}, ...Object.values(this.data.cold), world);

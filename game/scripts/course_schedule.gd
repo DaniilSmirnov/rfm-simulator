@@ -9,7 +9,7 @@ var zero_index = 0
 var active_id = -1
 
 func update(game, delta: float) -> void:
-	if not game.playing or game.paused or game.dead or game.finished or (game.room.connected and not game.room.is_host):
+	if not game.playing or game.paused or game.dead or game.finished or (game.room.is_guest()):
 		return
 	match phase:
 		"countdown", "intermission":

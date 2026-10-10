@@ -22,7 +22,7 @@ func _verify() -> void:
 	deadline = Time.get_ticks_msec() + 15000
 	while game.room.busy and Time.get_ticks_msec() < deadline:
 		await get_tree().process_frame
-	if game.room.lobby_status.text != "VK_ROOM_ORIGIN_PROBE_REJECTED":
-		push_error("ROOM_ORIGIN_FAIL: request did not reach same-origin room API; status=" + game.room.lobby_status.text)
+	if game.room.ui.status.text != "VK_ROOM_ORIGIN_PROBE_REJECTED":
+		push_error("ROOM_ORIGIN_FAIL: request did not reach same-origin room API; status=" + game.room.ui.status.text)
 		return
 	print("VK_ROOM_ORIGIN_PASS: Godot HTTPRequest reached same-origin /api/rooms using verified VK session")

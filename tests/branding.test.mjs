@@ -69,6 +69,6 @@ test('authored game content has no third-party vehicle brands or named crews', a
   assert.ok(sponsors.every(sponsor => sponsor === 'Rally Fans Map'));
   assert.match(props, /name = "SportGrille"/);
   assert.match(props, /"FANS MAP"/);
-  const room = await readFile(new URL('../game/scripts/room.gd', import.meta.url), 'utf8');
+  const room = await readFile(new URL('../game/scripts/room_lobby.gd', import.meta.url), 'utf8');
   assert.match(room, /placeholder_text = "Твой ник"/);
 });

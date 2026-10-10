@@ -88,9 +88,9 @@ func run() -> void:
 		"lavender plateau before the village, collectible grapes in the vineyards after it")
 	city.free()
 	guest.select_player_car(2)
-	host.room.request_kind = "create"
+	host.room.transport.request_kind = "create"
 	host.room._response(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), JSON.stringify({"player": "host", "token": "h", "host": true, "room": "ABC123", "slot": 0, "car_model": 5, "stage": 1}).to_utf8_buffer())
-	guest.room.request_kind = "join"
+	guest.room.transport.request_kind = "join"
 	guest.room._response(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), JSON.stringify({"player": "guest", "token": "g", "host": false, "slot": 1, "car_model": 2, "stage": 1}).to_utf8_buffer())
 	check(guest.stage.winter and guest.playing and not guest.selection_controls.visible, "guest enters host winter stage before gameplay")
 	check(guest.stage.trails.is_empty(), "winter stage keeps its original forest without spectator footpaths")

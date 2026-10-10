@@ -41,6 +41,7 @@ var alpine_life: RefCounted
 
 const VillageStage = preload("res://scripts/village_stage.gd")
 const StageSolids = preload("res://scripts/stage_solids.gd")
+const WorldSync = preload("res://scripts/world_sync.gd")
 var village: RefCounted
 # Static and destructible scenery (houses, walls, lamps); empty on most stages.
 var solids: Node3D
@@ -897,6 +898,39 @@ func update_fallen(delta: float) -> void:
 			var y = h * (0.32 if layer == 0 else 0.47 + (layer - 1) * 0.18)
 			var slot: Vector2i = forest_chunk_slots[index]
 			forest_layers[layer][slot.x].set_instance_transform(slot.y, Transform3D(basis * Basis.from_scale(Vector3(radius, height, radius)), trees[index] - forest_chunk_centers[slot.x] + Vector3(0, 0.2, 0) + basis * Vector3(0, y, 0)))
+
+# Shared-world providers this stage contributes to the room snapshot
+# (see world_sync.gd). Collision-relevant parts are applied before a guest
+# replays its own driving input.
+func sync_providers(game) -> Array:
+	var list: Array = []
+	var lamps_snapshot = func() -> Dictionary:
+		return {"city_lamps": solids.snapshot() if solids != null else [], "church_bell": solids.bell.snapshot() if solids != null and solids.bell != null else {}}
+	var lamps_apply = func(f: Dictionary, _t: float) -> void:
+		if solids == null:
+			return
+		solids.apply_snapshot(f.get("city_lamps", []))
+		if solids.bell != null:
+			solids.bell.apply_snapshot(f.get("church_bell", {}))
+			for item in f.get("city_lamps", []):
+				game.lamp_requests.erase(int(item.id))
+	list.append(WorldSync.provider("city", "city", ["city_lamps", "church_bell"], lamps_snapshot, lamps_apply, true))
+	if winter:
+		var snow_snapshot = func() -> Dictionary:
+			return {"snow": snow.snapshot(), "snow_dug": snow.dug_snapshot()}
+		var snow_apply = func(f: Dictionary, _t: float) -> void:
+			snow.authoritative = false
+			snow.apply_snapshot(f.get("snow", []))
+			snow.apply_dug_snapshot(f.get("snow_dug", []))
+		list.append(WorldSync.provider("snow", "snow", ["snow", "snow_dug"], snow_snapshot, snow_apply, true))
+	var trees_snapshot = func() -> Dictionary:
+		return {"fallen": tree_snapshot()}
+	var trees_apply = func(f: Dictionary, _t: float) -> void:
+		apply_trees(f.get("fallen", []))
+		for fallen_tree in f.get("fallen", []):
+			game.tree_requests.erase(int(fallen_tree.id))
+	list.append(WorldSync.provider("trees", "trees", ["fallen"], trees_snapshot, trees_apply, true))
+	return list
 
 func tree_snapshot() -> Array:
 	var result = []

@@ -1,4 +1,5 @@
 extends Node3D
+const NetProtocol = preload("res://scripts/net_protocol.gd")
 
 var cargo = preload("res://scripts/car_cargo.gd").new()
 var camp_cooking = preload("res://scripts/camp_cooking.gd").new()
@@ -61,6 +62,10 @@ var meat_prop: Node3D
 var eat_time = -1.0
 var eat_committed = false
 const EAT_DURATION = 3.6
+# Shared actions a guest triggers straight from the keyboard (the rest need a
+# target and go through placement or the interaction prompt).
+const GUEST_KEY_ACTIONS = ["table", "chairs", "grill", "flag", "rally", "collect", "mount_mushroom", "eat_mushroom", "eat_berries", "firewood", "cauldron", "church_bell", "dig_snow"]
+const EAT_ACTIONS = {"meat": "eat", "mushroom": "eat_mushroom", "berries": "eat_berries", "plov": "eat_plov"}
 var beer_prop: Node3D
 var avatar_variant = 0
 var rope_mesh: MeshInstance3D
@@ -92,6 +97,25 @@ var placement_preview: Node3D
 var placement_yaw = 0.0
 var placement_valid = false
 var placement_material: StandardMaterial3D
+
+# The player an action is performed for: the local player, or a guest whose
+# command the host is running (shared_actions.gd sets `acting`).
+var acting = null
+
+func actor_pos() -> Vector3:
+	return acting.pos if acting != null else walker
+
+func actor_in_car() -> bool:
+	return acting.in_car if acting != null else in_car
+
+func actor_beers() -> int:
+	return acting.beers if acting != null else beers
+
+func actor_yaw() -> float:
+	return acting.yaw if acting != null else view_yaw
+
+func actor_position() -> Vector3:
+	return acting.position() if acting != null else player_position()
 
 func chair_owner() -> String:
 	return room.player_id if room != null and room.connected else "local"
@@ -147,7 +171,7 @@ func valid_furniture_spot(spot: Vector3, kind: String, ignored_owner: String = "
 
 func dig_snow(spot: Vector3) -> void:
 	var owner = cargo.actor()
-	if in_car or paused or dead or finished or not cargo.held.has(owner) or cargo.held[owner].kind != "shovel" or walker.distance_to(spot) > 4.0: return
+	if actor_in_car() or paused or dead or finished or not cargo.held.has(owner) or cargo.held[owner].kind != "shovel" or actor_pos().distance_to(spot) > 4.0: return
 	var local_actor = owner == chair_owner()
 	if local_actor and cargo.shovel_busy(): return
 	# The room server keeps a spot only together with a yaw.
@@ -220,7 +244,7 @@ func confirm_placement() -> void:
 	var kind = placement_kind
 	var spot = placement_preview.position
 	var yaw = placement_yaw
-	if room.connected and not room.is_host:
+	if room.is_guest():
 		room.submit(kind, {"pos": room.a(spot), "yaw": yaw})
 	else:
 		match kind:
@@ -416,7 +440,7 @@ func update_mobile_safe_area(delta: float) -> void:
 	mobile_safe_timer = 0.25
 	# Like profile bootstrap, this is intercepted locally by the browser shell.
 	# The minimal engine has neither eval nor JavaScript object interfaces.
-	mobile_safe_http.request(room.server + "/__rally_viewport")
+	mobile_safe_http.request(room.transport.server + "/__rally_viewport")
 
 func _mobile_safe_response(result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
 	if result != HTTPRequest.RESULT_SUCCESS or code != 200:
@@ -448,7 +472,7 @@ func _set_paused(value: bool) -> void:
 	menu_title.text = "Перерыв на природе"
 	menu_text.text = "Пауза. Ралли, мангал и таймеры остановлены.\n\nHome — вернуть машину на дорогу.\nF8 / F9 — показать застревание / вылет.\n\nПродолжить — кнопкой или Esc."
 	start_button.text = "ПРОДОЛЖИТЬ"
-	menu_text.text = "Выезд приостановлен. Продолжить или вернуться в меню." if not room.connected or room.is_host else "Твоя пауза. Остальные игроки продолжают выезд."
+	menu_text.text = "Выезд приостановлен. Продолжить или вернуться в меню." if room.is_authority() else "Твоя пауза. Остальные игроки продолжают выезд."
 	_update_invite_button()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if paused or mobile_mode else Input.MOUSE_MODE_CAPTURED
 
@@ -529,8 +553,8 @@ func _ready() -> void:
 	platform_service = preload("res://scripts/platform_service.gd").new()
 	platform_service.profile_ready.connect(func(profile):
 		if profile.get("platform", "standalone") != "standalone":
-			room.name_input.text = str(profile.get("nickname", ""))
-			room.name_input.editable = false
+			room.ui.name_input.text = str(profile.get("nickname", ""))
+			room.ui.name_input.editable = false
 		for i in range(car_choice.items.size()):
 			car_choice.items[i] = Props.PLAYER_MODELS[i].name
 		for i in range(stage_choice.items.size()):
@@ -920,7 +944,7 @@ func prepare_world() -> void:
 	loading_screen.hide_loading()
 
 func start_game() -> void:
-	if platform_service != null and (not platform_service.can_use("car", car_choice.selected) or not platform_service.can_use("stage", stage_choice.selected, room.connected and not room.is_host)):
+	if platform_service != null and (not platform_service.can_use("car", car_choice.selected) or not platform_service.can_use("stage", stage_choice.selected, room.is_guest())):
 		toast("Выбранный контент недоступен в VK. Дождитесь загрузки прав или выберите бесплатный вариант.")
 		return
 	if playing:
@@ -935,7 +959,7 @@ func start_game() -> void:
 	course.apply_snapshot({})
 	racing = false
 	selection_controls.hide()
-	room.lobby.hide()
+	room.ui.panel.hide()
 	start_button.show()
 	menu.hide()
 	course_label.show()
@@ -976,9 +1000,9 @@ func _join_invited_room() -> void:
 		return
 	var requested: String = platform_service.invite_room
 	platform_service.invite_room = ""
-	if requested.length() != 6 or not requested.is_valid_hex_number():
+	if not NetProtocol.valid_room_id(requested.to_upper()):
 		return
-	room.id_input.text = requested
+	room.ui.id_input.text = requested
 	room.connect_room(requested)
 
 func _invite_friends() -> void:
@@ -1002,7 +1026,7 @@ func _invite_friends() -> void:
 		room.connect_room("")
 		if not room.busy:
 			invite_after_room_create = false
-			invite_status.text = "Не удалось создать комнату: " + room.lobby_status.text
+			invite_status.text = "Не удалось создать комнату: " + room.ui.status.text
 			invite_status.show()
 			toast(invite_status.text)
 		return
@@ -1058,7 +1082,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event.is_action_pressed("pause_demo") or event.is_action_pressed("placement_cancel"):
 			cancel_placement()
 			return
-		if not paused and not dead and not finished and not (room.connected and not room.is_host and room.world_paused):
+		if not paused and not dead and not finished and not (room.is_guest() and room.world_paused):
 			if event.is_action_pressed("interact") or event.is_action_pressed("placement_confirm") or event.is_action_pressed(placement_kind):
 				confirm_placement()
 				return
@@ -1080,7 +1104,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion and not mobile_mode:
 		view_yaw -= event.relative.x * 0.0025
 		view_pitch = clampf(view_pitch - event.relative.y * 0.0025, -1.15, 1.1)
-	if drink_time >= 0 or eat_time >= 0 or (room.connected and not room.is_host and room.world_paused):
+	if drink_time >= 0 or eat_time >= 0 or (room.is_guest() and room.world_paused):
 		return
 	if event.is_action_pressed("jump") and not in_car:
 		jump()
@@ -1095,8 +1119,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("eat_berries"):
 		eat_foraged("berries")
 		return
-	for shared_action in room.SHARED_ACTIONS:
-		if shared_action not in ["eat", "eat_plov", "plov_cook", "pack", "trunk", "take_gear", "return_gear"] and event.is_action_pressed(shared_action) and room.submit(shared_action):
+	# A guest's key press becomes a command the host performs for them.
+	for shared_action in GUEST_KEY_ACTIONS:
+		if InputMap.has_action(shared_action) and event.is_action_pressed(shared_action) and room.submit(shared_action):
 			return
 	if event.is_action_pressed("interact"):
 		_toggle_car()
@@ -1126,7 +1151,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		else:
 			toast("Возврат на СУ недоступен во время заездов.")
 	elif event is InputEventKey and event.pressed and not event.echo:
-		if room.connected and not room.is_host:
+		if room.is_guest():
 			return
 		if event.physical_keycode == KEY_F8:
 			spawn_racer("stuck")
@@ -1155,14 +1180,14 @@ func _process(delta: float) -> void:
 	if soundscape != null:
 		soundscape.update(delta)
 	camp_cooking.animate_flames(Time.get_ticks_msec() / 1000.0)
-	if not playing or paused or dead or finished or (room.connected and not room.is_host and room.world_paused):
+	if not playing or paused or dead or finished or (room.is_guest() and room.world_paused):
 		return
-	if not room.connected or room.is_host:
+	if room.is_authority():
 		elapsed += delta
 		course.update(self, delta)
 	elif course.phase in ["countdown", "intermission"]:
 		course.remaining = maxf(0, course.remaining - delta)
-	stage.snow.authoritative = not room.connected or room.is_host
+	stage.snow.authoritative = room.is_authority()
 	if stage.winter:
 		stage.snow.update(delta)
 	stage.update_fallen(delta)
@@ -1185,11 +1210,11 @@ func _process(delta: float) -> void:
 	_update_placement()
 	Props.animate_wheels(car)
 	cargo.update(delta)
-	camp_cooking.update(delta, room.connected and not room.is_host)
-	spectators.update(elapsed, delta, room.connected and not room.is_host)
-	stage.officials.update(self, delta, room.connected and not room.is_host)
+	camp_cooking.update(delta, room.is_guest())
+	spectators.update(elapsed, delta, room.is_guest())
+	stage.officials.update(self, delta, room.is_guest())
 	foraging.update_visuals()
-	if not room.connected or room.is_host:
+	if room.is_authority():
 		_update_racers(delta)
 		for racer in racers:
 			Props.animate_wheels(racer.node)
@@ -1207,7 +1232,7 @@ func _process(delta: float) -> void:
 	_update_hud()
 	engine_audio.pitch_scale = 0.75 + absf(speed) / 18.0
 	engine_audio.volume_db = -21 if in_car else -35
-	if not room.connected or room.is_host:
+	if room.is_authority():
 		_check_finish()
 	if capture_mode and elapsed > 1.3:
 		capture_mode = false
@@ -1217,7 +1242,7 @@ func _process(delta: float) -> void:
 		get_tree().quit()
 
 func _update_sobriety(delta: float) -> void:
-	if not playing or paused or dead or finished or (room.connected and not room.is_host and room.world_paused):
+	if not playing or paused or dead or finished or (room.is_guest() and room.world_paused):
 		return
 	if beers < 30:
 		sober_remaining = 0.0
@@ -1323,7 +1348,7 @@ func _drive(delta: float) -> void:
 
 func knock_tree(index: int, direction_hint: Vector3) -> void:
 	if stage.fell(index, direction_hint):
-		if room.connected and not room.is_host:
+		if room.is_guest():
 			tree_requests[index] = direction_hint.normalized()
 		toast("Дерево падает!")
 
@@ -1352,7 +1377,7 @@ func contact_blocked(start: Vector3, end: Vector3, driving: bool) -> bool:
 	for person in people:
 		if Motion.swept_hit(start + Vector3(0, 0.7, 0), end + Vector3(0, 0.7, 0), person + Vector3(0, 0.7, 0), 1.55 if driving else 0.6):
 			if end.distance_to(person) <= start.distance_to(person):
-				if driving and absf(speed) > 5 and (not room.connected or room.is_host):
+				if driving and absf(speed) > 5 and (room.is_authority()):
 					die("Легковушка сбила участника вашей компании.")
 				return true
 	return false
@@ -1489,29 +1514,29 @@ func _toggle_car() -> void:
 		toast("Подойди к своей машине, чтобы сесть.")
 
 func near_camp() -> bool:
-	return camp != null and player_position().distance_to(camp.position) < 7
+	return camp != null and actor_position().distance_to(camp.position) < 7
 
 func nearby_drink_source() -> bool:
 	return near_camp() or (spectators != null and spectators.nearby_table(player_position()) >= 0)
 
 func food_source_group() -> int:
-	if not in_car and near_camp() and grill != null:
+	if not actor_in_car() and near_camp() and grill != null:
 		return -1 if cook_time >= 35 and grill_servings > 0 else -2
-	if not in_car and spectators != null:
-		return spectators.nearby_grill(player_position())
+	if not actor_in_car() and spectators != null:
+		return spectators.nearby_grill(actor_position())
 	return -2
 
 func can_eat_meat() -> bool:
 	return playing and not paused and not dead and not finished and not in_car and eat_time < 0 and drink_time < 0 and food_source_group() != -2
 
 func place_table(spot: Vector3 = Vector3.INF, yaw: float = 0.0) -> bool:
-	if in_car:
+	if actor_in_car():
 		return false
 	var moving = spot != Vector3.INF
 	if camp != null and not moving:
 		return false
 	if not moving:
-		spot = walker + Vector3(-sin(view_yaw), 0, -cos(view_yaw)) * 2.5
+		spot = actor_pos() + Vector3(-sin(actor_yaw()), 0, -cos(actor_yaw())) * 2.5
 	if not valid_furniture_spot(spot, "table"):
 		return false
 	if camp == null:
@@ -1526,14 +1551,14 @@ func place_table(spot: Vector3 = Vector3.INF, yaw: float = 0.0) -> bool:
 	return true
 
 func place_chairs(spot: Vector3 = Vector3.INF, yaw: float = 0.0, owner: String = "") -> bool:
-	if in_car:
+	if actor_in_car():
 		return false
 	if owner == "":
 		owner = chair_owner()
 	if spot == Vector3.INF:
 		if personal_chairs.has(owner):
 			return false
-		spot = camp.position + Vector3(-1.6, 0, 0.7) if near_camp() else walker + Vector3(-sin(view_yaw), 0, -cos(view_yaw)) * 2.5
+		spot = camp.position + Vector3(-1.6, 0, 0.7) if near_camp() else actor_pos() + Vector3(-sin(actor_yaw()), 0, -cos(actor_yaw())) * 2.5
 	if not valid_furniture_spot(spot, "chairs", owner):
 		return false
 	apply_chair(owner, spot, yaw)
@@ -1555,7 +1580,7 @@ func place_flag(spot: Vector3 = Vector3.INF, yaw: float = 0.0, owner: String = "
 	var moving = spot != Vector3.INF
 	if owner == "":
 		owner = flag_owner()
-	if not replicated and (in_car or not moving or flag_count(owner) >= FLAGS_PER_PLAYER):
+	if not replicated and (actor_in_car() or not moving or flag_count(owner) >= FLAGS_PER_PLAYER):
 		return false
 	if not valid_furniture_spot(spot, "flag"):
 		return false
@@ -1568,12 +1593,12 @@ func place_flag(spot: Vector3 = Vector3.INF, yaw: float = 0.0, owner: String = "
 
 func start_grill(spot: Vector3 = Vector3.INF, yaw: float = 0.0, replicated: bool = false) -> bool:
 	var moving = spot != Vector3.INF
-	if not replicated and in_car:
+	if not replicated and actor_in_car():
 		return false
 	if cooking and not moving:
 		return false
 	if not moving:
-		spot = camp.position + Vector3(0.3, 0, -2.4) if camp != null else walker + Vector3(-sin(view_yaw), 0, -cos(view_yaw)) * 2.5
+		spot = camp.position + Vector3(0.3, 0, -2.4) if camp != null else actor_pos() + Vector3(-sin(actor_yaw()), 0, -cos(actor_yaw())) * 2.5
 	if not replicated and not valid_furniture_spot(spot, "grill"):
 		return false
 	if grill != null:
@@ -1816,17 +1841,17 @@ func eat_foraged(kind: String, source: int = -2) -> bool:
 	return true
 
 func commit_meat(source_group: int = -2) -> bool:
-	if in_car:
+	if actor_in_car():
 		return false
 	var source = source_group
 	if source == -2:
 		source = eat_source_group if eat_source_group != -2 else food_source_group()
 	if source == -1:
-		if grill == null or (not near_camp() and player_position().distance_to(grill.position) > 4) or cook_time < 35 or grill_servings <= 0:
+		if grill == null or (not near_camp() and actor_position().distance_to(grill.position) > 4) or cook_time < 35 or grill_servings <= 0:
 			return false
 		grill_servings -= 1
 		Props.set_grill_servings(grill, grill_servings)
-	elif spectators == null or source < 0 or source >= spectators.groups.size() or player_position().distance_to(spectators.groups[source].grill.position) > 4 or not spectators.consume_serving(source):
+	elif spectators == null or source < 0 or source >= spectators.groups.size() or actor_position().distance_to(spectators.groups[source].grill.position) > 4 or not spectators.consume_serving(source):
 		return false
 	eaten = true
 	toast("Шашлык удался. Осталось %d шампуров." % grill_servings if source == -1 else "У NPC нашлась порция шашлыка. Приятного аппетита!")
@@ -1843,7 +1868,7 @@ func _update_eating(delta: float) -> void:
 	Props.pose_food(meat_prop, eat_time, eat_kind)
 	if not eat_committed and eat_time >= 2.6:
 		eat_committed = true
-		if not room.connected or room.is_host:
+		if room.is_authority():
 			if eat_kind == "meat":
 				commit_meat()
 			elif eat_kind == "plov":
@@ -1851,7 +1876,7 @@ func _update_eating(delta: float) -> void:
 			else:
 				foraging.consume(eat_kind, "", forage_source)
 		else:
-			room.submit("eat" if eat_kind == "meat" else "eat_" + eat_kind, {"source": eat_source_group if eat_kind == "meat" else forage_source})
+			room.submit(EAT_ACTIONS[eat_kind], {"source": eat_source_group if eat_kind == "meat" else forage_source})
 	if eat_time >= EAT_DURATION:
 		_cancel_eat()
 
@@ -1870,7 +1895,7 @@ func start_rally() -> bool:
 	return course.phase == "racing"
 
 func spawn_course_car(role: String, id: int, zero_index: int = 0) -> void:
-	if dead or finished or (room.connected and not room.is_host):
+	if dead or finished or (room.is_guest()):
 		return
 	var node = Props.course_car(role, zero_index)
 	var racer = _add_course_vehicle(node, id, "pass", 0, role, zero_index)
@@ -1912,7 +1937,7 @@ func _add_course_vehicle(node: Node3D, id: int, kind: String, variant: int, role
 	return racer
 
 func spawn_racer(forced: String = "") -> void:
-	if course.phase != "racing" or rally_spawn_count >= RALLY_CREW_LIMIT or dead or finished or (room.connected and not room.is_host):
+	if course.phase != "racing" or rally_spawn_count >= RALLY_CREW_LIMIT or dead or finished or (room.is_guest()):
 		return
 	racing = true
 	var kind = forced
@@ -2490,7 +2515,7 @@ func count_racer(racer: Dictionary) -> void:
 func knock_solid(contact: Dictionary, velocity: Vector3) -> void:
 	if contact.get("kind", "") != "lamp" or velocity.length() <= 5:
 		return
-	if room.connected and not room.is_host:
+	if room.is_guest():
 		lamp_requests[int(contact.id)] = velocity
 	else:
 		stage.solids.knock_lamp(int(contact.id), velocity)

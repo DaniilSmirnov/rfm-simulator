@@ -40,7 +40,7 @@ func active() -> bool:
 	return game != null and game.playing and not game.paused and not game.dead and not game.finished
 
 func world_blocked() -> bool:
-	return game.room.connected and not game.room.is_host and game.room.world_paused
+	return game.room.is_guest() and game.room.world_paused
 
 func _process(_delta: float) -> void:
 	game.fit_mobile_dialogs()

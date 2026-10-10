@@ -1,5 +1,6 @@
 extends Node
 # HTTPRequest is handled in the web shell; this URL never reaches the backend.
+const NetProtocol = preload("res://scripts/net_protocol.gd")
 signal profile_ready(profile: Dictionary)
 signal failed(message: String)
 signal purchase_changed
@@ -80,7 +81,7 @@ func invite_friend(id: String) -> void:
 		return
 	if invite_busy:
 		return
-	if id.length() != 6 or not id.is_valid_hex_number():
+	if not NetProtocol.valid_room_id(id.to_upper()):
 		invite_feedback.emit("Не удалось определить ID комнаты.")
 		return
 	invite_busy = true

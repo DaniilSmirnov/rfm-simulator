@@ -65,11 +65,11 @@ func run() -> void:
 	guest.platform_service.catalog = JSON.parse_string(FileAccess.get_file_as_string("res://data/store_catalog.json"))
 	guest.platform_service.entitlements = {"mode": "restricted", "skus": []}
 	guest.room.room_id = "ABCDEF"
-	guest.room.request_kind = "join"
+	guest.room.transport.request_kind = "join"
 	var response = {"player": "guest", "token": "test", "host": false, "stage": 2, "car_model": 0, "slot": 3}
 	guest.room._response(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), JSON.stringify(response).to_utf8_buffer())
 	guest.room._process(1)
-	check(guest.loading_world and not guest.room.busy and guest.room.request_kind == "join", "room does not publish partial world during preparation")
+	check(guest.loading_world and not guest.room.busy and guest.room.transport.request_kind == "join", "room does not publish partial world during preparation")
 	while guest.loading_world:
 		await process_frame
 	check(guest.playing and guest.world_ready and guest.stage.provence, "guest finishes world preparation before handshake enters play")

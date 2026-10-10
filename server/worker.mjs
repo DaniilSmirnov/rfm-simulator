@@ -3,9 +3,15 @@ import { accountStore, preparePurchase, paymentCallback, PaymentError, PAYMENT_H
 export { VkPayments } from './payments-vk.mjs';
 import { AuthError, authenticateLaunch, authenticateSession } from './auth-vk.mjs';
 import { validateRoomSelection } from './store.mjs';
-import { RoomState, RoomError } from './room-core.mjs';
+import { RoomState, RoomError, protocol } from './room-core.mjs';
 const json = (data, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
 const PUSH_INTERVAL = 40;
+const MAX_MESSAGE = protocol.max_message_bytes;
+// Room IDs: the protocol pattern without its anchors, reused in every route.
+const ROOM_ID = protocol.room_id_pattern.replace(/^\^|\$$/g, '');
+const SOCKET_ROUTE = new RegExp(`^/api/rooms/(${ROOM_ID})/socket$`);
+const ENTRY_ROUTE = new RegExp(`^/api/rooms/${ROOM_ID}/join$`);
+const ROOM_ROUTE = new RegExp(`^/api/rooms/(${ROOM_ID})/(join|sync|leave|heartbeat)$`);
 const socketUrl = (url, room) => `${url.protocol === 'https:' ? 'wss:' : 'ws:'}//${url.host}/api/rooms/${room}/socket`;
 export class RallyRoom {
   constructor(ctx) {
@@ -31,7 +37,7 @@ export class RallyRoom {
     }
     try {
       const raw = await request.text();
-      if (raw.length > 65536) throw new RoomError(413, 'Слишком большое сообщение.');
+      if (raw.length > MAX_MESSAGE) throw new RoomError(413, 'Слишком большое сообщение.');
       let body;
       try { body = JSON.parse(raw); } catch { throw new RoomError(400, 'Некорректное сообщение.'); }
       if (!body || typeof body !== 'object') throw new RoomError(400, 'Некорректное сообщение.');
@@ -92,7 +98,7 @@ export class RallyRoom {
   async webSocketMessage(ws, message) {
     let body;
     try {
-      if (typeof message !== 'string' || message.length > 65536) throw new RoomError(413, 'Слишком большое сообщение.');
+      if (typeof message !== 'string' || message.length > MAX_MESSAGE) throw new RoomError(413, 'Слишком большое сообщение.');
       try { body = JSON.parse(message); } catch { throw new RoomError(400, 'Некорректное сообщение.'); }
       if (!body || typeof body !== 'object') throw new RoomError(400, 'Некорректное сообщение.');
       const now = Date.now();
@@ -143,7 +149,7 @@ export default {
       return Response.redirect(url.toString(), 308);
     }
     if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
-    const socket = url.pathname.match(/^\/api\/rooms\/([A-F0-9]{6})\/socket$/);
+    const socket = url.pathname.match(SOCKET_ROUTE);
     if (socket && request.method === 'GET') {
       if (request.headers.get('Upgrade') !== 'websocket') return json({ error: 'Нужен WebSocket.' }, 426);
       const origin = request.headers.get('Origin');
@@ -170,13 +176,13 @@ export default {
       const ip = request.headers.get('CF-Connecting-IP') || 'local';
       await enforceLimit(env, 'API_RATE_LIMIT', 'ip:' + ip);
       if (url.pathname === '/api/vk/session') await enforceLimit(env, 'AUTH_RATE_LIMIT', 'ip:' + ip);
-      if (url.pathname === '/api/rooms' || /^\/api\/rooms\/[A-F0-9]{6}\/join$/.test(url.pathname)) {
+      if (url.pathname === '/api/rooms' || ENTRY_ROUTE.test(url.pathname)) {
         await enforceLimit(env, 'ROOM_ENTRY_RATE_LIMIT', 'ip:' + ip);
       }
     } catch (error) { return limitResponse(error); }
     const origin = request.headers.get('Origin');
     if (origin && origin !== url.origin) return json({ error: 'Недопустимый источник.' }, 403);
-    if (Number(request.headers.get('Content-Length')) > 65536) return json({ error: 'Слишком большое сообщение.' }, 413);
+    if (Number(request.headers.get('Content-Length')) > MAX_MESSAGE) return json({ error: 'Слишком большое сообщение.' }, 413);
     try {
       if (url.pathname === '/api/vk/session') {
         const raw = await request.text();
@@ -200,7 +206,7 @@ export default {
       // An explicitly supplied session must never silently downgrade to anonymous.
       if (request.headers.has('Authorization') || request.headers.get('X-Rally-Platform') === 'vk') {
         const session = await authenticateSession(request, env);
-        if (url.pathname === '/api/rooms' || /^\/api\/rooms\/[A-F0-9]{6}\/join$/.test(url.pathname)) {
+        if (url.pathname === '/api/rooms' || ENTRY_ROUTE.test(url.pathname)) {
           await enforceLimit(env, 'ROOM_ENTRY_RATE_LIMIT', 'user:' + session.user);
           const raw = await request.text();
           if (raw.length > 1024) return json({ error: 'Слишком большое сообщение.' }, 413);
@@ -231,7 +237,7 @@ export default {
       }
       return json({ error: 'Не удалось создать комнату. Попробуй ещё раз.' }, 503);
     }
-    const route = url.pathname.match(/^\/api\/rooms\/([A-F0-9]{6})\/(join|sync|leave|heartbeat)$/);
+    const route = url.pathname.match(ROOM_ROUTE);
     if (!route) return json({ error: 'Неверный ID комнаты: нужны 6 символов.' }, 404);
     const response = await env.ROOMS.get(env.ROOMS.idFromName(route[1])).fetch(request);
     if (route[2] !== 'join' || !response.ok) return response;
