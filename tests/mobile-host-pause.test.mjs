@@ -21,9 +21,10 @@ test('vehicle uses circular joystick with independent accelerator and brake', as
 
 test('camera follows moving car, while flames run on independent visual time', async () => {
   const game = await read('game/scripts/game.gd');
+  const player = await read('game/scripts/player_motion.gd');
   const cooking = await read('game/scripts/camp_cooking.gd');
-  assert.match(game, /var travel_yaw = heading/);
-  assert.match(game, /lerp_angle\(view_yaw, travel_yaw/);
+  assert.match(player, /var travel_yaw = game\.heading/);
+  assert.match(player, /lerp_angle\(game\.view_yaw, travel_yaw/);
   assert.match(game, /camp_cooking\.animate_flames\(Time\.get_ticks_msec\(\)/);
   assert.match(cooking, /func animate_flames\(visual_time: float\)/);
 });
