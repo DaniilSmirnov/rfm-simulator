@@ -8,7 +8,8 @@ extends RefCounted
 #
 # Provider: {"name": String, "section": String ("" = hot), "keys": Array,
 #            "snapshot": Callable() -> Dictionary, "apply": Callable(fields, sample_time),
-#            "collision": bool (applied before guest drive reconciliation)}
+#            "collision": bool (applied before guest drive reconciliation),
+#            "interval": float (seconds; a busy section uploads at most this often)}
 const Props = preload("res://scripts/props.gd")
 const SnapshotMotion = preload("res://scripts/snapshot_motion.gd")
 
@@ -22,13 +23,16 @@ var cold_revs: Dictionary = {}
 # Host: revisions the server already holds, and uploads still in flight.
 var server_cold_revs: Dictionary = {}
 var cold_sent: Dictionary = {}
+# Host: when each section was last uploaded, for sections with an interval.
+var cold_uploaded_at: Dictionary = {}
 var last_impact = 0
 var last_notice = ""
 var racer_motion: Dictionary = {}
 var racer_targets: Dictionary = {}
+const PEOPLE_INTERVAL = 0.3
 
-static func provider(name: String, section: String, keys: Array, snapshot: Callable, apply: Callable, collision: bool = false) -> Dictionary:
-	return {"name": name, "section": section, "keys": keys, "snapshot": snapshot, "apply": apply, "collision": collision}
+static func provider(name: String, section: String, keys: Array, snapshot: Callable, apply: Callable, collision: bool = false, interval: float = 0.0) -> Dictionary:
+	return {"name": name, "section": section, "keys": keys, "snapshot": snapshot, "apply": apply, "collision": collision, "interval": interval}
 
 func setup(owner_room) -> void:
 	room = owner_room
@@ -50,11 +54,15 @@ func rebuild() -> void:
 	providers.append(provider("drive", "", ["drive_protocol", "driving"], _drive_snapshot, func(_f, _t): pass))
 	providers.append(provider("stones", "", ["stones", "impacts"], func(): return {"stones": room.stone_state(), "impacts": game.impact_serials}, _stones_apply))
 	providers.append(provider("status", "", ["paused", "notice", "notice_time", "cook_time"], _status_snapshot, _status_apply))
-	providers.append(_subsystem("npc_people", func(): return game.spectators, "actor_snapshot", "apply_actor_snapshot"))
-	providers.append(_subsystem("marshals", func(): return game.stage.officials if game.stage != null else null, "snapshot", "apply_snapshot"))
-	providers.append(_subsystem("foraging", func(): return game.foraging, "snapshot", "apply_snapshot"))
-	providers.append(_subsystem("course", func(): return game.course, "snapshot", "apply_snapshot"))
-	providers.append(_subsystem("cargo", func(): return game.cargo, "snapshot", "apply_snapshot"))
+	# Spectators, marshals, the schedule, trunks and foraging stand still most of
+	# the time: as their own sections they travel only when they change.
+	# Walking spectators and marshals are smoothed on guests, so three updates a
+	# second are enough even while someone walks.
+	providers.append(_subsystem("npc_people", func(): return game.spectators, "actor_snapshot", "apply_actor_snapshot", "people", PEOPLE_INTERVAL))
+	providers.append(_subsystem("marshals", func(): return game.stage.officials if game.stage != null else null, "snapshot", "apply_snapshot", "marshals", PEOPLE_INTERVAL))
+	providers.append(_subsystem("foraging", func(): return game.foraging, "snapshot", "apply_snapshot", "foraging"))
+	providers.append(_subsystem("course", func(): return game.course, "snapshot", "apply_snapshot", "course"))
+	providers.append(_subsystem("cargo", func(): return game.cargo, "snapshot", "apply_snapshot", "cargo"))
 	providers.append(provider("progress", "", ["racing", "passed", "helped", "elapsed"], _progress_snapshot, _progress_apply))
 	providers.append(_subsystem("camp_cooking", func(): return game.camp_cooking, "snapshot", "apply_snapshot"))
 	providers.append(provider("racers", "", ["racers", "tow", "tow_progress", "tow_owner", "recovery_links", "recovery_helpers"], _racers_snapshot, _racers_apply))
@@ -62,7 +70,7 @@ func rebuild() -> void:
 
 # A subsystem that already owns snapshot()/apply_snapshot() under one key.
 # `owner` returns the subsystem when it is needed: some are created later.
-func _subsystem(key: String, owner: Callable, snapshot_method: String, apply_method: String) -> Dictionary:
+func _subsystem(key: String, owner: Callable, snapshot_method: String, apply_method: String, section: String = "", interval: float = 0.0) -> Dictionary:
 	var snapshot = func() -> Dictionary:
 		var target = owner.call()
 		return {key: target.call(snapshot_method) if target != null else {}}
@@ -70,7 +78,16 @@ func _subsystem(key: String, owner: Callable, snapshot_method: String, apply_met
 		var target = owner.call()
 		if target != null and f.has(key):
 			target.call(apply_method, f[key])
-	return provider(key, "", [key], snapshot, apply)
+	return provider(key, section, [key], snapshot, apply, false, interval)
+
+# Shortest time between uploads of each cold section (0 = every change).
+func section_intervals() -> Dictionary:
+	_ensure()
+	var result = {}
+	for p in providers:
+		if p.section != "":
+			result[p.section] = maxf(float(result.get(p.section, 0.0)), float(p.get("interval", 0.0)))
+	return result
 
 func cold_sections() -> Dictionary:
 	_ensure()
@@ -115,10 +132,15 @@ func host_upload(body: Dictionary) -> void:
 	var parts = split_world(world_state())
 	body.world = parts.hot
 	var now = Time.get_ticks_msec()
+	var intervals = section_intervals()
 	var cold = {}
 	for section in parts.cold:
 		var revision = int(parts.hot.cold_revs[section])
 		if server_cold_revs.has(section) and int(server_cold_revs[section]) == revision:
+			continue
+		# A busy section waits for its interval; the change goes with the next upload.
+		var interval_ms = int(float(intervals.get(section, 0.0)) * 1000.0)
+		if interval_ms > 0 and cold_uploaded_at.has(section) and now - int(cold_uploaded_at[section]) < interval_ms:
 			continue
 		# A section in flight is not repeated until the server could have answered.
 		var sent: Dictionary = cold_sent.get(section, {})
@@ -126,6 +148,7 @@ func host_upload(body: Dictionary) -> void:
 			continue
 		cold[section] = parts.cold[section]
 		cold_sent[section] = {"revision": revision, "time": now}
+		cold_uploaded_at[section] = now
 	if not cold.is_empty():
 		body.cold = cold
 
@@ -133,6 +156,7 @@ func reset() -> void:
 	cold_revs.clear()
 	server_cold_revs.clear()
 	cold_sent.clear()
+	cold_uploaded_at.clear()
 
 # ---------------------------------------------------------------- guest side
 
@@ -185,7 +209,9 @@ func _drive_snapshot() -> Dictionary:
 	return {"drive_protocol": 1, "driving": driving}
 
 func _status_snapshot() -> Dictionary:
-	return {"paused": game.paused, "notice": game.toast_label.text, "notice_time": game.toast_time, "cook_time": game.cook_time}
+	# The toast text only travels while it is on screen.
+	var showing: bool = game.toast_time > 0
+	return {"paused": game.paused, "notice": game.toast_label.text if showing else "", "notice_time": snappedf(game.toast_time, 0.1) if showing else 0.0, "cook_time": snappedf(game.cook_time, 0.01)}
 
 func _status_apply(w: Dictionary, _t: float) -> void:
 	room.world_paused = bool(w.get("paused", false))
@@ -296,7 +322,17 @@ func _camp_apply(f: Dictionary, _t: float) -> void:
 func _racers_snapshot() -> Dictionary:
 	var racers = []
 	for r in game.racers:
-		racers.append({"id": r.id, "role": r.get("role", "racer"), "zero_index": r.get("zero_index", 0), "variant": r.variant, "pos": room.a(r.node.position), "yaw": r.node.rotation.y, "tilt": room.a(r.node.rotation), "state": r.state, "recovery_progress": r.get("recovery_progress", 0), "recovery_helpers": r.get("recovery_helpers", 0)})
+		# Default fields are left out; the guest reads them with the same defaults.
+		var entry = {"id": r.id, "variant": r.variant, "pos": room.a(r.node.position), "yaw": snappedf(r.node.rotation.y, 0.001), "tilt": room.a(r.node.rotation), "state": r.state}
+		if r.get("role", "racer") != "racer":
+			entry.role = r.role
+		if int(r.get("zero_index", 0)) != 0:
+			entry.zero_index = r.zero_index
+		if float(r.get("recovery_progress", 0)) != 0.0:
+			entry.recovery_progress = snappedf(float(r.recovery_progress), 0.01)
+		if int(r.get("recovery_helpers", 0)) != 0:
+			entry.recovery_helpers = r.recovery_helpers
+		racers.append(entry)
 	return {"racers": racers, "tow": game.tow_target.get_meta("room_id") if game.tow_target != null else -1, "tow_progress": game.tow_progress, "tow_owner": room.tow_owner, "recovery_links": game.recovery_links, "recovery_helpers": game.recovery_helpers}
 
 func _racers_apply(w: Dictionary, sample_time: float) -> void:

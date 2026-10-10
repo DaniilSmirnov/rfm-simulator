@@ -55,6 +55,17 @@ func run() -> void:
 	host.room.world_sync.server_cold_revs = upload.world.cold_revs.duplicate()
 	host.room.world_sync.cold_sent.clear()
 	check(not host.room.sync_body().has("cold"), "sections the server holds are not resent")
+	check(not upload.world.has("npc_people") and not upload.world.has("course") and not upload.world.has("foraging") and upload.cold.has("people"), "spectators, schedule and foraging travel as sections")
+	# A busy section (walking spectators) waits for its interval after an upload.
+	host.room.world_sync.server_cold_revs.people = -1
+	host.room.world_sync.cold_sent.clear()
+	check(not host.room.sync_body().get("cold", {}).has("people"), "a changed busy section waits for its upload interval")
+	host.room.world_sync.cold_uploaded_at.people = Time.get_ticks_msec() - 1000
+	host.room.world_sync.cold_sent.clear()
+	check(host.room.sync_body().get("cold", {}).has("people"), "the busy section uploads once its interval passed")
+	for entry in host.room.world_state().npc_people:
+		check(not entry.has("time") and str(entry.get("yaw", 0.0)).length() <= 6, "spectator entries carry no timer and short angles")
+		break
 	host.cook_time = 19
 	host.in_car = false
 	host.course.phase = "racing"

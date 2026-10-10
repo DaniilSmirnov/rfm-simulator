@@ -88,6 +88,16 @@ func activity(id: int, time: float) -> Dictionary:
 		return {"action": "idle", "time": -1.0, "cycle": cycle}
 	return {"action": action, "time": phase, "cycle": cycle}
 
+# A guest clock may run up to 0.35 s off the host's: find the replicated action
+# in the schedule just before or after, and its timer at the host's moment.
+func _nearby_schedule_time(id: int, action: String) -> float:
+	var duration = 3.3 if action == "beer" else 3.6
+	for shift in [-0.35, 0.35]:
+		var nearby = activity(id, clock + shift)
+		if nearby.action == action:
+			return clampf(float(nearby.time) - shift, 0.0, duration)
+	return 0.0
+
 func update(world_time: float, delta: float, guest: bool) -> void:
 	navigation_budget.advance(delta)
 	if guest:
@@ -107,9 +117,13 @@ func update(world_time: float, delta: float, guest: bool) -> void:
 			person.avatar.rotation.y = lerp_angle(person.avatar.rotation.y, float(target.yaw), 1.0 - exp(-delta * 10))
 			person.helper = int(target.get("helper", -1))
 			action = str(target.action)
-			if action in ["beer", "eat"]:
-				target.time = minf(3.3 if action == "beer" else 3.6, float(target.time) + delta)
-			pose.time = float(target.time) if action in ["beer", "eat"] else -1.0
+			# The drink/meal timer follows the shared schedule (activity() of the
+			# replicated clock), so it is not sent; a host that diverged from the
+			# schedule still shows the action, timed locally from its start.
+			if action in ["beer", "eat"] and pose.action != action:
+				pose.time = _nearby_schedule_time(person.id, action)
+			elif not action in ["beer", "eat"]:
+				pose.time = -1.0
 		else:
 			var racer = nearby_stranded(person)
 			person.helper = -1
@@ -267,7 +281,12 @@ func push_helpers() -> Dictionary:
 func actor_snapshot() -> Array:
 	var result: Array = []
 	for person in people:
-		result.append({"id": person.id, "pos": game.room.a(person.avatar.position), "yaw": person.avatar.rotation.y, "action": person.action, "time": person.time, "helper": person.helper})
+		var entry = {"id": person.id, "pos": game.room.a(person.avatar.position), "yaw": snappedf(person.avatar.rotation.y, 0.01), "action": person.action}
+		# The helper is sent only while someone pushes a car. The action timer is
+		# never sent: guests derive it from the shared schedule.
+		if int(person.helper) != -1:
+			entry.helper = person.helper
+		result.append(entry)
 	return result
 
 func apply_actor_snapshot(poses: Array) -> void:

@@ -172,8 +172,15 @@ func update_visuals() -> void:
 func snapshot() -> Dictionary:
 	var effect_states = {}
 	for key in effects:
-		effect_states[key] = {"serial": effects[key].serial, "remaining": maxf(0, float(effects[key].until) - game.elapsed)}
+		# An absolute end time keeps the section unchanged while the effect runs.
+		effect_states[key] = {"serial": effects[key].serial, "until": float(effects[key].until)}
 	return {"harvested": game.stage.harvested.keys(), "inventories": inventories.duplicate(true), "skewers": skewers.duplicate(true), "effects": effect_states}
+
+# Host clock end of an effect; older hosts sent the time left instead.
+func _effect_until(state: Dictionary) -> float:
+	if state.has("until"):
+		return float(state.until)
+	return game.elapsed + float(state.get("remaining", 0))
 
 func apply_snapshot(data: Dictionary) -> void:
 	game.stage.apply_harvested(data.get("harvested", []))
@@ -182,8 +189,8 @@ func apply_snapshot(data: Dictionary) -> void:
 	effects.clear()
 	for key in data.get("effects", {}):
 		var state: Dictionary = data.effects[key]
-		effects[key] = {"serial": int(state.get("serial", 0)), "until": game.elapsed + float(state.get("remaining", 0))}
+		effects[key] = {"serial": int(state.get("serial", 0)), "until": _effect_until(state)}
 	var effect: Dictionary = data.get("effects", {}).get(game.chair_owner(), {})
 	if not effect.is_empty():
-		game.mushroom_effect.trigger(int(effect.get("serial", 0)), float(effect.get("remaining", 0)))
+		game.mushroom_effect.trigger(int(effect.get("serial", 0)), maxf(0.0, snappedf(_effect_until(effect) - game.elapsed, 0.001)))
 	update_visuals()
