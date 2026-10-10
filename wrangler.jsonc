@@ -52,6 +52,12 @@
     {"name":"STORE_RATE_LIMIT", "namespace_id":"5480952304", "simple":{"limit":120,"period":60}},
     {"name":"PURCHASE_RATE_LIMIT", "namespace_id":"5480952305", "simple":{"limit":12,"period":60}}
   ],
+  "observability": {
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true
+    }
+  },
   "vars": {
     "RATE_LIMIT_ENABLED": "true",
     "VK_APP_ID": "54809523",
