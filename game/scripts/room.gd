@@ -103,6 +103,10 @@ func _build_ui() -> void:
 	id_input.add_theme_font_size_override("font_size", 22)
 	id_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	fields.add_child(id_input)
+	if OS.has_feature("web") and OS.has_feature("vk"):
+		var native_input = preload("res://scripts/mobile_room_input.gd").new()
+		native_input.field = id_input
+		add_child(native_input)
 	var row = HBoxContainer.new()
 	row.add_theme_constant_override("separation", 12)
 	box.add_child(row)
