@@ -4,8 +4,10 @@ func _initialize() -> void:
 	call_deferred("run")
 func run() -> void:
 	var taxi = Props.rally_car(5)
-	check(taxi.get_meta("number") == 65 and taxi.has_node("TrunkTaxi"), "reference rally 2107 has number 65 and taxi checker")
-	check(taxi.get_node("TrunkTaxi").position.z > 1.4 and taxi.get_node("TrunkTaxi").position.y < 1.4, "taxi checker is on trunk, below roof")
+	var parts: Dictionary = taxi.get_meta("baked_parts", {})
+	check(taxi.get_meta("number") == 65 and parts.has("TrunkTaxi"), "reference rally 2107 has number 65 and taxi checker")
+	var sign: Vector3 = parts.TrunkTaxi.get_center() if parts.has("TrunkTaxi") else Vector3.ZERO
+	check(sign.z > 1.4 and sign.y < 1.4, "taxi checker is on trunk, below roof")
 	taxi.free()
 	var game = load("res://main.tscn").instantiate()
 	root.add_child(game)

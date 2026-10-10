@@ -10,8 +10,11 @@ func smooth_normals(mesh: Mesh) -> bool:
 		var arrays = mesh.surface_get_arrays(surface)
 		var normals = arrays[Mesh.ARRAY_NORMAL]
 		var indices = arrays[Mesh.ARRAY_INDEX]
-		for i in range(0, indices.size(), 3):
-			if normals[indices[i]].distance_to(normals[indices[i + 1]]) > 0.05:
+		var count = indices.size() if indices != null else normals.size()
+		for i in range(0, count, 3):
+			var a = indices[i] if indices != null else i
+			var b = indices[i + 1] if indices != null else i + 1
+			if normals[a].distance_to(normals[b]) > 0.05:
 				return true
 	return false
 
@@ -26,9 +29,13 @@ func _initialize() -> void:
 		check(count > 0, "Imported character has body geometry")
 		var head_mesh = avatar.get_node("Head").get_child(0).mesh
 		check(smooth_normals(head_mesh), "GLB retains smooth shading on the head")
+		# Body parts are flattened to one surface whose vertex colours keep the palette.
 		var has_skin = false
-		for surface in range(head_mesh.get_surface_count()):
-			has_skin = has_skin or head_mesh.surface_get_material(surface).albedo_color.is_equal_approx(Color(Props.spectator_profile(i).skin))
+		check(head_mesh.get_surface_count() == 1, "head is one draw call")
+		for colour in head_mesh.surface_get_arrays(0)[Mesh.ARRAY_COLOR]:
+			# Vertex colours are stored as 8-bit channels.
+			var skin = Color(Props.spectator_profile(i).skin)
+			has_skin = has_skin or Vector3(colour.r - skin.r, colour.g - skin.g, colour.b - skin.b).length() < 0.01
 		check(has_skin, "Original skin palette retained")
 		var other = Props.player_avatar(i)
 		check(avatar.get_node("Head").get_child(0).mesh == other.get_node("Head").get_child(0).mesh, "Instances share imported mesh resources")

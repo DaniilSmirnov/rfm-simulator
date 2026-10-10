@@ -411,7 +411,7 @@ func _build_environment() -> void:
 	sun.light_color = Color(light.color)
 	sun.light_energy = float(light.energy)
 	sun.shadow_enabled = true
-	sun.directional_shadow_max_distance = 120
+	draw_distance.apply_shadows(sun)
 	add_child(sun)
 
 func _panel(color: Color) -> StyleBoxFlat:

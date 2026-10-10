@@ -3,6 +3,7 @@ extends Node3D
 const Navigation = preload("res://scripts/crowd_navigation.gd")
 var people: Array[Dictionary] = []
 var targets: Dictionary = {}
+const MeshMerge = preload("res://scripts/mesh_merge.gd")
 const Props = preload("res://scripts/props.gd")
 const Records = preload("res://scripts/stage_records.gd")
 var stage: Node3D
@@ -112,6 +113,8 @@ func arch(s: float, caption: String, finish: bool) -> void:
 	bounds.size = Vector3(13.1, 0.85, 0.70)
 	shape.shape = bounds
 	overhead.add_child(shape)
+	# Pillars, banner, chequers and captions: one static mesh for the gate.
+	MeshMerge.bake(gate)
 	arches.append(gate)
 
 func station(s: float, sign: float, title: String) -> void:

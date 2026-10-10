@@ -15,7 +15,7 @@ func run() -> void:
 			var s = float(arch.get_meta("station"))
 			check(arch.position.distance_to(stage.at(s)) < 1, "arch is aligned with actual route")
 			check(stage.rock_hit(stage.at(s - 2), stage.at(s + 2), 1.1, false).is_empty(), "centre of gate leaves passage for rally cars")
-			check(arch.get_children().any(func(n): return n is Label3D and n.text == arch.get_meta("caption")), "arch has readable start/finish caption")
+			check(arch.get_meta("baked_text", []).has(arch.get_meta("caption")), "arch has readable start/finish caption")
 		for person in officials.judges + officials.marshals:
 			check(person.get_node_or_null("SafetyVest") != null, "official wears visible high-visibility vest")
 			check(stage.road_distance(person.position) > 5.3, "official stands clear of racing line")
