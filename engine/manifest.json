@@ -1,7 +1,8 @@
 {
   "godot": "4.4.1-stable",
   "emscripten": "3.1.64",
-  "template_sha256": "6867a5d48d9d9c89be7b7f0af6059e5c3860fa1b3dcec81f5cd6f0d6e0886dc9",
-  "wasm_sha256": "d1823ead7c932b52efe41ae01fabbe805c48977ee919d328fe87afb72e90f22e",
-  "physics_3d": true
+  "template_sha256": "6f1904a04514e6d8b061b70d6ebdeef3d53089b1b133c6f4a0e44aff2882fa78",
+  "wasm_sha256": "9d98bbcec6d86ba2c49a88be0c1792ca56f71a1acabf9ec007f24d1ae3960793",
+  "physics_3d": true,
+  "websocket": true
 }
