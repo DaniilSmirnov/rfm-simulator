@@ -1,35 +1,16 @@
 {
-  "comment": "Player cars in content_id order: look, handling and trunk of each model in one place. Read by scripts/car_registry.gd (props.gd, player_handling.gd, car_cargo.gd); the catalog lists the same names. Handling values are deliberate gameplay differences, not factory specifications. model: shell = built from `shape` by props.gd; other models have their own builder (shape is the fallback when an imported asset is missing).",
-  "defaults": {
-    "model": "shell", "suv": false, "bonnet_rise": 0.27, "pillar": 0.1, "rear_sill": true, "lamp_tilt": 0.0,
-    "trim": "303d41", "lower_grille": 0.0, "grille_style": "", "spare_wheel": false,
-    "handling": {"drive": "front", "wheelbase": 2.45, "acceleration": 6.2, "inertia": 1.25},
-    "trunk": {"hatch": false, "top": 0.94}
-  },
+  "comment": "Player cars in content_id order: look, handling and trunk of each model in one place. Read by scripts/car_registry.gd (props.gd, player_handling.gd, car_cargo.gd); the catalog lists the same names. Handling values are deliberate gameplay differences, not factory specifications. model: shell = built from `shape` by car_body.gd (field list there); other models have their own builder (shape is the fallback when an imported asset is missing).",
+  "defaults": {"model": "shell", "suv": false, "bonnet_rise": 0.27, "pillar": 0.1, "lamp_tilt": 0.0, "trim": "303d41", "lower_grille": 0.0, "grille_style": "", "spare_wheel": false, "handling": {"drive": "front", "wheelbase": 2.45, "acceleration": 6.2, "inertia": 1.25}, "trunk": {"hatch": false, "top": 0.94}, "wheel": {"style": "steel", "count": 4, "color": "b8c0bf", "detail": "2c3436"}, "doors": 4},
   "cars": [
-    {"name": "Компактный седан", "model": "granta", "color": "111a2b", "length": 4.26, "width": 1.70, "height": 1.50, "rear": 0.95, "glass": 0.36, "lights": "wide", "grille": 0.65,
-     "shape": [-0.87, -0.40, 0.57, 1.07, 0.72, 0.77], "lamp_tilt": 0.16, "lower_grille": 0.91},
-    {"name": "Городской седан", "color": "a8bdc2", "length": 4.41, "width": 1.77, "height": 1.49, "rear": 1.05, "glass": 0.48, "lights": "slim", "grille": 0.94,
-     "shape": [-1.02, -0.37, 0.68, 1.25, 0.77, 0.80], "lamp_tilt": 0.16, "lower_grille": 0.91},
-    {"name": "Лесной внедорожник", "model": "niva", "color": "627746", "length": 3.74, "width": 1.68, "height": 1.74, "rear": 1.50, "glass": 0.14, "lights": "round", "grille": 0.86,
-     "shape": [-0.72, -0.59, 1.28, 1.52, 0.63, 0.56], "suv": true, "bonnet_rise": 0.34, "pillar": 0.32, "rear_sill": false, "trim": "c6ccc8", "spare_wheel": true,
-     "handling": {"drive": "all", "acceleration": 5.0, "inertia": 1.6}, "trunk": {"hatch": true}},
-    {"name": "Классический седан", "color": "e6dfc7", "length": 4.12, "width": 1.64, "height": 1.45, "rear": 0.95, "glass": 0.19, "lights": "square", "grille": 0.55,
-     "shape": [-0.77, -0.61, 0.65, 0.88, 0.68, 0.66], "bonnet_rise": 0.34, "trim": "c6ccc8", "grille_style": "slats",
-     "handling": {"drive": "rear"}, "trunk": {"top": 0.99}},
-    {"name": "Лёгкий седан", "color": "8dabb9", "length": 4.37, "width": 1.72, "height": 1.46, "rear": 1.00, "glass": 0.52, "lights": "wide", "grille": 0.80,
-     "shape": [-0.98, -0.32, 0.64, 1.27, 0.78, 0.77], "lamp_tilt": 0.16, "lower_grille": 1.08},
-    {"name": "Дорожный седан", "color": "a74d43", "length": 4.40, "width": 1.74, "height": 1.47, "rear": 0.93, "glass": 0.43, "lights": "slim", "grille": 0.56,
-     "shape": [-0.94, -0.40, 0.70, 1.22, 0.79, 0.78], "lamp_tilt": 0.16, "lower_grille": 0.91, "grille_style": "chrome_pair"},
-    {"name": "Семейный седан", "color": "c6c9b9", "length": 4.35, "width": 1.73, "height": 1.53, "rear": 0.87, "glass": 0.27, "lights": "square", "grille": 0.90,
-     "shape": [-0.79, -0.49, 0.65, 1.03, 0.70, 0.66], "bonnet_rise": 0.34, "grille_style": "chrome_lines", "trunk": {"top": 0.99}},
-    {"name": "Туристический кроссовер", "color": "a58058", "length": 4.34, "width": 1.82, "height": 1.70, "rear": 1.63, "glass": 0.28, "lights": "square", "grille": 1.05,
-     "shape": [-0.91, -0.56, 1.29, 1.66, 0.75, 0.65], "suv": true, "grille_style": "chrome_lines",
-     "handling": {"drive": "all", "acceleration": 5.0, "inertia": 1.6}, "trunk": {"hatch": true}},
-    {"name": "Походный хэтчбек", "model": "camping_hatchback", "color": "283f87", "length": 4.17, "width": 1.68, "height": 1.47, "rear": 0.98, "glass": 0.30, "lights": "square", "grille": 0.75,
-     "shape": [-0.96, -0.43, 0.60, 1.08, 0.68, 0.70], "bonnet_rise": 0.34,
-     "handling": {"acceleration": 5.0, "inertia": 1.6}, "trunk": {"hatch": true, "hinge": 0.35}},
-    {"name": "Спортивный седан", "model": "sport_sedan", "color": "c92530", "length": 4.68, "width": 1.88, "height": 1.46, "rear": 1.00, "glass": 0.40, "lights": "slim", "grille": 0.80,
-     "handling": {"drive": "rear", "wheelbase": 2.65, "acceleration": 8.2}, "trunk": {"top": 0.99}}
+    {"name": "Компактный седан", "model": "granta", "color": "111a2b", "length": 4.26, "width": 1.7, "height": 1.5, "rear": 0.95, "glass": 0.36, "lights": "wide", "grille": 0.65, "shape": [-0.87, -0.4, 0.57, 1.07, 0.72, 0.77], "lamp_tilt": 0.16, "lower_grille": 0.91},
+    {"name": "Городской седан", "color": "a8bdc2", "length": 4.41, "width": 1.77, "height": 1.49, "rear": 1.05, "glass": 0.48, "lights": "slim", "grille": 0.94, "shape": [-1.02, -0.37, 0.68, 1.25, 0.77, 0.8], "lamp_tilt": 0.16, "lower_grille": 0.91, "wheel": {"style": "hubcap", "count": 10, "color": "c4ccd0", "detail": "59656b"}, "grille_style": "chrome_pair", "tail": "band"},
+    {"name": "Лесной внедорожник", "model": "niva", "color": "627746", "length": 3.74, "width": 1.68, "height": 1.74, "rear": 1.5, "glass": 0.14, "lights": "round", "grille": 0.86, "shape": [-0.72, -0.59, 1.28, 1.52, 0.63, 0.56], "suv": true, "bonnet_rise": 0.34, "pillar": 0.32, "trim": "c6ccc8", "spare_wheel": true, "handling": {"drive": "all", "acceleration": 5.0, "inertia": 1.6}, "trunk": {"hatch": true}, "doors": 2, "wheel": {"style": "steel", "count": 5, "color": "d4d8d2", "detail": "2c3436"}, "roof_rails": true},
+    {"name": "Классический седан", "color": "e6dfc7", "length": 4.12, "width": 1.64, "height": 1.44, "rear": 0.95, "glass": 0.19, "lights": "twin", "grille": 1.0, "shape": [-0.7, -0.55, 0.62, 0.92, 0.68, 0.66], "bonnet_rise": 0.3, "trim": "c6ccc8", "grille_style": "chrome_lines", "handling": {"drive": "rear"}, "trunk": {"top": 0.99}, "wheel": {"style": "hubcap", "count": 6, "color": "d6dbd8", "detail": "6f7a7e"}, "stripe": "8b6b3d"},
+    {"name": "Лёгкий седан", "color": "8dabb9", "length": 4.37, "width": 1.72, "height": 1.46, "rear": 1.0, "glass": 0.52, "lights": "slim", "grille": 0.8, "shape": [-0.98, -0.32, 0.64, 1.27, 0.78, 0.77], "lamp_tilt": 0.0, "lower_grille": 1.08, "wheel": {"style": "spokes", "count": 5, "color": "c9cfd2", "detail": "2a3134"}, "tail": "band", "spoiler": "lip"},
+    {"name": "Дорожный седан", "color": "a74d43", "length": 4.62, "width": 1.74, "height": 1.43, "rear": 0.93, "glass": 0.43, "lights": "slim", "grille": 0.56, "shape": [-0.98, -0.36, 0.72, 1.3, 0.82, 0.8], "lamp_tilt": 0.16, "lower_grille": 0.91, "grille_style": "chrome_pair", "wheel": {"style": "spokes", "count": 12, "color": "c9cdc9", "detail": "2c3134", "rim": 0.72}, "spoiler": "lip", "roof_color": "3a2a29"},
+    {"name": "Семейный седан", "color": "c6c9b9", "length": 4.35, "width": 1.73, "height": 1.56, "rear": 0.87, "glass": 0.27, "lights": "square", "grille": 0.9, "shape": [-0.79, -0.49, 0.65, 1.03, 0.7, 0.66], "bonnet_rise": 0.34, "grille_style": "chrome_lines", "trunk": {"top": 0.99}, "wheel": {"style": "hubcap", "count": 8, "color": "d4d9d6", "detail": "6c777b"}, "roof_color": "eeede4", "mudflaps": true},
+    {"name": "Туристический кроссовер", "color": "a58058", "length": 4.34, "width": 1.82, "height": 1.7, "rear": 1.63, "glass": 0.28, "lights": "square", "grille": 1.05, "shape": [-0.91, -0.56, 1.55, 1.98, 0.75, 0.65], "suv": true, "grille_style": "chrome_lines", "handling": {"drive": "all", "acceleration": 5.0, "inertia": 1.6}, "trunk": {"hatch": true}, "wheel": {"style": "steel", "count": 6, "color": "4a5154", "detail": "181d1f"}, "roof_rails": true, "mudflaps": true, "stripe": "6e5338", "tail": "block"},
+    {"name": "Походный хэтчбек", "model": "camping_hatchback", "color": "283f87", "length": 4.17, "width": 1.68, "height": 1.47, "rear": 0.98, "glass": 0.3, "lights": "square", "grille": 0.75, "shape": [-0.96, -0.43, 0.6, 1.08, 0.68, 0.7], "bonnet_rise": 0.34, "handling": {"acceleration": 5.0, "inertia": 1.6}, "trunk": {"hatch": true, "hinge": 0.35}},
+    {"name": "Спортивный седан", "model": "sport_sedan", "color": "c92530", "length": 4.68, "width": 1.88, "height": 1.46, "rear": 1.0, "glass": 0.4, "lights": "slim", "grille": 0.8, "handling": {"drive": "rear", "wheelbase": 2.65, "acceleration": 8.2}, "trunk": {"top": 0.99}}
   ]
 }

@@ -2,12 +2,12 @@
  "comment": "Ratchet for scripts/lint-gdscript.mjs. Numbers may only go down: lower them in the change that shrinks the code. file_lines.default covers every runtime script (game/scripts) not listed.",
  "file_lines": {
   "default": 700,
-  "game/scripts/props.gd": 1434,
+  "game/scripts/props.gd": 1190,
   "game/scripts/game.gd": 1035,
   "game/scripts/village_architecture.gd": 974,
   "game/scripts/stage.gd": 922
  },
  "longest_function": 211,
- "long_functions": 31,
+ "long_functions": 29,
  "longest_line": 778
 }

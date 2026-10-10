@@ -9,6 +9,7 @@ const BODY_PATH = "res://models/cars/niva/niva_body_static.obj"
 const TAILGATE_PATH = "res://models/cars/niva/niva_tailgate.obj"
 const WHEELS_PATH = "res://models/cars/niva/niva_wheels.obj"
 const HINGE = Vector3(0.0, 1.56, 1.42)
+const CarParts = preload("res://scripts/car_parts.gd")
 
 static func has_asset() -> bool:
 	return ResourceLoader.exists(OBJ_PATH) and ResourceLoader.exists(BODY_PATH) and ResourceLoader.exists(TAILGATE_PATH) and ResourceLoader.exists(WHEELS_PATH)
@@ -16,6 +17,32 @@ static func has_asset() -> bool:
 static func _mesh(path: String) -> Mesh:
 	var resource = load(path)
 	return resource as Mesh
+
+# The imported panels carry smoothed normals across large, slightly uneven
+# faces, which shade as dents. Per-face normals give the game's flat look.
+static func _flat_shaded(mesh: Mesh) -> ArrayMesh:
+	var result = ArrayMesh.new()
+	for surface_index in range(mesh.get_surface_count()):
+		var arrays = mesh.surface_get_arrays(surface_index)
+		var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX] if arrays[Mesh.ARRAY_INDEX] != null else PackedInt32Array()
+		var flat = PackedVector3Array()
+		var normals = PackedVector3Array()
+		var count = indices.size() if not indices.is_empty() else vertices.size()
+		for i in range(0, count, 3):
+			var a = vertices[indices[i] if not indices.is_empty() else i]
+			var b = vertices[indices[i + 1] if not indices.is_empty() else i + 1]
+			var c = vertices[indices[i + 2] if not indices.is_empty() else i + 2]
+			var normal = (c - a).cross(b - a).normalized()
+			flat.append_array(PackedVector3Array([a, b, c]))
+			normals.append_array(PackedVector3Array([normal, normal, normal]))
+		var out = []
+		out.resize(Mesh.ARRAY_MAX)
+		out[Mesh.ARRAY_VERTEX] = flat
+		out[Mesh.ARRAY_NORMAL] = normals
+		result.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, out)
+		result.surface_set_material(surface_index, mesh.surface_get_material(surface_index))
+	return result
 
 static func create_preview() -> Node3D:
 	if not has_asset():
@@ -69,8 +96,18 @@ static func _attach_wheels(root: Node3D, mesh: Mesh) -> void:
 			wheel.position = pivot
 			wheel.material_override = mesh.surface_get_material(surface_index)
 			wheel.set_meta("rolling_wheel_radius", 0.34)
-			wheel.set_meta("rolling_wheel_axis", Vector3.RIGHT)
+			# LEFT turns the tread top forward (-Z) while driving forward.
+			wheel.set_meta("rolling_wheel_axis", Vector3.LEFT)
 			root.add_child(wheel)
+			# The stamped hub is a plain disc: a ring of holes shows it turning.
+			var size: Vector3 = hi - lo
+			if size.y < 0.5:
+				var holes = MeshInstance3D.new()
+				holes.name = "HubHoles"
+				var outer: float = (hi.x if pivot.x > 0.0 else lo.x) - pivot.x
+				holes.mesh = CarParts.hub_holes(size.y * 0.30, size.y * 0.13, 5, outer + signf(outer) * 0.006, Color("2b3134"))
+				holes.material_override = CarParts.material()
+				wheel.add_child(holes)
 
 static func build() -> Node3D:
 	if not has_asset():
@@ -95,7 +132,7 @@ static func build() -> Node3D:
 	root.add_child(details)
 	var body = MeshInstance3D.new()
 	body.name = "NivaBody"
-	body.mesh = body_mesh
+	body.mesh = _flat_shaded(body_mesh)
 	details.add_child(body)
 	_attach_wheels(details, wheel_mesh)
 
@@ -108,7 +145,7 @@ static func build() -> Node3D:
 
 	var door = MeshInstance3D.new()
 	door.name = "NivaTailgate_Lid"
-	door.mesh = door_mesh
+	door.mesh = _flat_shaded(door_mesh)
 	door.position = -HINGE
 	hinge.add_child(door)
 	return root
