@@ -174,10 +174,10 @@ func configure() -> void:
 	var sq = Layout.SQUARE
 	var center = anchor(sq.s, sq.lateral, sq.along)
 	square = {"center": center, "yaw": yaw_at(sq.s), "half": sq.size * 0.5, "height": route(sq.s).y + Layout.KERB * 0.5}
-	flats.append({"center": center, "yaw": square.yaw, "half": square.half, "height": square.height, "margin": 6.0})
+	flats.append({"center": center, "yaw": square.yaw, "half": square.half, "height": square.height, "margin": 6.0, "reach": square.half.length() + 6.0})
 	for item in Layout.FLATS:
 		var p = anchor(item[0], item[1], item[2])
-		flats.append({"center": p, "yaw": yaw_at(item[0]), "half": Vector2(item[3], item[4]) * 0.5, "height": landform(p.x, p.z), "margin": item[5]})
+		flats.append({"center": p, "yaw": yaw_at(item[0]), "half": Vector2(item[3], item[4]) * 0.5, "height": landform(p.x, p.z), "margin": item[5], "reach": (Vector2(item[3], item[4]) * 0.5).length() + item[5]})
 	for spot in Layout.CLEARINGS:
 		var p: Vector3
 		if spot is String:
@@ -230,6 +230,9 @@ func ground(pos: Vector3) -> float:
 	height = lerpf(height, land, smoothstep(edge + 0.6, edge + span, distance))
 	var keep_road = smoothstep(half + 0.4, half + 2.0, distance)
 	for flat in flats:
+		# Beyond the corner of its rectangle plus the margin a flat has no weight.
+		if Vector2(pos.x - flat.center.x, pos.z - flat.center.z).length_squared() > float(flat.reach) * float(flat.reach):
+			continue
 		var w = _flat_weight(flat, pos) * keep_road
 		if w > 0.0:
 			height = lerpf(height, float(flat.height), w)
