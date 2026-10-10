@@ -11,7 +11,7 @@ func run() -> void:
 	var stage = Stage.new(3)
 	root.add_child(stage)
 	stage.build()
-	check(stage.desert and not stage.urban and not stage.winter, "fourth stage is a distinct desert biome")
+	check(stage.desert and not stage.provence and not stage.winter, "fourth stage is a distinct desert biome")
 	check(stage.trees.is_empty() and stage.collectibles.is_empty(), "desert contains no forest or woodland food")
 	check(stage.at(100).y - stage.at(500).y > 35.0 and stage.at(800).y - stage.at(500).y > 30.0, "route descends into a deep canyon and climbs back out")
 	check(stage.canyon.mesas.size() == 4 and stage.clearings.size() == 7, "four climbable summits and three ground spectator areas")

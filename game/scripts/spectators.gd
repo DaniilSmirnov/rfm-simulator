@@ -28,15 +28,15 @@ func rebuild(cooperative: bool = false) -> void:
 		var outward = (clearing - stage.at(s)).normalized()
 		outward.y = 0
 		outward = outward.normalized()
-		var center = clearing + (stage.direction(s) * 7.0 if stage.urban else outward * 6.0)
-		if stage.urban:
+		var center = clearing + (stage.direction(s) * 7.0 if stage.provence else outward * 6.0)
+		if stage.provence:
 			# Keep a whole picnic group clear of both sides of every junction.
 			for offset in [7.0, -7.0, 14.0, -14.0, 21.0, -21.0, 0.0]:
 				var candidate = clearing + stage.direction(s) * offset
 				var available = true
 				for along in [-2.4, 0.0, 3.2]:
 					var spot = grounded(candidate + stage.direction(s) * along)
-					available = available and stage.road_distance(spot) > 6.0 and stage.city.hit(spot, spot, 1.2, false).is_empty()
+					available = available and stage.road_distance(spot) > 6.0 and stage.solids.hit(spot, spot, 1.2, false).is_empty()
 				if available:
 					center = candidate
 					break
@@ -44,8 +44,8 @@ func rebuild(cooperative: bool = false) -> void:
 	# The shoulder is already free of trees; leave the driving lane unobstructed.
 	for i in range(4):
 		var s = 85.0 + i * 190.0
-		if stage.urban:
-			continue # City spectators use the existing street parking areas.
+		if stage.provence:
+			continue # Village spectators use the roadside spots and the square.
 		var center = stage.at(s) + stage.side(s) * (7.2 if i % 2 == 0 else -7.2)
 		_add_group(center, s, i + stage.clearings.size(), 1)
 	update(clock, 0.0, false)
@@ -239,7 +239,7 @@ func watch_spot(s: float, home: Vector3) -> Vector3:
 		var point = grounded(game.stage.at(s + shift) + game.stage.side(s + shift) * sign * 6.4)
 		if game.stage.road_distance(point) < 5.5 or game.stage.obstacle_hit(point, point, 0.4) >= 0 or not game.stage.rock_hit(point, point, 0.4, false).is_empty():
 			continue
-		if game.stage.urban and not game.stage.city.hit(point, point, 0.4, false).is_empty():
+		if not game.stage.solids.hit(point, point, 0.4, false).is_empty():
 			continue
 		return point
 	return home

@@ -7,11 +7,19 @@ const BIRD_CLIP_SECONDS = 0.35
 const BIRD_GAP_MIN = 20.0
 const BIRD_GAP_MAX = 40.0
 const FIRE_BURST_SECONDS = 1.5
+# Provençal summer: short cicada choruses on the vineyard stage only.
+const CICADA_VOLUME_DB = -31.0
+const CICADA_CLIP_SECONDS = 1.8
+const CICADA_GAP_MIN = 6.0
+const CICADA_GAP_MAX = 14.0
+const CICADA_STAGE = 2
 const FIRE_GAP_MIN = 18.0
 const FIRE_GAP_MAX = 30.0
 var game: Node
 var shutting_down = false
 var birds: AudioStreamPlayer
+var cicadas: AudioStreamPlayer
+var cicada_clock = 0.0
 var effects: AudioStreamPlayer
 var steps: AudioStreamPlayer
 var step_clock = 0.0
@@ -36,7 +44,12 @@ func tone(kind: String, seconds: float) -> AudioStreamWAV:
 	for i in range(count):
 		var t = float(i) / rate
 		var value = 0.0
-		if kind == "birds":
+		if kind == "cicadas":
+			# A rasping 4.3 kHz buzz pulsed at 28 Hz, swelling in and fading out.
+			var pulse = pow(0.5 + 0.5 * sin(TAU * 28.0 * t), 2.0)
+			var swell = sin(PI * t / seconds)
+			value = (sin(TAU * 4300.0 * t) * 0.7 + random.randf_range(-1, 1) * 0.3) * pulse * swell * 0.16
+		elif kind == "birds":
 			var phase = fmod(t, 2.0)
 			if phase < 0.30:
 				value = sin(TAU * (1800 * phase + 1500 * phase * phase)) * sin(PI * phase / 0.30) * 0.18
@@ -58,6 +71,11 @@ func _ready() -> void:
 	ambient_random.seed = 7102026
 	bird_clock = ambient_random.randf_range(BIRD_GAP_MIN, BIRD_GAP_MAX)
 	fire_clock = ambient_random.randf_range(FIRE_GAP_MIN, FIRE_GAP_MAX)
+	cicada_clock = ambient_random.randf_range(1.0, CICADA_GAP_MIN)
+	cicadas = AudioStreamPlayer.new()
+	cicadas.stream = tone("cicadas", CICADA_CLIP_SECONDS)
+	cicadas.volume_db = CICADA_VOLUME_DB
+	add_child(cicadas)
 	birds = AudioStreamPlayer.new()
 	birds.stream = tone("birds", BIRD_CLIP_SECONDS)
 	birds.volume_db = BIRDS_VOLUME_DB
@@ -92,6 +110,7 @@ func repair() -> void:
 			player.stop()
 	var ambience_paused = game.paused or (game.room.connected and not game.room.is_host and game.room.world_paused)
 	birds.stream_paused = ambience_paused
+	cicadas.stream_paused = ambience_paused
 	game.fire_audio.stream_paused = ambience_paused
 	game.rally_audio.stream_paused = not running
 	if is_instance_valid(game.grill):
@@ -140,6 +159,14 @@ func _update_sparse_ambience(delta: float) -> void:
 			bird_clock = ambient_random.randf_range(BIRD_GAP_MIN, BIRD_GAP_MAX)
 	elif birds.playing:
 		birds.stop()
+
+	if game.selected_stage == CICADA_STAGE:
+		cicada_clock -= delta
+		if cicada_clock <= 0.0:
+			game._play_audio(cicadas)
+			cicada_clock = ambient_random.randf_range(CICADA_GAP_MIN, CICADA_GAP_MAX)
+	elif cicadas.playing:
+		cicadas.stop()
 
 	var fire_available = active() and is_instance_valid(game.grill)
 	if not fire_available:

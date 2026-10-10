@@ -14,7 +14,7 @@ static func clear(game, racer: Dictionary, start: Vector3, end: Vector3) -> bool
 		point.y = stage.ground(point) + 0.06
 		if absf(point.y - previous.y) > 1.4 or not stage.rock_hit(previous, point, 1.0).is_empty() or stage.obstacle_hit(previous, point, 1.0, true) >= 0:
 			return false
-		if stage.urban and not stage.city.hit(previous, point, 1.0).is_empty():
+		if not stage.solids.hit(previous, point, 1.0).is_empty():
 			return false
 		previous = point
 	var positions = [game.car.position]

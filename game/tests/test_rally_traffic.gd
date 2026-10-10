@@ -14,22 +14,23 @@ func clear_cars(game) -> void:
 	game.passed = 0
 	game.dead = false
 	game.car.position = Vector3(170, 2, 5)
-func pair(game, moving: bool = false) -> Array:
+# start is the follower's progress; the leader runs 40 m ahead of it.
+func pair(game, moving: bool = false, start: float = 150.0) -> Array:
 	clear_cars(game)
 	game.course.phase = "racing"
 	game.spawn_racer("pass")
 	game.spawn_racer("pass")
 	var lead = game.racers[0]
 	var follower = game.racers[1]
-	lead.s = 190.0
+	lead.s = start + 40.0
 	lead.focus = 650.0
-	lead.node.position = game.race_at(190)
+	lead.node.position = game.race_at(start + 40.0)
 	lead.state = "racing" if moving else "stranded"
 	lead.pace = 0.55
 	lead.drive_speed = 13.2
-	follower.s = 150.0
+	follower.s = start
 	follower.focus = 650.0
-	follower.node.position = game.race_at(150)
+	follower.node.position = game.race_at(start)
 	follower.line = 0.0
 	follower.slide = 0.0
 	follower.pace = 1.15
@@ -62,7 +63,8 @@ func run() -> void:
 		avoided = avoided or absf(follower.line) > 2.7
 		safe = safe and follower.state == "racing" and follower.node.position.distance_to(lead.node.position) > 2.5
 	check(avoided and safe and follower.s > lead.s + 12, "crew safely steers around a stranded car and continues")
-	cars = pair(game, true)
+	# Overtake on the open plateau, clear of the narrow Grand-Rue entry.
+	cars = pair(game, true, 175.0)
 	lead = cars[0]
 	follower = cars[1]
 	var overtook = false
@@ -93,10 +95,11 @@ func run() -> void:
 	var snapshot = game.room.world_state()
 	check(snapshot.racers.size() == 2 and snapshot.racers[1].pos == game.room.a(follower.node.position), "multiplayer snapshot carries the actual chosen rally trajectory")
 	game.course.pass_index = 2
-	cars = pair(game)
+	# Reverse pass: the stranded car sits in the vineyard valley, not the hairpin.
+	cars = pair(game, false, 50.0)
 	lead = cars[0]
 	follower = cars[1]
-	follower.s = 160.0
+	follower.s = 60.0
 	follower.node.position = game.race_at(follower.s)
 	var plan = game.Traffic.plan(game, follower)
 	check(plan.avoiding, "reverse traffic recognizes a blocker ahead in travel direction")

@@ -28,8 +28,8 @@ func run() -> void:
 			check(stage.road_distance(person.position) > 5.3, "official stands clear of racing line")
 			check(person.get_node("RightArm/BeerCan").visible == false and person.get_node("RightArm/Skewer").visible == false, "officials carry no picnic food or beer")
 			check(absf(person.position.y - stage.ground(person.position)) < 0.01, "official stands on terrain")
-			if stage.urban:
-				check(stage.city.hit(person.position, person.position, 0.35, false).is_empty(), "city official stands outside buildings")
+			if stage.provence:
+				check(stage.solids.hit(person.position, person.position, 0.35, false).is_empty(), "village official stands outside buildings")
 		for car in officials.cars:
 			check(stage.road_distance(car.position) > 5.3 and car.get_meta("role") == "judge_car", "marked judge car parks beside route")
 			check(car.get_node_or_null("AmberBeacon") != null, "judge car has amber beacon")

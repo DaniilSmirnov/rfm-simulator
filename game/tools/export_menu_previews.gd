@@ -32,7 +32,7 @@ func run() -> void:
 	await game._shutdown_audio()
 	quit()
 func capture(game: Node, index: int, name: String) -> void:
-	var target = game.car.position + Vector3(0, 0.9, 0) if index == 0 else game.stage.at(390 if game.stage.urban else 200)
+	var target = game.car.position + Vector3(0, 0.9, 0) if index == 0 else game.stage.at(372 if game.stage.provence else 200)
 	cameras[index].position = target + (Vector3(4.8, 2.2, 5.6) if index == 0 else Vector3(28, 20, 30))
 	if index == 1 and game.stage.desert:
 		cameras[index].far = 1100
@@ -49,9 +49,9 @@ func capture(game: Node, index: int, name: String) -> void:
 	elif index == 1 and game.stage.winter:
 		preload("res://tools/export_winter_screenshots.gd").frame_overview(game.stage, cameras[index])
 		target = game.stage.at(255) + Vector3(0, 1.0, 0)
-	elif index == 1 and game.stage.urban:
+	elif index == 1 and game.stage.provence:
 		cameras[index].far = 500
-		target = game.stage.village_main_at(435) + game.stage.village_main_side(435) * 20.0
+		target = game.stage.village.square.center + Vector3(0, game.stage.village.square.height, 0)
 		cameras[index].position = target + Vector3(-40, 42, 52)
 	if index == 0:
 		frame_car(game.car, cameras[index])

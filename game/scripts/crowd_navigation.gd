@@ -54,7 +54,7 @@ static func clear(game, a: Vector3, b: Vector3, ctx: Dictionary) -> bool:
 				return false
 	if game.stage.obstacle_hit(a, b, RADIUS, true) >= 0:
 		return false
-	if game.stage.urban and not game.stage.city.hit(a, b, RADIUS).is_empty():
+	if not game.stage.solids.hit(a, b, RADIUS).is_empty():
 		return false
 	var start = flat(a)
 	var end = flat(b)

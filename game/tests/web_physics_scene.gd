@@ -17,7 +17,7 @@ func _ready() -> void:
 	await stage.build_async(func(title, amount):
 		reports.append([title, amount])
 		await get_tree().process_frame)
-	if not stage.loaded_baked or reports.size() < 3 or stage.city.walk_surfaces.is_empty():
+	if not stage.loaded_baked or reports.size() < 3 or stage.solids.walk_surfaces.is_empty():
 		push_error("WEB_PHYSICS_FAIL: prepared village or loading progress missing")
 		get_tree().quit(1)
 		return
@@ -27,15 +27,15 @@ func _ready() -> void:
 		push_error("WEB_PHYSICS_FAIL: prepared grape instance cannot be harvested")
 		get_tree().quit(1)
 		return
-	if not stage.city.bell.pull(stage.city.bell.handle_position()):
+	if not stage.solids.bell.pull(stage.solids.bell.handle_position()):
 		push_error("WEB_PHYSICS_FAIL: prepared bell cannot be pulled")
 		get_tree().quit(1)
 		return
 	print("WEB_BAKED_VILLAGE_PASS: async scene, progress, walking support, harvest and bell")
 	await get_tree().physics_frame
-	var lamp: RigidBody3D = stage.city.lamps[0].body
+	var lamp: RigidBody3D = stage.solids.lamps[0].body
 	var before = lamp.position
-	stage.city.knock_lamp(0, Vector3(12, 0, 0))
+	stage.solids.knock_lamp(0, Vector3(12, 0, 0))
 	for i in range(60):
 		await get_tree().physics_frame
 	if lamp.position.distance_to(before) > 0.1 and lamp.rotation.length() > 0.01:

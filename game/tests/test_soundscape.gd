@@ -14,6 +14,7 @@ func run() -> void:
 	var audio = game.soundscape
 	check(audio.birds.stream.loop_mode == AudioStreamWAV.LOOP_DISABLED, "bird ambience is a sparse one shot")
 	check(is_equal_approx(audio.birds.volume_db, -37.0), "bird ambience intensity is reduced by 80 percent")
+	check(audio.cicadas.stream.loop_mode == AudioStreamWAV.LOOP_DISABLED and audio.cicadas.stream.data.size() > 0 and audio.cicadas.volume_db < -25.0, "cicadas are a quiet one-shot chorus")
 	check(is_equal_approx(game.fire_audio.volume_db, -26.0), "cooking fire intensity is reduced by 80 percent")
 	check(is_equal_approx(audio.BIRD_GAP_MIN, 20.0) and is_equal_approx(audio.BIRD_GAP_MAX, 40.0), "bird calls have long randomized gaps")
 	check(is_equal_approx(audio.FIRE_GAP_MIN, 18.0) and is_equal_approx(audio.FIRE_GAP_MAX, 30.0), "fire crackle has long randomized gaps")

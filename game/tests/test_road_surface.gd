@@ -12,17 +12,19 @@ func run() -> void:
 		var stage = Stage.new(variant)
 		root.add_child(stage)
 		if variant == 2:
-			check(is_equal_approx(stage.road_width(435.0), 4 * 0.8 + 0.76), "gravel width matches the five cobbled side-lane rows")
-			check(is_equal_approx(stage.road_width(180.0), stage.WIDTH), "country main road retains its width")
+			check(stage.road_width(400.0) < stage.road_width(120.0) and stage.road_width(470.0) < stage.road_width(400.0), "village lanes narrow from the plateau road to the church lane")
 		stage._build_road()
 		if variant == 2:
-			check(stage.get_node_or_null("GravelPuddle_412") != null and stage.get_node_or_null("GravelPuddle_463") != null, "gravel depressions contain visible water surfaces")
-		var mesh: ArrayMesh = stage.get_node("StageRoadSurface").mesh
+			var kinds = ["asphalt", "cobble", "gravel"]
+			var present = kinds.filter(func(kind): return stage.get_node_or_null("StageRoadSurface_" + kind) != null)
+			check(present.size() == 3, "village road is split into asphalt, cobble and gravel meshes")
+			check(stage.get_node("StageRoadSurface_cobble").material_override.albedo_texture != null, "cobbles carry a sett texture")
+		var mesh: ArrayMesh = stage.get_node("StageRoadSurface" if variant == 0 else "StageRoadSurface_cobble").mesh
 		var arrays = mesh.surface_get_arrays(0)
 		var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 		var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
 		var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
-		check(indices.size() > 840 * 6 * 4 and vertices.size() < indices.size(), "road has extra geometry and shares indexed vertices")
+		check(indices.size() > (840 * 6 * 4 if variant == 0 else 238 * 6 * 8) and vertices.size() < indices.size(), "road has extra geometry and shares indexed vertices")
 		var valid = normals.size() == vertices.size()
 		for vertex in vertices:
 			valid = valid and is_finite(vertex.x) and is_finite(vertex.y) and is_finite(vertex.z)

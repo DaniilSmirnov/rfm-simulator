@@ -115,7 +115,7 @@ func _layout() -> void:
 				if game.flag_count() < game.FLAGS_PER_PLAYER:
 					gear.append(["Флаг", "flag"])
 			if game.foraging.can_eat("berries"):
-				gear.append(["Виноград" if game.stage.urban else "Ягоды", "eat_berries"])
+				gear.append(["Виноград" if game.stage.provence else "Ягоды", "eat_berries"])
 			if game.tow_target != null or game.nearby_tow_racer():
 				add_button("Трос", "tow", true, Rect2(Vector2(size.x - edge - 360, size.y - edge - 256), Vector2(68, 68)))
 		if not gear.is_empty():

@@ -18,16 +18,19 @@ func run() -> void:
 		panel.hide()
 	game.toast_label.hide()
 	game.camera.fov = 58
-	game.camera.position = Vector3(140, 110, -170)
-	game.camera.look_at(Vector3(0, 10, -180))
+	var stage = game.stage
+	var square: Vector3 = stage.village.square.center + Vector3(0, stage.village.square.height, 0)
+	game.camera.position = stage.at(90) + Vector3(-60, 30, 30)
+	game.camera.look_at(stage.at(150))
 	await snap("res://../vineyard-overview.png")
-	game.camera.position = Vector3(-65, 38, -390)
-	game.camera.look_at(Vector3(15, 8, -430))
+	game.camera.position = square + Vector3(70, 45, 60)
+	game.camera.look_at(square + Vector3(-10, 0, -40))
 	await snap("res://../vineyard-village.png")
-	game.camera.position = game.stage.at(365) + Vector3(0, 3.8, 0)
-	game.camera.look_at(game.stage.at(420) + Vector3(0, 3.5, 0))
+	game.camera.position = stage.at(305) + Vector3(0, 1.8, 0) + stage.side(305) * 2.5
+	game.camera.look_at(stage.at(345) + Vector3(0, 3, 0))
 	await snap("res://../vineyard-street.png")
-	var vine = game.stage.collectibles[80].pos
+	var grapes = stage.collectibles.filter(func(item): return item.get("name", "") == "виноград")
+	var vine: Vector3 = grapes[grapes.size() / 3].pos
 	game.camera.position = vine + Vector3(2.3, 2.0, 3.0)
 	game.camera.look_at(vine + Vector3(0, 1.1, 0))
 	await snap("res://../vineyard-grapes.png")

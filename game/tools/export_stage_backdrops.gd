@@ -29,13 +29,13 @@ func run() -> void:
 		elif game.stage.winter:
 			preload("res://tools/export_winter_screenshots.gd").frame_overview(game.stage, camera)
 			target = game.stage.at(255) + Vector3(0, 1, 0)
-		elif game.stage.urban:
-			target = game.stage.village_main_at(435) + game.stage.village_main_side(435) * 20.0
+		elif game.stage.provence:
+			target = game.stage.village.square.center + Vector3(0, game.stage.village.square.height, 0)
 			camera.position = target + Vector3(-40, 42, 52)
 		if game.stage.desert:
 			camera.position = Vector3(170, 155, -180)
 			target = Vector3(0, 34, -422)
-		camera.look_at(target if game.stage.variant == 0 or game.stage.urban or game.stage.winter else target + Vector3(0, 4, -18))
+		camera.look_at(target if game.stage.variant == 0 or game.stage.provence or game.stage.winter else target + Vector3(0, 4, -18))
 		viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
 		await process_frame
 		await process_frame
