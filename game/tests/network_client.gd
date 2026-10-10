@@ -35,6 +35,8 @@ func _process(delta: float) -> void:
 		for id in game.room.host_drives:
 			sample.driving[id] = game.room.host_drives[id].snapshot()
 		sample.safe_area_ready = game.mobile_safe_rect.has_area()
+		sample.direct = game.room.direct.open_links().size()
+		sample.direct_healthy = not game.room.is_host and game.room.direct.healthy(game.room.host_id)
 		print("NETWORK_SAMPLE ", JSON.stringify(sample))
 func on_control(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
 	if code != 200: return

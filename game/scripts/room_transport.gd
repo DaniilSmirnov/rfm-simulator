@@ -229,6 +229,12 @@ func _send_socket(body: Dictionary) -> void:
 	if socket.send_text(JSON.stringify(body)) != OK:
 		_socket_failed()
 
+# Connection setup for a direct link, relayed by the room server to one member.
+func send_signal(to: String, data: Dictionary) -> bool:
+	if not socket_open or socket == null:
+		return false
+	return socket.send_text(JSON.stringify({"type": "signal", "to": to, "data": data})) == OK
+
 func _socket_message(text: String) -> void:
 	var data = JSON.parse_string(text)
 	if not data is Dictionary or not room.connected:
@@ -247,6 +253,9 @@ func _socket_message(text: String) -> void:
 			room._on_reply("sync", data)
 		"push":
 			room._on_reply("sync", data)
+		"signal":
+			if data.get("data") is Dictionary:
+				room.direct.on_signal(str(data.get("from", "")), data.data)
 		"error":
 			var status = int(data.get("status", 500))
 			var message = str(data.get("error", "Нет связи с сервером комнаты."))

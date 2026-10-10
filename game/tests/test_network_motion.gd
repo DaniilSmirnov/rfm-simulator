@@ -47,6 +47,10 @@ func run() -> void:
 	adaptive.push(0.0, Vector3.ZERO, Vector3.ZERO)
 	adaptive.push(0.1, Vector3(1.0, 0, 0), Vector3.ZERO)
 	check(adaptive.delay() <= 0.11, "stable 10 Hz transport uses roughly 100 ms buffer instead of 180 ms")
+	var direct_rate = Buffer.new()
+	for i in range(30):
+		direct_rate.push(i * 0.05, Vector3(i * 0.5, 0, 0), Vector3.ZERO)
+	check(direct_rate.delay() <= 0.07 and direct_rate.delay() >= 0.06, "a 20 Hz direct link keeps a 60 ms buffer")
 	var before = adaptive.render(0.25).position.x
 	adaptive.push(0.4, Vector3(4.0, 0, 0), Vector3.ZERO)
 	check(adaptive.render(0.26).position.x >= before, "jitter-driven buffer increase never rewinds remote motion")
