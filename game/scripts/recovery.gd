@@ -73,8 +73,7 @@ static func update(game, players: Dictionary, delta: float) -> void:
 		var next: Vector3 = racer.recovery_start.lerp(racer.recovery_goal, progress)
 		next.y = game.stage.ground(next)
 		var blocked = not game.stage.rock_hit(racer.node.position, next, 0.85).is_empty() or game.stage.obstacle_hit(racer.node.position, next, 0.85, true) >= 0
-		if game.stage.urban:
-			blocked = blocked or not game.stage.city.hit(racer.node.position, next, 0.85).is_empty()
+		blocked = blocked or not game.stage.solids.hit(racer.node.position, next, 0.85).is_empty()
 		if blocked:
 			game.toast("Путь к дороге перекрыт. Освободи проход для экипажа.")
 			continue

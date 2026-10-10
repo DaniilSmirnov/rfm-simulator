@@ -105,16 +105,16 @@ func step(c: Dictionary, stage, model: int) -> void:
 				condition = maxf(0, condition - minf(14, closing * 0.65))
 				impact_timer = 0.4
 				emit_event({"kind": "impact", "speed": closing})
-		if stage.urban:
-			var city = stage.city.hit(previous, next, 0.85)
-			if not city.is_empty():
-				next = city.position
-				emit_event({"kind": "city", "hit": city, "velocity": motion.velocity})
-				var closing = motion.rock_impulse(city.normal, yaw)
-				if closing > 1 and impact_timer <= 0:
-					condition = maxf(0, condition - minf(20, closing * 0.85))
-					impact_timer = 0.4
-					emit_event({"kind": "impact", "speed": closing})
+		var solid = stage.solids.hit(previous, next, 0.85)
+		if not solid.is_empty():
+			next = solid.position
+			# Event kind "city" is the room protocol name for solid scenery hits.
+			emit_event({"kind": "city", "hit": solid, "velocity": motion.velocity})
+			var closing = motion.rock_impulse(solid.normal, yaw)
+			if closing > 1 and impact_timer <= 0:
+				condition = maxf(0, condition - minf(20, closing * 0.85))
+				impact_timer = 0.4
+				emit_event({"kind": "impact", "speed": closing})
 		var tree = stage.obstacle_hit(previous, next, 0.95, true)
 		var blocked = tree >= 0
 		if blocked and motion.velocity.length() > 5 and not stage.fallen.has(tree):

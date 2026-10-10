@@ -116,8 +116,8 @@ func run() -> void:
 			check(other.woodland_details.get("MushroomCaps", 0) == 0, "winter has no summer mushrooms")
 		if variant == 2:
 			check(other.woodland_details.get("VineyardLeaves", 0) > 0 and other.woodland_details.get("VineyardGrapes", 0) > 0, "vineyard keeps its own leaves and collectible grapes")
-			check(other.woodland_details.get("VillageForestBerries", 0) > 0 and other.woodland_details.get("VillageForestBushes", 0) > 0, "village outer forest has its own bushes and berries")
-			check(other.woodland_details.get("MushroomCaps", 0) > 0, "village outer forest has edible mushrooms")
+			check(other.woodland_details.get("GardenFigs", 0) > 0 and other.woodland_details.get("OliveTree0", 0) > 100, "village gardens grow collectible figs among the olive groves")
+			check(other.woodland_details.get("MushroomCaps", 0) == 0, "the dry Provençal stage has no forest mushrooms")
 		other.free()
 	print("WOODLAND RESULT: %d failures" % failures)
 	quit(1 if failures else 0)

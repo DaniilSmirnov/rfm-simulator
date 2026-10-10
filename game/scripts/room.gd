@@ -328,8 +328,8 @@ func _apply_sync(data: Dictionary) -> void:
 							game.stage.snow.apply_dug_snapshot(cold.fields.get("snow_dug", []))
 						if "trees" in cold.sections:
 							game.stage.apply_trees(cold.fields.get("fallen", []))
-						if "city" in cold.sections and game.stage.urban:
-							game.stage.city.apply_snapshot(cold.fields.get("city_lamps", []))
+						if "city" in cold.sections:
+							game.stage.solids.apply_snapshot(cold.fields.get("city_lamps", []))
 					prediction.reconcile(drive, game.stage, game.selected_car)
 					game.condition = prediction.condition
 					game.car.position = prediction.node.position
@@ -632,8 +632,8 @@ func _apply_command(c: Dictionary) -> void:
 		"eat_plov": game.camp_cooking.consume()
 		"eat": game.commit_meat(int(placement.get("source", -2)))
 		"church_bell":
-			if game.stage.urban and game.stage.city.bell != null:
-				game.stage.city.bell.pull(game.walker)
+			if game.stage.solids.bell != null:
+				game.stage.solids.bell.pull(game.walker)
 		"collect": game.foraging.collect(int(placement.get("resource_id", -1)), str(c.get("player", "guest")))
 		"mount_mushroom": game.foraging.mount(int(placement.get("source", -2)), str(c.get("player", "guest")))
 		"eat_mushroom": game.foraging.consume("mushroom", str(c.get("player", "guest")), int(placement.get("source", -2)))
@@ -662,7 +662,7 @@ func world_state() -> Dictionary:
 	var driving = {}
 	for id in host_drives:
 		driving[id] = host_drives[id].snapshot()
-	var world = {"drive_protocol": 1, "driving": driving, "camp_cooking": game.camp_cooking.snapshot(), "cargo": game.cargo.snapshot(), "foraging": game.foraging.snapshot(), "course": game.course.snapshot(), "church_bell": game.stage.city.bell.snapshot() if game.stage.urban and game.stage.city.bell != null else {}, "city_lamps": game.stage.city.snapshot() if game.stage.urban else [], "chair_poses": chair_poses, "flag_poses": flag_poses, "table_yaw": game.camp.rotation.y if game.camp != null else 0.0, "grill_pose": {"pos": a(game.grill.position), "yaw": game.grill.rotation.y} if game.grill != null else null, "snow_dug": game.stage.snow.dug_snapshot(), "snow": game.stage.snow.snapshot() if game.stage.winter else [], "fallen": game.stage.tree_snapshot(), "stones": stone_state(), "impacts": game.impact_serials, "camp": a(game.camp.position) if game.camp != null else null, "chairs": game.has_chairs, "cooking": game.cooking, "cook_time": game.cook_time, "grill_servings": game.grill_servings, "npc_servings": game.spectators.snapshot(), "npc_people": game.spectators.actor_snapshot(), "marshals": game.stage.officials.snapshot(), "eaten": game.eaten, "racing": game.racing, "passed": game.passed, "helped": game.helped, "elapsed": game.elapsed, "paused": game.paused, "dead": game.dead, "finished": game.finished, "racers": racers, "tow": game.tow_target.get_meta("room_id") if game.tow_target != null else -1, "tow_progress": game.tow_progress, "tow_owner": tow_owner, "recovery_links": game.recovery_links, "recovery_helpers": game.recovery_helpers, "notice": game.toast_label.text, "notice_time": game.toast_time}
+	var world = {"drive_protocol": 1, "driving": driving, "camp_cooking": game.camp_cooking.snapshot(), "cargo": game.cargo.snapshot(), "foraging": game.foraging.snapshot(), "course": game.course.snapshot(), "church_bell": game.stage.solids.bell.snapshot() if game.stage.solids.bell != null else {}, "city_lamps": game.stage.solids.snapshot(), "chair_poses": chair_poses, "flag_poses": flag_poses, "table_yaw": game.camp.rotation.y if game.camp != null else 0.0, "grill_pose": {"pos": a(game.grill.position), "yaw": game.grill.rotation.y} if game.grill != null else null, "snow_dug": game.stage.snow.dug_snapshot(), "snow": game.stage.snow.snapshot() if game.stage.winter else [], "fallen": game.stage.tree_snapshot(), "stones": stone_state(), "impacts": game.impact_serials, "camp": a(game.camp.position) if game.camp != null else null, "chairs": game.has_chairs, "cooking": game.cooking, "cook_time": game.cook_time, "grill_servings": game.grill_servings, "npc_servings": game.spectators.snapshot(), "npc_people": game.spectators.actor_snapshot(), "marshals": game.stage.officials.snapshot(), "eaten": game.eaten, "racing": game.racing, "passed": game.passed, "helped": game.helped, "elapsed": game.elapsed, "paused": game.paused, "dead": game.dead, "finished": game.finished, "racers": racers, "tow": game.tow_target.get_meta("room_id") if game.tow_target != null else -1, "tow_progress": game.tow_progress, "tow_owner": tow_owner, "recovery_links": game.recovery_links, "recovery_helpers": game.recovery_helpers, "notice": game.toast_label.text, "notice_time": game.toast_time}
 	# The result text is only needed once the shared run ends.
 	if game.dead or game.finished:
 		world.title = game.menu_title.text
@@ -773,10 +773,10 @@ func sync_body() -> Dictionary:
 	return body
 
 func apply_cold(f: Dictionary, sections: Array) -> void:
-	if "city" in sections and game.stage.urban:
-		game.stage.city.apply_snapshot(f.get("city_lamps", []))
-		if game.stage.city.bell != null:
-			game.stage.city.bell.apply_snapshot(f.get("church_bell", {}))
+	if "city" in sections:
+		game.stage.solids.apply_snapshot(f.get("city_lamps", []))
+		if game.stage.solids.bell != null:
+			game.stage.solids.bell.apply_snapshot(f.get("church_bell", {}))
 		for item in f.get("city_lamps", []):
 			game.lamp_requests.erase(int(item.id))
 	if "snow" in sections and game.stage.winter:
@@ -926,11 +926,10 @@ func check_remote_collisions() -> void:
 			continue
 		var previous = v(peer.state.car) if peer.last_car == null else peer.last_car
 		var current = v(peer.state.car)
-		if game.stage.urban:
-			for request in peer.state.get("lamps", []):
-				var index = int(request.id)
-				if index >= 0 and index < game.stage.city.lamps.size() and current.distance_to(game.stage.city.lamps[index].body.position) < 5 and peer.state.in_car and v(request.dir).length() > 5:
-					game.stage.city.knock_lamp(index, v(request.dir))
+		for request in peer.state.get("lamps", []):
+			var index = int(request.id)
+			if index >= 0 and index < game.stage.solids.lamps.size() and current.distance_to(game.stage.solids.lamps[index].body.position) < 5 and peer.state.in_car and v(request.dir).length() > 5:
+				game.stage.solids.knock_lamp(index, v(request.dir))
 		for request in peer.state.get("trees", []):
 			var index = int(request.id)
 			if index >= 0 and index < game.stage.trees.size() and current.distance_to(game.stage.trees[index]) < 4 and absf(float(peer.state.get("speed", 0))) > 1:
@@ -1125,7 +1124,7 @@ func apply_drive_events(solver, authoritative: bool) -> void:
 	for event in solver.events:
 		match event.kind:
 			"tree": game.knock_tree(event.index, event.velocity)
-			"city": game.knock_city(event.hit, event.velocity)
+			"city": game.knock_solid(event.hit, event.velocity)
 			"person":
 				if authoritative:
 					game.die("Легковушка сбила участника вашей компании.")

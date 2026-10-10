@@ -1,6 +1,7 @@
 extends SceneTree
 const Stage = preload("res://scripts/stage.gd")
-const Village = preload("res://scripts/vineyard.gd")
+const Architecture = preload("res://scripts/village_architecture.gd")
+const Layout = preload("res://scripts/village_layout.gd")
 var failures = 0
 var walking_game: Node3D
 var render_fps = 60.0
@@ -37,13 +38,14 @@ func route(city, pose: Transform3D, points: Array) -> bool:
 func run() -> void:
 	var stage = Stage.new(2)
 	root.add_child(stage)
-	var city = Village.new()
-	city.stage = stage
-	stage.city = city
-	stage.add_child(city)
-	city._church(stage.village_main_at(435.0) + stage.village_main_side(435.0) * 43.0)
-	city._side_lane_houses()
-	check(city.viewpoints.size() == 3, "church and exactly two existing side-lane houses offer viewpoints")
+	# Build only the two accessible buildings through the village kit.
+	var kit = Architecture.new(stage.village)
+	stage.village.architecture = kit
+	kit._register_meshes()
+	kit._church()
+	kit._roof_terrace_house(Layout.ROOF_TERRACE_HOUSE.s, Layout.ROOF_TERRACE_HOUSE.side)
+	var city = stage.solids
+	check(city.viewpoints.size() == 2 and city.viewpoints[0].kind == "tower" and city.viewpoints[1].kind == "roof", "church tower and the roof-terrace house offer viewpoints")
 	for action in ["forward", "back", "left", "right", "sprint"]:
 		if not InputMap.has_action(action): InputMap.add_action(action)
 	walking_game = load("res://scripts/game.gd").new()
@@ -86,7 +88,7 @@ func run() -> void:
 		check(route(city, view.pose, house_path), "house entrance and both stair flights lead to roof")
 		house_path.reverse()
 		check(route(city, view.pose, house_path), "roof has a usable return route")
-		check(not city._point_clear_of_obstacles(view.pose * Vector3(0.5, 0, 0.5)), "interior footprint rejects generated grass stones and trees")
+		check(not city.clear(view.pose * Vector3(0.5, 0, 0.5)), "interior footprint rejects generated grass stones and trees")
 		var underneath: Vector3 = view.pose * Vector3(2.2, 0.1, -2)
 		check(city.walking_floor(underneath, underneath.y) < underneath.y + 0.45, "ground-floor walker cannot snap to the roof")
 		var edge: Vector3 = view.pose * Vector3(3.3, 6.1, -2)

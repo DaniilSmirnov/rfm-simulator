@@ -77,14 +77,14 @@ func run() -> void:
 	check(guest.loading_world and not guest.room.busy and guest.room.request_kind == "join", "room does not publish partial world during preparation")
 	while guest.loading_world:
 		await process_frame
-	check(guest.playing and guest.world_ready and guest.stage.urban, "guest finishes world preparation before handshake enters play")
+	check(guest.playing and guest.world_ready and guest.stage.provence, "guest finishes world preparation before handshake enters play")
 	check(guest.car.position == guest.stage.at(30) and guest.avatar_variant == 3, "handshake applies assigned lane after preparation")
-	check(guest.stage.city.vine_count > 0 and guest.stage.city.village_cobblestones > 0 and guest.stage.city.lamps.size() > 0, "cooperative village creates landscape and physics")
+	check(int(guest.stage.village.counts.get("vines", 0)) > 0 and int(guest.stage.village.counts.get("houses", 0)) > 0 and guest.stage.solids.lamps.size() > 0, "cooperative village creates landscape and physics")
 	var urban_sync = guest.Stage.new(2)
 	root.add_child(urban_sync)
 	urban_sync.build()
 	check(guest.stage.collectibles == urban_sync.collectibles and guest.stage.woodland_details == urban_sync.woodland_details, "cooperative village preserves collectible positions and instance batches")
-	check(guest.stage.city.vine_count == urban_sync.city.vine_count and guest.stage.city.village_cobblestones == urban_sync.city.village_cobblestones and guest.stage.city.obstacles.size() == urban_sync.city.obstacles.size(), "cooperative village preserves vines, paving and collision obstacles")
+	check(guest.stage.village.counts == urban_sync.village.counts and guest.stage.solids.obstacles.size() == urban_sync.solids.obstacles.size(), "cooperative village preserves vines, houses and collision obstacles")
 	urban_sync.free()
 	guest.room.connected = false
 	await guest._shutdown_audio()

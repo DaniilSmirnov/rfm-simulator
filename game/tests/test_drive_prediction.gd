@@ -122,8 +122,8 @@ func run() -> void:
 	var village = Stage.new(2)
 	root.add_child(village)
 	village.build()
-	var lamp = village.city.lamps[0].body
-	var center = village.city._relative_pose(lamp).origin
+	var lamp = village.solids.lamps[0].body
+	var center = village.solids.relative_pose(lamp).origin
 	var start = center + Vector3(1.05, 0, 0)
 	start.y = village.ground(start)
 	client.reset(start, PI / 2)

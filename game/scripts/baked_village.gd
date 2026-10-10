@@ -1,8 +1,8 @@
 extends RefCounted
 # Packed geometry stays spatially partitioned. Only mutable MultiMeshes are
 # uploaded once per scene; immutable meshes and materials retain shared resources.
-const SCHEMA = 3
-const SOURCES = ["stage", "city", "vineyard", "props", "village_interiors", "church_bell"]
+const SCHEMA = 4
+const SOURCES = ["stage", "stage_solids", "primitive_batcher", "village_stage", "village_layout", "village_architecture", "village_landscape", "village_farmland", "props", "village_interiors", "church_bell"]
 const STAGE_FIELDS = ["woodland_details", "collectibles", "collectible_parts", "rocks", "trees", "forest_data", "detail_tree_groups", "detail_tree_visuals", "forest_layers", "forest_chunk_slots", "forest_chunk_centers"]
 
 static func fingerprint() -> String:
@@ -80,7 +80,7 @@ static func _restore(node: Node, fields: Dictionary, root: Node) -> void:
 static func _script_fields(node: Node, root: Node, multimeshes: Dictionary) -> Dictionary:
 	var fields = {}
 	for property in node.get_property_list():
-		if property.usage & PROPERTY_USAGE_SCRIPT_VARIABLE and property.name not in ["stage", "batches", "meshes", "collision_cells", "moving_obstacle_ids", "indexed_obstacle_count"]:
+		if property.usage & PROPERTY_USAGE_SCRIPT_VARIABLE and property.name not in ["stage", "collision_cells", "moving_obstacle_ids", "indexed_obstacle_count"]:
 			fields[property.name] = _encode(node.get(property.name), root, multimeshes)
 	return fields
 
@@ -100,6 +100,10 @@ static func save(stage: Node3D, path: String) -> Error:
 	stage.rocks = stage.rocks.filter(func(rock): return not rock.get("official", false))
 	stage.officials.free()
 	stage.officials = null
+	# Village life is local animation, rebuilt from the baked anchors on load.
+	if stage.life != null:
+		stage.life.root.free()
+		stage.life = null
 	var asset = Node3D.new()
 	asset.name = "VillageAsset"
 	for child in stage.get_children():
@@ -113,9 +117,11 @@ static func save(stage: Node3D, path: String) -> Error:
 	asset.set_meta("baked_schema", SCHEMA)
 	asset.set_meta("source_fingerprint", fingerprint())
 	asset.set_meta("stage_state", state)
-	asset.set_meta("city_path", asset.get_path_to(stage.city))
-	asset.set_meta("city_state", _script_fields(stage.city, asset, multimeshes))
-	asset.set_meta("bell_state", _script_fields(stage.city.bell, asset, multimeshes))
+	asset.set_meta("solids_path", asset.get_path_to(stage.solids))
+	asset.set_meta("solids_state", _script_fields(stage.solids, asset, multimeshes))
+	asset.set_meta("bell_state", _script_fields(stage.solids.bell, asset, multimeshes))
+	asset.set_meta("village_anchors", _encode(stage.village.anchors, asset, multimeshes))
+	asset.set_meta("village_counts", stage.village.counts.duplicate())
 	var instance_data = {}
 	for node in asset.find_children("*", "MultiMeshInstance3D", true, false):
 		if not node.has_meta("baked_instances"):
@@ -157,17 +163,23 @@ static func _apply(stage: Node3D, packed: PackedScene) -> bool:
 		node.multimesh = mm
 		if stage.capture_bake_buffers:
 			node.set_meta("baked_instances", data.buffer)
-	stage.city = asset.get_node(asset.get_meta("city_path"))
+	# The baked solids replace the empty component created with the stage.
+	if stage.solids != null:
+		stage.remove_child(stage.solids)
+		stage.solids.free()
+	stage.solids = asset.get_node(asset.get_meta("solids_path"))
 	_restore(stage, asset.get_meta("stage_state"), asset)
-	_restore(stage.city, asset.get_meta("city_state"), asset)
-	_restore(stage.city.bell, asset.get_meta("bell_state"), asset)
-	stage.city.stage = stage
+	_restore(stage.solids, asset.get_meta("solids_state"), asset)
+	_restore(stage.solids.bell, asset.get_meta("bell_state"), asset)
+	stage.solids.stage = stage
+	stage.village.anchors = _decode(asset.get_meta("village_anchors"), asset)
+	stage.village.counts = asset.get_meta("village_counts", {}).duplicate()
 	_clear_owners(asset)
 	for child in asset.get_children():
 		asset.remove_child(child)
 		stage.add_child(child)
 	asset.free()
-	stage.city._index_collisions()
+	stage.solids.index()
 	stage._rebuild_tree_index()
 	stage.loaded_baked = true
 	return true

@@ -24,7 +24,7 @@ func run() -> void:
 	root.add_child(stage)
 	stage.build()
 	var ff = stage.finnish_forest
-	check(stage.lakeland and not stage.desert and not stage.urban and not stage.winter, "fifth stage is a distinct Finnish lake-forest biome")
+	check(stage.lakeland and not stage.desert and not stage.provence and not stage.winter, "fifth stage is a distinct Finnish lake-forest biome")
 	check(Stage.STAGES[4].begins_with("Финский лес"), "stage is called Финский лес in the menu")
 
 	# --- Route character: fast crests, a yellow-house jump, sweepers and a chicane.

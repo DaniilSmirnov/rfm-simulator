@@ -22,7 +22,7 @@ func roadside(station: float, preferred_side: float, clearance: float) -> Dictio
 				var point = grounded(stage.at(s) + stage.side(s) * sign * distance)
 				if stage.road_distance(point) < 5.3 + clearance * 0.2:
 					continue
-				if stage.urban and not stage.city.hit(point, point, clearance, false).is_empty():
+				if not stage.solids.hit(point, point, clearance, false).is_empty():
 					continue
 				if stage.lakeland and stage.water.depth(point) > -0.3:
 					continue
@@ -33,8 +33,7 @@ func roadside(station: float, preferred_side: float, clearance: float) -> Dictio
 					for along in [-4.6, -3.2, -1.1, 1.1, 3.2]:
 						var extra = grounded(point + stage.direction(s) * along)
 						clear = clear and stage.road_distance(extra) > 5.3 and stage.obstacle_hit(extra, extra, clearance) < 0 and stage.rock_hit(extra, extra, clearance, false).is_empty()
-						if stage.urban:
-							clear = clear and stage.city.hit(extra, extra, clearance, false).is_empty()
+						clear = clear and stage.solids.hit(extra, extra, clearance, false).is_empty()
 				if clear:
 					return {"pos": point, "s": s, "side": sign}
 	return {}
@@ -133,7 +132,7 @@ func station(s: float, sign: float, title: String) -> void:
 		var official = Props.course_official("judge", i)
 		add_child(official)
 		official.position = grounded(car.position + forward * (-3.2 if i == 0 else 3.2))
-		if stage.urban and not stage.city.hit(official.position, official.position, 0.4, false).is_empty():
+		if not stage.solids.hit(official.position, official.position, 0.4, false).is_empty():
 			official.position = grounded(car.position + stage.side(spot.s) * spot.side * 1.7 + forward * (i - 0.5))
 		var toward = stage.at(spot.s) - official.position
 		official.rotation.y = atan2(-toward.x, -toward.z)

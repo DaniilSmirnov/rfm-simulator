@@ -33,9 +33,18 @@ var finnish_forest: RefCounted
 var water: RefCounted
 var forest_life: RefCounted
 var lakeland = false
+const AlpineWinter = preload("res://scripts/alpine_winter.gd")
+const AlpineScenery = preload("res://scripts/alpine_scenery.gd")
+const AlpineLife = preload("res://scripts/alpine_life.gd")
+var alpine: RefCounted
+var alpine_life: RefCounted
 
-const City = preload("res://scripts/vineyard.gd")
-var city: Node3D
+const VillageStage = preload("res://scripts/village_stage.gd")
+const StageSolids = preload("res://scripts/stage_solids.gd")
+var village: RefCounted
+# Static and destructible scenery (houses, walls, lamps); empty on most stages.
+var solids: Node3D
+var life: RefCounted
 const BakedVillage = preload("res://scripts/baked_village.gd")
 var baked_scene_path = "res://generated/village.scn"
 var loaded_baked = false
@@ -57,13 +66,14 @@ const WIDTH = 7.4
 # Five side-lane rows spaced 0.8 m apart, each stone 0.76 m wide.
 const SIDE_LANE_WIDTH = 3.96
 const TREE_CELL_SIZE = 16.0
-const STAGES = ["Лесной перевал · гравий", "Зимний Турини · снег и лёд", "Виноградники · европейская деревня", "Красный каньон · пустынный грунт", "Финский лес · гравий и озёра"]
+const STAGES = ["Лесной перевал · гравий", "Зимний Турини · асфальт, снег и лёд", "Виноградники · провансальская деревня", "Красный каньон · пустынный грунт", "Финский лес · гравий и озёра"]
 var variant = 0
 var winter = false
-var urban = false
-var village_church_center = Vector3.ZERO
+var provence = false
 var points: PackedVector3Array = []
-var gravel_landform_frames: Array[Dictionary] = []
+# Nearest-segment index of a winding route (stations are not -z there).
+var route_segment_step = STEP
+var _last_route_group = 0
 var road_segment_starts = PackedVector2Array()
 var road_segment_deltas = PackedVector2Array()
 var road_segment_inverse_lengths = PackedFloat64Array()
@@ -100,18 +110,24 @@ var rng = RandomNumberGenerator.new()
 func _init(selected: int = 0) -> void:
 	variant = clampi(selected, 0, STAGES.size() - 1)
 	winter = variant == 1
-	urban = variant == 2
+	provence = variant == 2
 	desert = variant == 3
 	lakeland = variant == 4
+	# Joins the scene only when the world is built: the menu stays empty.
+	solids = StageSolids.new()
+	solids.name = "StageSolids"
+	solids.stage = self
 	if desert:
 		canyon = Canyon.new()
+	if winter:
+		alpine = AlpineWinter.new()
 	if lakeland:
 		finnish_forest = FinnishForest.new()
 		water = Water.new()
 		water.stage = self
 		forest_life = ForestLife.new()
-	if urban:
-		village_church_center = village_main_at(435.0) + village_main_side(435.0) * 43.0
+	if provence:
+		village = VillageStage.new()
 	for i in range(int(LENGTH / STEP) + 1):
 		var s = i * STEP
 		if desert:
@@ -119,16 +135,19 @@ func _init(selected: int = 0) -> void:
 		elif lakeland:
 			points.append(finnish_forest.route(s))
 		elif winter:
-			points.append(Vector3(sin(s / 48.0) * 58.0 + sin(s / 115.0) * 14.0, 18.0 + s * 0.085 + sin(s / 36.0) * 5.0, -s))
-		elif urban:
-			points.append(urban_at(s))
+			points.append(alpine.route(s))
+		elif provence:
+			points.append(village.route(s))
 		else:
 			points.append(Vector3(sin(s / 90.0) * 38.0 + sin(s / 38.0) * 9.0, 5.0 + s * 0.024 + sin(s / 58.0) * 3.7, -s))
-	if urban:
-		_index_urban_route()
-		for crest in [Vector3(423.0, 1.05, 36.0), Vector3(450.0, 0.75, 32.0)]:
-			var forward = flat(direction(crest.x)).normalized()
-			gravel_landform_frames.append({"centre": flat(at(crest.x)), "forward": forward, "across": Vector2(-forward.y, forward.x), "height": crest.y, "length": crest.z})
+	if provence:
+		# Index the fine route table: the village has 90-degree corners and a hairpin.
+		var samples = PackedVector3Array()
+		for i in range(int(LENGTH) + 1):
+			samples.append(village.route(float(i)))
+		_index_route(samples, 1.0)
+		village.configure(self)
+		return
 	if desert:
 		canyon.configure(self)
 		return
@@ -138,13 +157,6 @@ func _init(selected: int = 0) -> void:
 	for s in [140.0, 310.0, 505.0, 690.0]:
 		if winter:
 			clearings.append(at(s) + side(s) * (13.0 if s < 500 else -13.0))
-			continue
-		if urban:
-			var parking_s = [140.0, 310.0, 505.0, 770.0][clearings.size()]
-			var parking_side = 1.0 if clearings.is_empty() else -1.0
-			var parking = at(parking_s) + side(parking_s) * parking_side * 10.5
-			parking.y = at(parking_s).y + 0.08
-			clearings.append(parking)
 			continue
 		var direction_sign = 1.0 if s < 500 else -1.0
 		var lookout = at(s) + side(s) * direction_sign * 27.0
@@ -168,6 +180,7 @@ func _init(selected: int = 0) -> void:
 		for i in range(4):
 			var station = 85.0 + i * 190.0
 			snow_camps.append(at(station) + side(station) * (7.2 if i % 2 == 0 else -7.2))
+		AlpineScenery.configure(self)
 		_place_snow_glades()
 
 # Level, tree-free glades beside straights. Snow is left untouched so a crew
@@ -181,7 +194,7 @@ func _place_snow_glades() -> void:
 		var before = direction(station - GLADE_STRAIGHT)
 		var after = direction(station + GLADE_STRAIGHT)
 		var turn = Vector2(before.x, before.z).angle_to(Vector2(after.x, after.z))
-		if absf(turn) < GLADE_MAX_TURN: candidates.append([absf(turn), station])
+		if absf(turn) < GLADE_MAX_TURN and not alpine.glade_blocked(station): candidates.append([absf(turn), station])
 	candidates.sort()
 	for candidate in candidates:
 		var station: float = candidate[1]
@@ -198,6 +211,8 @@ func _place_snow_glades() -> void:
 
 func at(s: float) -> Vector3:
 	s = clampf(s, 0, LENGTH - 0.001)
+	if provence:
+		return village.route(s)
 	var index = int(s / STEP)
 	return points[index].lerp(points[index + 1], fmod(s, STEP) / STEP)
 
@@ -208,80 +223,40 @@ func side(s: float) -> Vector3:
 	return direction(s).cross(Vector3.UP).normalized()
 
 func road_s(pos: Vector3) -> float:
-	if urban:
-		return float(urban_nearest(pos).s)
+	if provence:
+		return float(route_nearest(pos).s)
 	return clampf(-pos.z, 0, LENGTH)
 
 func road_distance(pos: Vector3) -> float:
-	if urban:
-		return float(urban_nearest(pos).distance)
+	if provence:
+		return float(route_nearest(pos).distance)
 	var p = at(road_s(pos))
 	return Vector2(pos.x - p.x, pos.z - p.z).length()
 
 func roughness(s: float) -> float:
-	if urban:
-		return (sin(s * 0.55) * 0.045 + sin(s * 1.7) * 0.018) if village_forest_detour(s) else (sin(s * 3.4) * 0.014 if village(s) else sin(s * 0.8) * 0.018)
+	if provence:
+		return village.roughness(s)
 	# Broad crests plus broken ruts; deterministic across all room members.
+	if winter:
+		return alpine.roughness(s)
 	return sin(s * 0.46) * 0.075 + sin(s * 1.13) * 0.035 + pow(maxf(0, cos((s - 32.0) * TAU / 46.0)), 10) * 0.55
-
-# Compact smooth profiles keep junctions and village paving untouched.
-func gravel_profile(s: float, center: float, half_length: float) -> float:
-	var t = absf(s - center) / half_length
-	return (1.0 + cos(t * PI)) * 0.5 if t < 1.0 else 0.0
-
-func village_gravel_landform(pos: Vector3) -> float:
-	# The road crosses a broad hill, rather than sitting on a narrow ramp.
-	# World-space profiles are shared by tyre contact and surrounding terrain.
-	var height = 0.0
-	for frame in gravel_landform_frames:
-		var offset = flat(pos) - frame.centre
-		var along = offset.dot(frame.forward)
-		var lateral = offset.dot(frame.across)
-		height += gravel_profile(along, 0.0, frame.length) * gravel_profile(lateral, 0.0, 24.0) * frame.height
-	return height
-
-func gravel_relief(pos: Vector3, s: float) -> float:
-	if not village_forest_detour(s):
-		return 0.0
-	var lateral = (pos - at(s)).dot(side(s))
-	var edge = 1.0 - smoothstep(road_width(s) * 0.45, road_width(s) * 0.75, absf(lateral))
-	var blend = smoothstep(386.0, 398.0, s) * (1.0 - smoothstep(474.0, 484.0, s))
-	var bank = lateral * sin(s * 0.095) * 0.10
-	var bumps = sin(s * 0.65) * 0.025 + sin(s * 0.32 + lateral * 0.75) * 0.035
-	var wheel_rut = exp(-pow((absf(lateral) - 0.80) / 0.24, 2.0))
-	var ruts = -wheel_rut * (0.09 + 0.04 * sin(s * 0.6))
-	var puddles = -gravel_profile(s, 407.0, 2.2) * 0.13 * exp(-pow((lateral - 0.5) / 0.7, 2.0))
-	puddles -= gravel_profile(s, 469.0, 2.2) * 0.14 * exp(-pow((lateral + 0.5) / 0.7, 2.0))
-	puddles -= gravel_profile(s, 412.0, 2.4) * 0.16 * exp(-pow((lateral + 0.55) / 0.8, 2.0))
-	puddles -= gravel_profile(s, 463.0, 2.6) * 0.18 * exp(-pow((lateral - 0.55) / 0.8, 2.0))
-	return (bank + bumps + ruts + puddles) * edge * blend + village_gravel_landform(pos) * smoothstep(382.0, 390.0, s) * (1.0 - smoothstep(480.0, 488.0, s))
 
 func grip(pos: Vector3) -> float:
 	if lakeland:
 		return finnish_forest.grip(self, pos)
 	if desert:
 		return 0.48 if road_distance(pos) > road_width(road_s(pos)) * 0.5 or (road_s(pos) > 550.0 and road_s(pos) < 670.0) else 0.74
-	if urban:
-		var nearest = urban_nearest(pos)
-		var s: float = nearest.s
-		if nearest.distance >= road_width(s) * 0.55:
-			return 0.58
-		var base = 0.62 if village_forest_detour(s) else (0.86 if village(s) else 1.02)
-		if village_forest_detour(s):
-			var lateral = (pos - at(s)).dot(side(s))
-			var wet = gravel_profile(s, 407.0, 2.2) * exp(-pow((lateral - 0.5) / 0.7, 2.0))
-			wet += gravel_profile(s, 469.0, 2.2) * exp(-pow((lateral + 0.5) / 0.7, 2.0))
-			wet += gravel_profile(s, 412.0, 2.4) * exp(-pow((lateral + 0.55) / 0.8, 2.0))
-			wet += gravel_profile(s, 463.0, 2.6) * exp(-pow((lateral - 0.55) / 0.8, 2.0))
-			return lerpf(base, 0.38, clampf(wet, 0.0, 1.0))
-		return base
+	if provence:
+		return village.grip(pos)
 	if winter:
 		if snow.is_dug(self, pos): return 0.65
 		if DeepSnow.depth(self, pos) > 0.02:
 			return lerpf(0.24, 0.50, snow.packed(pos))
 		if road_distance(pos) > WIDTH * 0.55:
 			return 0.32
-		return 0.22 if int(road_s(pos) / 32) % 3 == 1 else 0.47
+		# Monte-Carlo tarmac: dry, wet, snow with dark wheel tracks, black ice.
+		var station = road_s(pos)
+		return alpine.surface_grip(station, (pos - at(station)).dot(side(station)), road_width(station) * 0.5)
 	if road_distance(pos) > WIDTH * 0.55:
 		return 0.48
 	return 0.42 if int(road_s(pos) / STEP) % 13 == 7 else 0.78
@@ -320,42 +295,18 @@ func base_ground(pos: Vector3) -> float:
 		return finnish_forest.ground(self, pos)
 	if desert:
 		return canyon.ground(self, pos)
-	if urban:
-		# Level foundation beneath the hollow church; keep terrain out of its nave.
-		var church_offset = pos - village_church_center
-		if absf(church_offset.z) < 5.6 and church_offset.x > -14.6 and church_offset.x < 10.8:
-			return 2.0
-		var paved_height = village_paved_height(pos)
-		if paved_height != INF:
-			return paved_height
-		var nearest = urban_nearest(pos)
-		var s: float = nearest.s
-		var p = at(s)
-		var distance: float = nearest.distance
-		var road_height = p.y + roughness(s)
-		if village_forest_detour(s):
-			road_height += gravel_relief(pos, s)
-		if s > 370.0 and s < 500.0:
-			var connection = smoothstep(382.0, 390.0, s) * (1.0 - smoothstep(480.0, 488.0, s))
-			road_height = lerpf(2.0775, road_height, connection)
-		# The distant landscape must not change elevation when the nearest road
-		# switches from the countryside to the lower village forest bypass.
-		var height = lerpf(road_height, village_hill_height(pos), smoothstep(road_width(s) * 0.5 + 1.0, 24.0, distance))
-		for parking in clearings:
-			var d = flat(pos).distance_to(flat(parking))
-			height = lerpf(parking.y, height, smoothstep(5.0, 16.0, d))
-		return height
+	if provence:
+		return village.ground(pos)
 	var s = road_s(pos)
 	var p = at(s)
 	var distance = road_distance(pos)
 	var slope = maxf(0, distance - 10.0)
-	var height = p.y + roughness(s) * (1.0 - smoothstep(3.7, 8.0, distance)) + sin(pos.x * 0.07 + s * 0.013) * slope * 0.08 + slope * (0.08 if urban else 0.20)
+	var height = p.y + roughness(s) * (1.0 - smoothstep(3.7, 8.0, distance)) + sin(pos.x * 0.07 + s * 0.013) * slope * 0.08 + slope * 0.20
 	if variant == 0:
 		height += forest_relief(pos, distance)
-	if urban:
-		height = p.y + sin(pos.x * 0.12 + s * 0.04) * 0.025 + slope * 0.08
 	if winter:
-		height += slope * 0.42 + sin(s / 85.0) * slope * 0.15
+		# Corniche cut into the mountain, lacet ladders and the col saddle.
+		height = alpine.land(self, pos, s, distance)
 		for glade in snow_glades:
 			var reach = Vector2(pos.x - glade.x, pos.z - glade.z).length()
 			if reach >= GLADE_BLEND: continue
@@ -375,27 +326,6 @@ func base_ground(pos: Vector3) -> float:
 				height = lerpf(height, trail_sample.height, blend)
 	return height - DeepSnow.camp_depression(self, pos) if winter else height
 
-func village_country_relief(s: float) -> float:
-	return gravel_profile(s, 94.0, 32.0) * 0.65 - gravel_profile(s, 126.0, 28.0) * 0.35 + gravel_profile(s, 224.0, 36.0) * 0.80 + gravel_profile(s, 620.0, 34.0) * 0.70 + gravel_profile(s, 748.0, 30.0) * 0.95 - gravel_profile(s, 786.0, 32.0) * 0.35
-
-func village_forest_microrelief(pos: Vector3) -> float:
-	# Geographic mask, independent of nearest route segment: no switching cliffs.
-	var s = -pos.z
-	var edge = absf(pos.x - village_main_at(clampf(s, 0, LENGTH)).x)
-	var mask = smoothstep(270.0, 310.0, s) * (1.0 - smoothstep(570.0, 620.0, s)) * smoothstep(36.0, 58.0, edge)
-	return (sin(pos.x * 0.13) * sin(pos.z * 0.15) * 0.28 + sin(pos.x * 0.31 + pos.z * 0.16) * 0.14 + sin(pos.z * 0.035 + pos.x * 0.02) * 0.45) * mask
-
-func village_hill_height(pos: Vector3) -> float:
-	var station = clampf(-pos.z, 0.0, LENGTH - 0.001)
-	var axis = village_main_at(station)
-	var distance = absf(pos.x - axis.x)
-	var excess = maxf(distance - 8.0, 0.0)
-	var hillside = (sqrt(excess * excess + 1296.0) - 36.0) * 0.045
-	var village_blend = smoothstep(250.0, 320.0, station) * (1.0 - smoothstep(550.0, 640.0, station))
-	var road_blend = smoothstep(190.0, 300.0, station) * (1.0 - smoothstep(570.0, 710.0, station))
-	var axis_height = axis.y - (1.0 - road_blend) * (sin(station / 14.0) * 0.32 + gravel_profile(station, 178.0, 14.0) * 1.1 + gravel_profile(station, 686.0, 16.0) * 1.25)
-	return axis_height + hillside * (1.0 - village_blend) + sin(pos.x * 0.016 + pos.z * 0.010) * minf(hillside * 0.08, 0.20) * (1.0 - village_blend) + village_forest_microrelief(pos) + village_gravel_landform(pos)
-
 # Trees must touch the *rendered* terrain, not the continuous ground()
 # function. Terrain is triangulated in 4 m cells (2 m near forest roads)
 # and its vertices are 0.25 m below ground(). Reproduce that interpolation
@@ -404,29 +334,50 @@ func village_hill_height(pos: Vector3) -> float:
 # On those boundaries, snap the fine tile's midpoint to the coarse edge.
 # Otherwise the ground() midpoint can be above/below the straight 4 m edge,
 # creating visible cracks (and floating trees).
+# The village is baked offline: memoise tile steps and vertex heights while its
+# terrain, road and planting are generated (cleared after the build).
+var terrain_cache_enabled = false
+var _tile_step_cache: Dictionary = {}
+var _vertex_height_cache: Dictionary = {}
+
+func _set_terrain_cache(enabled: bool) -> void:
+	terrain_cache_enabled = enabled
+	_tile_step_cache.clear()
+	_vertex_height_cache.clear()
+
 func terrain_tile_step(cell_x: float, cell_z: float) -> float:
+	if terrain_cache_enabled:
+		var key = Vector2(cell_x, cell_z)
+		if not _tile_step_cache.has(key):
+			_tile_step_cache[key] = _terrain_tile_step(cell_x, cell_z)
+		return _tile_step_cache[key]
+	return _terrain_tile_step(cell_x, cell_z)
+
+func _terrain_tile_step(cell_x: float, cell_z: float) -> float:
 	var p = Vector3(cell_x + 2.0, 0, cell_z + 2.0)
-	var nearest = urban_nearest(p) if urban else {}
-	if urban and nearest.distance < road_width(nearest.s) * 0.5 + 4.0:
-		return 1.0
+	if provence:
+		return village.tile_step(p)
 	if lakeland and finnish_forest.shoreline_near(road_s(p), p.x - at(road_s(p)).x):
 		return 2.0
-	return 2.0 if ((variant == 0 or urban or lakeland) and road_distance(p) < 12.0) or (winter and road_distance(p) < 30.0) else 4.0
+	return 2.0 if ((variant == 0 or lakeland) and road_distance(p) < 12.0) or (winter and road_distance(p) < 30.0) else 4.0
 
 func terrain_base_vertex_height(x: float, z: float) -> float:
 	var p = Vector3(x, 0, z)
-	var margin = 0.25
-	if urban:
-		var nearest = urban_nearest(p)
-		margin = lerpf(0.20, 0.25, smoothstep(road_width(nearest.s) * 0.5, road_width(nearest.s) * 0.5 + 3.0, nearest.distance))
-	return base_ground(p) - margin
+	return base_ground(p) - 0.25
 
 func terrain_vertex_height(x: float, z: float) -> float:
+	if terrain_cache_enabled:
+		var key = Vector2(x, z)
+		if not _vertex_height_cache.has(key):
+			_vertex_height_cache[key] = _terrain_vertex_height(x, z)
+		return _vertex_height_cache[key]
+	return _terrain_vertex_height(x, z)
+
+func _terrain_vertex_height(x: float, z: float) -> float:
 	if desert:
 		return canyon.base_ground(self, Vector3(x, 0, z)) - 0.25
-	var value = terrain_base_vertex_height(x, z)
-	if variant != 0 and not urban and not winter and not lakeland:
-		return value
+	if variant != 0 and not provence and not winter and not lakeland:
+		return terrain_base_vertex_height(x, z)
 	var cell_x = floorf(x / 4.0) * 4.0
 	var cell_z = floorf(z / 4.0) * 4.0
 	if not is_equal_approx(x, cell_x) and is_equal_approx(z, cell_z):
@@ -437,7 +388,7 @@ func terrain_vertex_height(x: float, z: float) -> float:
 		var edge_step = maxf(terrain_tile_step(x - 4, cell_z), terrain_tile_step(x, cell_z))
 		var begin = floorf(z / edge_step) * edge_step
 		return lerpf(terrain_base_vertex_height(x, begin), terrain_base_vertex_height(x, begin + edge_step), (z - begin) / edge_step)
-	return value
+	return terrain_base_vertex_height(x, z)
 
 func terrain_surface_height(pos: Vector3) -> float:
 	var cell_x = floorf(pos.x / 4.0) * 4.0
@@ -503,51 +454,67 @@ func trail_distance(pos: Vector3, cutoff: float = INF) -> float:
 		distance = minf(distance, float(_trail_sample(pos, trail).distance))
 	return distance
 
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_PREDELETE and is_instance_valid(solids) and solids.get_parent() == null:
+		solids.free()
+
+func _attach_solids() -> void:
+	if solids.get_parent() == null:
+		add_child(solids)
+
 func build(use_baked: bool = true) -> void:
-	if urban and use_baked and BakedVillage.load_into(self, baked_scene_path):
+	_attach_solids()
+	if provence and use_baked and BakedVillage.load_into(self, baked_scene_path):
+		life = village.make_life()
 		_build_finish()
 		return
 	rng.seed = 7102026 + variant * 971
+	_set_terrain_cache(provence)
 	_build_terrain()
 	_build_road()
 	_build_nature()
 	_build_details()
+	_set_terrain_cache(false)
 	_build_finish()
 
 func build_async(progress: Callable) -> void:
-	if urban and ResourceLoader.exists(baked_scene_path):
+	_attach_solids()
+	if provence and ResourceLoader.exists(baked_scene_path):
 		await progress.call("Загрузка спецучастка", 0)
 		if await BakedVillage.load_into_async(self, baked_scene_path, progress):
+			life = village.make_life()
 			await progress.call("Судьи и указатели", 75)
 			_build_finish()
 			return
 	rng.seed = 7102026 + variant * 971
+	_set_terrain_cache(provence)
 	await progress.call("Рельеф", 0)
 	await _build_terrain(true)
 	await progress.call("Дорога", 30)
 	_build_road()
-	await progress.call("Скалы и окружение" if desert else ("Лес и озёра" if lakeland else "Лес и окружение"), 40)
+	await progress.call("Скалы и окружение" if desert else ("Лес и озёра" if lakeland else ("Виноградники и лаванда" if provence else ("Альпы и окружение" if winter else "Лес и окружение"))), 40)
 	await _build_nature(true)
 	await progress.call("Объекты спецучастка", 55)
 	await _build_details(true)
+	_set_terrain_cache(false)
 	await progress.call("Судьи и указатели", 75)
 	_build_finish()
 
 func _build_nature(cooperative: bool = false) -> void:
-	if desert:
-		return
+	if desert or provence:
+		return # The village builds its own groves, crops and verges.
 	var forest: Array[Dictionary] = []
-	for i in range(100 if urban else (520 if winter else 7600)):
+	for i in range(900 if winter else 7600):
 		if cooperative and i % 400 == 0:
 			await get_tree().process_frame
 		var p = Vector3(rng.randf_range(-150, 150), 0, rng.randf_range(-LENGTH - 65, 50))
-		if urban:
-			continue
 		if road_distance(p) < 9:
 			continue
 		if not winter and trail_distance(p) < 3.2:
 			continue
 		if lakeland and (finnish_forest.reserved(p, 1.0) or water.depth(p) > -0.4):
+			continue
+		if winter and (alpine.reserved(p, 2.0) or AlpineScenery.bare_rock(self, p)):
 			continue
 		var in_clearing = false
 		for c in clearings:
@@ -564,12 +531,14 @@ func _build_nature(cooperative: bool = false) -> void:
 	forest_data = forest
 	_rebuild_tree_index()
 	_build_forest(forest)
-	for i in range(0 if urban else 100):
+	for i in range(100):
 		var s = rng.randf_range(20, LENGTH - 15)
 		var p = at(s) + side(s) * rng.randf_range(-6, 6)
 		if road_distance(p) < 4.3:
 			continue
 		if lakeland and (finnish_forest.reserved(p, 1.0) or water.depth(p) > -0.1):
+			continue
+		if winter and alpine.reserved(p, 1.0):
 			continue
 		p.y = ground(p)
 		var radius = rng.randf_range(0.3, 1)
@@ -590,17 +559,19 @@ func _build_details(cooperative: bool = false) -> void:
 		water.build(self)
 		finnish_forest.build(self)
 		forest_life.build(self)
-	if urban:
-		if cooperative:
-			await _build_city(true)
-		else:
-			_build_city()
+	if winter:
+		AlpineScenery.build(self)
+		alpine_life = AlpineLife.new()
+		alpine_life.build(self)
+	if provence:
+		await village.build(cooperative)
+		life = village.make_life()
 
 func _build_finish() -> void:
 	for i in range(clearings.size()):
 		var c = clearings[i]
-		if urban or desert:
-			# Vineyard spectator spots are ordinary roadside/courtyard places.
+		if provence or desert:
+			# Village spectator spots are ordinary roadside places and the square.
 			# Keep the gameplay positions, but do not build a separate parking entity.
 			continue
 		RallyProps.cylinder(self, c + Vector3(0, 1.2, 0), 0.07, 0.07, 2.4, Color("d5bc8e"), 5)
@@ -613,8 +584,10 @@ func _build_finish() -> void:
 		label.pixel_size = 0.005
 		label.modulate = Color("344537")
 		label.outline_size = 0
+	if winter:
+		AlpineScenery.build_peaks(self)
 	# Distant angular ridges, original meshes.
-	for i in range(0 if urban or desert else 18):
+	for i in range(0 if provence or desert or winter else 18):
 		var p = Vector3((-1 if i % 2 == 0 else 1) * rng.randf_range(220, 340), 30, -i * 65.0)
 		RallyProps.cylinder(self, p, rng.randf_range(120, 180), 0, rng.randf_range(220, 340) if winter else rng.randf_range(130, 210), Color("c3d1db") if winter else Color("697d70"), 5)
 
@@ -623,22 +596,14 @@ func _build_finish() -> void:
 	add_child(officials)
 	officials.build()
 
-func _build_city(cooperative: bool = false) -> void:
-	city = City.new()
-	city.stage = self
-	add_child(city)
-	if cooperative:
-		await city.build(true)
-	else:
-		city.build()
-
 func _build_terrain(cooperative: bool = false) -> void:
 	var builders: Dictionary = {}
+	var village_colors: Dictionary = {}
 	for z in range(-920, 81, 4):
 		if cooperative and (z + 920) % 64 == 0:
 			await get_tree().process_frame
 		for x in range(-204, 204, 4):
-			var tile = Vector2i(floori(x / 64.0), floori(z / 64.0)) if urban or winter or lakeland else Vector2i.ZERO
+			var tile = Vector2i(floori(x / 64.0), floori(z / 64.0)) if provence or winter or lakeland else Vector2i.ZERO
 			if not builders.has(tile):
 				var builder = SurfaceTool.new()
 				builder.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -654,11 +619,16 @@ func _build_terrain(cooperative: bool = false) -> void:
 					var d = a + Vector3(step, 0, step)
 					for v in [a, b, c, b, d, c]:
 						v.y = terrain_vertex_height(v.x, v.z)
-						var color = Color("e1edf1") if winter else Color(0.32, 0.38, 0.25)
+						var color = alpine.terrain_color(self, v) if winter else Color(0.32, 0.38, 0.25)
 						if desert:
 							color = Color("b56443").lerp(Color("dfac74"), (sin(v.y * 0.65) + 1.0) * 0.5)
 						if lakeland:
 							color = finnish_forest.terrain_color(self, v, 0.0)
+						if provence:
+							var key = Vector2(v.x, v.z)
+							if not village_colors.has(key):
+								village_colors[key] = village.terrain_color(v)
+							color = village_colors[key]
 						if variant == 0:
 							var patch = (sin(v.x * 0.065) * sin(v.z * 0.041) + 1.0) * 0.5
 							color = Color("514a32").lerp(Color("485c36"), patch)
@@ -680,11 +650,6 @@ func _build_terrain(cooperative: bool = false) -> void:
 		if winter:
 			snow.register_chunk(self, tile, n)
 
-func draw_base_road_surface(s: float) -> bool:
-	# The village has its own explicit cobblestone mesh; do not leave asphalt
-	# underneath it where it can show through between individual stones.
-	return not village(s) or (urban and ((s >= 381.0 and s <= 488.0) or s >= 569.0))
-
 func road_width(s: float) -> float:
 	if lakeland:
 		return finnish_forest.road_width(s)
@@ -692,17 +657,13 @@ func road_width(s: float) -> float:
 		var narrow = smoothstep(230.0, 265.0, s) * (1.0 - smoothstep(405.0, 435.0, s))
 		var wash = smoothstep(540.0, 565.0, s) * (1.0 - smoothstep(655.0, 680.0, s))
 		return WIDTH - narrow * 1.2 + wash * 1.6
-	return SIDE_LANE_WIDTH if urban and s > 370.0 and s < 500.0 else WIDTH
+	if provence:
+		return village.road_width(s)
+	return WIDTH
 
 func road_surface_vertex(s: float, lateral: float) -> Vector3:
 	var p = at(s) + side(s) * lateral
-	var surface_lift = 0.04
-	if urban and s > 370.0 and s < 500.0:
-		surface_lift *= smoothstep(382.0, 386.0, s) * (1.0 - smoothstep(484.0, 488.0, s))
-	if urban and s >= 569.0 and s <= 573.0:
-		# Overlap the final cobblestone row, then meet the vineyard road smoothly.
-		surface_lift = lerpf(-0.015, 0.04, smoothstep(569.0, 573.0, s))
-	p.y = ground(p) + surface_lift
+	p.y = ground(p) + 0.04
 	return p
 
 func road_surface_color(p: Vector3, s: float) -> Color:
@@ -710,123 +671,112 @@ func road_surface_color(p: Vector3, s: float) -> Color:
 		return finnish_forest.road_color(p, s, (p - at(s)).dot(side(s)))
 	if desert:
 		return Color("d4a475").lightened(sin(p.z * 0.25 + p.x * 0.10) * 0.025)
-	# The same world-space vertex belongs to adjacent segments whose station
-	# parameters differ by one. Shading with the segment's start station made
-	# identical vertices get different colours, creating visible gravel seams.
-	# For the village detour derive the actual station from p, once per colour
-	# calculation, regardless of which adjacent triangle references it.
-	var station = road_s(p) if urban else s
-	var base = Color("708a9c") if winter else ((Color("857763") if station >= 381.0 and station <= 489.0 else Color("525757")) if urban else Color("9d896b"))
+	if winter:
+		# Derive the station from the vertex, so shared vertices match.
+		var winter_station = road_s(p)
+		return alpine.road_color(p, winter_station, (p - at(winter_station)).dot(side(winter_station)), road_width(winter_station) * 0.5)
+	if provence:
+		# Derive the station from the vertex itself, so vertices shared by two
+		# segments get one colour and no seam appears along the strips.
+		var station = road_s(p)
+		return village.road_color(p, station, (p - at(station)).dot(side(station)))
+	var base = Color("708a9c") if winter else Color("9d896b")
 	var shade = sin(p.x * 0.17 + p.z * 0.11) * 0.025 + sin(p.z * 0.29 - p.x * 0.07) * 0.015
-	if village_forest_detour(station):
-		var lateral = (p - at(station)).dot(side(station))
-		base = base.darkened(exp(-pow((absf(lateral) - 0.80) / 0.28, 2.0)) * 0.18)
 	return base.lightened(shade)
 
+func road_surface_kind(s: float) -> String:
+	return village.surface(s) if provence else "default"
+
 func _build_road() -> void:
-	var st = SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	# One mesh per surface kind: the village cobbles carry a texture.
+	var builders: Dictionary = {}
+	# Strips share their edge vertices; sample ground and colour once per vertex.
+	var vertices: Dictionary = {}
+	var vertex = func(station: float, lateral: float) -> Vector3:
+		var key = Vector2(station, lateral)
+		if not vertices.has(key):
+			vertices[key] = road_surface_vertex(station, lateral)
+		return vertices[key]
+	var colors: Dictionary = {}
+	var color_of = func(v: Vector3, station: float) -> Color:
+		if not colors.has(v):
+			colors[v] = road_surface_color(v, station)
+		return colors[v]
 	for i in range(int(LENGTH)):
 		var s = float(i)
-		if draw_base_road_surface(s):
-			# Bound physical segment length as well as station length: the side
-			# lanes cover many metres per station through the village bypass.
-			var divisions = maxi(4, ceili(at(s).distance_to(at(s + 1.0)) / 0.75))
-			for segment in range(divisions):
-				var begin = s + float(segment) / divisions
-				var end = s + float(segment + 1) / divisions
-				var strips = 8 if desert or village_forest_detour(s) else 4
-				for strip in range(strips):
-					var width = road_width(s)
-					var left = -width * 0.5 + width * float(strip) / strips
-					var right = -width * 0.5 + width * float(strip + 1) / strips
-					var a = road_surface_vertex(begin, right)
-					var b = road_surface_vertex(begin, left)
-					var c = road_surface_vertex(end, right)
-					var d = road_surface_vertex(end, left)
-					for v in [a, b, c, b, d, c]:
-						st.set_color(road_surface_color(v, s))
+		var kind = road_surface_kind(s)
+		if not builders.has(kind):
+			var builder = SurfaceTool.new()
+			builder.begin(Mesh.PRIMITIVE_TRIANGLES)
+			builders[kind] = builder
+		var st: SurfaceTool = builders[kind]
+		# Bound physical segment length as well as station length.
+		var divisions = maxi(4, ceili(at(s).distance_to(at(s + 1.0)) / 0.75))
+		for segment in range(divisions):
+			var begin = s + float(segment) / divisions
+			var end = s + float(segment + 1) / divisions
+			var strips = 12 if winter else (8 if desert or provence else 4)
+			for strip in range(strips):
+				var width = road_width(s)
+				var left = -width * 0.5 + width * float(strip) / strips
+				var right = -width * 0.5 + width * float(strip + 1) / strips
+				var a: Vector3 = vertex.call(begin, right)
+				var b: Vector3 = vertex.call(begin, left)
+				var c: Vector3 = vertex.call(end, right)
+				var d: Vector3 = vertex.call(end, left)
+				for v in [a, b, c, b, d, c]:
+					st.set_color(color_of.call(v, s))
+					st.set_uv(Vector2(v.x, v.z) * 0.45)
+					st.add_vertex(v)
+			if provence:
+				# A visible earth shoulder closes the road-to-terrain seam.
+				# Keep the analytical tyre-contact surface unchanged.
+				for edge_side in [-1.0, 1.0]:
+					var a: Vector3 = vertex.call(begin, edge_side * road_width(s) * 0.5)
+					var b: Vector3 = vertex.call(end, edge_side * road_width(s) * 0.5)
+					var c = a
+					var d = b
+					c.y = terrain_surface_height(c)
+					d.y = terrain_surface_height(d)
+					for v in ([a, c, b, b, c, d] if edge_side > 0 else [a, b, c, b, d, c]):
+						st.set_color(color_of.call(v, s).darkened(0.12))
+						st.set_uv(Vector2(v.x, v.z) * 0.45)
 						st.add_vertex(v)
-				if urban:
-					# A visible earth shoulder closes the road-to-terrain seam.
-					# Keep the analytical tyre-contact surface unchanged.
-					for edge_side in [-1.0, 1.0]:
-						var a = road_surface_vertex(begin, edge_side * road_width(s) * 0.5)
-						var b = road_surface_vertex(end, edge_side * road_width(s) * 0.5)
-						var c = a
-						var d = b
-						c.y = terrain_surface_height(c)
-						d.y = terrain_surface_height(d)
-						for v in ([a, c, b, b, c, d] if edge_side > 0 else [a, b, c, b, d, c]):
-							st.set_color(road_surface_color(v, s).darkened(0.12))
-							st.add_vertex(v)
 		# Broken muddy wheel tracks, shallow puddles.
 		var ford = lakeland and absf(s - finnish_forest.FORD_STATION) < 30.0
-		if not urban and not desert and not ford and i % 12 == 0:
+		if not provence and not desert and not winter and not ford and i % 12 == 0:
 			for offset in [-1.0, 1.0]:
 				var p = at(s) + side(s) * offset
 				p.y = ground(p)
 				var rut = RallyProps.box(self, p + Vector3(0, 0.07, 0), Vector3(0.5, 0.025, 2.7), Color("586974") if winter else Color("77654c"))
 				rut.rotation.y = atan2(-direction(s).x, -direction(s).z)
-		if not urban and not desert and not ford and i % 52 == 28:
+		if not provence and not desert and not winter and not ford and i % 52 == 28:
 			var p = at(s) + side(s) * 1.5
 			p.y = ground(p)
 			var puddle = RallyProps.cylinder(self, p + Vector3(0, 0.10, 0), 1.1, 1.1, 0.025, Color("56645d"), 9)
 			puddle.scale.z = 1.7
-	# Shared positions and colours allow smooth normals across strip joins.
-	st.index()
-	st.generate_normals()
-	var n = MeshInstance3D.new()
-	n.mesh = st.commit()
-	var mat = RallyProps.material(Color.WHITE)
-	mat.vertex_color_use_as_albedo = true
-	mat.vertex_color_is_srgb = true
-	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	n.material_override = mat
-	n.name = "StageRoadSurface"
-	add_child(n)
+	var kinds = builders.keys()
+	kinds.sort()
+	for kind in kinds:
+		var st: SurfaceTool = builders[kind]
+		# Shared positions and colours allow smooth normals across strip joins.
+		st.index()
+		st.generate_normals()
+		var n = MeshInstance3D.new()
+		n.mesh = st.commit()
+		if provence:
+			n.material_override = village.road_material(kind)
+		else:
+			var mat = RallyProps.material(Color.WHITE)
+			mat.vertex_color_use_as_albedo = true
+			mat.vertex_color_is_srgb = true
+			mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+			n.material_override = mat
+		n.name = "StageRoadSurface" if kind == "default" else "StageRoadSurface_" + kind
+		add_child(n)
 	if winter:
 		Snowbanks.build(self)
-	if urban:
-		for station in [407.0, 412.0, 463.0, 469.0]:
-			var offset = (-0.55 if station < 440.0 else 0.55) if station in [412.0, 463.0] else (0.5 if station < 440.0 else -0.5)
-			var p = at(station) + side(station) * offset
-			p.y = ground(p) + 0.07
-			_build_gravel_puddle(p, station)
-
-func _build_gravel_puddle(center: Vector3, station: float) -> void:
-	var basis = Basis(Vector3.UP, atan2(-direction(station).x, -direction(station).z))
-	var shoreline: Array[Vector3] = []
-	for i in range(48):
-		var angle = i * TAU / 48.0
-		var ray = basis * Vector3(cos(angle) * 0.68, 0, sin(angle) * 1.36)
-		var low = 0.0
-		var high = 1.0
-		# Stop at the first bank; water stays horizontal, below surrounding road.
-		for sample in range(1, 13):
-			var radius = float(sample) / 12.0
-			if ground(center + ray * radius) + 0.04 >= center.y:
-				high = radius
-				break
-			low = radius
-		for iteration in range(8):
-			var radius = (low + high) * 0.5
-			if ground(center + ray * radius) + 0.04 >= center.y:
-				high = radius
-			else:
-				low = radius
-		shoreline.append(center + ray * low)
-	var builder = SurfaceTool.new()
-	builder.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for i in range(48):
-		for point in [center, shoreline[i], shoreline[(i + 1) % 48]]:
-			builder.add_vertex(point)
-	builder.generate_normals()
-	var puddle = MeshInstance3D.new()
-	puddle.name = "GravelPuddle_%d" % int(station)
-	puddle.mesh = builder.commit()
-	puddle.material_override = RallyProps.material(Color("56645d"))
-	add_child(puddle)
+		alpine.build_ice(self)
 
 
 # Four instanced draw calls for the forest instead of thousands of nodes.
@@ -1057,7 +1007,7 @@ func rock_hit(start: Vector3, end: Vector3, radius: float, allow_escape: bool = 
 	var best: Dictionary = {}
 	var earliest = INF
 	for rock in rocks_in_bounds(a.min(b) - Vector2.ONE * radius, a.max(b) + Vector2.ONE * radius):
-		var tyre_offset = 0.3 if rock.get("village_stone", false) else 0.0
+		var tyre_offset = 0.0
 		if minf(start.y, end.y) - tyre_offset > rock.pos.y + rock.height:
 			continue
 		var center = flat(rock.pos)
@@ -1111,83 +1061,83 @@ func woodland_spot(pos: Vector3, padding: float = 0.0) -> bool:
 			return false
 	return true
 
-func _detail_batch(name: String, mesh: Mesh, poses: Array, colors: Array, indices: Array = []) -> void:
-	var tree_group = "thuja" if name.begins_with("VillageThuja") else ("mixed" if name.begins_with("VillageForestTreeLayer") else "")
-	if not name.contains("_Tile_"):
-		if name in ["VillageThujaLower", "VillageForestTreeLayer0"]:
-			var ids: Array = []
-			for pose in poses:
-				ids.append(trees.size())
-				trees.append(pose.origin - Vector3.UP * pose.basis.y.length() * 0.5)
-				forest_data.append({"height": pose.basis.y.length() / (0.48 if tree_group == "thuja" else 0.64)})
-			detail_tree_groups[tree_group] = ids
-			_rebuild_tree_index()
-		if tree_group != "": indices = detail_tree_groups[tree_group]
-		if urban and name in ["VineyardRoadsideStones", "VillageGravelStones", "VillageForestStones", "VillageStones", "CropGroundStones"]:
-			for pose in poses:
-				var height = pose.basis.y.length()
-				rocks.append({"pos": pose.origin - Vector3.UP * height * 0.5, "radius": maxf(pose.basis.x.length(), pose.basis.z.length()) * 0.5, "height": height, "village_stone": true})
-	if (urban and name in ["MushroomCaps", "FlyAgaricCaps", "ToadstoolCaps", "MushroomStems"]) or name in ["LavenderFoliage", "LavenderStems", "LavenderFlowers", "VillageThujaLower", "VillageThujaMiddle", "VillageThujaCrown", "ForestGrass", "ForestPebbles", "CropGroundGrass", "CropGroundStones", "ForestBushes", "ForestBerryBushes", "ForestBerries", "ForestBushStems", "VineyardGrapes", "VineyardLeaves", "VineyardRoadsideGrass", "VineyardRoadsideStones", "VineyardRoadsideBushes", "VillageForestTreeLayer0", "VillageForestTreeLayer1", "VillageForestTreeLayer2", "VillageForestTreeLayer3", "VillageHorizonTreeLayer0", "VillageHorizonTreeLayer1", "VillageHorizonTreeLayer2", "VillageHorizonTreeLayer3", "VillageGravelGrass", "VillageGravelStones", "VillageGravelBoulders", "VillageForestGrass", "VillageForestStones", "VillageForestBoulders", "VillageForestBushes", "VillageForestBerryBushes", "VillageForestBerries", "VillageGrass", "VillageStones"]:
-		var cells = {}
+# Instanced decorative layers. Options (all optional):
+#   tiles: split into 64 m culling tiles named <name>_Tile_x_y ("GrassTile" for ForestGrass)
+#   range: visibility range of tiles in metres (default 160)
+#   tree: shared group id of a fallable tree; with tree_bases/tree_heights on
+#         the first (trunk) layer, those trees join trees[] and collide with cars
+#   collectible: remember instances so harvesting can hide them
+#   texture: albedo texture of the layer
+func _detail_batch(name: String, mesh: Mesh, poses: Array, colors: Array, options: Dictionary = {}) -> void:
+	var group: String = options.get("tree", "")
+	var indices: Array = []
+	if options.has("tree_bases"):
+		var ids: Array = []
 		for i in range(poses.size()):
-			var origin: Vector3 = poses[i].origin
-			var key = Vector2i(floori(origin.x / 64), floori(origin.z / 64))
-			if not cells.has(key):
-				cells[key] = {"poses": [], "colors": [], "indices": []}
-			cells[key].poses.append(poses[i])
-			cells[key].colors.append(colors[i])
-			cells[key].indices.append(i if indices.is_empty() else indices[i])
-		for key in cells:
-			var prefix = "GrassTile" if name == "ForestGrass" else name + "_Tile"
-			_detail_batch(prefix + "_%d_%d" % [key.x, key.y], mesh, cells[key].poses, cells[key].colors, cells[key].indices)
-		woodland_details[name] = poses.size()
+			ids.append(trees.size())
+			trees.append(options.tree_bases[i])
+			forest_data.append({"height": float(options.tree_heights[i])})
+		detail_tree_groups[group] = ids
+		_rebuild_tree_index()
+	if group != "":
+		indices = detail_tree_groups[group]
+	woodland_details[name] = poses.size()
+	if not options.get("tiles", false):
+		_detail_node(name, name, mesh, poses, colors, options, indices, false)
 		return
+	var cells = {}
+	for i in range(poses.size()):
+		var origin: Vector3 = poses[i].origin
+		var key = Vector2i(floori(origin.x / 64), floori(origin.z / 64))
+		if not cells.has(key):
+			cells[key] = {"poses": [], "colors": [], "indices": []}
+		cells[key].poses.append(poses[i])
+		cells[key].colors.append(colors[i])
+		cells[key].indices.append(i if indices.is_empty() else indices[i])
+	for key in cells:
+		var prefix = "GrassTile" if name == "ForestGrass" else name + "_Tile"
+		_detail_node(prefix + "_%d_%d" % [key.x, key.y], name, mesh, cells[key].poses, cells[key].colors, options, cells[key].indices, true)
+
+func _detail_node(node_name: String, source: String, mesh: Mesh, poses: Array, colors: Array, options: Dictionary, indices: Array, tiled: bool) -> void:
+	var group: String = options.get("tree", "")
+	var collectible: bool = options.get("collectible", false)
 	var mat = RallyProps.material(Color.WHITE)
 	mat.vertex_color_use_as_albedo = true
 	mat.vertex_color_is_srgb = true
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	if options.has("texture"):
+		mat.albedo_texture = options.texture
 	var mm = MultiMesh.new()
-	if name.begins_with("FlyAgaricCaps") or name.begins_with("ToadstoolCaps"):
-		mat.albedo_texture = RallyProps.MUSHROOM_TEXTURES["fly_agaric" if name.begins_with("FlyAgaricCaps") else "toadstool"]
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.use_colors = true
 	mm.mesh = mesh
 	mm.instance_count = poses.size()
-	var center = Vector3.ZERO
-	if (name.begins_with("GrassTile") or name.contains("_Tile_")) and not poses.is_empty():
-		center = poses[0].origin
+	var center = poses[0].origin if tiled and not poses.is_empty() else Vector3.ZERO
 	for i in range(poses.size()):
 		var pose: Transform3D = poses[i]
 		pose.origin -= center
 		mm.set_instance_transform(i, pose)
 		mm.set_instance_color(i, colors[i])
-		if tree_group != "":
-			var id: int = indices[i]
+		var id: int = i if indices.is_empty() else indices[i]
+		if group != "":
 			if not detail_tree_visuals.has(id): detail_tree_visuals[id] = []
 			detail_tree_visuals[id].append({"mesh": mm, "instance": i, "pose": poses[i], "center": center})
-		var source = name.get_slice("_Tile", 0)
-		if source in ["ForestBerries", "VillageForestBerries", "MushroomCaps", "FlyAgaricCaps", "ToadstoolCaps", "MushroomStems", "VineyardGrapes"]:
+		if collectible:
 			if not collectible_parts.has(source):
 				collectible_parts[source] = {}
-			collectible_parts[source][i if indices.is_empty() else indices[i]] = {"mesh": mm, "instance": i, "pose": pose, "hidden": false}
+			collectible_parts[source][id] = {"mesh": mm, "instance": i, "pose": pose, "hidden": false}
 	var node = MultiMeshInstance3D.new()
-	node.name = name
+	node.name = node_name
 	node.position = center
-	if name.begins_with("GrassTile") or name.contains("_Tile_"):
-		node.visibility_range_end = 70 if name.begins_with("VineyardGrapes") else (110 if name.begins_with("LavenderFlowers") or name.begins_with("LavenderStems") else 160)
-		# The sparse silhouette must survive even the near preset (420 * 0.7).
-		if name.begins_with("VillageHorizonTreeLayer"):
-			node.visibility_range_end = 420
+	if tiled:
+		node.visibility_range_end = float(options.get("range", 160.0))
 		node.visibility_range_end_margin = 15
-		if urban and name.begins_with("Mushroom") or urban and name.begins_with("FlyAgaric") or urban and name.begins_with("Toadstool"):
-			node.visibility_range_end = 70
 	node.multimesh = mm
 	if capture_bake_buffers:
 		BakedVillage.capture_instances(node, poses, colors, center)
 	node.material_override = mat
 	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(node)
-	woodland_details[name] = poses.size()
 
 func _grass_mesh() -> Mesh:
 	return NATURE_GRASS
@@ -1296,12 +1246,12 @@ func _build_woodland_details(cooperative: bool = false) -> void:
 				fruit_indices.append(fruit_index)
 			collectibles.append({"kind": "berries", "pos": Vector3(p.x, ground(p), p.z), "quantity": 3, "parts": {"ForestBerries": fruit_indices}})
 	var leaves = NATURE_BUSH
-	_detail_batch("ForestBushes", leaves, bush_poses, bush_colors)
-	_detail_batch("ForestBerryBushes", leaves, berry_bush_poses, berry_bush_colors)
+	_detail_batch("ForestBushes", leaves, bush_poses, bush_colors, {"tiles": true})
+	_detail_batch("ForestBerryBushes", leaves, berry_bush_poses, berry_bush_colors, {"tiles": true})
 	var berry_mesh = NATURE_BERRY
-	_detail_batch("ForestBerries", berry_mesh, berry_poses, berry_colors)
+	_detail_batch("ForestBerries", berry_mesh, berry_poses, berry_colors, {"tiles": true, "collectible": true})
 	var bush_stem_mesh = NATURE_BUSH_STEM
-	_detail_batch("ForestBushStems", bush_stem_mesh, bush_stem_poses, bush_stem_colors)
+	_detail_batch("ForestBushStems", bush_stem_mesh, bush_stem_poses, bush_stem_colors, {"tiles": true})
 	for i in range(300):
 		if cooperative and i % 400 == 0:
 			await get_tree().process_frame
@@ -1359,17 +1309,17 @@ func _build_woodland_details(cooperative: bool = false) -> void:
 			if blocked:
 				group.poses.remove_at(index)
 				group.colors.remove_at(index)
-	_detail_batch("ForestPebbles", shared_stone_mesh(), stone_poses, stone_colors)
-	_detail_batch("ForestGrass", _grass_mesh(), grass_poses, grass_colors)
+	_detail_batch("ForestPebbles", shared_stone_mesh(), stone_poses, stone_colors, {"tiles": true})
+	_detail_batch("ForestGrass", _grass_mesh(), grass_poses, grass_colors, {"tiles": true})
 	var stem = NATURE_MUSHROOM_STEM
-	_detail_batch("MushroomStems", stem, stem_poses, stem_colors)
+	_detail_batch("MushroomStems", stem, stem_poses, stem_colors, {"collectible": true})
 	var cap = NATURE_MUSHROOM_CAP
-	_detail_batch("MushroomCaps", cap, cap_poses, cap_colors)
+	_detail_batch("MushroomCaps", cap, cap_poses, cap_colors, {"collectible": true})
 	for species in poison_caps:
 		var colors: Array = []
 		colors.resize(poison_caps[species].size())
 		colors.fill(Color.WHITE)
-		_detail_batch("FlyAgaricCaps" if species == "fly_agaric" else "ToadstoolCaps", cap, poison_caps[species], colors)
+		_detail_batch("FlyAgaricCaps" if species == "fly_agaric" else "ToadstoolCaps", cap, poison_caps[species], colors, {"collectible": true, "texture": RallyProps.MUSHROOM_TEXTURES[species]})
 	var mound = CylinderMesh.new()
 	mound.height = 1
 	mound.bottom_radius = 1
@@ -1385,109 +1335,17 @@ func _build_woodland_details(cooperative: bool = false) -> void:
 	twig.rings = 1
 	_detail_batch("AntHillTwigs", twig, twig_poses, twig_colors)
 
-func village(s: float) -> bool:
-	return urban and s >= 300.0 and s <= 570.0
-
-# The first village side street branches through the woods past the cemetery
-# and joins the second side street. All stations remain ordered start-to-finish.
-func village_forest_detour(s: float) -> bool:
-	return urban and s > 382.0 and s < 488.0
-
-func village_forest_offset(s: float) -> float:
-	return (urban_at(s) - village_main_at(s)).dot(village_main_side(s))
-
-# Village buildings and the original cobblestone main road must not follow
-# the rally-only forest bypass. Keep their historical straight village axis.
-func village_main_at(s: float) -> Vector3:
-	var village_blend = smoothstep(190.0, 300.0, s) * (1.0 - smoothstep(570.0, 710.0, s))
-	var country_x = sin(s / 85.0) * 34.0 + sin(s / 43.0) * 10.0
-	var village_x = sin((s - 300.0) / 100.0) * 14.0
-	var height = 2.0 + (1.0 - village_blend) * (7.0 + sin(s / 95.0) * 3.0 + s * 0.004 + sin(s / 14.0) * 0.32 + gravel_profile(s, 178.0, 14.0) * 1.1 + gravel_profile(s, 686.0, 16.0) * 1.25 + village_country_relief(s))
-	return Vector3(lerpf(country_x, village_x, village_blend), height, -s)
-
-func village_main_direction(s: float) -> Vector3:
-	return (village_main_at(minf(s + 2.0, LENGTH - 0.01)) - village_main_at(maxf(s - 2.0, 0.0))).normalized()
-
-func village_main_side(s: float) -> Vector3:
-	return village_main_direction(s).cross(Vector3.UP).normalized()
-
-# Follow each cobbled side lane to its outer end before entering the woods.
-# The church and cemetery remain together inside the loop.
-func urban_at(s: float) -> Vector3:
-	if s <= 370.0 or s >= 500.0:
-		return village_main_at(s)
-	var first = village_main_at(370.0)
-	var last = village_main_at(500.0)
-	var first_side = village_main_side(370.0)
-	var last_side = village_main_side(500.0)
-	var stations = [370.0, 382.0, 402.0, 418.0, 435.0, 454.0, 474.0, 488.0, 500.0]
-	var route = [
-		first, first + first_side * 47.0, first + first_side * 96.0 + village_main_direction(370.0) * 28.0,
-		village_main_at(420.0) + village_main_side(420.0) * 117.0,
-		village_main_at(435.0) + village_main_side(435.0) * 115.0,
-		village_main_at(460.0) + village_main_side(460.0) * 118.0,
-		last + last_side * 96.0 - village_main_direction(500.0) * 28.0, last + last_side * 47.0, last
-	]
-	for i in range(stations.size() - 1):
-		if s <= stations[i + 1]:
-			var t = smoothstep(stations[i], stations[i + 1], s)
-			var p: Vector3 = route[i].lerp(route[i + 1], t)
-			if i >= 1 and i <= 6:
-				# Smooth forest bends instead of stopped straight-line corners.
-				t = (s - stations[i]) / (stations[i + 1] - stations[i])
-				var a: Vector3 = route[i]
-				var b: Vector3 = route[i + 1]
-				var start_tangent: Vector3 = (route[i + 1] - route[i - 1]) * 0.5
-				var end_tangent: Vector3 = (route[i + 2] - route[i]) * 0.5
-				if i == 1:
-					start_tangent = first_side * a.distance_to(b)
-				if i == 6:
-					end_tangent = -last_side * a.distance_to(b)
-				p = a * (2*t*t*t - 3*t*t + 1) + start_tangent * (t*t*t - 2*t*t + t) + b * (-2*t*t*t + 3*t*t) + end_tangent * (t*t*t - t*t)
-			p.y += (sin(s * 0.12) * 0.55 + sin(s * 0.037) * 0.75) * smoothstep(402.0, 418.0, s) * (1.0 - smoothstep(454.0, 474.0, s))
-			return p
-	return last
-
-# Historic main-road station is independent of the rally-only bypass.
-func village_main_nearest(pos: Vector3) -> Dictionary:
-	var best = INF
-	var station = 300.0
-	var p = flat(pos)
-	var start = clampf(-pos.z - 8.0, 290.0, 578.0)
-	for i in range(9):
-		var s = start + i * 2.0
-		var a = flat(village_main_at(s))
-		var segment = flat(village_main_at(s + 2.0)) - a
-		var ratio = clampf((p - a).dot(segment) / maxf(segment.length_squared(), 0.000001), 0.0, 1.0)
-		var distance = p.distance_squared_to(a + segment * ratio)
-		if distance < best:
-			best = distance
-			station = s + ratio * 2.0
-	return {"s": station, "distance": sqrt(best)}
-
-# Contact heights are the tops of the explicitly authored paving meshes.
-func village_paved_height(pos: Vector3) -> float:
-	var nearest = village_main_nearest(pos)
-	var on_main = nearest.s >= 300.0 and nearest.s <= 570.0
-	if on_main and nearest.distance <= 3.75:
-		return 2.0875
-	for station in [370.0, 500.0]:
-		var offset = pos - village_main_at(station)
-		if absf(offset.dot(village_main_side(station))) <= 46.5 and absf(offset.dot(village_main_direction(station))) <= 2.5:
-			return 2.0775
-	if on_main and nearest.distance > 3.75 and nearest.distance < 6.45:
-		return 2.36
-	return INF
-
-func _index_urban_route() -> void:
+# Spatial index of a winding route given as samples every `step` stations.
+func _index_route(samples: PackedVector3Array, step: float) -> void:
+	route_segment_step = step
 	road_segment_starts.clear()
 	road_segment_deltas.clear()
 	road_segment_inverse_lengths.clear()
 	road_group_low.clear()
 	road_group_high.clear()
-	for i in range(points.size() - 1):
-		var a = flat(points[i])
-		var b = flat(points[i + 1])
+	for i in range(samples.size() - 1):
+		var a = flat(samples[i])
+		var b = flat(samples[i + 1])
 		road_segment_starts.append(a)
 		road_segment_deltas.append(b - a)
 		road_segment_inverse_lengths.append(1.0 / maxf((b - a).length_squared(), 0.000001))
@@ -1499,15 +1357,17 @@ func _index_urban_route() -> void:
 			road_group_low[group] = road_group_low[group].min(a).min(b)
 			road_group_high[group] = road_group_high[group].max(a).max(b)
 
-func urban_nearest(pos: Vector3) -> Dictionary:
-	if road_segment_starts.size() != points.size() - 1:
-		_index_urban_route()
+# Nearest station and plan distance on the indexed route. Every segment that
+# could win is tested, so perpendicular streets and hairpins stay exact.
+func route_nearest(pos: Vector3) -> Dictionary:
+	if road_segment_starts.is_empty():
+		_index_route(points, STEP)
 	var best = INF
 	var station = 0.0
 	var p = flat(pos)
-	var seed = clampi(int(-pos.z / (STEP * ROAD_GROUP_SIZE)), 0, road_group_low.size() - 1)
+	# Successive queries are spatially coherent: start from the last winning group.
+	var seed = clampi(_last_route_group, 0, road_group_low.size() - 1)
 	# Visit the likely group first, then reject others by a conservative bound.
-	# Every segment capable of winning is still tested, including distant points.
 	for pass_index in range(road_group_low.size() + 1):
 		var group = seed if pass_index == 0 else pass_index - 1
 		if pass_index > 0 and group == seed:
@@ -1519,10 +1379,11 @@ func urban_nearest(pos: Vector3) -> Dictionary:
 			var segment = road_segment_deltas[i]
 			var ratio = clampf((p - a).dot(segment) * road_segment_inverse_lengths[i], 0.0, 1.0)
 			var distance = p.distance_squared_to(a + segment * ratio)
-			var candidate = (i + ratio) * STEP
+			var candidate = (i + ratio) * route_segment_step
 			if distance < best or (distance == best and candidate < station):
 				best = distance
 				station = candidate
+	_last_route_group = int(station / route_segment_step) / ROAD_GROUP_SIZE
 	return {"s": station, "distance": sqrt(best)}
 
 func rally_speed(s: float) -> float:
@@ -1530,9 +1391,28 @@ func rally_speed(s: float) -> float:
 		return finnish_forest.rally_speed(s)
 	if desert:
 		return 17.0 if s > 240.0 and s < 420.0 else 26.0
-	if not urban:
-		return 27.0
-	return 15.0 if village(s) else 27.0
+	if provence:
+		return village.rally_speed(s)
+	if winter:
+		return alpine.rally_speed(s)
+	return 27.0
+
+# How far beyond the road edge crews may run when cutting or overtaking.
+func shoulder(s: float) -> float:
+	return village.shoulder(s) if provence else 1.4
+
+# Loose surfaces throw gravel from spinning tyres; village asphalt and cobbles do not.
+func loose_surface(pos: Vector3) -> bool:
+	return village.loose(pos) if provence else true
+
+# Local, unsynchronised scenery life (animals, villagers, wind).
+func update_life(delta: float, focus: Vector3) -> void:
+	if lakeland:
+		forest_life.update(delta, focus)
+	elif winter and alpine_life != null:
+		alpine_life.update(delta, focus)
+	elif life != null:
+		life.update(delta, focus)
 
 # Collectible identifiers follow deterministic generation order and are shared by
 # every room member. Harvesting hides the existing instances without new nodes.
