@@ -111,7 +111,11 @@ func run() -> void:
 	Input.action_press("tow")
 	scene._update_tow(0.1)
 	check(scene.tow_target != null, "tow attaches near stranded car")
-	scene._update_tow(6)
+	for i in range(80):
+		if r.state == "racing":
+			break
+		scene.walker = r.node.position + scene.Recovery.road_direction(scene, r) * 4
+		scene._update_tow(0.5)
 	Input.action_release("tow")
 	check(scene.helped == 1 and r.kind == "pass" and r.state == "racing", "tow releases crew to race")
 	check(scene.rope_mesh == null, "tow rope cleared")
