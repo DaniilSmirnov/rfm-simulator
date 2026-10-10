@@ -38,6 +38,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Lint GDScript (preload paths, records, layers, size budget)
+        run: node scripts/lint-gdscript.mjs
       - name: Run isolated and audited Godot test shard
         run: node scripts/test-game.mjs --shard=${{ matrix.shard }}
 
