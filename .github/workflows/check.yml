@@ -142,7 +142,7 @@ jobs:
           node scripts/test-web-physics.mjs
           node scripts/test-multiplayer.mjs --web
 
-      - name: Verify browser multiplayer over WebSocket
+      - name: Verify browser multiplayer over WebSocket and the WebRTC direct link
         if: steps.physics.outputs.websocket == 'true'
         run: node scripts/test-multiplayer.mjs --web --socket
 
