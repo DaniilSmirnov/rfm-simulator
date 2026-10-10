@@ -68,9 +68,9 @@ func spawn_racer(forced: String = "") -> void:
 	for existing in game.racers:
 		if existing.state == "stranded" and kind in ["stuck", "crash"]:
 			kind = "pass"
-	var variant = [5, 0, 1, 2, 3, 4][game.rally_spawn_count % Props.RALLY_MODELS.size()]
+	var variant = Props.RallyCarModel.spawn_variant(game.rally_spawn_count)
 	game.rally_spawn_count += 1
-	var node = Props.car(Color.WHITE, true, variant)
+	var node = Props.rally_car(variant)
 	var racer = add_course_vehicle(node, game.rally_spawn_count + (game.course.pass_index - 1) * 200, kind, variant)
 	racer.drive_speed = Traffic.speed_limit(game, racer, 0.0)
 	game.toast("Приближается %s, номер %d!" % [node.get_meta("model"), node.get_meta("number")])

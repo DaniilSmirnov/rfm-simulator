@@ -3,6 +3,7 @@ extends RefCounted
 # Original, unbranded low-poly compact sedan: Granta-inspired proportions.
 # Independent model source; gameplay, cargo and hatch physics stay in RallyProps.
 const P = preload("res://scripts/props.gd")
+const CarParts = preload("res://scripts/car_parts.gd")
 const PAINT = Color("111a2b") # near-black with a restrained blue tint
 const PAINT_LIT = Color("1c2a40")
 const PAINT_SHADE = Color("0a101c")
@@ -64,46 +65,37 @@ static func build() -> Node3D:
 		for z in [-0.83, 0.07, 1.06]:
 			_box(root, Vector3(side * 0.854, 0.62, z), Vector3(0.012, 0.49, 0.018), PAINT_SHADE, "DoorJoint")
 		_box(root, Vector3(side * 0.852, 0.43, 0.03), Vector3(0.04, 0.10, 2.10), PAINT_SHADE, "SideSill")
-		# Mirrors, arms and reflective caps.
-		_box(root, Vector3(side * 0.88, 1.07, -0.95), Vector3(0.14, 0.055, 0.11), TRIM, "MirrorArm")
-		_box(root, Vector3(side * 0.96, 1.13, -0.95), Vector3(0.24, 0.13, 0.18), PAINT_LIT, "MirrorCap")
-		_box(root, Vector3(side * 1.083, 1.12, -0.95), Vector3(0.015, 0.075, 0.13), CHROME, "MirrorGlass")
-		# A pivot owns the full wheel assembly, including its spokes. Rotating only
-		# the tyre mesh leaves the visible alloy spokes frozen in place.
+		# Mirrors stand on the door shoulder behind the windscreen base.
+		_box(root, Vector3(side * 0.82, 0.985, -0.74), Vector3(0.12, 0.05, 0.14), TRIM, "MirrorArm")
+		_box(root, Vector3(side * 0.93, 1.05, -0.74), Vector3(0.12, 0.12, 0.17), PAINT_LIT, "MirrorCap")
+		_box(root, Vector3(side * 0.93, 1.05, -0.65), Vector3(0.10, 0.09, 0.012), CHROME, "MirrorGlass")
+		# One pivot per wheel: tyre, rim and spokes turn together.
 		for index in range(2):
-			var z = -1.35 if index == 0 else 1.40
-			var wheel_pivot = Node3D.new()
-			wheel_pivot.name = "RollingWheel_%s_%s" % ["L" if side < 0 else "R", "Front" if index == 0 else "Rear"]
-			root.add_child(wheel_pivot)
-			wheel_pivot.position = Vector3(side * 0.89, 0.37, z)
-			wheel_pivot.set_meta("rolling_wheel_radius", 0.37)
-			wheel_pivot.set_meta("rolling_wheel_axis", Vector3.LEFT)
-			var tire = P.cylinder(wheel_pivot, Vector3.ZERO, 0.37, 0.37, 0.29, RUBBER, 16)
-			tire.rotation.z = PI / 2
-			tire.name = "WheelTire"
-			var rim = P.cylinder(wheel_pivot, Vector3(side * 0.16, 0, 0), 0.255, 0.255, 0.04, CHROME, 12)
-			rim.rotation.z = PI / 2
-			rim.name = "WheelRim"
-			for spoke in range(6):
-				var angle = spoke * TAU / 6.0
-				P.car_beam(wheel_pivot, Vector3(side * 0.19, 0, 0), Vector3(side * 0.19, cos(angle) * 0.21, sin(angle) * 0.21), 0.036, PAINT_SHADE)
-		# Granta-inspired swept headlamps, but no badge or trademarks.
+			var wheel_name = "RollingWheel_%s_%s" % ["L" if side < 0 else "R", "Front" if index == 0 else "Rear"]
+			CarParts.wheel(root, Vector3(side * 0.89, 0.37, -1.35 if index == 0 else 1.40), 0.37, 0.27, side,
+				{"name": wheel_name, "style": "spokes", "count": 6, "color": "8e99a2", "detail": "0e141d", "rim": 0.7})
+		# Swept headlamps: a strip on the front face and the larger part on the
+		# bonnet slope above it, so the lamp follows the nose instead of a spike.
 		P.quad_panel(root, PackedVector3Array([
-			Vector3(side * 0.35, 0.74, -2.143), Vector3(side * 0.77, 0.75, -2.105),
-			Vector3(side * 0.79, 0.93, -1.94), Vector3(side * 0.33, 0.88, -2.12),
+			Vector3(side * 0.25, 0.615, -2.142), Vector3(side * 0.60, 0.615, -2.142),
+			Vector3(side * 0.60, 0.705, -2.142), Vector3(side * 0.25, 0.705, -2.142),
 		]), Color("dce7ed")).name = "FrontHeadlight"
-		_box(root, Vector3(side * 0.62, 0.78, -2.12), Vector3(0.25, 0.035, 0.04), Color("e8be6c"), "FrontIndicator")
+		P.quad_panel(root, PackedVector3Array([
+			Vector3(side * 0.25, 0.727, -2.128), Vector3(side * 0.61, 0.727, -2.128),
+			Vector3(side * 0.67, 0.792, -2.045), Vector3(side * 0.30, 0.792, -2.045),
+		]), Color("c9d6de")).name = "FrontHeadlightTop"
+		_box(root, Vector3(side * 0.55, 0.585, -2.15), Vector3(0.18, 0.03, 0.02), Color("e8be6c"), "FrontIndicator")
 		_box(root, Vector3(side * 0.60, 0.75, 2.137), Vector3(0.37, 0.21, 0.045), Color("9d303b"), "RearLamp")
 		_box(root, Vector3(side * 0.68, 0.81, 2.16), Vector3(0.18, 0.045, 0.03), Color("d6c5b7"), "ReverseLamp")
 	# Front fascia, unbranded grille, bumper and tow detail.
-	_box(root, Vector3(0, 0.72, -2.155), Vector3(0.68, 0.18, 0.055), TRIM, "Grille")
-	for x in [-0.22, 0, 0.22]:
-		_box(root, Vector3(x, 0.72, -2.185), Vector3(0.11, 0.025, 0.018), PAINT_LIT, "GrilleBar")
+	_box(root, Vector3(0, 0.665, -2.142), Vector3(0.46, 0.09, 0.03), TRIM, "Grille")
+	for x in [-0.13, 0, 0.13]:
+		_box(root, Vector3(x, 0.665, -2.16), Vector3(0.09, 0.02, 0.015), PAINT_LIT, "GrilleBar")
 	_box(root, Vector3(0, 0.49, -2.17), Vector3(1.55, 0.15, 0.11), PAINT_SHADE, "FrontBumper")
-	_box(root, Vector3(0, 0.47, -2.245), Vector3(0.83, 0.075, 0.035), TRIM, "LowerIntake")
+	_box(root, Vector3(0, 0.425, -2.228), Vector3(0.83, 0.05, 0.02), TRIM, "LowerIntake")
 	_box(root, Vector3(0, 0.53, 2.155), Vector3(1.52, 0.16, 0.09), PAINT_SHADE, "RearBumper")
-	_box(root, Vector3(0, 0.89, 2.14), Vector3(0.30, 0.11, 0.025), PAINT_LIT, "BlankRearPlate")
-	_box(root, Vector3(0, 0.79, -2.205), Vector3(0.27, 0.10, 0.025), PAINT_LIT, "BlankFrontPlate")
+	_box(root, Vector3(0, 0.71, 2.142), Vector3(0.40, 0.11, 0.02), Color("dfe3de"), "BlankRearPlate")
+	_box(root, Vector3(0, 0.505, -2.232), Vector3(0.40, 0.10, 0.015), Color("dfe3de"), "BlankFrontPlate")
 	# A subtle blue sheen is conveyed by the slightly brighter crown/bonnet facets,
 	# not by a logo, badge or reflective texture.
 	return P.add_player_trunk(root, 0)

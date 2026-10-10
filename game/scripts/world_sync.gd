@@ -371,7 +371,7 @@ func _racers_apply(w: Dictionary, sample_time: float) -> void:
 				break
 		if not exists:
 			var role = str(r.get("role", "racer"))
-			var node = Props.car(Color.WHITE, true, int(r.variant)) if role == "racer" else Props.course_car(role, int(r.get("zero_index", 0)))
+			var node = Props.rally_car(int(r.variant)) if role == "racer" else Props.course_car(role, int(r.get("zero_index", 0)))
 			game.add_child(node)
 			node.position = room.v(r.pos)
 			node.set_meta("room_id", r.id)

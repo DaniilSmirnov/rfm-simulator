@@ -9,6 +9,7 @@ const COLORS = {
 	"glass": Color("253d49"),
 	"trim": Color("202b31"),
 	"lights": Color("a6464a"),
+	"headlights": Color("e6e4d4"),
 	"wheels_metal": Color("899299"),
 	"wheels_rubber": Color("181c20"),
 	"boat": Color("59636d"),
@@ -62,6 +63,36 @@ static func _wheel_parts(parent: Node3D, mesh: Mesh, part: String, color: Color,
 			wheel.set_meta("rolling_wheel_axis", Vector3.RIGHT)
 			parent.add_child(wheel)
 
+static func _material(color: Color, metallic: float) -> StandardMaterial3D:
+	var mat = StandardMaterial3D.new()
+	mat.albedo_color = color
+	mat.metallic = metallic
+	mat.roughness = 0.65
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	return mat
+
+# [front, rear] halves of a mesh, split per triangle at z = 0 (source axes).
+static func _split_by_z(mesh: Mesh) -> Array:
+	var halves = [SurfaceTool.new(), SurfaceTool.new()]
+	for half in halves:
+		half.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for surface_index in range(mesh.get_surface_count()):
+		var source = MeshDataTool.new()
+		if source.create_from_surface(mesh, surface_index) != OK:
+			continue
+		for face in range(source.get_face_count()):
+			var points: Array = []
+			for corner in range(3):
+				points.append(source.get_vertex(source.get_face_vertex(face, corner)))
+			var target: SurfaceTool = halves[0] if points[0].z + points[1].z + points[2].z > 0.0 else halves[1]
+			for point in points:
+				target.add_vertex(point)
+	var result: Array = []
+	for half in halves:
+		half.generate_normals()
+		result.append(half.commit())
+	return result
+
 static func build() -> Node3D:
 	for part in PARTS:
 		if not ResourceLoader.exists(ASSET_ROOT + part + ".obj"):
@@ -92,18 +123,24 @@ static func build() -> Node3D:
 		if part in ["wheels_metal", "wheels_rubber"]:
 			_wheel_parts(details, mesh, part, COLORS[part], tyre_radius)
 			continue
+		if part == "lights":
+			# One OBJ holds all lamps; only the rear ones are red. The source
+			# faces +Z, so the headlamps are its positive-z triangles.
+			var halves = _split_by_z(mesh)
+			mesh = halves[1]
+			var headlights = MeshInstance3D.new()
+			headlights.name = "Camping_headlights"
+			headlights.mesh = halves[0]
+			headlights.rotation.y = PI
+			headlights.material_override = _material(COLORS.headlights, 0.0)
+			details.add_child(headlights)
 		var surface = MeshInstance3D.new()
 		surface.name = "BodyShellHatchback" if part == "body" else "Camping_" + part
 		surface.mesh = mesh
 		# Source OBJ faces +Z, while gameplay expects vehicle forward along -Z.
 		# Apply to each part before add_player_trunk() clips the rear hatch.
 		surface.rotation.y = PI
-		var mat = StandardMaterial3D.new()
-		mat.albedo_color = COLORS[part]
-		mat.metallic = 0.15 if part == "wheels_metal" else 0.0
-		mat.roughness = 0.65
-		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-		surface.material_override = mat
+		surface.material_override = _material(COLORS[part], 0.15 if part == "wheels_metal" else 0.0)
 		# Rear glass, trim and lamps must be split together with the hatch panel.
 		# add_player_trunk() only clips direct MeshInstance3D children.
 		# Wheels and roof cargo stay static under CarModelDetails.
