@@ -1,0 +1,60 @@
+{
+  "comment": "The single list of special stages (СУ). The menu, the stage builder (scripts/stage_registry.gd), previews, the catalog check and the server's stage limit all follow this order: the index is the stage's content_id. A new stage is one biome script plus one entry here (and its catalog product).",
+  "defaults": {
+    "loading": "Лес и окружение",
+    "berries": "Ягоды",
+    "berries_hud": "ЯГОДЫ",
+    "minimap": "26352be8",
+    "environment": {
+      "sky_top": "6f949f", "sky_horizon": "ddd9be", "ground_bottom": "64765b", "ground_horizon": "ddd9be",
+      "ambient": "c6c9ae", "ambient_energy": 0.35, "fog": "9ea995", "fog_density": 0.0018
+    },
+    "sun": {"rotation": [-36, -32, 0], "color": "ffe3b2", "energy": 0.85}
+  },
+  "stages": [
+    {
+      "id": "forest", "title": "Лесной перевал", "subtitle": "гравий",
+      "biome": "res://scripts/forest_pass.gd"
+    },
+    {
+      "id": "winter", "title": "Зимний Турини", "subtitle": "асфальт, снег и лёд",
+      "biome": "res://scripts/alpine_winter.gd",
+      "loading": "Альпы и окружение",
+      "environment": {
+        "sky_top": "3f74ad", "sky_curve": 0.06, "sky_horizon": "d4e3ee", "ground_bottom": "8d9aa6", "ground_horizon": "dfe9f0",
+        "ambient": "c9dbef", "ambient_energy": 0.34, "fog": "cfdde8", "fog_density": 0.0011
+      },
+      "sun": {"rotation": [-24, -48, 0], "color": "fff0dc", "energy": 0.78}
+    },
+    {
+      "id": "provence", "title": "Виноградники", "subtitle": "провансальская деревня",
+      "biome": "res://scripts/village_stage.gd",
+      "loading": "Виноградники и лаванда",
+      "berries": "Виноград",
+      "berries_hud": "ЯГОДЫ/ВИНОГРАД",
+      "environment": {
+        "sky_top": "3d74bd", "sky_horizon": "cfdbe0", "ground_bottom": "6a6648", "ground_horizon": "cfdbe0",
+        "ambient": "cdd1c6", "ambient_energy": 0.36, "fog": "c4d0d6", "fog_density": 0.0005, "fog_sky_affect": 0.25
+      }
+    },
+    {
+      "id": "canyon", "title": "Красный каньон", "subtitle": "пустынный грунт",
+      "biome": "res://scripts/canyon.gd",
+      "loading": "Скалы и окружение",
+      "minimap": "613b2ae8",
+      "environment": {
+        "sky_top": "5987ab", "sky_horizon": "e9c69a", "ground_bottom": "a95c3a", "ground_horizon": "e9c69a",
+        "ambient": "efccaa", "ambient_energy": 0.42, "fog": "d6a479", "fog_density": 0.0008
+      }
+    },
+    {
+      "id": "lakes", "title": "Финский лес", "subtitle": "гравий и озёра",
+      "biome": "res://scripts/finnish_forest.gd",
+      "loading": "Лес и озёра",
+      "environment": {
+        "sky_top": "5f8fb8", "sky_horizon": "d9e3dd", "ground_bottom": "4e5f45", "ground_horizon": "d9e3dd",
+        "ambient": "c9d6c8", "ambient_energy": 0.4, "fog": "aebdb4", "fog_density": 0.0014
+      }
+    }
+  ]
+}

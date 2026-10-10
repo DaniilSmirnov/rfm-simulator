@@ -20,14 +20,14 @@ func _ready() -> void:
 	control = HTTPRequest.new()
 	add_child(control)
 	control.request_completed.connect(on_control)
-	game.room.name_input.text = role
+	game.room.ui.name_input.text = role
 	game.room.connect_room(join_id)
 func _process(delta: float) -> void:
 	poll_clock += delta
 	report_clock += delta
 	if poll_clock >= 0.2 and control.get_http_client_status() == HTTPClient.STATUS_DISCONNECTED:
 		poll_clock = 0
-		control.request(game.room.server + "/test/control?role=" + role)
+		control.request(game.room.transport.server + "/test/control?role=" + role)
 	if report_clock >= 0.2:
 		report_clock = 0
 		var p = game.room.prediction

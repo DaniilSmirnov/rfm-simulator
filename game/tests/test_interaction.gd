@@ -1,11 +1,4 @@
-extends SceneTree
-var failures = 0
-func check(ok: bool, title: String) -> void:
-	if not ok:
-		failures += 1
-		push_error(title)
-	else:
-		print("PASS: " + title)
+extends "res://tests/harness.gd"
 func _initialize() -> void:
 	call_deferred("run")
 func aim(game: Node3D, point: Vector3) -> void:
@@ -141,4 +134,4 @@ func run() -> void:
 	game.queue_free()
 	await process_frame
 	print("INTERACTION RESULT: %d failures" % failures)
-	quit(1 if failures else 0)
+	finish()

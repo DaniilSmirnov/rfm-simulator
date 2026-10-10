@@ -1,10 +1,6 @@
-extends SceneTree
+extends "res://tests/harness.gd"
 const Predictor = preload("res://scripts/drive_prediction.gd")
 const Stage = preload("res://scripts/stage.gd")
-var failures = 0
-func check(ok: bool, title: String) -> void:
-	print(("PASS: " if ok else "FAIL: ") + title)
-	if not ok: failures += 1
 func _initialize() -> void:
 	call_deferred("run")
 func run() -> void:
@@ -35,7 +31,7 @@ func run() -> void:
 	check(host.ack == 30, "a missing command is not skipped")
 	for i in range(120):
 		client.predict(5, 1.0, 0.0, false, stage, 0)
-	check(client.pending.size() == Predictor.LIMIT, "disconnection backlog stays bounded")
+	check(client.full() and client.backlog_ticks() == Predictor.MAX_PENDING_TICKS and client.outgoing().size() <= Predictor.LIMIT, "disconnection backlog stays bounded by simulated time")
 	client.reset(stage.at(12), 0)
 	host.reset(stage.at(12), 0)
 	for i in range(8):
@@ -45,7 +41,7 @@ func run() -> void:
 	client.reconcile(host.snapshot(), stage, 0)
 	check(client.pending.is_empty(), "budget-delayed commands eventually drain")
 	# A missing packet and an older reply are independent of simulation order.
-	for model in range(10):
+	for model in range(RallyProps.PLAYER_MODELS.size()):
 		client.reset(stage.at(100), 0)
 		host.reset(stage.at(100), 0)
 		for i in range(100):
@@ -56,6 +52,28 @@ func run() -> void:
 		host.accept(client.pending, stage, model)
 		client.reconcile(host.snapshot(), stage, model)
 		check(client.node.position.distance_to(host.node.position) < 0.00001 and client.motion.velocity.distance_to(host.motion.velocity) < 0.00001, "delayed throttle, reverse, steering and braking converge for model %d" % model)
+	# Identical frames merge into one unsent command; merged input replays exactly.
+	var merged = Predictor.new()
+	var plain = Predictor.new()
+	merged.coalesce = true
+	merged.reset(stage.at(60), 0)
+	plain.reset(stage.at(60), 0)
+	host.reset(stage.at(60), 0)
+	for i in range(60):
+		var steer = 0.31 if i < 30 else -0.5
+		merged.predict(2, 1.0, steer, i > 50, stage, 3)
+		plain.predict(2, 1.0, Predictor.quantize(steer), i > 50, stage, 3)
+		if i % 7 == 6:
+			merged.seal()
+	check(merged.pending.size() <= plain.pending.size() / 3 and merged.node.position.distance_to(plain.node.position) < 0.00001, "coalesced frames shrink the queue without changing local physics")
+	check(merged.pending.all(func(c): return int(c.ticks) <= Predictor.MAX_TICKS), "merged commands respect the per-command tick cap")
+	var sent = merged.outgoing().duplicate(true)
+	merged.seal()
+	merged.predict(2, 1.0, -0.5, true, stage, 3)
+	check(merged.pending.size() == sent.size() + 1, "sent commands are never extended after sealing")
+	host.accept(merged.pending, stage, 3)
+	merged.reconcile(host.snapshot(), stage, 3)
+	check(merged.pending.is_empty() and merged.node.position.distance_to(host.node.position) < 0.00001, "host reproduces merged input exactly")
 	client.node.position += Vector3(1, 0, 0)
 	var rendered = client.node.position
 	client.reconcile(host.snapshot(), stage, 9)
@@ -115,4 +133,4 @@ func run() -> void:
 	village.free()
 	stage.free()
 	print("DRIVE PREDICTION RESULT: %d failures" % failures)
-	quit(1 if failures else 0)
+	finish()

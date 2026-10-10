@@ -207,7 +207,7 @@ func _physics_process(delta: float) -> void:
 	var game = stage.get_parent()
 	var simulate = true
 	if game != null and game.has_method("player_position"):
-		simulate = game.playing and not game.paused and not game.dead and not game.finished and (not game.room.connected or game.room.is_host)
+		simulate = game.playing and not game.paused and not game.dead and not game.finished and (game.room.is_authority())
 	for i in range(lamps.size()):
 		var lamp_state = lamps[i]
 		lamp_state.body.freeze = not (simulate and lamp_state.fallen)

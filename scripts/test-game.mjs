@@ -41,6 +41,12 @@ const execute=(name,command,args,timeoutMs)=>{
  if(summary.length)console.log(summary.join('\n').slice(-8000));
  results.push({name,pass,elapsedMs,exitCode:result.status,signal:result.signal||null,
   error:result.error?.message||null});
+ // Surface failures as annotations, readable without downloading job logs.
+ if(!pass && process.env.GITHUB_ACTIONS){
+  const relevant=tailLines.filter(x=>/FAIL|ERROR|Error|error|Assertion|not ok|RESULT/.test(x)).slice(-25);
+  const text=(relevant.length?relevant:tailLines.slice(-25)).join('\n').slice(-6000);
+  console.log('::error title=FAIL '+name.replace(/[:,\n]/g,' ')+'::'+text.replace(/%/g,'%25').replace(/\r/g,'%0D').replace(/\n/g,'%0A'));
+ }
  return pass;
 };
 
@@ -59,9 +65,12 @@ if(!importOK) {
     a.endsWith('.mjs')?join(root,a):a),120_000);
   }
   for(const filename of selected){
+   const timeoutMs=slowTests.has(filename)?180_000:90_000;
+   // The shared harness fails the test itself a few seconds before the runner
+   // would kill it, so a script error reports FAIL instead of a bare timeout.
    execute('Godot '+filename,godot,
-    ['--headless','--path',project,'--script','res://tests/'+filename],
-    slowTests.has(filename)?180_000:90_000);
+    ['--headless','--path',project,'--script','res://tests/'+filename,'--','--watchdog='+(timeoutMs/1000-5)],
+    timeoutMs);
   }
  }
 }

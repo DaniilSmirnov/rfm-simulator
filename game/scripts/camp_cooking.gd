@@ -9,7 +9,7 @@ var cook_time = 0.0
 var servings = 0
 
 func can_act() -> bool:
-	return game.playing and not game.in_car and not game.paused and not game.dead and not game.finished and game.beers < 30
+	return game.playing and not game.actor_in_car() and not game.paused and not game.dead and not game.finished and game.actor_beers() < 30
 
 func deploy_fire(spot: Vector3, yaw: float) -> bool:
 	if pot != null and spot.distance_to(pot.position) < 1.5:
@@ -30,7 +30,7 @@ func heated() -> bool:
 func place_pot(spot: Vector3, yaw: float = 0) -> bool:
 	if fire != null and spot.distance_to(fire.position) < 1.5:
 		spot = fire.position
-	if not can_act() or game.packing.active() or game.walker.distance_to(spot) > 5 or not game.valid_furniture_spot(spot, "cauldron"):
+	if not can_act() or game.packing.active() or game.actor_pos().distance_to(spot) > 5 or not game.valid_furniture_spot(spot, "cauldron"):
 		return false
 	if pot == null:
 		pot = Props.cauldron(game)
@@ -58,7 +58,7 @@ func mount() -> bool:
 	return game.cargo.deploy("cauldron", fire.position, 0)
 
 func start() -> bool:
-	if not can_act() or not game.cargo.available() or game.packing.active() or not heated() or phase != "empty" or game.walker.distance_to(pot.position) > 3.5 or game.cargo.held.has(game.cargo.actor()):
+	if not can_act() or not game.cargo.available() or game.packing.active() or not heated() or phase != "empty" or game.actor_pos().distance_to(pot.position) > 3.5 or game.cargo.held.has(game.cargo.actor()):
 		return false
 	if game.room.submit("plov_cook"):
 		return true
@@ -69,7 +69,7 @@ func start() -> bool:
 	return true
 
 func can_eat() -> bool:
-	return can_act() and pot != null and phase == "ready" and servings > 0 and game.walker.distance_to(pot.position) <= 3.5
+	return can_act() and pot != null and phase == "ready" and servings > 0 and game.actor_pos().distance_to(pot.position) <= 3.5
 
 func consume() -> bool:
 	if not can_eat() or game.cargo.held.has(game.cargo.actor()):

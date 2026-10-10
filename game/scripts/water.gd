@@ -47,7 +47,7 @@ func now() -> float:
 # ---------------------------------------------------------------- queries
 
 func level(pos: Vector3) -> float:
-	return stage.finnish_forest.nearest_water_level(stage, pos)
+	return stage.finnish_forest.nearest_water_level(pos)
 
 # Metres of water above the lake bed; <= 0 on dry land.
 func depth(pos: Vector3) -> float:

@@ -1,12 +1,7 @@
-extends SceneTree
+extends "res://tests/harness.gd"
 const Stage = preload("res://scripts/stage.gd")
 const Baked = preload("res://scripts/baked_village.gd")
-var failures = 0
 
-func check(ok: bool, message: String) -> void:
-	if not ok:
-		failures += 1
-		push_error(message)
 
 func _initialize() -> void:
 	call_deferred("run")
@@ -118,4 +113,4 @@ func run() -> void:
 	print("BAKED_VILLAGE generated_ms=", generated_us / 1000.0, " loaded_ms=", loaded_us / 1000.0, " failures=", failures)
 	for stage in [generated, baked, other, empty]:
 		stage.free()
-	quit(1 if failures else 0)
+	finish()

@@ -15,5 +15,7 @@ module_text_server_fb_enabled = True
 module_webp_enabled = True
 # Keep default 3D and GLES3 renderer, plus native rigid-body city physics.
 module_godot_physics_3d_enabled = True
+# Browser WebSocket client for low-latency room sync (JS bridge, no TLS stack).
+module_websocket_enabled = True
 # Limit ThinLTO optimization memory and linker concurrency.
 linkflags = "-Wl,--threads=2,--thinlto-jobs=1"

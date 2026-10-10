@@ -1,12 +1,5 @@
-extends SceneTree
+extends "res://tests/harness.gd"
 const Navigation = preload("res://scripts/crowd_navigation.gd")
-var failures = 0
-func check(ok: bool, caption: String) -> void:
-	if ok:
-		print("PASS: " + caption)
-	else:
-		failures += 1
-		push_error(caption)
 func _initialize() -> void:
 	call_deferred("run")
 func ground(game, p: Vector3) -> Vector3:
@@ -127,4 +120,4 @@ func run() -> void:
 	game.queue_free()
 	await process_frame
 	print("CROWD NAVIGATION RESULT: %d failures" % failures)
-	quit(1 if failures else 0)
+	finish()

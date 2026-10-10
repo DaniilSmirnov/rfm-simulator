@@ -1,11 +1,12 @@
 extends Control
+const StageRegistry = preload("res://scripts/stage_registry.gd")
 var game: Node
 
 func _draw() -> void:
 	if not is_instance_valid(game):
 		return
 	draw_style_box(_background(), Rect2(Vector2.ZERO, size))
-	if game.stage.lakeland:
+	if game.stage.water != null:
 		for cell in game.stage.water.minimap_cells:
 			draw_circle(project(Vector3(cell.x, 0, cell.y)), 2.6, Color("4f7f9ccc"))
 	for i in range(game.stage.points.size() - 1):
@@ -40,6 +41,6 @@ func project(p: Vector3) -> Vector2:
 
 func _background() -> StyleBoxFlat:
 	var style = StyleBoxFlat.new()
-	style.bg_color = Color("613b2ae8") if is_instance_valid(game) and game.stage.desert else Color("26352be8")
+	style.bg_color = Color(str(StageRegistry.value(game.stage.variant, "minimap"))) if is_instance_valid(game) else Color("26352be8")
 	style.set_corner_radius_all(12)
 	return style

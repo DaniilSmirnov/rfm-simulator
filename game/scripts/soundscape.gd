@@ -91,7 +91,7 @@ func _ready() -> void:
 	add_child(steps)
 
 func active() -> bool:
-	return game.playing and not game.paused and not game.dead and not game.finished and not (game.room.connected and not game.room.is_host and game.room.world_paused)
+	return game.playing and not game.paused and not game.dead and not game.finished and not (game.room.is_guest() and game.room.world_paused)
 
 func repair() -> void:
 	if shutting_down:
@@ -103,12 +103,12 @@ func repair() -> void:
 	var running = active()
 	for player in [game.engine_audio, game.wind_audio]:
 		var wanted = running if player == game.engine_audio else true
-		player.stream_paused = game.paused or (game.room.connected and not game.room.is_host and game.room.world_paused)
+		player.stream_paused = game.paused or (game.room.is_guest() and game.room.world_paused)
 		if wanted and not player.playing:
 			player.play()
 		elif not wanted and player.playing:
 			player.stop()
-	var ambience_paused = game.paused or (game.room.connected and not game.room.is_host and game.room.world_paused)
+	var ambience_paused = game.paused or (game.room.is_guest() and game.room.world_paused)
 	birds.stream_paused = ambience_paused
 	cicadas.stream_paused = ambience_paused
 	game.fire_audio.stream_paused = ambience_paused
@@ -148,7 +148,7 @@ func update(delta: float) -> void:
 		step_clock = 0.32 if Input.is_action_pressed("sprint") else 0.48
 
 func _update_sparse_ambience(delta: float) -> void:
-	var paused = game.paused or (game.room.connected and not game.room.is_host and game.room.world_paused)
+	var paused = game.paused or (game.room.is_guest() and game.room.world_paused)
 	if paused:
 		return
 

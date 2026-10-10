@@ -1,5 +1,6 @@
 extends Control
 class_name RallyMobileControls
+const StageRegistry = preload("res://scripts/stage_registry.gd")
 
 var game: Node
 var fingers: Dictionary = {}
@@ -40,7 +41,7 @@ func active() -> bool:
 	return game != null and game.playing and not game.paused and not game.dead and not game.finished
 
 func world_blocked() -> bool:
-	return game.room.connected and not game.room.is_host and game.room.world_paused
+	return game.room.is_guest() and game.room.world_paused
 
 func _process(_delta: float) -> void:
 	game.fit_mobile_dialogs()
@@ -115,7 +116,7 @@ func _layout() -> void:
 				if game.flag_count() < game.FLAGS_PER_PLAYER:
 					gear.append(["Флаг", "flag"])
 			if game.foraging.can_eat("berries"):
-				gear.append(["Виноград" if game.stage.provence else "Ягоды", "eat_berries"])
+				gear.append([str(StageRegistry.value(game.stage.variant, "berries")), "eat_berries"])
 			if game.tow_target != null or game.nearby_tow_racer():
 				add_button("Трос", "tow", true, Rect2(Vector2(size.x - edge - 360, size.y - edge - 256), Vector2(68, 68)))
 		if not gear.is_empty():

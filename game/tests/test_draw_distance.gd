@@ -1,9 +1,5 @@
-extends SceneTree
+extends "res://tests/harness.gd"
 const Distance = preload("res://scripts/draw_distance.gd")
-var failures = 0
-func check(ok: bool, title: String) -> void:
-	print(("PASS: " if ok else "FAIL: ") + title)
-	if not ok: failures += 1
 func _initialize() -> void:
 	call_deferred("run")
 func run() -> void:
@@ -102,4 +98,4 @@ func run() -> void:
 	game.queue_free()
 	await process_frame
 	print("DRAW DISTANCE RESULT: %d failures" % failures)
-	quit(1 if failures else 0)
+	finish()

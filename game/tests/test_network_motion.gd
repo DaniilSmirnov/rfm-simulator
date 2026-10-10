@@ -1,14 +1,5 @@
-extends SceneTree
+extends "res://tests/harness.gd"
 const Buffer = preload("res://scripts/snapshot_motion.gd")
-var checks = 0
-var failures = 0
-func check(ok: bool, title: String) -> void:
-	checks += 1
-	if not ok:
-		failures += 1
-		push_error(title)
-	else:
-		print("PASS: " + title)
 func _initialize() -> void:
 	call_deferred("run")
 func run() -> void:
@@ -89,22 +80,22 @@ func run() -> void:
 	game.room.connected = true
 	game.room.is_host = false
 	game.room.player_id = "guest"
-	game.room.request_kind = "sync"
+	game.room.transport.request_kind = "sync"
 	var own_position = game.car.position
 	game.room._update_peers([{"id": "guest", "state": {"car": [900, 0, 0]}}])
 	check(game.car.position == own_position, "own local prediction is not overwritten by delayed echo")
 	var now = Time.get_ticks_usec() / 1000000.0
-	game.room.request_sent_at = now - 2.0
+	game.room.transport.request_sent_at = now - 2.0
 	game.room.update_server_clock((now + 100) * 1000)
 	now = Time.get_ticks_usec() / 1000000.0
-	game.room.request_sent_at = now - 0.02
+	game.room.transport.request_sent_at = now - 0.02
 	game.room.update_server_clock((now + 100) * 1000)
-	check(absf(game.room.server_offset - 100.01) < 0.02, "fast response repairs clock calibrated by a slow first response")
-	var offset_before = game.room.server_offset
+	check(absf(game.room.transport.server_offset - 100.01) < 0.02, "fast response repairs clock calibrated by a slow first response")
+	var offset_before = game.room.transport.server_offset
 	now = Time.get_ticks_usec() / 1000000.0
-	game.room.request_sent_at = now - 1.5
+	game.room.transport.request_sent_at = now - 1.5
 	game.room.update_server_clock((now + 100) * 1000)
-	check(game.room.server_offset == offset_before, "slow outlier does not shift calibrated render clock")
+	check(game.room.transport.server_offset == offset_before, "slow outlier does not shift calibrated render clock")
 	var world = game.room.world_state()
 	world.elapsed = 10
 	var stamp = Time.get_ticks_msec()
@@ -124,4 +115,4 @@ func run() -> void:
 	game.queue_free()
 	await process_frame
 	print("NETWORK MOTION RESULT: %d checks, %d failures" % [checks, failures])
-	quit(1 if failures else 0)
+	finish()

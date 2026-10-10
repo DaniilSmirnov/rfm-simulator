@@ -1,0 +1,23 @@
+{
+  "comment": "Room protocol shared by the Godot client (scripts/net_protocol.gd) and the Worker (server/room-core.mjs, server/worker.mjs). Change limits here only.",
+  "protocol_version": 2,
+  "max_players": 8,
+  "room_id_pattern": "^[A-F0-9]{6}$",
+  "room_id_length": 6,
+  "room_id_alphabet": "0123456789ABCDEF",
+  "sync_interval": 0.1,
+  "max_message_bytes": 65536,
+  "name_input_length": 24,
+  "name_max_length": 64,
+  "actions": ["table", "chairs", "grill", "flag", "eat", "rally", "collect", "mount_mushroom", "eat_mushroom", "eat_berries", "pack", "take_gear", "return_gear", "trunk", "firewood", "cauldron", "plov_cook", "eat_plov", "church_bell", "dig_snow"],
+  "limits": {
+    "drive_inputs_per_sync": 96,
+    "ticks_per_input": 12,
+    "commands_per_sync": 8,
+    "queued_commands": 64,
+    "acknowledgements_per_sync": 64,
+    "object_requests_per_sync": 8,
+    "cold_sections": 16
+  },
+  "durations": {"eat": 3.6, "drink": 3.3}
+}

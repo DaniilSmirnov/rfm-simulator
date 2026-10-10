@@ -1,11 +1,6 @@
-extends SceneTree
+extends "res://tests/harness.gd"
 
-var failures = 0
 
-func check(ok: bool, description: String) -> void:
-	print(("PASS: " if ok else "FAIL: ") + description)
-	if not ok:
-		failures += 1
 
 func _initialize() -> void:
 	call_deferred("run")
@@ -35,7 +30,7 @@ func run() -> void:
 	game.room.busy = false
 	game.invite_after_room_create = true
 	game.invite_button.disabled = true
-	game.room.request_kind = "create"
+	game.room.transport.request_kind = "create"
 	game.room._response(HTTPRequest.RESULT_SUCCESS, 409, PackedStringArray(), JSON.stringify({"error": "Комната недоступна"}).to_utf8_buffer())
 	check(not game.invite_after_room_create and not game.invite_button.disabled and game.invite_status.visible and game.invite_status.text.contains("Комната недоступна"), "failed room creation displays the server error and permits retry")
 	game.dead = true
@@ -74,4 +69,4 @@ func run() -> void:
 	game.queue_free()
 	await process_frame
 	print("VK INVITE UI RESULT: %d failures" % failures)
-	quit(1 if failures else 0)
+	finish()

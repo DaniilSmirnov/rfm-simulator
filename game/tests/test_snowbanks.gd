@@ -1,10 +1,6 @@
-extends SceneTree
+extends "res://tests/harness.gd"
 const Stage = preload("res://scripts/stage.gd")
 const Banks = preload("res://scripts/snowbanks.gd")
-var failures = 0
-func check(ok: bool, description: String) -> void:
-	print(("PASS: " if ok else "FAIL: ") + description)
-	if not ok: failures += 1
 func _initialize() -> void: call_deferred("run")
 func run() -> void:
 	var stage = Stage.new(1)
@@ -67,4 +63,4 @@ func run() -> void:
 		check(clear, "NPC camp furniture footprint starts cleared")
 	stage.free()
 	print("SNOWBANKS RESULT: ", failures, " failures")
-	quit(1 if failures else 0)
+	finish()

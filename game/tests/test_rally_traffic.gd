@@ -1,9 +1,4 @@
-extends SceneTree
-var failures = 0
-func check(ok: bool, title: String) -> void:
-	print(("PASS: " if ok else "FAIL: ") + title)
-	if not ok:
-		failures += 1
+extends "res://tests/harness.gd"
 func _initialize() -> void:
 	call_deferred("run")
 func clear_cars(game) -> void:
@@ -39,6 +34,8 @@ func pair(game, moving: bool = false, start: float = 150.0) -> Array:
 func run() -> void:
 	var game = load("res://main.tscn").instantiate()
 	root.add_child(game)
+	# game._ready() randomizes crews; a fixed seed keeps this test repeatable.
+	game.rng.seed = 6022026
 	await process_frame
 	game.set_process(false)
 	game.room.set_process(false)
@@ -140,4 +137,4 @@ func run() -> void:
 	game.queue_free()
 	await process_frame
 	print("RALLY TRAFFIC RESULT: %d failures" % failures)
-	quit(1 if failures else 0)
+	finish()

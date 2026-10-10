@@ -1,4 +1,4 @@
-extends RefCounted
+extends "res://scripts/stage_biome.gd"
 # Deterministic geometry of the winter stage "Зимний Турини": a narrow alpine
 # tarmac road in the spirit of the Rallye Monte-Carlo night stages over a col.
 # The layout is original and only inspired by the character of the event:
@@ -143,7 +143,7 @@ func roughness(s: float) -> float:
 	return sin(s * 0.5) * 0.02 + sin(s * 1.37) * 0.012 + sin(s * 0.13) * 0.015
 
 # Height of the landscape before glades, clearings and camps are levelled.
-func land(stage, pos: Vector3, s: float, distance: float) -> float:
+func land(pos: Vector3, s: float, distance: float) -> float:
 	var p: Vector3 = stage.at(s)
 	var lateral = (pos - p).dot(stage.side(s))
 	var e = maxf(0.0, distance - 10.0)
@@ -162,7 +162,7 @@ func land(stage, pos: Vector3, s: float, distance: float) -> float:
 	return height + wall * c + saddle * k + ladder * (1.0 - c - k)
 
 # Bare rock in the cut above the corniche and on the far valley walls.
-func rock(stage, pos: Vector3, s: float, distance: float, height: float) -> float:
+func rock(pos: Vector3, s: float, distance: float, height: float) -> float:
 	var lateral = (pos - stage.at(s)).dot(stage.side(s))
 	var c = clampf(corniche(s), 0.0, 1.0) * smoothstep(-1.0, 1.0, lateral * uphill_sign(s))
 	var cut = c * smoothstep(12.5, 15.5, distance)
@@ -172,14 +172,14 @@ func rock(stage, pos: Vector3, s: float, distance: float, height: float) -> floa
 	var ledges = smoothstep(-0.2, 0.6, sin(height * 0.45 + pos.x * 0.03 + s * 0.02) + crags * 0.5)
 	return clampf(maxf(cut, walls) * ledges, 0.0, 1.0)
 
-func terrain_color(stage, v: Vector3) -> Color:
+func terrain_color(v: Vector3) -> Color:
 	var s: float = stage.road_s(v)
 	var distance: float = stage.road_distance(v)
 	var snow = Color("e7eef2").lerp(Color("f4f7f9"), (sin(v.x * 0.043 + v.z * 0.031) + 1.0) * 0.25)
 	# Plough spray and exhaust grime close to the tarmac.
 	snow = snow.lerp(Color("d8dfe3"), (1.0 - smoothstep(5.2, 9.5, distance)) * 0.6)
 	var stone = Color("6d6863").lerp(Color("8c8781"), (sin(v.y * 1.7 + v.x * 0.2) + 1.0) * 0.5)
-	return snow.lerp(stone, rock(stage, v, s, distance, v.y) * 0.8)
+	return snow.lerp(stone, rock(v, s, distance, v.y) * 0.8)
 
 func reserved(pos: Vector3, padding: float = 0.0) -> bool:
 	for spot in reserved_spots:
@@ -245,7 +245,7 @@ func surface_grip(s: float, lateral: float, half_width: float = 3.7) -> float:
 	var mix = conditions(s, lateral, half_width)
 	return mix.dry * GRIP.dry + mix.wet * GRIP.wet + mix.snow * GRIP.snow + mix.ice * GRIP.ice
 
-func road_color(p: Vector3, s: float, lateral: float, half_width: float) -> Color:
+func road_paint(p: Vector3, s: float, lateral: float, half_width: float) -> Color:
 	var mix = conditions(s, lateral, half_width)
 	var color = COLORS.dry * mix.dry + COLORS.wet * mix.wet + COLORS.snow * mix.snow + COLORS.ice * mix.ice
 	color.a = 1.0
@@ -254,7 +254,7 @@ func road_color(p: Vector3, s: float, lateral: float, half_width: float) -> Colo
 
 # Thin glossy glaze over every ice patch, conforming to the road surface. The
 # vertex alpha follows the same soft mask as grip, so the edges fade out.
-func build_ice(stage) -> void:
+func build_ice() -> void:
 	var surface = SurfaceTool.new()
 	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var count = 0
@@ -296,3 +296,165 @@ func build_ice(stage) -> void:
 	node.material_override = material
 	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	stage.add_child(node)
+
+# ---------------------------------------------------------------- stage hooks
+
+const DeepSnow = preload("res://scripts/deep_snow.gd")
+const Snowbanks = preload("res://scripts/snowbanks.gd")
+const AlpineScenery = preload("res://scripts/alpine_scenery.gd")
+const AlpineLife = preload("res://scripts/alpine_life.gd")
+const WorldSync = preload("res://scripts/world_sync.gd")
+var alpine_life: RefCounted
+
+func has_snow() -> bool:
+	return true
+
+func configure() -> void:
+	for s in [140.0, 310.0, 505.0, 690.0]:
+		stage.clearings.append(stage.at(s) + stage.side(s) * (13.0 if s < 500 else -13.0))
+	for clearing in stage.clearings:
+		var station = stage.road_s(clearing)
+		var outward = clearing - stage.at(station)
+		outward.y = 0
+		stage.snow_camps.append(clearing + outward.normalized() * 6.0)
+	for i in range(4):
+		var station = 85.0 + i * 190.0
+		stage.snow_camps.append(stage.at(station) + stage.side(station) * (7.2 if i % 2 == 0 else -7.2))
+	AlpineScenery.configure(stage)
+	_place_snow_glades()
+
+# Level, tree-free glades beside straights. Snow is left untouched so a crew
+# has a reason to take the shovel and dig its own camp out of the drift.
+func _place_snow_glades() -> void:
+	var taken: Array[float] = []
+	for point in stage.clearings + stage.snow_camps: taken.append(stage.road_s(point))
+	var candidates: Array = []
+	for i in range(int((LENGTH - 80.0) / 4.0)):
+		var station = 40.0 + i * 4.0
+		var before = stage.direction(station - stage.GLADE_STRAIGHT)
+		var after = stage.direction(station + stage.GLADE_STRAIGHT)
+		var turn = Vector2(before.x, before.z).angle_to(Vector2(after.x, after.z))
+		if absf(turn) < stage.GLADE_MAX_TURN and not glade_blocked(station): candidates.append([absf(turn), station])
+	candidates.sort()
+	for candidate in candidates:
+		var station: float = candidate[1]
+		var free = true
+		for other in taken: free = free and absf(other - station) > stage.GLADE_SPACING
+		if not free: continue
+		taken.append(station)
+		var side_sign = 1.0 if stage.snow_glades.size() % 2 == 0 else -1.0
+		var center = stage.at(station) + stage.side(station) * side_sign * stage.GLADE_OFFSET
+		# Level with the inner edge, so the glade is a shelf off the shoulder.
+		center.y = stage.base_ground(stage.at(station) + stage.side(station) * side_sign * (stage.GLADE_OFFSET - stage.GLADE_FLAT))
+		stage.snow_glades.append(center)
+		if stage.snow_glades.size() >= stage.GLADE_COUNT: break
+
+# Corniche cut into the mountain, lacet ladders and the col saddle; glades,
+# clearings and dug camps are levelled into it.
+func base_ground(pos: Vector3) -> float:
+	var s = stage.road_s(pos)
+	var distance = stage.road_distance(pos)
+	var height = land(pos, s, distance)
+	for glade in stage.snow_glades:
+		var reach = Vector2(pos.x - glade.x, pos.z - glade.z).length()
+		if reach >= stage.GLADE_BLEND: continue
+		# Never lift or lower the ploughed road beside a glade.
+		var level = (1.0 - smoothstep(stage.GLADE_FLAT, stage.GLADE_BLEND, reach)) * smoothstep(stage.WIDTH * 0.5 + 0.5, stage.WIDTH * 0.5 + 2.5, distance)
+		height = lerpf(height, glade.y, level)
+	height = stage.blend_clearings(pos, height, 7.0, 16.0)
+	return height - DeepSnow.camp_depression(stage, pos)
+
+func ground(pos: Vector3) -> float:
+	var height = stage.snow.floor_height(stage, pos) if stage.snow.is_dug(stage, pos) else stage.base_ground(pos)
+	return maxf(height, Snowbanks.surface_height(stage, pos))
+
+func vehicle_ground(pos: Vector3) -> float:
+	return maxf(stage.snow.contact(stage, pos), Snowbanks.surface_height(stage, pos))
+
+# Feet break through loose snow; tyre tracks and excavations hold the walker up.
+func walking_ground(pos: Vector3) -> float:
+	var height = stage.ground(pos)
+	var loose = stage.snow.loose_depth(stage, pos)
+	if loose <= 0.02: return height
+	# Packed tyre tracks are firm: feet stop at the track's visible dip.
+	var sunk = height - loose * lerpf(DeepSnow.FOOT_SINK, 0.28, stage.snow.packed(pos))
+	return maxf(sunk, Snowbanks.surface_height(stage, pos))
+
+# Furniture needs ground dug out of the loose snow.
+func camp_allowed(spot: Vector3, kind: String) -> bool:
+	var radius = 0.9 if kind == "table" else 0.55
+	for x in [-radius, 0.0, radius]:
+		for z in [-radius, 0.0, radius]:
+			if stage.snow.loose_depth(stage, spot + Vector3(x, 0, z)) > 0.02: return false
+	return true
+
+func grip(pos: Vector3) -> float:
+	if stage.snow.is_dug(stage, pos): return 0.65
+	if DeepSnow.depth(stage, pos) > 0.02:
+		return lerpf(0.24, 0.50, stage.snow.packed(pos))
+	if stage.road_distance(pos) > stage.WIDTH * 0.55:
+		return 0.32
+	# Monte-Carlo tarmac: dry, wet, snow with dark wheel tracks, black ice.
+	var station = stage.road_s(pos)
+	return surface_grip(station, (pos - stage.at(station)).dot(stage.side(station)), stage.road_width(station) * 0.5)
+
+func terrain_tile_step(p: Vector3) -> float:
+	return 2.0 if stage.road_distance(p) < 30.0 else 4.0
+
+func terrain_tiled() -> bool:
+	return true
+
+func terrain_chunk_built(tile: Vector2i, node: MeshInstance3D) -> void:
+	stage.snow.register_chunk(stage, tile, node)
+
+# The station is derived from the vertex, so vertices shared by segments match.
+func road_color(p: Vector3, _s: float) -> Color:
+	var station = stage.road_s(p)
+	return road_paint(p, station, (p - stage.at(station)).dot(stage.side(station)), stage.road_width(station) * 0.5)
+
+func road_strips() -> int:
+	return 12
+
+func after_road() -> void:
+	Snowbanks.build(stage)
+	build_ice()
+
+func forest_tree_count() -> int:
+	return 900
+
+func forest_tree_max_height() -> float:
+	return 13.0
+
+func forest_clearing_radius() -> float:
+	return 11.0
+
+func tree_blocked(p: Vector3) -> bool:
+	return reserved(p, 2.0) or AlpineScenery.bare_rock(stage, p)
+
+func roadside_rock_blocked(p: Vector3) -> bool:
+	return reserved(p, 1.0)
+
+func build_details(_cooperative: bool) -> void:
+	AlpineScenery.build(stage)
+	alpine_life = AlpineLife.new()
+	alpine_life.build(stage)
+
+func build_horizon() -> void:
+	AlpineScenery.build_peaks(stage)
+
+func update_life(delta: float, focus: Vector3) -> void:
+	if alpine_life != null:
+		alpine_life.update(delta, focus)
+
+func sync_providers(_game) -> Array:
+	var snow = stage.snow
+	var snapshot = func() -> Dictionary:
+		return {"snow": snow.snapshot(), "snow_dug": snow.dug_snapshot()}
+	var apply = func(f: Dictionary, _t: float) -> void:
+		snow.authoritative = false
+		snow.apply_snapshot(f.get("snow", []))
+		snow.apply_dug_snapshot(f.get("snow_dug", []))
+	return [WorldSync.provider("snow", "snow", ["snow", "snow_dug"], snapshot, apply, true)]
+
+func marshal_stations() -> Array:
+	return [180.0, 420.0, 650.0]

@@ -1,12 +1,8 @@
-extends SceneTree
+extends "res://tests/harness.gd"
 # "Зимний Турини" as a Monte-Carlo col: route, mixed tarmac, scenery and life.
 # Deep snow, banks and digging keep their own tests (deep_snow, snowbanks, shovel).
 const Stage = preload("res://scripts/stage.gd")
 const Banks = preload("res://scripts/snowbanks.gd")
-var failures = 0
-func check(ok: bool, label: String) -> void:
-	print(("PASS: " if ok else "FAIL: ") + label)
-	if not ok: failures += 1
 func _initialize() -> void: call_deferred("run")
 
 func run() -> void:
@@ -110,4 +106,4 @@ func run() -> void:
 	stage.queue_free()
 	await process_frame
 	print("ALPINE WINTER RESULT: ", failures, " failures")
-	quit(1 if failures else 0)
+	finish()

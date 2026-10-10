@@ -1,10 +1,5 @@
-extends SceneTree
+extends "res://tests/harness.gd"
 const Props = preload("res://scripts/props.gd")
-var failures = 0
-func check(ok: bool, message: String) -> void:
-	if not ok:
-		failures += 1
-		push_error(message)
 func _initialize() -> void:
 	var parent = Node3D.new()
 	root.add_child(parent)
@@ -36,4 +31,4 @@ func _initialize() -> void:
 		check(count <= Props.RESOURCE_CACHE_LIMIT, "resource caches stay bounded under random content")
 	parent.free()
 	print("RESOURCE_CACHE failures=", failures)
-	quit(1 if failures else 0)
+	finish()

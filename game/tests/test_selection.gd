@@ -1,15 +1,6 @@
-extends SceneTree
+extends "res://tests/harness.gd"
 const Stage = preload("res://scripts/stage.gd")
 const RallyProps = preload("res://scripts/props.gd")
-var checks = 0
-var failures = 0
-func check(ok: bool, title: String) -> void:
-	checks += 1
-	if not ok:
-		failures += 1
-		push_error(title)
-	else:
-		print("PASS: " + title)
 func _initialize() -> void:
 	call_deferred("run")
 func run() -> void:
@@ -97,9 +88,9 @@ func run() -> void:
 		"lavender plateau before the village, collectible grapes in the vineyards after it")
 	city.free()
 	guest.select_player_car(2)
-	host.room.request_kind = "create"
+	host.room.transport.request_kind = "create"
 	host.room._response(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), JSON.stringify({"player": "host", "token": "h", "host": true, "room": "ABC123", "slot": 0, "car_model": 5, "stage": 1}).to_utf8_buffer())
-	guest.room.request_kind = "join"
+	guest.room.transport.request_kind = "join"
 	guest.room._response(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), JSON.stringify({"player": "guest", "token": "g", "host": false, "slot": 1, "car_model": 2, "stage": 1}).to_utf8_buffer())
 	check(guest.stage.winter and guest.playing and not guest.selection_controls.visible, "guest enters host winter stage before gameplay")
 	check(guest.stage.trails.is_empty(), "winter stage keeps its original forest without spectator footpaths")
@@ -148,4 +139,4 @@ func run() -> void:
 		game.queue_free()
 	await process_frame
 	print("SELECTION RESULT: %d checks, %d failures" % [checks, failures])
-	quit(1 if failures else 0)
+	finish()

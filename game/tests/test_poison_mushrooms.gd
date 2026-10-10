@@ -1,10 +1,5 @@
-extends SceneTree
+extends "res://tests/harness.gd"
 const Props = preload("res://scripts/props.gd")
-var failures = 0
-func check(ok: bool, title: String) -> void:
-	print(("PASS: " if ok else "FAIL: ") + title)
-	if not ok:
-		failures += 1
 func _initialize() -> void:
 	call_deferred("run")
 func run() -> void:
@@ -78,16 +73,19 @@ func run() -> void:
 	guest.walker = host.grill.position
 	host.room._apply_command({"action": "eat_mushroom", "player": "guest", "state": guest.room.local_state(), "placement": {"source": -1}})
 	check(not host.mushroom_effect.overlay.visible, "remote consumption leaves the host's colors normal")
+	# Effects carry the host's end time; the shared clock (elapsed) is replicated.
+	guest.elapsed = host.elapsed
 	guest.foraging.apply_snapshot(host.foraging.snapshot())
 	check(guest.mushroom_effect.movement_multiplier() == 0.5, "poison halves walking and running speed")
-	check(guest.mushroom_effect.remaining == 10, "guest receives their own ten second effect")
+	check(is_equal_approx(guest.mushroom_effect.remaining, 10), "guest receives their own ten second effect")
 	guest.mushroom_effect.update(3)
 	guest.foraging.apply_snapshot(host.foraging.snapshot())
-	check(guest.mushroom_effect.remaining == 7, "repeated snapshot never restarts the timer")
+	check(is_equal_approx(guest.mushroom_effect.remaining, 7), "repeated snapshot never restarts the timer")
 	host.elapsed += 4
+	guest.elapsed = host.elapsed
 	guest.mushroom_effect.serial = 0
 	guest.foraging.apply_snapshot(host.foraging.snapshot())
-	check(guest.mushroom_effect.remaining == 6, "late snapshot starts only the remaining duration")
+	check(is_equal_approx(guest.mushroom_effect.remaining, 6), "late snapshot starts only the remaining duration")
 	guest.mushroom_effect.update(6)
 	check(not guest.mushroom_effect.overlay.visible, "guest colors return to normal")
 	check(guest.mushroom_effect.movement_multiplier() == 1.0, "movement recovers when poison expires")
@@ -99,4 +97,4 @@ func run() -> void:
 		game.queue_free()
 	await process_frame
 	print("POISON MUSHROOM RESULT: %d failures" % failures)
-	quit(1 if failures else 0)
+	finish()

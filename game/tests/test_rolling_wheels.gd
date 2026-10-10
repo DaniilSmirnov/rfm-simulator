@@ -1,12 +1,5 @@
-extends SceneTree
-var failed := 0
+extends "res://tests/harness.gd"
 
-func verify(ok: bool, message: String) -> void:
-	if not ok:
-		failed += 1
-		push_error(message)
-	else:
-		print("PASS: " + message)
 
 func _initialize() -> void:
 	call_deferred("run")
@@ -20,7 +13,7 @@ func run() -> void:
 		if part is Node3D and part.has_meta("rolling_wheel_radius") and not part.get_meta("rolling_wheel_radius") is String:
 			wheel = part
 			break
-	verify(wheel != null, "player car includes rolling wheel pivot")
+	check(wheel != null, "player car includes rolling wheel pivot")
 	if wheel == null:
 		# A missing wheel must fail promptly instead of crashing and hanging CI.
 		car.free()
@@ -30,23 +23,23 @@ func run() -> void:
 	for part in car.get_children():
 		if part is Node3D and part.has_meta("rolling_wheel_radius"):
 			wheel_count += 1
-	verify(wheel_count == 4, "Granta has four independently rotating wheels")
-	verify(wheel.get_node_or_null("WheelTire") != null and wheel.get_node_or_null("WheelRim") != null,
+	check(wheel_count == 4, "Granta has four independently rotating wheels")
+	check(wheel.get_node_or_null("WheelTire") != null and wheel.get_node_or_null("WheelRim") != null,
 		"wheel hub and tyre rotate on the same pivot")
 	props.animate_wheels(car)
 	var start_rotation = wheel.quaternion
 	car.position.z -= 1.0
 	props.animate_wheels(car)
-	verify(not wheel.quaternion.is_equal_approx(start_rotation), "moving forwards rotates wheels")
+	check(not wheel.quaternion.is_equal_approx(start_rotation), "moving forwards rotates wheels")
 	var forward_rotation = wheel.quaternion
 	car.position.z += 1.0
 	props.animate_wheels(car)
-	verify(wheel.quaternion.is_equal_approx(start_rotation), "driving backward reverses rotation")
+	check(wheel.quaternion.is_equal_approx(start_rotation), "driving backward reverses rotation")
 	props.animate_wheels(car)
-	verify(wheel.quaternion.is_equal_approx(start_rotation), "idle car wheels do not rotate")
+	check(wheel.quaternion.is_equal_approx(start_rotation), "idle car wheels do not rotate")
 	car.position.z -= 100
 	props.animate_wheels(car)
-	verify(wheel.quaternion.is_equal_approx(start_rotation), "teleports do not spin wheels")
+	check(wheel.quaternion.is_equal_approx(start_rotation), "teleports do not spin wheels")
 	car.free()
 
 	var rally = props.rally_car(0)
@@ -57,7 +50,7 @@ func run() -> void:
 		if part is Node3D and part.has_meta("rolling_wheel_radius") and not part.get_meta("rolling_wheel_radius") is String:
 			rally_part = part
 			break
-	verify(rally_part != null, "rally car includes rolling wheel mesh")
+	check(rally_part != null, "rally car includes rolling wheel mesh")
 	if rally_part == null:
 		rally.free()
 		quit(1)
@@ -65,8 +58,8 @@ func run() -> void:
 	var before = rally_part.quaternion
 	rally.position.z -= 2
 	props.animate_wheels(rally)
-	verify(not rally_part.quaternion.is_equal_approx(before), "moving rally car spins wheels")
+	check(not rally_part.quaternion.is_equal_approx(before), "moving rally car spins wheels")
 	rally.free()
 
-	print("ROLLING WHEELS RESULT: %d failures" % failed)
-	quit(1 if failed else 0)
+	print("ROLLING WHEELS RESULT: %d failures" % failures)
+	finish()

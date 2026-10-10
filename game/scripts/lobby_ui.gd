@@ -1,4 +1,5 @@
 extends Node
+const NetProtocol = preload("res://scripts/net_protocol.gd")
 # Shared presentation only: ownership remains in PlatformService and the backend.
 var game: Node3D
 var background: TextureRect
@@ -184,9 +185,9 @@ func refresh() -> void:
 	images[0].texture = load("res://textures/previews/car_%d.webp" % game.selected_car)
 	images[1].texture = load("res://textures/previews/stage_%d.webp" % game.selected_stage)
 	if game.room != null:
-		game.room.create_button.disabled = game.room.busy or not car_ok or not stage_ok
+		game.room.ui.create_button.disabled = game.room.busy or not car_ok or not stage_ok
 		# A guest borrows the host's stage. Only their personal car is required.
-		game.room.join_button.disabled = game.room.busy or not car_ok or game.room.id_input.text.strip_edges().length() != 6
+		game.room.ui.join_button.disabled = game.room.busy or not car_ok or game.room.ui.id_input.text.strip_edges().length() != NetProtocol.room_id_length()
 
 func _process(_delta: float) -> void:
 	var size = game.get_viewport().get_visible_rect().size
@@ -218,7 +219,7 @@ func _process(_delta: float) -> void:
 		game.menu.pivot_offset = extent / 2
 		game.menu.scale = Vector2.ONE * factor
 	if game.room != null:
-		host_pause.visible = game.room.connected and not game.room.is_host and game.room.world_paused and not game.paused and not game.dead and not game.finished
+		host_pause.visible = game.room.is_guest() and game.room.world_paused and not game.paused and not game.dead and not game.finished
 	game.draw_distance_controls.visible = game.playing and game.paused and not game.dead and not game.finished
 	return_button.visible = game.playing
 	help_button.visible = game.menu.visible and (not game.playing or game.paused) and not game.dead and not game.finished

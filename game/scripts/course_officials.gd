@@ -4,6 +4,7 @@ const Navigation = preload("res://scripts/crowd_navigation.gd")
 var people: Array[Dictionary] = []
 var targets: Dictionary = {}
 const Props = preload("res://scripts/props.gd")
+const Records = preload("res://scripts/stage_records.gd")
 var stage: Node3D
 var arches: Array[Node3D] = []
 var cars: Array[Node3D] = []
@@ -24,7 +25,7 @@ func roadside(station: float, preferred_side: float, clearance: float) -> Dictio
 					continue
 				if not stage.solids.hit(point, point, clearance, false).is_empty():
 					continue
-				if stage.lakeland and stage.water.depth(point) > -0.3:
+				if stage.water != null and stage.water.depth(point) > -0.3:
 					continue
 				if stage.obstacle_hit(point, point, clearance) >= 0 or not stage.rock_hit(point, point, clearance, false).is_empty():
 					continue
@@ -48,7 +49,7 @@ func solid(parent: Node3D, local: Vector3, radius: float, height: float) -> void
 	shape.height = height
 	collider.shape = shape
 	body.add_child(collider)
-	var record = {"pos": parent.position + local.rotated(Vector3.UP, parent.rotation.y), "radius": radius, "height": height, "official": true}
+	var record = Records.rock(parent.position + local.rotated(Vector3.UP, parent.rotation.y), radius, height, Records.OFFICIAL)
 	if parent.get_meta("role", "") == "marshal":
 		record.actor = parent
 		parent.set_meta("solid_record", record)
@@ -60,7 +61,7 @@ func build() -> void:
 	arch(stage.LENGTH - 8.0, "Rally Fans Map", true)
 	station(24.0, 1.0, "Старт")
 	station(stage.LENGTH - 30.0, -1.0, "Финиш")
-	var positions: Array = [180.0, 420.0, 650.0] if stage.winter else [165.0, 365.0, 570.0, 730.0]
+	var positions: Array = stage.biome.marshal_stations()
 	for i in range(positions.size()):
 		var spot = roadside(positions[i], 1.0 if i % 2 == 0 else -1.0, 0.6)
 		if spot.is_empty():
@@ -206,7 +207,7 @@ func snapshot() -> Array:
 	var result: Array = []
 	for person in people:
 		var p: Vector3 = person.avatar.position
-		result.append({"id": person.id, "pos": [p.x, p.y, p.z], "yaw": person.avatar.rotation.y, "helper": person.helper, "action": person.action})
+		result.append({"id": person.id, "pos": [snappedf(p.x, 0.01), snappedf(p.y, 0.01), snappedf(p.z, 0.01)], "yaw": snappedf(person.avatar.rotation.y, 0.001), "helper": person.helper, "action": person.action})
 	return result
 
 func apply_snapshot(poses: Array) -> void:

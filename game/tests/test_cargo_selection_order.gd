@@ -1,10 +1,5 @@
-extends SceneTree
+extends "res://tests/harness.gd"
 const Props = preload("res://scripts/props.gd")
-var failures = 0
-func check(ok: bool, title: String) -> void:
-	print(("PASS: " if ok else "FAIL: ") + title)
-	if not ok:
-		failures += 1
 func _initialize() -> void:
 	call_deferred("run")
 func run() -> void:
@@ -22,13 +17,13 @@ func run() -> void:
 		scene.stage.rocks.clear()
 	var origin: Vector3 = game.stage.clearings[0]
 	game.car.position = origin + Vector3(0, 0, 12)
-	for variant in range(10):
+	for variant in range(RallyProps.PLAYER_MODELS.size()):
 		game.selected_car = variant
 		game.heading = 0 if variant % 2 == 0 else PI / 2
 		var pose: Dictionary = game.cargo.poses().local
 		game.walker = game.cargo.point(pose)
 		game.camera.position = pose.pos + Vector3(0, 1.6, Props.trunk_profile(variant).rear + 2.2).rotated(Vector3.UP, game.heading)
-		for index in range(5):
+		for index in range(Props.CARGO_KINDS.size()):
 			var target: Vector3 = pose.pos + Props.cargo_point(Props.trunk_profile(variant), index).rotated(Vector3.UP, game.heading)
 			game.camera.look_at(target)
 			check(game.interaction.current().get("value", "") == Props.CARGO_KINDS[index], "each cargo box is selectable on car %d, box %d" % [variant, index])
@@ -60,4 +55,4 @@ func run() -> void:
 		scene.queue_free()
 	await process_frame
 	print("CARGO ORDER RESULT: %d failures" % failures)
-	quit(1 if failures else 0)
+	finish()

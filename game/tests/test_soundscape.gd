@@ -1,8 +1,4 @@
-extends SceneTree
-var failures = 0
-func check(value: bool, message: String) -> void:
-	print(("PASS: " if value else "FAIL: ") + message)
-	if not value: failures += 1
+extends "res://tests/harness.gd"
 func _initialize() -> void:
 	call_deferred("run")
 func run() -> void:
@@ -37,4 +33,4 @@ func run() -> void:
 	game.queue_free()
 	await process_frame
 	print("SOUNDSCAPE RESULT: %d failures" % failures)
-	quit(1 if failures else 0)
+	finish()

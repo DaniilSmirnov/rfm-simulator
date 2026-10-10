@@ -1,11 +1,6 @@
-extends SceneTree
+extends "res://tests/harness.gd"
 const Stage = preload("res://scripts/stage.gd")
 const Motion = preload("res://scripts/vehicle_motion.gd")
-var failures = 0
-func check(ok: bool, message: String) -> void:
-	print(("PASS: " if ok else "FAIL: ") + message)
-	if not ok:
-		failures += 1
 func _initialize() -> void:
 	call_deferred("run")
 
@@ -233,4 +228,4 @@ func run() -> void:
 	await game._shutdown_audio()
 	game.free()
 	print("FINNISH FOREST RESULT: %d failures" % failures)
-	quit(1 if failures else 0)
+	finish()

@@ -1,15 +1,10 @@
-extends SceneTree
+extends "res://tests/harness.gd"
 const Stage = preload("res://scripts/stage.gd")
 const Motion = preload("res://scripts/vehicle_motion.gd")
 class LinearStage:
 	extends "res://scripts/stage.gd"
 	func rocks_in_bounds(_low: Vector2, _high: Vector2) -> Array:
 		return rocks
-var failures = 0
-func check(ok: bool, title: String) -> void:
-	print(("PASS: " if ok else "FAIL: ") + title)
-	if not ok:
-		failures += 1
 func _initialize() -> void:
 	call_deferred("run")
 func run() -> void:
@@ -166,4 +161,4 @@ func run() -> void:
 	game.queue_free()
 	await process_frame
 	print("ROCK RESULT: %d failures" % failures)
-	quit(1 if failures else 0)
+	finish()

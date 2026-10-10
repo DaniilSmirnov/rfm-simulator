@@ -1,4 +1,4 @@
-extends SceneTree
+extends "res://tests/harness.gd"
 const Rejoin = preload("res://scripts/rally_rejoin.gd")
 const Traffic = preload("res://scripts/rally_traffic.gd")
 const Stage = preload("res://scripts/stage.gd")
@@ -6,10 +6,6 @@ class Harness:
 	extends "res://scripts/game.gd"
 	func toast(_message: String) -> void: pass
 	func _play_audio(_audio: Node) -> void: pass
-var failures = 0
-func check(ok: bool, label: String) -> void:
-	print(("PASS: " if ok else "FAIL: ") + label)
-	if not ok: failures += 1
 func _initialize() -> void: call_deferred("run")
 func scenario(reverse: bool, backwards: bool = false, speed: float = 0.0, fps: int = 60, role: String = "racer") -> void:
 	var game = Harness.new()
@@ -91,4 +87,4 @@ func run() -> void:
 	scenario(false, false, 0.0, 60, "zero")
 	check(not Rejoin.eligible({"kind": "stuck"}), "stuck crews still need assistance")
 	print("Rally rejoin failures: ", failures)
-	quit(failures)
+	finish()

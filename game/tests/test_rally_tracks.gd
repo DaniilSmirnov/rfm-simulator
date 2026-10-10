@@ -1,14 +1,10 @@
-extends SceneTree
+extends "res://tests/harness.gd"
 const Tracks = preload("res://scripts/rally_tracks.gd")
 const Stage = preload("res://scripts/stage.gd")
 class Harness:
 	extends "res://scripts/game.gd"
 	func toast(_message: String) -> void: pass
 	func _play_audio(_audio: Node) -> void: pass
-var failures = 0
-func check(ok: bool, message: String) -> void:
-	print(("PASS: " if ok else "FAIL: ") + message)
-	if not ok: failures += 1
 func _initialize() -> void:
 	call_deferred("run")
 func harness(reverse: bool = false):
@@ -117,4 +113,4 @@ func run() -> void:
 	check(absf(low.time-high.time)<0.25, "mixed playback travel time agrees at 24 and 144 FPS")
 	print("TRACK_PLAYBACK_CPU_MS low=",low.cost_ms," high=",high.cost_ms," (headless, not device FPS)")
 	print("RALLY TRACKS RESULT: %d failures" % failures)
-	quit(1 if failures else 0)
+	finish()

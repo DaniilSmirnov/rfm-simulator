@@ -1,9 +1,4 @@
-extends SceneTree
-var failures = 0
-func check(ok: bool, message: String) -> void:
-	if not ok:
-		failures += 1
-		push_error(message)
+extends "res://tests/harness.gd"
 func _initialize() -> void:
 	call_deferred("run")
 func run() -> void:
@@ -47,4 +42,4 @@ func run() -> void:
 	await game._shutdown_audio()
 	game.free()
 	print("MINIMAP_AND_CAMP failures=", failures)
-	quit(1 if failures else 0)
+	finish()

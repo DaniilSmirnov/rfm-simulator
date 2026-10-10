@@ -1,9 +1,4 @@
-extends SceneTree
-var failures = 0
-func check(value: bool, message: String) -> void:
-	if not value:
-		failures += 1
-		push_error(message)
+extends "res://tests/harness.gd"
 func _initialize() -> void:
 	call_deferred("run")
 func run() -> void:
@@ -14,23 +9,23 @@ func run() -> void:
 	game.room.set_process(false)
 	check(game.menu.get_child(0) == game.menu_content, "main menu contains no scroll container")
 	check(not game.menu_title.visible and not game.menu_text.visible, "main menu hides duplicate heading and player count")
-	check(game.room.lobby.is_visible_in_tree() and not game.start_button.visible, "all starts use the unified room menu")
+	check(game.room.ui.panel.is_visible_in_tree() and not game.start_button.visible, "all starts use the unified room menu")
 	check(game.lobby_ui.images.size() == 2 and game.lobby_ui.images[0].texture != null, "both cards have rendered previews")
 	check(game.lobby_ui.background.visible and game.lobby_ui.background.mouse_filter == Control.MOUSE_FILTER_IGNORE, "menu backdrop is visible and does not intercept input")
 	game.platform_service.catalog = JSON.parse_string(FileAccess.get_file_as_string("res://data/store_catalog.json"))
 	game.platform_service.entitlements = {"mode": "restricted", "skus": []}
-	game.room.id_input.text = "ABCDEF"
+	game.room.ui.id_input.text = "ABCDEF"
 	game.select_player_car(9)
 	game.select_stage(2)
 	game.lobby_ui.refresh()
 	check(game.lobby_ui.background.texture.resource_path.ends_with("backdrop_2.webp"), "backdrop follows locked stage selection")
 	check(game.selected_car == 9 and game.selected_stage == 2, "closed content can be previewed")
-	check(game.room.create_button.disabled and game.room.join_button.disabled, "locked car blocks both entry actions")
+	check(game.room.ui.create_button.disabled and game.room.ui.join_button.disabled, "locked car blocks both entry actions")
 	game.start_game()
 	check(not game.playing, "direct start cannot bypass ownership")
 	game.select_player_car(0)
 	game.lobby_ui.refresh()
-	check(game.room.create_button.disabled and not game.room.join_button.disabled, "guest can join host stage with free car")
+	check(game.room.ui.create_button.disabled and not game.room.ui.join_button.disabled, "guest can join host stage with free car")
 	game.room.connect_room("")
 	check(not game.room.busy, "locked stage cannot create room")
 	game.select_stage(1)
@@ -50,16 +45,16 @@ func run() -> void:
 	game.platform_service.entitlements.skus = ["stage_02"]
 	game.lobby_ui.refresh()
 	check(game.lobby_ui.states[1].text.contains("Куплено"), "server ownership shows purchase label")
-	check(not game.room.create_button.disabled and not game.lobby_ui.purchase_button.visible, "confirmed winter ownership unlocks host and hides purchase")
+	check(not game.room.ui.create_button.disabled and not game.lobby_ui.purchase_button.visible, "confirmed winter ownership unlocks host and hides purchase")
 	# Red Canyon is a separate paid VK map, not covered by a winter purchase.
 	game.select_stage(3)
 	game.lobby_ui.refresh()
 	check(not game.platform_service.can_use("stage", 3), "unpaid canyon locked after buying winter stage")
-	check(game.room.create_button.disabled and not game.room.join_button.disabled, "unpaid canyon cannot host but can join another owner's room")
+	check(game.room.ui.create_button.disabled and not game.room.ui.join_button.disabled, "unpaid canyon cannot host but can join another owner's room")
 	check(game.lobby_ui.purchase_button.visible and game.lobby_ui.purchase_button.text == "ОТКРЫТЬ СУ · 20 ГОЛОСОВ", "canyon exposes 20-vote purchase")
 	game.platform_service.entitlements.skus.append("stage_04")
 	game.lobby_ui.refresh()
-	check(game.platform_service.can_use("stage", 3) and not game.room.create_button.disabled, "owned canyon unlocks new room")
+	check(game.platform_service.can_use("stage", 3) and not game.room.ui.create_button.disabled, "owned canyon unlocks new room")
 	check(game.lobby_ui.states[1].text.contains("Куплено") and not game.lobby_ui.purchase_button.visible, "purchased canyon hides purchase button")
 	game.platform_service.entitlements.skus.erase("stage_04")
 	game.select_stage(1)
@@ -69,12 +64,12 @@ func run() -> void:
 	game.platform_service.catalog[7].price = 3
 	game.platform_service.catalog[7].payment_mode = "production"
 	game.lobby_ui.refresh()
-	check(game.lobby_ui.car_purchase_button.visible and game.room.create_button.disabled, "locked selected car exposes its own purchase")
+	check(game.lobby_ui.car_purchase_button.visible and game.room.ui.create_button.disabled, "locked selected car exposes its own purchase")
 	check(game.lobby_ui.car_purchase_button.text == "КУПИТЬ МАШИНУ · 3 ГОЛОСА", "production car price")
 	game.car_choice.select(0)
 	game.select_stage(0)
 	game.lobby_ui.refresh()
-	check(not game.room.create_button.disabled, "free baseline enables create")
+	check(not game.room.ui.create_button.disabled, "free baseline enables create")
 	game.room.connected = true
 	game.room.is_host = false
 	game.room.world_paused = true
@@ -90,7 +85,7 @@ func run() -> void:
 	game.lobby_ui._process(0)
 	check(not game.lobby_ui.host_pause.visible, "resuming host hides banner")
 	game.enable_mobile()
-	check(game.menu_content.is_visible_in_tree() and game.room.lobby.is_visible_in_tree(), "mobile keeps compact menu content visible")
+	check(game.menu_content.is_visible_in_tree() and game.room.ui.panel.is_visible_in_tree(), "mobile keeps compact menu content visible")
 	game.playing = false
 	game.lobby_ui._process(0)
 	check(not game.mobile_top.visible and not game.mobile_bottom.visible, "main mobile menu has no empty HUD backgrounds")
@@ -108,7 +103,7 @@ func run() -> void:
 	await process_frame
 	check(game.lobby_ui.background.get_global_rect().size.distance_to(game.get_viewport().get_visible_rect().size) < 1, "backdrop covers full viewport outside safe HUD rectangle")
 	check(safe.encloses(game.menu.get_global_rect()), "entire mobile main menu fits VK safe area without scrolling")
-	for control in [game.room.create_button, game.room.join_button, game.lobby_ui.purchase_button, game.lobby_ui.car_purchase_button, game.lobby_ui.check_purchase, game.lobby_ui.purchase_status]:
+	for control in [game.room.ui.create_button, game.room.ui.join_button, game.lobby_ui.purchase_button, game.lobby_ui.car_purchase_button, game.lobby_ui.check_purchase, game.lobby_ui.purchase_status]:
 		check(game.menu.get_global_rect().encloses(control.get_global_rect()), "all menu actions and purchase status stay inside panel")
 	check(not game.menu_title.visible and not game.menu_text.visible, "mobile main menu has no duplicate heading or subtitle")
 	game.playing = true
@@ -135,4 +130,4 @@ func run() -> void:
 	game.queue_free()
 	await process_frame
 	print("LOBBY_UI failures=", failures)
-	quit(1 if failures else 0)
+	finish()

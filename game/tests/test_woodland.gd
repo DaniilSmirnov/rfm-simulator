@@ -1,14 +1,9 @@
-extends SceneTree
+extends "res://tests/harness.gd"
 const Stage = preload("res://scripts/stage.gd")
 class UnboundedStage:
 	extends "res://scripts/stage.gd"
 	func _trail_near(_pos: Vector3, _trail: Dictionary, _padding: float) -> bool:
 		return true
-var failures = 0
-func check(ok: bool, title: String) -> void:
-	print(("PASS: " if ok else "FAIL: ") + title)
-	if not ok:
-		failures += 1
 func _initialize() -> void:
 	call_deferred("run")
 func run() -> void:
@@ -72,11 +67,11 @@ func run() -> void:
 	var same = Stage.new()
 	for p in [Vector3(80, 0, -270), Vector3(-75, 0, -500)]:
 		check(stage.ground(p) == same.ground(p), "forest relief is deterministic for multiplayer")
-		check(absf(stage.forest_relief(p, 70)) > 0.1, "forest ground has local hill relief")
+		check(absf(stage.biome.land_relief(p, 70)) > 0.1, "forest ground has local hill relief")
 	var road = stage.at(80)
-	check(absf(stage.forest_relief(road, 0)) < 0.001, "forest relief leaves rally lane unchanged")
+	check(absf(stage.biome.land_relief(road, 0)) < 0.001, "forest relief leaves rally lane unchanged")
 	var ditch = stage.at(80) + stage.side(80) * 6.4
-	check(stage.forest_relief(ditch, 6.4) < -0.6, "roadside drainage ditch lowers ground")
+	check(stage.biome.land_relief(ditch, 6.4) < -0.6, "roadside drainage ditch lowers ground")
 	var clear = true
 	for c in stage.clearings:
 		clear = clear and absf(stage.ground(c) - c.y) < 0.01
@@ -120,4 +115,4 @@ func run() -> void:
 			check(other.woodland_details.get("MushroomCaps", 0) == 0, "the dry Provençal stage has no forest mushrooms")
 		other.free()
 	print("WOODLAND RESULT: %d failures" % failures)
-	quit(1 if failures else 0)
+	finish()

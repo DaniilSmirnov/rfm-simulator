@@ -1,13 +1,8 @@
-extends SceneTree
+extends "res://tests/harness.gd"
 
 const Props = preload("res://scripts/props.gd")
 const NivaAsset = preload("res://scripts/niva_asset.gd")
-var failures = 0
 
-func check(condition: bool, description: String) -> void:
-	print(("PASS: " if condition else "FAIL: ") + description)
-	if not condition:
-		failures += 1
 
 func _initialize() -> void:
 	call_deferred("run")
@@ -56,4 +51,4 @@ func run() -> void:
 	car.queue_free()
 	await process_frame
 	print("NIVA INTEGRATION RESULT: %d failures" % failures)
-	quit(1 if failures > 0 else 0)
+	finish()

@@ -5,8 +5,10 @@ extends RefCounted
 # the verges and a horizon with Mont Ventoux. Every layer is an instanced batch.
 const Props = preload("res://scripts/props.gd")
 const Layout = preload("res://scripts/village_layout.gd")
+const DetailLayer = preload("res://scripts/detail_layer.gd")
 const LAVENDER_TEXTURE = preload("res://textures/nature/lavender.svg")
 const Farmland = preload("res://scripts/village_farmland.gd")
+const Records = preload("res://scripts/stage_records.gd")
 
 var village
 var stage
@@ -208,7 +210,7 @@ func _vineyards(cooperative: bool) -> void:
 						indices.append(fruit.size())
 						fruit.append(Transform3D(Basis.from_scale(Vector3.ONE * 0.11), position))
 						fruit_colors.append(Color("4a2a4f") if purple else Color("b5bd62"))
-				stage.collectibles.append({"kind": "berries", "name": "виноград", "pos": p, "quantity": 3, "parts": {"VineyardGrapes": indices}})
+				stage.collectibles.append(Records.collectible("berries", p, 3, {"VineyardGrapes": indices}, "виноград"))
 				# Dry-stone terrace wall under every fourth row on the slope.
 				if village.section(s).id == "terraces" and row % 4 == 3 and absf(village.direction(s).angle_to(village.direction(s + 6.0))) < 0.15:
 					Props.box(section, Vector3(1.4, 0.12, 0), Vector3(0.5, 0.42, 6.1), Color("9d9584"))
@@ -221,8 +223,8 @@ func _vineyards(cooperative: bool) -> void:
 	village.batcher.collect(terraces, Transform3D.IDENTITY)
 	terraces.free()
 	var sphere = architecture._sphere(1.0, 8, 4)
-	stage._detail_batch("VineyardLeaves", sphere, leaves, leaf_colors, {"tiles": true})
-	stage._detail_batch("VineyardGrapes", sphere, fruit, fruit_colors, {"tiles": true, "range": 70.0, "collectible": true})
+	stage.detail_batch("VineyardLeaves", sphere, leaves, leaf_colors, DetailLayer.tiled())
+	stage.detail_batch("VineyardGrapes", sphere, fruit, fruit_colors, DetailLayer.tiled(70.0).harvestable())
 
 # Grape harvest: full crates waiting at the row ends in the valley.
 func _harvest_crates() -> void:
@@ -292,31 +294,6 @@ func _plane_avenue() -> void:
 		s += 9.0
 	village.batcher.collect(root, Transform3D.IDENTITY)
 
-func _tree_layers(name: String, trees: Array, layers: Array) -> void:
-	# trees: [{"base": Vector3, "height": float, "yaw": float, "shade": float}]
-	if trees.is_empty():
-		return
-	var bases: Array = []
-	var heights: Array = []
-	for tree in trees:
-		bases.append(tree.base)
-		heights.append(tree.height)
-	for index in range(layers.size()):
-		var layer: Dictionary = layers[index]
-		var poses: Array = []
-		var colors: Array = []
-		for tree in trees:
-			var h: float = tree.height
-			var basis = Basis(Vector3.UP, float(tree.yaw)) * Basis.from_euler(Vector3(layer.get("tilt", 0.0), 0, 0))
-			var scale: Vector3 = layer.scale * h
-			poses.append(Transform3D(basis.scaled(scale), tree.base + basis * Vector3(layer.get("dx", 0.0) * h, layer.y * h, 0)))
-			colors.append(Color(layer.color).lightened(float(tree.shade)))
-		var options = {"tiles": true, "range": 260.0, "tree": name}
-		if index == 0:
-			options.tree_bases = bases
-			options.tree_heights = heights
-		stage._detail_batch("%s%d" % [name, index], layer.mesh, poses, colors, options)
-
 func _trees() -> void:
 	var trunk = architecture._sphere(1.0, 6, 3)
 	var cone = CylinderMesh.new()
@@ -343,7 +320,7 @@ func _trees() -> void:
 					continue
 				olives.append({"base": surface(p) - Vector3.UP * 0.05, "height": rng.randf_range(3.6, 5.0), "yaw": rng.randf() * TAU, "shade": rng.randf_range(-0.05, 0.06)})
 	olives.append_array(farmland.olives if farmland != null else [])
-	_tree_layers("OliveTree", olives, [
+	stage.woodland.tree_layers("OliveTree", olives, [
 		{"mesh": stick, "scale": Vector3(0.08, 0.42, 0.08), "y": 0.2, "tilt": 0.18, "color": "6d5f4c"},
 		{"mesh": crown, "scale": Vector3(0.62, 0.34, 0.58), "y": 0.55, "dx": 0.12, "color": "8a9a6e"},
 		{"mesh": crown, "scale": Vector3(0.5, 0.3, 0.48), "y": 0.72, "dx": -0.15, "color": "9aa87c"},
@@ -361,7 +338,7 @@ func _trees() -> void:
 		if not free_spot(p, 1.0, 8.0) or not crop_clear(p, 1.2):
 			continue
 		cypresses.append({"base": surface(p) - Vector3.UP * 0.05, "height": rng.randf_range(8.0, 12.5), "yaw": rng.randf() * TAU, "shade": rng.randf_range(-0.04, 0.05)})
-	_tree_layers("Cypress", cypresses, [
+	stage.woodland.tree_layers("Cypress", cypresses, [
 		{"mesh": stick, "scale": Vector3(0.03, 0.12, 0.03), "y": 0.06, "color": "5b4a35"},
 		{"mesh": crown, "scale": Vector3(0.17, 0.62, 0.17), "y": 0.36, "color": "2f4a30"},
 		{"mesh": cone, "scale": Vector3(0.2, 0.42, 0.2), "y": 0.68, "color": "35522f"},
@@ -386,12 +363,12 @@ func _trees() -> void:
 		pines.append({"base": surface(p) - Vector3.UP * 0.05, "height": rng.randf_range(11.0, 15.0), "yaw": rng.randf() * TAU, "shade": rng.randf_range(-0.05, 0.03)})
 		if pines.size() >= 18:
 			break
-	_tree_layers("HolmOak", oaks, [
+	stage.woodland.tree_layers("HolmOak", oaks, [
 		{"mesh": stick, "scale": Vector3(0.05, 0.5, 0.05), "y": 0.25, "color": "5a4a3a"},
 		{"mesh": crown, "scale": Vector3(0.62, 0.48, 0.62), "y": 0.62, "color": "3e5532"},
 		{"mesh": crown, "scale": Vector3(0.42, 0.32, 0.42), "y": 0.84, "dx": 0.1, "color": "4b6538"},
 	])
-	_tree_layers("UmbrellaPine", pines, [
+	stage.woodland.tree_layers("UmbrellaPine", pines, [
 		{"mesh": stick, "scale": Vector3(0.03, 0.8, 0.03), "y": 0.4, "tilt": 0.08, "color": "7a5a44"},
 		{"mesh": crown, "scale": Vector3(0.7, 0.16, 0.7), "y": 0.84, "color": "3f5a37"},
 		{"mesh": crown, "scale": Vector3(0.48, 0.12, 0.48), "y": 0.93, "dx": 0.06, "color": "4c6a3f"},
@@ -426,11 +403,11 @@ func _figs() -> void:
 				indices.append(figs.size())
 				figs.append(Transform3D(Basis.from_scale(Vector3(0.09, 0.11, 0.09)), fig))
 				fig_colors.append(Color("5a3150"))
-		stage.collectibles.append({"kind": "berries", "name": "инжир", "pos": p, "quantity": 3, "parts": {"GardenFigs": indices}})
+		stage.collectibles.append(Records.collectible("berries", p, 3, {"GardenFigs": indices}, "инжир"))
 		fig_count += 1
-	stage._detail_batch("GardenFigTrunks", architecture._sphere(1.0, 6, 3), stems, stem_colors)
-	stage._detail_batch("GardenFigLeaves", crown, leaves, leaf_colors)
-	stage._detail_batch("GardenFigs", crown, figs, fig_colors, {"collectible": true})
+	stage.detail_batch("GardenFigTrunks", architecture._sphere(1.0, 6, 3), stems, stem_colors)
+	stage.detail_batch("GardenFigLeaves", crown, leaves, leaf_colors)
+	stage.detail_batch("GardenFigs", crown, figs, fig_colors, DetailLayer.plain().harvestable())
 
 # ---------------------------------------------------------------- walls
 
@@ -513,10 +490,10 @@ func _ground_cover(cooperative: bool) -> void:
 		var radius = rng.randf_range(0.06, 0.16)
 		pebbles.append(stage.shared_stone_pose(p + Vector3.UP * radius * 0.2, radius, rng.randf() * TAU))
 		pebble_colors.append(Color("d8cfbd").darkened(rng.randf() * 0.12))
-	stage._detail_batch("VillageGrass", stage._grass_mesh(), grass, grass_colors, {"tiles": true})
-	stage._detail_batch("VergeFlowers", architecture._sphere(1.0, 5, 2), flowers, flower_colors, {"tiles": true, "range": 110.0})
-	stage._detail_batch("GarrigueShrubs", preload("res://models/nature/roadside_bush.tres"), shrubs, shrub_colors, {"tiles": true, "range": 220.0})
-	stage._detail_batch("VineyardPebbles", stage.shared_stone_mesh(), pebbles, pebble_colors, {"tiles": true, "range": 110.0})
+	stage.detail_batch("VillageGrass", stage.woodland.grass_mesh(), grass, grass_colors, DetailLayer.tiled())
+	stage.detail_batch("VergeFlowers", architecture._sphere(1.0, 5, 2), flowers, flower_colors, DetailLayer.tiled(110.0))
+	stage.detail_batch("GarrigueShrubs", preload("res://models/nature/roadside_bush.tres"), shrubs, shrub_colors, DetailLayer.tiled(220.0))
+	stage.detail_batch("VineyardPebbles", stage.shared_stone_mesh(), pebbles, pebble_colors, DetailLayer.tiled(110.0))
 
 # Distant ridges of garrigue and the bald limestone summit of Mont Ventoux.
 func _horizon() -> void:

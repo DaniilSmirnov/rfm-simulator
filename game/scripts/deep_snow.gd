@@ -13,7 +13,7 @@ var authoritative = true
 var refresh_clock = 0.0
 
 static func natural_depth(stage, point: Vector3) -> float:
-	if not stage.winter: return 0.0
+	if not stage.has_snow: return 0.0
 	var outside: float = stage.road_distance(point) - (stage.WIDTH * 0.5 + 0.15 + 1.9)
 	var result = smoothstep(0.0, 3.0, outside) * (0.78 + sin(point.x * 0.041 + point.z * 0.029) * 0.10)
 	for clearing in stage.clearings:
@@ -27,10 +27,10 @@ static func camp_mask(stage, point: Vector3) -> float:
 	return mask
 
 static func depth(stage, point: Vector3) -> float:
-	return natural_depth(stage, point) * camp_mask(stage, point) if stage.winter else 0.0
+	return natural_depth(stage, point) * camp_mask(stage, point) if stage.has_snow else 0.0
 
 static func camp_depression(stage, point: Vector3) -> float:
-	return natural_depth(stage, point) * (1.0 - camp_mask(stage, point)) if stage.winter else 0.0
+	return natural_depth(stage, point) * (1.0 - camp_mask(stage, point)) if stage.has_snow else 0.0
 
 func packed(point: Vector3) -> float:
 	var coordinate = Vector2(point.x, point.z) / CELL
@@ -173,7 +173,7 @@ func polygon(stage, point: Vector3) -> Vector4i:
 	return Vector4i(int(x), int(z), step, 0 if (point.x - x + point.z - z) / step <= 1.0 else 1)
 
 func is_dug(stage, point: Vector3) -> bool:
-	return stage.winter and not dug.is_empty() and dug.has(polygon(stage, point))
+	return stage.has_snow and not dug.is_empty() and dug.has(polygon(stage, point))
 
 func loose_depth(stage, point: Vector3) -> float:
 	return 0.0 if is_dug(stage, point) else depth(stage, point)
@@ -194,7 +194,7 @@ func visible_height(stage, point: Vector3) -> float:
 	return floor_height(stage, point) if is_dug(stage, point) else stage.terrain_surface_height(point) - depth(stage, point) * 0.28 * packed(point)
 
 func can_dig(stage, point: Vector3) -> bool:
-	return stage.winter and depth(stage, point) > 0.02 and not is_dug(stage, point) and dug.size() < MAX_DUG
+	return stage.has_snow and depth(stage, point) > 0.02 and not is_dug(stage, point) and dug.size() < MAX_DUG
 
 func dirty_polygon(key: Vector4i) -> void:
 	for x in [key.x - 1, key.x + key.z + 1]:

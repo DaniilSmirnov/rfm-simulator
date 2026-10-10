@@ -1,8 +1,8 @@
-extends RefCounted
+extends "res://scripts/stage_biome.gd"
 # «Виноградники · провансальская деревня». Deterministic geometry shared by
 # driving, walking, camp placement and rendering, in the same shape as
-# canyon.gd and finnish_forest.gd: stage.gd asks this module for the route,
-# ground, grip, widths and pace, and calls build() for the scenery.
+# every stage_biome.gd: stage.gd asks this module for the route, ground,
+# grip, widths and pace, and calls build_details() for the scenery.
 const Layout = preload("res://scripts/village_layout.gd")
 const Architecture = preload("res://scripts/village_architecture.gd")
 const Landscape = preload("res://scripts/village_landscape.gd")
@@ -11,7 +11,6 @@ const LENGTH = 840.0
 const TABLE_STEP = 0.5
 const ROAD_BLEND = 11.0
 
-var stage
 var batcher = Batcher.new("VillageDetail_")
 var table_xz = PackedVector2Array()
 var table_y = PackedFloat32Array()
@@ -171,8 +170,7 @@ func pavement(s: float) -> bool:
 
 # ---------------------------------------------------------------- terrain
 
-func configure(owner_stage) -> void:
-	stage = owner_stage
+func configure() -> void:
 	var sq = Layout.SQUARE
 	var center = anchor(sq.s, sq.lateral, sq.along)
 	square = {"center": center, "yaw": yaw_at(sq.s), "half": sq.size * 0.5, "height": route(sq.s).y + Layout.KERB * 0.5}
@@ -278,7 +276,7 @@ func terrain_color(v: Vector3) -> Color:
 		color = color.lerp(Color("8f8164"), 0.5) # dusty verge
 	return color
 
-func road_color(p: Vector3, s: float, lateral: float) -> Color:
+func road_paint(p: Vector3, s: float, lateral: float) -> Color:
 	var shade = sin(p.x * 0.17 + p.z * 0.11) * 0.025 + sin(p.z * 0.29 - p.x * 0.07) * 0.015
 	match surface(s):
 		"cobble":
@@ -333,7 +331,7 @@ static func cobble_texture() -> ImageTexture:
 
 # ---------------------------------------------------------------- scenery
 
-func build(cooperative: bool = false) -> void:
+func _build_scenery(cooperative: bool) -> void:
 	architecture = Architecture.new(self)
 	landscape = Landscape.new(self)
 	await architecture.build(cooperative)
@@ -364,3 +362,76 @@ func landscape_hint(kind: String, p: Vector3) -> void:
 func pause(cooperative: bool) -> void:
 	if cooperative:
 		await stage.get_tree().process_frame
+
+# ---------------------------------------------------------------- stage hooks
+
+func winding_route() -> bool:
+	return true
+
+func base_ground(pos: Vector3) -> float:
+	return ground(pos)
+
+func terrain_tile_step(p: Vector3) -> float:
+	return tile_step(p)
+
+func terrain_tiled() -> bool:
+	return true
+
+# The village is baked offline: memoise tile steps and vertex heights while its
+# terrain, road and planting are generated.
+func cache_terrain() -> bool:
+	return true
+
+# The station is derived from the vertex itself, so vertices shared by two
+# segments get one colour and no seam appears along the strips.
+func road_color(p: Vector3, _s: float) -> Color:
+	var station = stage.road_s(p)
+	return road_paint(p, station, (p - stage.at(station)).dot(stage.side(station)))
+
+func road_surface_kind(s: float) -> String:
+	return surface(s)
+
+func road_strips() -> int:
+	return 8
+
+func road_seam_shoulders() -> bool:
+	return true
+
+func loose_surface(pos: Vector3) -> bool:
+	return loose(pos)
+
+func uses_baked_tracks() -> bool:
+	return true
+
+func uses_baked_scene() -> bool:
+	return true
+
+func after_baked_load() -> void:
+	stage.life = make_life()
+
+func build_details(cooperative: bool) -> void:
+	await _build_scenery(cooperative)
+	stage.life = make_life()
+
+# Village spectator spots are ordinary roadside places and the square: no signs.
+func clearing_signs() -> bool:
+	return false
+
+# Keep a whole picnic group clear of both sides of every junction.
+func spectator_camp(_index: int, clearing: Vector3, s: float, _outward: Vector3) -> Vector3:
+	var center = clearing + stage.direction(s) * 7.0
+	for offset in [7.0, -7.0, 14.0, -14.0, 21.0, -21.0, 0.0]:
+		var candidate = clearing + stage.direction(s) * offset
+		var available = true
+		for along in [-2.4, 0.0, 3.2]:
+			var spot = candidate + stage.direction(s) * along
+			spot.y = stage.ground(spot)
+			available = available and stage.road_distance(spot) > 6.0 and stage.solids.hit(spot, spot, 1.2, false).is_empty()
+		if available:
+			center = candidate
+			break
+	return center
+
+# Village spectators use the roadside spots and the square.
+func roadside_spectators() -> bool:
+	return false

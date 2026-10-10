@@ -1,53 +1,27 @@
 extends SceneTree
 # Actual game geometry and lighting for the "Финский лес" stage menu art and docs.
 # Run: xvfb-run godot --path game --rendering-method gl_compatibility --script res://tools/export_finnish_forest_screenshots.gd
-var viewport: SubViewport
-var camera: Camera3D
+const ScreenshotRig = preload("res://tools/screenshot_rig.gd")
+var rig
 func _initialize() -> void: call_deferred("run")
 
-func capture(path: String, size: Vector2i) -> void:
-	viewport.size = size
-	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
-	for frame in range(8): await process_frame
-	await RenderingServer.frame_post_draw
-	var image = viewport.get_texture().get_image()
-	assert(image != null and not image.is_empty())
-	assert(image.save_webp(path, false, 0.9) == OK)
-	viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
-	print("FINNISH_FOREST_SCREENSHOT ", path, " ", size)
-
 func aim(position: Vector3, target: Vector3, fov: float = 56.0) -> void:
-	camera.fov = fov
-	camera.position = position
-	camera.look_at(target)
+	rig.aim(position, target, fov)
+
+func capture(path: String, size: Vector2i) -> void:
+	await rig.capture(path, size)
 
 func run() -> void:
-	assert(DisplayServer.get_name() != "headless", "Screenshots require a real renderer")
-	var game = load("res://main.tscn").instantiate()
-	game.defer_world = true
-	root.add_child(game)
-	game.set_process(false)
-	game.room.set_process(false)
-	game.select_stage(4)
-	game.stage.build()
-	game.draw_distance.mode = game.draw_distance.FAR
-	game.draw_distance.apply(game.stage)
-	game.spectators.rebuild()
+	rig = ScreenshotRig.new(self, "FINNISH_FOREST_SCREENSHOT")
+	var game = rig.open_stage(4)
+	if game == null:
+		return
 	var stage = game.stage
 	var ff = stage.finnish_forest
 	# Let the boat, ducks and ants settle into their animated poses.
 	for i in range(30):
 		stage.water.update(1.0 / 30.0)
 		stage.forest_life.update(1.0 / 30.0, stage.at(380))
-	viewport = SubViewport.new()
-	viewport.world_3d = game.get_world_3d()
-	viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
-	root.add_child(viewport)
-	camera = Camera3D.new()
-	camera.far = 1100
-	viewport.add_child(camera)
-	camera.current = true
-	DirAccess.make_dir_recursive_absolute("res://../docs/screenshots")
 
 	# Overview of the first lake from above the road.
 	var view = stage.at(318) + stage.side(318) * 6.0
@@ -106,5 +80,4 @@ func run() -> void:
 	sauna_target.y = float(ff.jetty.deck) + 0.8
 	aim(view, sauna_target, 60.0)
 	await capture("res://../docs/screenshots/finnish-forest-sauna.webp", Vector2i(1920, 1080))
-	await game._shutdown_audio()
-	quit()
+	await rig.close()

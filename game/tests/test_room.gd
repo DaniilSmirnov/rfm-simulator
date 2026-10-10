@@ -1,13 +1,4 @@
-extends SceneTree
-var checks = 0
-var failures = 0
-func check(ok: bool, name: String) -> void:
-	checks += 1
-	if not ok:
-		failures += 1
-		push_error(name)
-	else:
-		print("PASS: " + name)
+extends "res://tests/harness.gd"
 func _initialize() -> void:
 	call_deferred("run")
 func run() -> void:
@@ -47,6 +38,35 @@ func run() -> void:
 	host.cook_time = 19
 	guest.room.apply_world(host.room.world_state())
 	check(guest.has_chairs and guest.cooking and guest.cook_time == 19, "late world snapshot builds chairs and grill")
+	var parts = host.room.world_sync.split_world(host.room.world_state())
+	check(not parts.hot.has("camp") and not parts.hot.has("snow") and parts.hot.has("racers") and parts.hot.cold_revs.size() == host.room.world_sync.cold_sections().size(), "hot snapshot leaves out slowly changing sections")
+	check(host.room.world_sync.split_world(host.room.world_state()).hot.cold_revs == parts.hot.cold_revs, "unchanged cold sections keep their revision")
+	guest.room.apply_world(parts.hot)
+	check(guest.camp != null and guest.has_chairs and guest.cooking, "hot-only snapshot keeps the replicated camp")
+	var with_camp = parts.hot.duplicate()
+	with_camp.cold = {"camp": parts.cold.camp}
+	guest.room.apply_world(with_camp)
+	check(int(guest.room.world_sync.cold_revs.get("camp", -1)) == int(parts.hot.cold_revs.camp) and not guest.room.world_sync.cold_revs.has("snow"), "guest records only the cold revisions it applied")
+	host.room.world_sync.server_cold_revs = {}
+	host.room.world_sync.cold_sent.clear()
+	var upload = host.room.sync_body()
+	check(upload.cold.size() == host.room.world_sync.cold_sections().size() and not upload.world.has("camp"), "host uploads every cold section once")
+	check(not host.room.sync_body().has("cold"), "a section in flight is not uploaded again at once")
+	host.room.world_sync.server_cold_revs = upload.world.cold_revs.duplicate()
+	host.room.world_sync.cold_sent.clear()
+	check(not host.room.sync_body().has("cold"), "sections the server holds are not resent")
+	check(not upload.world.has("npc_people") and not upload.world.has("course") and not upload.world.has("foraging") and upload.cold.has("people"), "spectators, schedule and foraging travel as sections")
+	# A busy section (walking spectators) waits for its interval after an upload.
+	host.room.world_sync.server_cold_revs.people = -1
+	host.room.world_sync.cold_sent.clear()
+	check(not host.room.sync_body().get("cold", {}).has("people"), "a changed busy section waits for its upload interval")
+	host.room.world_sync.cold_uploaded_at.people = Time.get_ticks_msec() - 1000
+	host.room.world_sync.cold_sent.clear()
+	check(host.room.sync_body().get("cold", {}).has("people"), "the busy section uploads once its interval passed")
+	for entry in host.room.world_state().npc_people:
+		check(not entry.has("time") and str(entry.get("yaw", 0.0)).length() <= 6, "spectator entries carry no timer and short angles")
+		break
+	host.cook_time = 19
 	host.in_car = false
 	host.course.phase = "racing"
 	host.spawn_racer("stuck")
@@ -133,7 +153,7 @@ func run() -> void:
 	guest.room.prediction.active = false
 	check(guest.room.recover_drive() and guest.car.transform == original_car, "recovery waits for authority instead of taking the legacy teleport path during handshake")
 	guest.room.prediction.active = true
-	for i in range(guest.room.Prediction.LIMIT):
+	for i in range(guest.room.Prediction.MAX_PENDING):
 		guest.room.prediction.pending.append({"seq": i + 1})
 	var queue_size = guest.room.prediction.pending.size()
 	check(guest.room.recover_drive() and guest.room.prediction.pending.size() == queue_size and guest.car.transform == original_car, "full input queue defers recovery without a local teleport or a success notice")
@@ -149,4 +169,4 @@ func run() -> void:
 		await g._shutdown_audio()
 		g.queue_free()
 	await process_frame
-	quit(1 if failures else 0)
+	finish()

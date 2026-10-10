@@ -1,10 +1,5 @@
-extends SceneTree
+extends "res://tests/harness.gd"
 const Props = preload("res://scripts/props.gd")
-var failures = 0
-func check(ok: bool, title: String) -> void:
-	print(("PASS: " if ok else "FAIL: ") + title)
-	if not ok:
-		failures += 1
 func _initialize() -> void:
 	call_deferred("run")
 func first_item(stage: Node3D, kind: String, skip: int = -1) -> int:
@@ -136,4 +131,4 @@ func run() -> void:
 		game.queue_free()
 	await process_frame
 	print("FORAGING RESULT: %d failures" % failures)
-	quit(1 if failures else 0)
+	finish()

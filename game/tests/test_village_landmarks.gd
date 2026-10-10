@@ -1,12 +1,8 @@
-extends SceneTree
+extends "res://tests/harness.gd"
 const Stage = preload("res://scripts/stage.gd")
 const Architecture = preload("res://scripts/village_architecture.gd")
 const Interior = preload("res://scripts/village_interiors.gd")
 const Distance = preload("res://scripts/draw_distance.gd")
-var failures = 0
-func check(ok: bool, title: String) -> void:
-	print(("PASS: " if ok else "FAIL: ") + title)
-	if not ok: failures += 1
 func _initialize() -> void:
 	call_deferred("run")
 func run() -> void:
@@ -75,4 +71,4 @@ func run() -> void:
 		setting.apply(stage)
 		check(ridges.all(func(tile): return tile.visibility_range_end == 0), "horizon ridges survive culling in every draw-distance preset")
 	stage.free()
-	quit(1 if failures else 0)
+	finish()

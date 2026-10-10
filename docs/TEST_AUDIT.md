@@ -2,7 +2,7 @@
 
 ## Findings and policy
 
-At this revision the project has 55 functional `game/tests/test_*.gd` scripts, 16 existing Node test modules plus `tests/test-catalog.test.mjs`, seven standalone `scripts/test-*.mjs` scenarios, and ten Godot screenshot/preview generators. Counts describe **files**, not assertions, coverage percentages or independently executable scenarios. This is not a claim of 100% unit coverage.
+Current counts come from `node scripts/test-game.mjs --list` (registry) and the directory listing; on 2026-10-10 there are 63 functional `game/tests/test_*.gd` scripts, 16 Node test modules in `tests/`, eight standalone `scripts/test-*.mjs` scenarios and ten Godot screenshot/preview generators. Every functional script extends `res://tests/harness.gd`, which provides `check()`, `finish()` and a watchdog that fails the test a few seconds before the runner timeout when a script error stops it. Counts describe **files**, not assertions, coverage percentages or independently executable scenarios. This is not a claim of 100% unit coverage.
 
 **Keep the gameplay tests.** We found no demonstrably redundant test that can safely be deleted. In particular:
 - `test_rolling_wheels.gd` identified real missing Granta wheel pivots.
@@ -21,7 +21,7 @@ At this revision the project has 55 functional `game/tests/test_*.gd` scripts, 1
 | `simulation` | Physics, schedules, AI, food and forest pickup interactions, multiplayer and towing | `node scripts/test-game.mjs --shard=simulation` |
 | `world` | Forest, winter, village/vineyard and desert, road terrain, crowd navigation and scenery budgets | `node scripts/test-game.mjs --shard=world` |
 
-`npm test` runs all groups locally. Each script gets a fresh OS process and a finite (90s or 180s) limit. On failure, the runner prints the test's tail, continues other test cases, writes `.cache/test-results/<shard>.json`, and exits nonzero if *any* failed. CI runs the three shards on separate workers in parallel (`fail-fast: false`) so a stuck world generation test does not suppress physics and VK results. Screenshots are rendered from the `world` job and uploaded independently of individual test failures.
+`npm test` runs all groups locally. Each script gets a fresh OS process and a finite (90s or 180s) limit. On failure, the runner prints the test's tail, continues other test cases, writes `.cache/test-results/<shard>.json`, and exits nonzero if *any* failed. CI runs the three shards on separate workers in parallel (`fail-fast: false`) so a stuck world generation test does not suppress physics and VK results. Screenshots are rendered from the `world` job even when a test failed (`!cancelled()`), then uploaded.
 
 ### Known red checks addressed in PR #78
 
@@ -35,7 +35,7 @@ At this revision the project has 55 functional `game/tests/test_*.gd` scripts, 1
 ## Added P0 contracts
 
 - `test_vehicle_contract.gd`: all ten selectable vehicles, wheel layout/radius and real rotation, visible mesh, selection identity, trunk slots.
-- `test_vk_catalog_matrix.gd`: four stages and ten cars, each SKU's access before/after purchase, cross-SKU isolation, free guest access and standalone unrestricted mode.
+- `test_vk_catalog_matrix.gd`: every stage and car from the catalog, each SKU's access before/after purchase, cross-SKU isolation, free guest access and standalone unrestricted mode.
 - `test-catalog.test.mjs`: test inventory consistency, nonempty ownership groups, inclusion of security/UI-critical suites.
 
 Existing `payments-vk.test.mjs`, `payments.integration.mjs`, `test_trunk.gd`, `test_niva_integration.gd`, `test_room.gd` and `test_canyon.gd` remain authoritative for server payment grants, trunk opening, network handshakes and canyon geometry, respectively.

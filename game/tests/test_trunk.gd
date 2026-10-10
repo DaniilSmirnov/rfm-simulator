@@ -1,10 +1,5 @@
-extends SceneTree
+extends "res://tests/harness.gd"
 const Props = preload("res://scripts/props.gd")
-var failures = 0
-func check(ok: bool, title: String) -> void:
-	print(("PASS: " if ok else "FAIL: ") + title)
-	if not ok:
-		failures += 1
 func _initialize() -> void:
 	call_deferred("run")
 func trunk(game) -> Vector3:
@@ -13,7 +8,7 @@ func return_box(game) -> void:
 	game.walker = trunk(game)
 	check(game.cargo.return_item(trunk(game)), "carried item returns at an open trunk")
 func run() -> void:
-	for variant in range(10):
+	for variant in range(RallyProps.PLAYER_MODELS.size()):
 		var model = Props.player_car(variant)
 		root.add_child(model)
 		var hinge = model.get_node_or_null("TrunkHinge")
@@ -149,7 +144,7 @@ func run() -> void:
 	host.course.pass_index = 2
 	guest.course.phase = "complete"
 	guest.course.pass_index = 2
-	for variant in range(10):
+	for variant in range(RallyProps.PLAYER_MODELS.size()):
 		host.room._update_peers([])
 		host.select_player_car(0)
 		guest.select_player_car(variant)
@@ -208,4 +203,4 @@ func run() -> void:
 		game.queue_free()
 	await process_frame
 	print("TRUNK RESULT: %d failures" % failures)
-	quit(1 if failures else 0)
+	finish()

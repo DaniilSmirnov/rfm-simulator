@@ -1,13 +1,9 @@
-extends SceneTree
+extends "res://tests/harness.gd"
 const Stage = preload("res://scripts/stage.gd")
 const Architecture = preload("res://scripts/village_architecture.gd")
 const Layout = preload("res://scripts/village_layout.gd")
-var failures = 0
 var walking_game: Node3D
 var render_fps = 60.0
-func check(ok: bool, title: String) -> void:
-	print(("PASS: " if ok else "FAIL: ") + title)
-	if not ok: failures += 1
 func _initialize() -> void:
 	call_deferred("run")
 func route(city, pose: Transform3D, points: Array) -> bool:
@@ -138,4 +134,4 @@ func run() -> void:
 	stage.queue_free()
 	await process_frame
 	print("Village viewpoints failures: ", failures)
-	quit(1 if failures else 0)
+	finish()

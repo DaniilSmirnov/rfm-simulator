@@ -1,4 +1,4 @@
-extends SceneTree
+extends "res://tests/harness.gd"
 const Handling = preload("res://scripts/rally_handling.gd")
 const Stage = preload("res://scripts/stage.gd")
 const Traffic = preload("res://scripts/rally_traffic.gd")
@@ -11,11 +11,6 @@ class Surface:
 		return traction
 	func ground(point: Vector3) -> float:
 		return point.x * slope
-var failures = 0
-func check(ok: bool, title: String) -> void:
-	print(("PASS: " if ok else "FAIL: ") + title)
-	if not ok:
-		failures += 1
 func crew() -> Dictionary:
 	return {"id": 1, "kind": "crash", "node": Node3D.new(), "motion": Motion.new(), "slide": 0.0, "slide_speed": 0.0, "drive_speed": 24.0}
 func corner(grip: float, fps: int, bend: float = 0.02) -> Dictionary:
@@ -38,7 +33,7 @@ func coast(grip: float, speed: float, fps: int = 60) -> float:
 	r.node.free()
 	return distance
 func tour() -> void:
-	for variant in range(3):
+	for variant in range(RallyStage.STAGES.size()):
 		for reverse in [false, true]:
 			var stage = Stage.new(variant)
 			var node = Node3D.new()
@@ -110,4 +105,4 @@ func _initialize() -> void:
 	check(Traffic.recovery_speed(30.0, {"slide": 1.5, "slide_speed": 2.0}) < 20.0 and Traffic.recovery_speed(30.0, {"slide": 0.0, "slide_speed": 0.0}) == 30.0, "driver lifts off during a slide and restores pace after recovery")
 	tour()
 	print("RALLY HANDLING RESULT: %d failures" % failures)
-	quit(1 if failures else 0)
+	finish()

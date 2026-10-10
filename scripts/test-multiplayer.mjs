@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
+import { connect as tcpConnect } from 'node:net';
 import { readFile, writeFile, cp, mkdir } from 'node:fs/promises';
 import { join, extname } from 'node:path';
 import { setTimeout as wait } from 'node:timers/promises';
@@ -7,6 +8,11 @@ import assert from 'node:assert/strict';
 import { getGodot, root, run } from './godot.mjs';
 
 const web = process.argv.includes('--web');
+// --socket runs the room over WebSocket with 150 ms added each way; the default
+// pins HTTP polling so injected HTTP losses stay meaningful.
+const socketMode = process.argv.includes('--socket');
+const transportArgs = socketMode ? [] : ['--room-transport=http'];
+const SOCKET_DELAY = 150;
 const workerPort = 8793;
 const processes = [];
 let browserFactory;
@@ -17,6 +23,7 @@ const samples = {};
 const tokenRoles = new Map();
 const controls = { host: {id:0,action:'pause'}, guest: {id:0,action:'pause'} };
 const latest = role => samples[role]?.at(-1);
+// Browser clients print through boot-diagnostics.js, which prefixes "[RFM startup] ".
 const logs = [];
 function observe(role, line) {
   if (line.includes('NETWORK_SAMPLE ')) {
@@ -64,20 +71,38 @@ const proxy = createServer(async(req,res)=> {
       }
       const response = await fetch(`http://127.0.0.1:${workerPort}${path}`,{method:req.method,headers:{'Content-Type':'application/json'},body});
       const payload=await response.text();
-      if(response.ok && (path === "/api/rooms" || path.endsWith("/join")))tokenRoles.set(JSON.parse(payload).token,path === "/api/rooms" ? "host" : "guest");
+      let reply=payload;
+      if(response.ok && (path === "/api/rooms" || path.endsWith("/join"))) {
+        const data=JSON.parse(payload);
+        tokenRoles.set(data.token,path === "/api/rooms" ? "host" : "guest");
+        // Route sockets through this proxy so they share its origin and latency.
+        if(data.socket)data.socket=data.socket.replace(/^ws:\/\/[^/]+/,`ws://127.0.0.1:${proxy.address().port}`);
+        reply=JSON.stringify(data);
+      }
       if(slow)await wait(150);
-      res.writeHead(response.status,{'Content-Type':'application/json'});res.end(payload);return;
+      res.writeHead(response.status,{'Content-Type':'application/json'});res.end(reply);return;
     }
     if(!web || url.pathname.includes('..')) {res.writeHead(404).end();return;}
     const name=url.pathname==='/' ? 'index.html' : url.pathname.slice(1);
     let bytes=await readFile(join(output,name));
     if(name==='index.html') {
-      const args=['--','--smoke-test',`--network-role=${url.searchParams.get('role')??'host'}`,`--room-server=http://127.0.0.1:${proxy.address().port}`];
+      const args=['--','--smoke-test',`--network-role=${url.searchParams.get('role')??'host'}`,`--room-server=http://127.0.0.1:${proxy.address().port}`,...transportArgs];
       if(url.searchParams.has('room'))args.push(`--network-room=${url.searchParams.get('room')}`);
       bytes=Buffer.from(bytes.toString().replace('RallyDevice.configure(GODOT_CONFIG);',`RallyDevice.configure(GODOT_CONFIG); GODOT_CONFIG.args = ${JSON.stringify(args)}.concat(RallyDevice.isMobile() ? ["--mobile-controls"] : []);`));
     }
     res.writeHead(200,{'Content-Type':{'.html':'text/html','.js':'text/javascript','.svg':'image/svg+xml','.png':'image/png'}[extname(name)]??'application/octet-stream'});res.end(bytes);
   } catch(error) {res.writeHead(500).end(String(error));}
+});
+proxy.on('upgrade',(req,client,head)=> {
+  const upstream=tcpConnect(workerPort,'127.0.0.1',()=> {
+    const headers=Object.entries(req.headers).map(([k,v])=>`${k}: ${k==='host'?`127.0.0.1:${workerPort}`:k==='origin'?`http://127.0.0.1:${workerPort}`:v}`);
+    upstream.write(`${req.method} ${req.url} HTTP/1.1\r\n${headers.join('\r\n')}\r\n\r\n`);
+    if(head.length)upstream.write(head);
+    const delayed=(from,to)=>from.on('data',chunk=>setTimeout(()=>{if(!to.destroyed)to.write(chunk);},SOCKET_DELAY/2));
+    delayed(client,upstream);delayed(upstream,client);
+  });
+  const close=()=>{client.destroy();upstream.destroy();};
+  upstream.on('error',close);client.on('error',close);upstream.on('close',close);client.on('close',close);
 });
 try {
   if(process.argv.includes('--relay')) {
@@ -128,10 +153,11 @@ try {
       await page.goto(`${origin}/?role=${role}${room?'&room='+room:''}`,{waitUntil:'domcontentloaded'});
       return page;
     }
-    launch([godot,'--headless','--path','game','--max-fps','60','res://tests/network_client.tscn','--','--smoke-test',`--network-role=${role}`,`--room-server=${origin}/${role}`, ...(room?[`--network-room=${room}`]:[])],role);
+    launch([godot,'--headless','--path','game','--max-fps','60','res://tests/network_client.tscn','--','--smoke-test',`--network-role=${role}`,`--room-server=${origin}/${role}`, ...transportArgs, ...(room?[`--network-room=${room}`]:[])],role);
   }
   await client('host');await until(()=>latest('host')?.connected,'host connects',web?120000:60000);
   await client('guest',latest('host').room);await until(()=>latest('guest')?.active,'prediction handshake',web?120000:60000);
+  if(socketMode)await until(()=>['host','guest'].every(role=>logs.some(line=>line.startsWith(`[${role}] `)&&/(^|\] )ROOM_SOCKET open$/.test(line.slice(role.length+3)))),'both clients on WebSocket',web?60000:30000);
   command('host','resume');command('guest','forward');
   const start=latest('guest').pos;
   await until(()=>latest('guest').speed>1 && latest('guest').pending>0,'responsive prediction before acknowledgement',15000);
@@ -142,8 +168,11 @@ try {
   const authoritative=Object.values(latest('host').driving)[0];
   assert.ok(authoritative,'host owns guest solver');
   assert.ok(Math.hypot(...latest('guest').pos.map((x,i)=>x-authoritative.pos[i]))<0.05,'client converges to host');
-  await until(()=>dropped===2,'two injected HTTP failures');
-  assert.equal(latest('guest').dead,false);assert.ok(dropped===2,'two real HTTP failures exercised');
+  if(!socketMode) {
+    await until(()=>dropped===2,'two injected HTTP failures');
+    assert.ok(dropped===2,'two real HTTP failures exercised');
+  }
+  assert.equal(latest('guest').dead,false);
   command('host','pause');await until(()=>latest('guest').world_paused,'host pause replicated');
   const seq=latest('guest').seq;await wait(500);assert.equal(latest('guest').seq,seq,'paused world produces no commands');
   command('host','resume');await until(()=>!latest('guest').world_paused,'host resume replicated');
@@ -158,9 +187,14 @@ try {
   assert.equal(latest('guest').condition,100);
   assert.equal(errors.length,0);
   if(web)assert.equal(latest("guest").safe_area_ready,true,"mobile Web client reads safe area through browser-local transport");
-  console.log(`PASS: ${web?'two Chromium clients (mobile guest)':'two Godot clients'}: delayed HTTP, 2 lost responses, prediction, braking, convergence, pause/resume, recovery, exit/re-entry, leave/rejoin`);
+  if(socketMode)assert.ok(!logs.some(line=>line.includes('ROOM_SOCKET disabled')),'WebSocket stayed in use');
+  console.log(`PASS: ${web?'two Chromium clients (mobile guest)':'two Godot clients'}: ${socketMode?'WebSocket with 150ms RTT':'delayed HTTP, 2 lost responses'}, prediction, braking, convergence, pause/resume, recovery, exit/re-entry, leave/rejoin`);
 } catch (error) {
   console.error(logs.filter(x => !x.includes('NETWORK_SAMPLE ')).slice(-100).join('\n'));
+  if(process.env.GITHUB_ACTIONS) {
+    const text=[String(error?.message??error).slice(0,2000),...logs.filter(x=>!x.includes('NETWORK_SAMPLE ')).slice(-30)].join('\n').slice(-6000);
+    console.log(`::error title=Multiplayer ${web?'web':'native'}${socketMode?' socket':''}::`+text.replace(/%/g,'%25').replace(/\r/g,'%0D').replace(/\n/g,'%0A'));
+  }
   throw error;
 } finally {
   await writeFile(join(root,'network-test.log'),logs.join('\n'));

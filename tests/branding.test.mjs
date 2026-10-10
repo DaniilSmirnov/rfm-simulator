@@ -38,7 +38,9 @@ test('loading progress is real, bounded, supports unknown sizes and waits for st
 test('game title is Rally Fans Simulator everywhere it is presented', async () => {
   const project = await readFile(new URL('../game/project.godot', import.meta.url), 'utf8');
   const shell = await readFile(new URL('../game/branding/web-shell.html', import.meta.url), 'utf8');
-  const game = await readFile(new URL('../game/scripts/game.gd', import.meta.url), 'utf8');
+  // The HUD (game_hud.gd) shows the title; game.gd assembles the scene.
+  const game = (await readFile(new URL('../game/scripts/game.gd', import.meta.url), 'utf8'))
+    + await readFile(new URL('../game/scripts/game_hud.gd', import.meta.url), 'utf8');
   assert.match(project, /config\/name="Rally Fans Simulator"/);
   assert.match(shell, /id="status-brand">Rally Fans Simulator<\/h1>/);
   assert.ok((game.match(/Rally Fans Simulator/g) ?? []).length >= 2);
@@ -69,6 +71,6 @@ test('authored game content has no third-party vehicle brands or named crews', a
   assert.ok(sponsors.every(sponsor => sponsor === 'Rally Fans Map'));
   assert.match(props, /name = "SportGrille"/);
   assert.match(props, /"FANS MAP"/);
-  const room = await readFile(new URL('../game/scripts/room.gd', import.meta.url), 'utf8');
+  const room = await readFile(new URL('../game/scripts/room_lobby.gd', import.meta.url), 'utf8');
   assert.match(room, /placeholder_text = "Твой ник"/);
 });

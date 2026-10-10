@@ -18,22 +18,22 @@ func stock(owner: String = "") -> Dictionary:
 	return inventories[key]
 
 func available() -> bool:
-	return game.playing and not game.paused and not game.dead and not game.finished and not game.in_car and game.beers < 30 and game.eat_time < 0 and game.drink_time < 0
+	return game.playing and not game.paused and not game.dead and not game.finished and not game.actor_in_car() and game.actor_beers() < 30 and game.eat_time < 0 and game.drink_time < 0
 
 func nearest() -> int:
-	return game.stage.nearest_collectible(game.walker) if available() else -1
+	return game.stage.nearest_collectible(game.actor_pos()) if available() else -1
 
 func collect(id: int = -1, owner: String = "") -> bool:
-	if not game.playing or game.in_car or game.beers >= 30 or game.paused or game.dead or game.finished:
+	if not game.playing or game.actor_in_car() or game.actor_beers() >= 30 or game.paused or game.dead or game.finished:
 		return false
 	if id < 0:
-		id = game.stage.nearest_collectible(game.walker)
+		id = game.stage.nearest_collectible(game.actor_pos())
 	if id < 0 or id >= game.stage.collectibles.size():
 		return false
 	var item: Dictionary = game.stage.collectibles[id]
-	if game.stage.flat(item.pos).distance_to(game.stage.flat(game.walker)) > 1.8 or absf(item.pos.y - game.walker.y) > 2.0 or game.stage.harvested.has(id):
+	if game.stage.flat(item.pos).distance_to(game.stage.flat(game.actor_pos())) > 1.8 or absf(item.pos.y - game.actor_pos().y) > 2.0 or game.stage.harvested.has(id):
 		return false
-	if owner == "" and game.room.connected and not game.room.is_host:
+	if owner == "" and game.room.is_guest():
 		return game.room.submit("collect", {"resource_id": id})
 	if not game.stage.harvest(id):
 		return false
@@ -56,13 +56,13 @@ func nearby_source() -> int:
 	var closest = 4.0
 	var found = -2
 	if game.grill != null:
-		var distance = game.walker.distance_to(game.grill.position)
+		var distance = game.actor_pos().distance_to(game.grill.position)
 		if distance < closest:
 			closest = distance
 			found = -1
 	if game.spectators != null:
 		for i in range(game.spectators.groups.size()):
-			var distance = game.walker.distance_to(game.spectators.groups[i].grill.position)
+			var distance = game.actor_pos().distance_to(game.spectators.groups[i].grill.position)
 			if distance < closest:
 				closest = distance
 				found = i
@@ -80,14 +80,14 @@ func can_mount() -> bool:
 	return available() and int(stock().mushrooms) > 0 and free_skewers(nearby_source()) > 0
 
 func mount(source: int = -2, owner: String = "") -> bool:
-	if not game.playing or game.in_car or game.beers >= 30 or game.paused or game.dead or game.finished:
+	if not game.playing or game.actor_in_car() or game.actor_beers() >= 30 or game.paused or game.dead or game.finished:
 		return false
 	if source == -2:
 		source = nearby_source()
 	var node = grill_node(source)
-	if node == null or game.walker.distance_to(node.position) >= 4.0 or free_skewers(source) <= 0 or int(stock(owner).mushrooms) <= 0:
+	if node == null or game.actor_pos().distance_to(node.position) >= 4.0 or free_skewers(source) <= 0 or int(stock(owner).mushrooms) <= 0:
 		return false
-	if owner == "" and game.room.connected and not game.room.is_host:
+	if owner == "" and game.room.is_guest():
 		return game.room.submit("mount_mushroom", {"source": source})
 	stock(owner).mushrooms = int(stock(owner).mushrooms) - 1
 	var types: Array = stock(owner).mushroom_types
@@ -119,7 +119,7 @@ func ready_species(source: int) -> String:
 	return str(skewers[str(source)][index].get("species", "edible")) if index >= 0 else "edible"
 
 func consume(kind: String, owner: String = "", source: int = -2) -> bool:
-	if not game.playing or game.in_car or game.beers >= 30 or game.paused or game.dead or game.finished:
+	if not game.playing or game.actor_in_car() or game.actor_beers() >= 30 or game.paused or game.dead or game.finished:
 		return false
 	if kind == "berries":
 		if int(stock(owner).berries) <= 0:
@@ -131,7 +131,7 @@ func consume(kind: String, owner: String = "", source: int = -2) -> bool:
 	if source == -2:
 		source = nearby_source()
 	var node = grill_node(source)
-	if node == null or game.walker.distance_to(node.position) >= 4.0:
+	if node == null or game.actor_pos().distance_to(node.position) >= 4.0:
 		return false
 	var index = ready_index(source)
 	if index < 0:
@@ -172,8 +172,15 @@ func update_visuals() -> void:
 func snapshot() -> Dictionary:
 	var effect_states = {}
 	for key in effects:
-		effect_states[key] = {"serial": effects[key].serial, "remaining": maxf(0, float(effects[key].until) - game.elapsed)}
+		# An absolute end time keeps the section unchanged while the effect runs.
+		effect_states[key] = {"serial": effects[key].serial, "until": float(effects[key].until)}
 	return {"harvested": game.stage.harvested.keys(), "inventories": inventories.duplicate(true), "skewers": skewers.duplicate(true), "effects": effect_states}
+
+# Host clock end of an effect; older hosts sent the time left instead.
+func _effect_until(state: Dictionary) -> float:
+	if state.has("until"):
+		return float(state.until)
+	return game.elapsed + float(state.get("remaining", 0))
 
 func apply_snapshot(data: Dictionary) -> void:
 	game.stage.apply_harvested(data.get("harvested", []))
@@ -182,8 +189,8 @@ func apply_snapshot(data: Dictionary) -> void:
 	effects.clear()
 	for key in data.get("effects", {}):
 		var state: Dictionary = data.effects[key]
-		effects[key] = {"serial": int(state.get("serial", 0)), "until": game.elapsed + float(state.get("remaining", 0))}
+		effects[key] = {"serial": int(state.get("serial", 0)), "until": _effect_until(state)}
 	var effect: Dictionary = data.get("effects", {}).get(game.chair_owner(), {})
 	if not effect.is_empty():
-		game.mushroom_effect.trigger(int(effect.get("serial", 0)), float(effect.get("remaining", 0)))
+		game.mushroom_effect.trigger(int(effect.get("serial", 0)), maxf(0.0, snappedf(_effect_until(effect) - game.elapsed, 0.001)))
 	update_visuals()
