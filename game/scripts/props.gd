@@ -234,19 +234,9 @@ static func car(color: Color, rally: bool = false, variant: int = 0) -> Node3D:
 			box(root, Vector3(x, 0.81, 0.15), Vector3(0.03, 0.32, 0.55), Color("f2e8d0"))
 	return root
 
-# Player fleet. Shapes are stylized original meshes, with recognizable proportions.
-const PLAYER_MODELS = [
-	{"name": "Компактный седан", "color": "111a2b", "length": 4.26, "width": 1.70, "height": 1.50, "rear": 0.95, "glass": 0.36, "lights": "wide", "grille": 0.65},
-	{"name": "Городской седан", "color": "a8bdc2", "length": 4.41, "width": 1.77, "height": 1.49, "rear": 1.05, "glass": 0.48, "lights": "slim", "grille": 0.94},
-	{"name": "Лесной внедорожник", "color": "627746", "length": 3.74, "width": 1.68, "height": 1.74, "rear": 1.50, "glass": 0.14, "lights": "round", "grille": 0.86},
-	{"name": "Классический седан", "color": "e6dfc7", "length": 4.12, "width": 1.64, "height": 1.45, "rear": 0.95, "glass": 0.19, "lights": "square", "grille": 0.55},
-	{"name": "Лёгкий седан", "color": "8dabb9", "length": 4.37, "width": 1.72, "height": 1.46, "rear": 1.00, "glass": 0.52, "lights": "wide", "grille": 0.80},
-	{"name": "Дорожный седан", "color": "a74d43", "length": 4.40, "width": 1.74, "height": 1.47, "rear": 0.93, "glass": 0.43, "lights": "slim", "grille": 0.56},
-	{"name": "Семейный седан", "color": "c6c9b9", "length": 4.35, "width": 1.73, "height": 1.53, "rear": 0.87, "glass": 0.27, "lights": "square", "grille": 0.90},
-	{"name": "Туристический кроссовер", "color": "a58058", "length": 4.34, "width": 1.82, "height": 1.70, "rear": 1.63, "glass": 0.28, "lights": "square", "grille": 1.05},
-	{"name": "Походный хэтчбек", "color": "283f87", "length": 4.17, "width": 1.68, "height": 1.47, "rear": 0.98, "glass": 0.30, "lights": "square", "grille": 0.75},
-	{"name": "Спортивный седан", "color": "c92530", "length": 4.68, "width": 1.88, "height": 1.46, "rear": 1.00, "glass": 0.40, "lights": "slim", "grille": 0.80},
-]
+# Player fleet, one record per car in res://data/cars.json (car_registry.gd).
+const CarRegistry = preload("res://scripts/car_registry.gd")
+static var PLAYER_MODELS: Array = CarRegistry.cars
 
 # A closed faceted shell with bevelled cross-sections. Each model has its own
 # bonnet, roof, windscreen, rear deck and wheelbase instead of stacked boxes.
@@ -522,42 +512,39 @@ static func player_car_sport_sedan() -> Node3D:
 
 static func player_car(variant: int = 0) -> Node3D:
 	variant = posmod(variant, PLAYER_MODELS.size())
-	if variant == 0:
-		return load("res://scripts/granta_model.gd").build()
-	if variant == 2:
-		var imported = load("res://scripts/niva_asset.gd").build()
-		if imported != null:
-			return imported
-		# Preserve a usable car while an asset import is incomplete.
-	if variant == 8:
-		return player_car_camping_hatchback()
-	if variant == 9:
-		return player_car_sport_sedan()
 	var p: Dictionary = PLAYER_MODELS[variant]
-	var shapes = [
-		[-0.87, -0.40, 0.57, 1.07, 0.72, 0.77], # Compact sedan: compact cabin, high boot.
-		[-1.02, -0.37, 0.68, 1.25, 0.77, 0.80], # City sedan: long, low wedge.
-		[-0.72, -0.59, 1.28, 1.52, 0.63, 0.56], # Off-road vehicle: upright three-door wagon.
-		[-0.77, -0.61, 0.65, 0.88, 0.68, 0.66], # Classic sedan: rectangular cabin and flat bonnet.
-		[-0.98, -0.32, 0.64, 1.27, 0.78, 0.77], # Light sedan: arched roof and swept rear glass.
-		[-0.94, -0.40, 0.70, 1.22, 0.79, 0.78], # Road sedan: longer bonnet, low rear deck.
-		[-0.79, -0.49, 0.65, 1.03, 0.70, 0.66], # Family sedan: tall, upright sedan.
-		[-0.91, -0.56, 1.29, 1.66, 0.75, 0.65], # Touring crossover: broad five-door SUV.
-		[-0.96, -0.43, 0.60, 1.08, 0.68, 0.70], # hatchback: low hatchback nose and steep rear glass.
-	]
-	var shape: Array = shapes[variant]
+	match str(p.model):
+		"granta":
+			return load("res://scripts/granta_model.gd").build()
+		"niva":
+			var imported = load("res://scripts/niva_asset.gd").build()
+			if imported != null:
+				return imported
+			# Preserve a usable car while an asset import is incomplete.
+		"camping_hatchback":
+			return player_car_camping_hatchback()
+		"sport_sedan":
+			return player_car_sport_sedan()
+	return player_car_shell(variant)
+
+# The generic faceted car of cars.json: `shape` holds the windscreen base, roof
+# front, roof rear and rear-glass base stations, then the front and rear
+# wheel offsets from the bumpers.
+static func player_car_shell(variant: int) -> Node3D:
+	var p: Dictionary = PLAYER_MODELS[variant]
+	var shape: Array = p.shape
 	var root = Node3D.new()
 	root.name = "PlayerCar_%d" % variant
 	root.set_meta("model", p.name)
 	root.set_meta("variant", variant)
 	var paint = Color(p.color)
-	var suv = variant in [2, 7]
+	var suv: bool = p.suv
 	var base = 0.81 if suv else 0.67
 	var radius = 0.43 if suv else 0.36
 	var front: float = -p.length / 2
 	var rear: float = p.length / 2
 	var half: float = p.width / 2
-	var bonnet = base + (0.34 if variant in [2, 3, 6, 8] else 0.27)
+	var bonnet: float = base + float(p.bonnet_rise)
 	var body = car_shell(root, [Vector4(front, half * 0.90, base - 0.24, bonnet - 0.13), Vector4(front + 0.38, half, base - 0.26, bonnet - 0.03), Vector4(shape[0], half, base - 0.26, bonnet), Vector4(shape[3], half, base - 0.26, bonnet - 0.02), Vector4(rear, half * 0.93, base - 0.22, bonnet - 0.06)], paint)
 	body.name = "BodyShell"
 	var floor_height = bonnet - 0.02
@@ -569,7 +556,7 @@ static func player_car(variant: int = 0) -> Node3D:
 		var x: float = side * glass_half
 		car_beam(root, Vector3(x, floor_height + 0.04, shape[0]), Vector3(x * 0.94, p.height - 0.04, shape[1]), 0.065, paint)
 		car_beam(root, Vector3(x * 0.93, p.height - 0.04, shape[2]), Vector3(x, floor_height + 0.04, shape[3]), 0.08, paint)
-		var pillar_z: float = 0.32 if variant == 2 else 0.1
+		var pillar_z: float = p.pillar
 		car_beam(root, Vector3(x, floor_height, pillar_z), Vector3(x * 0.94, p.height - 0.05, pillar_z), 0.07, paint)
 		box(root, Vector3(side * half * 1.08, bonnet + 0.12, shape[0] + 0.04), Vector3(0.21, 0.13, 0.21), Color("28343a"))
 		for z in [front + shape[4], rear - shape[5]]:
@@ -583,7 +570,7 @@ static func player_car(variant: int = 0) -> Node3D:
 			if suv:
 				box(root, Vector3(side * half, base + 0.02, z), Vector3(0.11, 0.13, 1.00), Color("35413d"))
 		box(root, Vector3(side * half * 1.005, base + 0.19, 0.19), Vector3(0.02, 0.035, 0.15), Color("c5cbc7"))
-		if variant != 2:
+		if p.rear_sill:
 			box(root, Vector3(side * half * 1.005, base + 0.19, 0.89), Vector3(0.02, 0.035, 0.15), Color("c5cbc7"))
 		var light_x: float = side * half * 0.65
 		if p.lights == "round":
@@ -591,43 +578,31 @@ static func player_car(variant: int = 0) -> Node3D:
 			light.rotation.x = PI / 2
 		else:
 			var lamp = box(root, Vector3(light_x, bonnet - 0.14, front - 0.028), Vector3(0.48 if p.lights == "wide" else 0.38, 0.10 if p.lights == "slim" else 0.21, 0.055), Color("eee8b4"))
-			lamp.rotation.z = side * (0.16 if variant in [0, 1, 4, 5] else 0.0)
+			lamp.rotation.z = side * float(p.lamp_tilt)
 		box(root, Vector3(light_x, bonnet - 0.13, rear + 0.025), Vector3(0.33, 0.30 if suv else 0.17, 0.055), Color("ab3631"))
-	var trim = Color("c6ccc8") if variant in [2, 3] else Color("303d41")
+	var trim = Color(p.trim)
 	for z in [front - 0.045, rear + 0.045]:
 		box(root, Vector3(0, base - 0.19, z), Vector3(p.width * 0.97, 0.15, 0.11), trim)
 		box(root, Vector3(0, base - 0.13, z + (-0.07 if z < 0 else 0.07)), Vector3(0.38, 0.10, 0.02), Color("e8e5d0"))
 	box(root, Vector3(0, bonnet - 0.15, front - 0.06), Vector3(p.grille, 0.24, 0.03), Color("1f2e33"))
-	if variant in [0, 1, 4, 5]:
-		box(root, Vector3(0, base - 0.07, front - 0.075), Vector3(1.08 if variant == 4 else 0.91, 0.17, 0.02), Color("1d2b31"))
-	if variant == 3:
+	if p.lower_grille > 0.0:
+		box(root, Vector3(0, base - 0.07, front - 0.075), Vector3(p.lower_grille, 0.17, 0.02), Color("1d2b31"))
+	if p.grille_style == "slats":
 		box(root, Vector3(0, bonnet - 0.13, front - 0.08), Vector3(0.62, 0.35, 0.025), Color("bdc6c3"))
 		for x in [-0.22, -0.11, 0, 0.11, 0.22]:
 			box(root, Vector3(x, bonnet - 0.13, front - 0.10), Vector3(0.055, 0.27, 0.02), Color("293a3c"))
-	elif variant in [6, 7]:
+	elif p.grille_style == "chrome_lines":
 		for x in [-0.35, 0.35]:
 			box(root, Vector3(x, bonnet - 0.1, front - 0.081), Vector3(0.46, 0.025, 0.02), Color("c2cac5"))
-	elif variant == 5:
+	elif p.grille_style == "chrome_pair":
 		for x in [-0.27, 0.27]:
 			box(root, Vector3(x, bonnet - 0.13, front - 0.084), Vector3(0.40, 0.035, 0.018), Color("b8c5c7"))
-	if variant == 2:
+	if p.spare_wheel:
 		var spare = cylinder(root, Vector3(0, base + 0.22, rear + 0.18), 0.38, 0.38, 0.22, Color("25332b"), 10)
 		spare.rotation.x = PI / 2
 	if suv:
 		for side in [-1, 1]:
 			box(root, Vector3(side * 0.57, p.height + 0.08, 0.48), Vector3(0.06, 0.07, 1.65), Color("38413a"))
-	if variant == 8:
-		# Real-world hatchback details: hatch spoiler, black steel wheels and a roof rack.
-		box(root, Vector3(0, p.height + 0.08, 0.72), Vector3(1.18, 0.08, 0.16), Color("1d2b35"))
-		for z in [-0.62, 0.62]:
-			box(root, Vector3(0, p.height + 0.11, z), Vector3(1.35, 0.08, 0.12), Color("252e30"))
-		# Inflatable boat strapped across the roof, with a recessed dark interior.
-		faceted(root, Vector3(0, p.height + 0.48, 0), Vector3(0.72, 0.30, 1.72), Color("747d7e"), 10, 5)
-		faceted(root, Vector3(0, p.height + 0.60, 0), Vector3(0.48, 0.12, 1.40), Color("354448"), 10, 4)
-		for z in [-0.62, 0.62]:
-			box(root, Vector3(0, p.height + 0.46, z), Vector3(1.48, 0.045, 0.10), Color("e0b83f"))
-			box(root, Vector3(0, p.height + 0.36, z), Vector3(0.055, 0.36, 0.055), Color("202a2d"))
-		root.set_meta("roof_cargo", "inflatable_boat")
 	return add_player_trunk(root, variant)
 
 static func skewer() -> Node3D:
@@ -1292,10 +1267,12 @@ static func panel_mesh(vertices: PackedVector3Array) -> ArrayMesh:
 	return mesh
 
 static func trunk_profile(variant: int) -> Dictionary:
-	var p = PLAYER_MODELS[posmod(variant, PLAYER_MODELS.size())]
-	var hatch = variant in [2, 7, 8]
+	var p: Dictionary = PLAYER_MODELS[posmod(variant, PLAYER_MODELS.size())]
+	var trunk: Dictionary = p.trunk
+	var hatch: bool = trunk.hatch
 	var rear: float = p.length / 2
-	return {"rear": rear, "half": p.width * 0.37, "hinge": (0.35 if variant == 8 else (1.26 if hatch else rear - 0.80)), "floor": 0.70 if hatch else 0.56, "top": p.height - 0.02 if hatch else (0.99 if variant in [3, 6, 9] else 0.94), "hatch": hatch}
+	var hinge: float = trunk.get("hinge", 1.26 if hatch else rear - 0.80)
+	return {"rear": rear, "half": p.width * 0.37, "hinge": hinge, "floor": 0.70 if hatch else 0.56, "top": p.height - 0.02 if hatch else float(trunk.top), "hatch": hatch}
 
 static func gear_box(parent: Node3D, kind: String, point: Vector3 = Vector3.ZERO) -> Node3D:
 	if kind == "shovel":

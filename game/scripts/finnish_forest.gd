@@ -55,6 +55,7 @@ const BODIES = [
 ]
 
 const Props = preload("res://scripts/props.gd")
+const Records = preload("res://scripts/stage_records.gd")
 # Buildings and the lakeside jetty; trees, boulders and undergrowth keep clear.
 var reserved_spots: Array[Dictionary] = []
 var yellow_house = Vector3.ZERO
@@ -391,7 +392,7 @@ func _build_yellow_house() -> void:
 		Props.box(house, Vector3(x, 2.5, 3.56), Vector3(0.86, 1.0, 0.04), Color("3b4a52"))
 	Props.box(house, Vector3(-1.4, 1.65, -3.52), Vector3(1.0, 2.1, 0.06), Color("f2eee2"))
 	Props.box(house, Vector3(-1.4, 1.6, -3.56), Vector3(0.8, 1.9, 0.04), Color("5a3b2b"))
-	stage.rocks.append({"pos": yellow_house, "radius": 5.6, "height": 6.0, "building": true})
+	stage.rocks.append(Records.rock(yellow_house, 5.6, 6.0, Records.BUILDING))
 	# A wooden shed and a fence line typical of a farmyard by the stage.
 	var shed = yellow_house + Vector3(YELLOW_HOUSE_SIDE * 9.0, 0, -6.0)
 	var barn = Node3D.new()
@@ -401,7 +402,7 @@ func _build_yellow_house() -> void:
 	_level(barn, Vector2(2.0, 1.6), Color("5f5a52"))
 	Props.box(barn, Vector3(0, 2.0, 0), Vector3(4.0, 2.8, 3.2), Color("8b3a2a"))
 	Props.box(barn, Vector3(0, 3.55, 0), Vector3(4.4, 0.25, 3.6), Color("4a4540"))
-	stage.rocks.append({"pos": shed, "radius": 2.6, "height": 3.0, "building": true})
+	stage.rocks.append(Records.rock(shed, 2.6, 3.0, Records.BUILDING))
 
 # Spectators traditionally mark how far crews fly over the crest.
 func _build_jump_boards() -> void:
@@ -431,7 +432,7 @@ func _build_sauna() -> void:
 		slab.rotation.z = -sign * 0.42
 	Props.box(hut, Vector3(0, 1.2, 1.72), Vector3(0.8, 1.7, 0.06), Color("4a3524"))
 	Props.cylinder(hut, Vector3(1.0, 3.5, -0.8), 0.14, 0.14, 1.3, Color("2f2f2f"), 6)
-	stage.rocks.append({"pos": sauna, "radius": 2.5, "height": 3.2, "building": true})
+	stage.rocks.append(Records.rock(sauna, 2.5, 3.2, Records.BUILDING))
 	# Jetty: deck planks on posts standing in the lake.
 	var start: Vector3 = jetty.start
 	var end: Vector3 = jetty.end

@@ -4,6 +4,7 @@ const Navigation = preload("res://scripts/crowd_navigation.gd")
 var people: Array[Dictionary] = []
 var targets: Dictionary = {}
 const Props = preload("res://scripts/props.gd")
+const Records = preload("res://scripts/stage_records.gd")
 var stage: Node3D
 var arches: Array[Node3D] = []
 var cars: Array[Node3D] = []
@@ -48,7 +49,7 @@ func solid(parent: Node3D, local: Vector3, radius: float, height: float) -> void
 	shape.height = height
 	collider.shape = shape
 	body.add_child(collider)
-	var record = {"pos": parent.position + local.rotated(Vector3.UP, parent.rotation.y), "radius": radius, "height": height, "official": true}
+	var record = Records.rock(parent.position + local.rotated(Vector3.UP, parent.rotation.y), radius, height, Records.OFFICIAL)
 	if parent.get_meta("role", "") == "marshal":
 		record.actor = parent
 		parent.set_meta("solid_record", record)

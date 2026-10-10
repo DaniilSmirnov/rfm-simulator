@@ -6,6 +6,7 @@ extends RefCounted
 # mistral line some parcels. Everything is batched; nothing here is collectible.
 const Props = preload("res://scripts/props.gd")
 const Layout = preload("res://scripts/village_layout.gd")
+const DetailLayer = preload("res://scripts/detail_layer.gd")
 const LAVENDER_TEXTURE = preload("res://textures/nature/lavender.svg")
 
 const PARCEL = Vector2(30.0, 24.0)
@@ -265,8 +266,8 @@ func _sunflower_fields() -> void:
 	stem_mesh.height = 1.0
 	stem_mesh.radial_segments = 4
 	stem_mesh.rings = 1
-	stage._detail_batch("SunflowerStems", stem_mesh, stems, stem_colors, {"tiles": true, "range": 230.0})
-	stage._detail_batch("SunflowerHeads", architecture._sphere(1.0, 8, 3), heads, head_colors, {"tiles": true, "range": 300.0})
+	stage.detail_batch("SunflowerStems", stem_mesh, stems, stem_colors, DetailLayer.tiled(230.0))
+	stage.detail_batch("SunflowerHeads", architecture._sphere(1.0, 8, 3), heads, head_colors, DetailLayer.tiled(300.0))
 
 # Trained vine rows with posts and wires; the collectible grapes stay roadside.
 func _vine_blocks() -> void:
@@ -293,14 +294,14 @@ func _vine_blocks() -> void:
 				x += 1.5
 			z += 2.6
 	counts["vine_leaves"] = leaves.size()
-	stage._detail_batch("FieldVineLeaves", architecture._sphere(1.0, 6, 3), leaves, leaf_colors, {"tiles": true, "range": 300.0})
+	stage.detail_batch("FieldVineLeaves", architecture._sphere(1.0, 6, 3), leaves, leaf_colors, DetailLayer.tiled(300.0))
 	var post = CylinderMesh.new()
 	post.top_radius = 0.5
 	post.bottom_radius = 0.5
 	post.height = 1.0
 	post.radial_segments = 4
 	post.rings = 1
-	stage._detail_batch("FieldVinePosts", post, posts, post_colors, {"tiles": true, "range": 160.0})
+	stage.detail_batch("FieldVinePosts", post, posts, post_colors, DetailLayer.tiled(160.0))
 
 # Olive groves on a regular planting grid; rendered with the roadside olives.
 func _olive_groves() -> void:

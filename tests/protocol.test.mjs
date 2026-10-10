@@ -99,3 +99,22 @@ test('stage registry: one entry per catalog stage, each with an existing biome s
   const stageGd = await read('game/scripts/stage.gd');
   assert.doesNotMatch(stageGd.replace(/#.*$/gm, ''), /\bif (not )?(winter|provence|desert|lakeland)\b|variant == \d/, 'stage.gd does not branch on a stage identity');
 });
+
+test('car registry: one record per catalog car, same names, known drive and model', async () => {
+  const {cars} = JSON.parse(await read('game/data/cars.json'));
+  const catalog = JSON.parse(await read('game/data/store_catalog.json')).filter(p => p.type === 'car');
+  assert.equal(cars.length, CAR_COUNT);
+  assert.deepEqual(catalog.map(p => p.content_id).sort((a, b) => a - b), cars.map((_, i) => i));
+  for (const [i, car] of cars.entries()) {
+    assert.equal(catalog.find(p => p.content_id === i).title, car.name, 'catalog title of car ' + i);
+    assert.ok(!car.handling?.drive || ['front', 'rear', 'all'].includes(car.handling.drive), car.name + ' drive');
+    assert.ok(!car.model || car.model === 'shell' ? car.shape?.length === 6 : true, car.name + ' needs a shape');
+  }
+  // Car look, handling and trunk come from cars.json, not from index checks.
+  for (const file of ['game/scripts/props.gd', 'game/scripts/player_handling.gd']) {
+    const code = (await read(file)).replace(/#.*$/gm, '');
+    const fleet = code.slice(code.indexOf('func player_car('), code.indexOf('func skewer('));
+    const scope = file.endsWith('props.gd') ? fleet + code.slice(code.indexOf('func trunk_profile('), code.indexOf('func gear_box(')) : code;
+    assert.doesNotMatch(scope, /variant (==|!=|in|not in) [\d[]/, file + ' has no per-car index branches');
+  }
+});

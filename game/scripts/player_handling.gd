@@ -8,11 +8,13 @@ var longitudinal_accel = 0.0
 var lateral_accel = 0.0
 const STEP = 1.0 / 120.0
 
+const CarRegistry = preload("res://scripts/car_registry.gd")
+
+# Deliberate handling differences, not claimed factory specifications; the
+# values live with each car in res://data/cars.json.
 static func profile(variant: int) -> Dictionary:
-	# Deliberate handling differences, not claimed factory specifications.
-	var rear_bias = 1.0 if variant in [3, 9] else (0.5 if variant in [2, 7] else 0.0)
-	var heavy = variant in [2, 7, 8]
-	return {"rear_bias": rear_bias, "wheelbase": 2.65 if variant == 9 else 2.45, "acceleration": 8.2 if variant == 9 else (5.0 if heavy else 6.2), "inertia": 1.6 if heavy else 1.25}
+	var handling: Dictionary = CarRegistry.car(variant).handling
+	return {"rear_bias": CarRegistry.rear_bias(variant), "wheelbase": float(handling.wheelbase), "acceleration": float(handling.acceleration), "inertia": float(handling.inertia)}
 
 func advance(motion, heading: float, throttle: float, steer: float, brake: bool, grip: float, max_speed: float, variant: int, dt: float) -> float:
 	var spec = profile(variant)

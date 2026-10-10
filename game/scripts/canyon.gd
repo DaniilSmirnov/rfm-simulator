@@ -8,6 +8,7 @@ const TIERS = 36
 const TOP_RADIUS = 9.0
 const OUTER_RADIUS = TOP_RADIUS + TIERS * LEDGE_WIDTH
 const SIDES = 32
+const Records = preload("res://scripts/stage_records.gd")
 var mesas: Array[Dictionary] = []
 
 func route(s: float) -> Vector3:
@@ -180,12 +181,12 @@ func build_details(_cooperative: bool) -> void:
 		p.y = smooth_ground(p)
 		var height = 35.0 + (i % 4) * 9.0
 		_build_butte(p, height, i)
-		stage.rocks.append({"pos": p, "radius": 28.0, "height": height})
+		stage.rocks.append(Records.rock(p, 28.0, height))
 	for sign in [-1.0, 1.0]:
 		var p: Vector3 = stage.at(195.0) + stage.side(195.0) * sign * 15.0
 		p.y = smooth_ground(p)
 		RallyProps.cylinder(stage, p + Vector3.UP * 10.0, 6.0, 3.8, 20.0, Color("a85338"), 7)
-		stage.rocks.append({"pos": p, "radius": 6.0, "height": 20.0})
+		stage.rocks.append(Records.rock(p, 6.0, 20.0))
 	var poses: Array = []
 	var colors: Array = []
 	for i in range(450):
@@ -201,7 +202,7 @@ func build_details(_cooperative: bool) -> void:
 		var size = stage.rng.randf_range(0.35, 1.2)
 		poses.append(Transform3D(Basis.from_scale(Vector3(size, size * 0.55, size)), p))
 		colors.append(Color("8b8860"))
-	stage._detail_batch("CanyonDryScrub", stage.NATURE_BUSH, poses, colors)
+	stage.detail_batch("CanyonDryScrub", stage.NATURE_BUSH, poses, colors)
 
 func _build_butte(origin: Vector3, height: float, seed_index: int) -> void:
 	var st = SurfaceTool.new()

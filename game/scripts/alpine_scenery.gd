@@ -22,6 +22,7 @@ const BARRIER_OFFSET = 0.5 # beyond the outer toe of the snowbank
 const STONE = Color("8f887e")
 const SNOW = Color("eef3f6")
 const ICE = Color("d3ebf5")
+const Records = preload("res://scripts/stage_records.gd")
 
 static var _vertex_material: StandardMaterial3D
 static var _ice_material: StandardMaterial3D
@@ -219,7 +220,7 @@ static func _build_barriers(stage, root: Node3D) -> void:
 			if not stone:
 				posts.append(Transform3D(Basis.from_scale(Vector3(0.13, 1.15, 0.13)), p + Vector3.UP * 0.3))
 				post_colors.append(Color("7c8489"))
-			stage.rocks.append({"pos": p, "radius": 0.32 if stone else 0.2, "height": 0.85, "barrier": true})
+			stage.rocks.append(Records.rock(p, 0.32 if stone else 0.2, 0.85, Records.BARRIER))
 			if i + 1 >= points.size() or points[i + 1] == null:
 				continue
 			var q: Vector3 = points[i + 1]
@@ -289,7 +290,7 @@ static func _build_road_signs(stage, root: Node3D) -> void:
 		stone.rotation.y = yaw
 		Props.box(stone, Vector3(0, 0.39, 0), Vector3(0.46, 0.12, 0.26), Color("c43a2d"))
 		Props.label_3d(stone, Vector3(0, 0.05, 0.125), "%d" % i, 64, 0.004, Color("2b2b2b"))
-		stage.rocks.append({"pos": p, "radius": 0.3, "height": 0.6, "barrier": true})
+		stage.rocks.append(Records.rock(p, 0.3, 0.6, Records.BARRIER))
 	var start = edge_point(stage, 16.0, 1.0, 1.4)
 	var arrow = _board(root, start, facing_traffic(stage, 16.0), Vector2(2.3, 0.95), Color("f4f2ec"), 1.6)
 	Props.label_3d(arrow, Vector3(0, 0.17, 0.03), "COL DE TURINI  ↑", 64, 0.0032, Color("23272a"))
@@ -332,7 +333,7 @@ static func _build_rock_cut(stage, root: Node3D) -> void:
 		rock_colors.append(Color("757069").lightened(rng.randf_range(-0.08, 0.1)))
 		cap_poses.append(Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3(radius * 1.5, 0.45, radius * 1.3)), center + Vector3.UP * height * 0.44))
 		cap_colors.append(SNOW)
-		stage.rocks.append({"pos": Vector3(p.x, low, p.z), "radius": radius * 0.85, "height": height * 0.6, "forest": true})
+		stage.rocks.append(Records.rock(Vector3(p.x, low, p.z), radius * 0.85, height * 0.6, Records.FOREST))
 		# Meltwater freezes along the face that looks onto the road.
 		var toward = (stage.at(s) - p)
 		toward.y = 0.0
@@ -381,7 +382,7 @@ static func _build_waterfall(stage, root: Node3D) -> void:
 		var spike = Props.cylinder(fall, Vector3(x, 11.6 - absf(x) * 0.9 - length * 0.5, 0.45), 0.0, 0.13, length, ICE, 5)
 		spike.material_override = ice
 	Props.faceted(fall, Vector3(0, 0.3, 2.2), Vector3(5.2, 1.2, 3.0), SNOW, 8, 3)
-	stage.rocks.append({"pos": p, "radius": 3.2, "height": 12.0, "forest": true})
+	stage.rocks.append(Records.rock(p, 3.2, 12.0, Records.FOREST))
 
 # ---------------------------------------------------------------- hamlet
 
@@ -461,7 +462,7 @@ static func _build_house(stage, root: Node3D, item: Dictionary) -> void:
 	var circles = maxi(1, ceili(w / d))
 	for i in range(circles):
 		var offset = (float(i) - (circles - 1) * 0.5) * (w / circles)
-		stage.rocks.append({"pos": node.position + across * offset, "radius": minf(w / circles, d) * 0.5 + 0.35, "height": height, "building": true})
+		stage.rocks.append(Records.rock(node.position + across * offset, minf(w / circles, d) * 0.5 + 0.35, height, Records.BUILDING))
 
 static func _build_chalet(stage, node: Node3D, w: float, d: float, floors: int, hotel: bool) -> float:
 	var ground_floor = 3.0
