@@ -6,6 +6,7 @@ extends Node
 #   world_sync.gd      the shared world as snapshot providers (hot/cold)
 #   peer_view.gd       how other members look on this client
 #   room_lobby.gd      the menu panel and the in-game room line
+#   direct_link.gd     WebRTC data channels host <-> guest (browser builds)
 #   drive_prediction.gd  guest car prediction / host-side simulation
 const Prediction = preload("res://scripts/drive_prediction.gd")
 const SnapshotMotion = preload("res://scripts/snapshot_motion.gd")
@@ -17,9 +18,11 @@ const PeerView = preload("res://scripts/peer_view.gd")
 const Lobby = preload("res://scripts/room_lobby.gd")
 const ActionContext = preload("res://scripts/action_context.gd")
 const SharedActions = preload("res://scripts/shared_actions.gd")
+const DirectLink = preload("res://scripts/direct_link.gd")
 
 var game: Node3D
 var transport: Node
+var direct: Node
 var world_sync = WorldSync.new()
 var ui = Lobby.new()
 # Membership.
@@ -29,6 +32,9 @@ var token = ""
 var is_host = false
 var connected = false
 var peers: Dictionary = {}
+# Membership as the server reports it: id -> {"name", "slot", "car_model"}.
+var members: Dictionary = {}
+var host_id = ""
 var world_paused = false
 var tow_owner = ""
 # Commands: a guest queues them, the host applies and acknowledges them.
@@ -62,6 +68,10 @@ func _ready() -> void:
 	transport.name = "Transport"
 	transport.room = self
 	add_child(transport)
+	direct = DirectLink.new()
+	direct.name = "DirectLink"
+	add_child(direct)
+	direct.setup(self)
 	ui.build(self)
 	world_sync.setup(self)
 
@@ -189,14 +199,12 @@ func _adopt_local_host_state() -> void:
 func _apply_sync(data: Dictionary) -> void:
 	if is_host and data.get("cold_revs") is Dictionary:
 		world_sync.server_cold_revs = data.cold_revs
+	host_id = str(data.get("host", host_id))
+	_update_members(data.players)
 	var world = data.get("world")
-	if not is_host and world is Dictionary:
-		var drive_stamp = float(data.get("world_time", -1))
-		if drive_stamp > authority_stamp:
-			authoritative_drives = world.get("driving", {})
-			authority_stamp = drive_stamp
-	_update_peers(data.players)
+	var stamp = float(data.get("world_time", -1))
 	if is_host:
+		_update_peers(data.players)
 		for command in data.commands:
 			if not processed.has(command.id):
 				_apply_command(command)
@@ -205,24 +213,44 @@ func _apply_sync(data: Dictionary) -> void:
 				acknowledgements.append(command.id)
 	else:
 		commands = commands.filter(func(c): return c.seq > int(data.accepted))
-		if world is Dictionary:
-			var stamp = float(data.get("world_time", -1))
-			if stamp < 0 or stamp > last_world_time:
-				prediction_enabled = int(world.get("drive_protocol", 0)) == 1
-				var drive = world.get("driving", {}).get(player_id, {})
-				if prediction_enabled and not drive.is_empty():
-					if not prediction.active:
-						prediction.reset(v(drive.pos), drive.yaw)
-					prediction.context = drive_context(player_id)
-					# Apply world collision geometry before replaying unacknowledged input.
-					world_sync.apply_collision(world)
-					prediction.reconcile(drive, game.stage, game.selected_car)
-					game.condition = prediction.condition
-					game.car.position = prediction.node.position
-					game.heading = prediction.yaw
-				apply_world(world, stamp / 1000.0 if stamp >= 0 else -1.0)
-				last_world_time = stamp
+		if direct.healthy(host_id):
+			# The direct link carries the hot world and everyone's state; the
+			# server still delivers slow sections and membership.
+			if world is Dictionary:
+				world_sync.apply_cold(world, stamp / 1000.0 if stamp >= 0 else server_clock())
+			_update_peers(data.players, false)
+		else:
+			_guest_world(world, stamp, data.players, true)
 	ui.show_room_status(room_id, peers.size() + 1, is_host, world_paused)
+
+# A guest applies the host's world: from the server, or straight from the host.
+func _guest_world(world, stamp: float, players: Array, membership: bool) -> void:
+	if world is Dictionary and stamp > authority_stamp:
+		authoritative_drives = world.get("driving", {})
+		authority_stamp = stamp
+	_update_peers(players, true, membership)
+	if not world is Dictionary or not (stamp < 0 or stamp > last_world_time):
+		return
+	prediction_enabled = int(world.get("drive_protocol", 0)) == 1
+	var drive = world.get("driving", {}).get(player_id, {})
+	if prediction_enabled and not drive.is_empty():
+		if not prediction.active:
+			prediction.reset(v(drive.pos), drive.yaw)
+		prediction.context = drive_context(player_id)
+		# Apply world collision geometry before replaying unacknowledged input.
+		world_sync.apply_collision(world)
+		prediction.reconcile(drive, game.stage, game.selected_car)
+		game.condition = prediction.condition
+		game.car.position = prediction.node.position
+		game.heading = prediction.yaw
+	apply_world(world, stamp / 1000.0 if stamp >= 0 else -1.0)
+	last_world_time = stamp
+
+func _update_members(players: Array) -> void:
+	members.clear()
+	for p in players:
+		members[str(p.id)] = {"name": p.get("name", ""), "slot": int(p.get("slot", 0)), "car_model": int(p.get("car_model", 0))}
+	direct.sync_members(host_id, members.keys())
 
 func sync_now() -> void:
 	clock = maxf(clock, NetProtocol.sync_interval())
@@ -258,10 +286,11 @@ func _process(delta: float) -> void:
 	if clock >= NetProtocol.sync_interval() and transport.ready_to_sync():
 		clock = fmod(clock, NetProtocol.sync_interval())
 		transport.send_sync(sync_body(), room_id)
+	direct.update(delta)
 	diagnostic_clock += delta
 	if diagnostic_clock >= 5.0:
 		diagnostic_clock = 0.0
-		print("[RFM network] RTT=%.0fms jitter=%.0fms peers=%d transport=%s" % [transport.round_trip_ms, transport.network_jitter_ms, peers.size(), transport.transport_name()])
+		print("[RFM network] RTT=%.0fms jitter=%.0fms peers=%d transport=%s direct=%d" % [transport.round_trip_ms, transport.network_jitter_ms, peers.size(), transport.transport_name(), direct.open_links().size()])
 	game.cargo.refresh_opened()
 	var frozen = world_paused or game.paused or game.dead or game.finished
 	for peer in peers.values():
@@ -323,50 +352,60 @@ func local_state() -> Dictionary:
 
 # ---------------------------------------------------------------- peers
 
-func _update_peers(players: Array) -> void:
+# `use_states`: take positions from these entries (false: membership only, the
+# direct link delivers states). `membership`: add and remove peers to match.
+func _update_peers(players: Array, use_states: bool = true, membership: bool = true) -> void:
 	var present = {}
 	for p in players:
 		if p.id == player_id:
 			continue
 		present[p.id] = true
 		if not peers.has(p.id):
-			peers[p.id] = PeerView.create(game, p)
-		if is_host and p.state != null and (bool(p.state.get("drive_enabled", false)) or host_drives.has(p.id)):
-			_simulate_guest_drive(p)
-		elif not is_host and p.state != null and authoritative_drives.has(p.id):
-			var drive = authoritative_drives[p.id]
-			p.state.car = drive.pos
-			p.state.heading = drive.yaw
-			p.state.tilt = [drive.pitch, drive.yaw, drive.roll]
-			p.state.speed = v(drive.velocity).dot(Vector3(-sin(drive.yaw), 0, -cos(drive.yaw)))
-			if p.state.in_car:
-				p.state.pos = drive.pos
-		if p.state != null:
-			var peer = peers[p.id]
-			var sample_time = float(p.state_time) / 1000.0 if p.has("state_time") else server_clock()
-			if is_host and host_drives.has(p.id):
-				sample_time = server_clock()
-			elif not is_host and authoritative_drives.has(p.id):
-				sample_time = authority_stamp / 1000.0
-			if peer.has("last_sample_time") and sample_time <= peer.last_sample_time:
+			if not membership:
 				continue
-			var switched = peer.state != null and peer.state.in_car != p.state.in_car
-			var tilt = v(p.state.get("tilt", [0, p.state.heading, 0]))
-			tilt.y = p.state.heading
-			peer.car_motion.push(sample_time, v(p.state.car), tilt)
-			peer.avatar_motion.max_speed = 12.0
-			peer.avatar_motion.push(sample_time, v(p.state.pos), Vector3(0, p.state.yaw, 0), switched)
-			peer.last_sample_time = sample_time
-		peers[p.id].state = p.state
-		if p.state != null:
-			peers[p.id].last_state_time = float(p.state_time) / 1000.0 if p.has("state_time") else server_clock()
-	for id in peers.keys():
-		if not present.has(id):
-			PeerView.remove(peers[id])
-			peers.erase(id)
-			host_drives.erase(id)
-			drive_budgets.erase(id)
-	game.cargo.release_departed()
+			peers[p.id] = PeerView.create(game, p)
+		# The host takes a guest's state from its direct link while that is alive.
+		if use_states and not (is_host and direct.healthy(str(p.id))):
+			_update_peer(p)
+	if membership:
+		for id in peers.keys():
+			if not present.has(id):
+				PeerView.remove(peers[id])
+				peers.erase(id)
+				host_drives.erase(id)
+				drive_budgets.erase(id)
+		game.cargo.release_departed()
+
+func _update_peer(p: Dictionary) -> void:
+	if is_host and p.state != null and (bool(p.state.get("drive_enabled", false)) or host_drives.has(p.id)):
+		_simulate_guest_drive(p)
+	elif not is_host and p.state != null and authoritative_drives.has(p.id):
+		var drive = authoritative_drives[p.id]
+		p.state.car = drive.pos
+		p.state.heading = drive.yaw
+		p.state.tilt = [drive.pitch, drive.yaw, drive.roll]
+		p.state.speed = v(drive.velocity).dot(Vector3(-sin(drive.yaw), 0, -cos(drive.yaw)))
+		if p.state.in_car:
+			p.state.pos = drive.pos
+	var peer = peers[p.id]
+	if p.state != null:
+		var sample_time = float(p.state_time) / 1000.0 if p.has("state_time") else server_clock()
+		if is_host and host_drives.has(p.id):
+			sample_time = server_clock()
+		elif not is_host and authoritative_drives.has(p.id):
+			sample_time = authority_stamp / 1000.0
+		if peer.has("last_sample_time") and sample_time <= peer.last_sample_time:
+			return
+		var switched = peer.state != null and peer.state.in_car != p.state.in_car
+		var tilt = v(p.state.get("tilt", [0, p.state.heading, 0]))
+		tilt.y = p.state.heading
+		peer.car_motion.push(sample_time, v(p.state.car), tilt)
+		peer.avatar_motion.max_speed = 12.0
+		peer.avatar_motion.push(sample_time, v(p.state.pos), Vector3(0, p.state.yaw, 0), switched)
+		peer.last_sample_time = sample_time
+	peer.state = p.state
+	if p.state != null:
+		peer.last_state_time = float(p.state_time) / 1000.0 if p.has("state_time") else server_clock()
 
 # The host runs each guest's car from the guest's input, within a time budget.
 func _simulate_guest_drive(p: Dictionary) -> void:
@@ -507,6 +546,7 @@ func check_remote_collisions() -> void:
 # ---------------------------------------------------------------- leaving
 
 func leave() -> void:
+	direct.close_all()
 	transport.close_socket()
 	transport.cancel()
 	connected = false
@@ -514,6 +554,7 @@ func leave() -> void:
 
 func disconnect_room(message: String) -> void:
 	connected = false
+	direct.close_all()
 	transport.close_socket()
 	game.paused = true
 	game.menu.show()

@@ -19,5 +19,20 @@
     "object_requests_per_sync": 8,
     "cold_sections": 16
   },
-  "durations": {"eat": 3.6, "drink": 3.3}
+  "durations": {"eat": 3.6, "drink": 3.3},
+  "direct": {
+    "comment": "WebRTC data channel between the host and each guest (browser builds). The room socket relays the connection setup; the server path stays the fallback and carries commands and slow world sections.",
+    "ice_servers": ["stun:stun.cloudflare.com:3478", "stun:stun.l.google.com:19302"],
+    "world_rate": 20,
+    "world_rate_crowded": 10,
+    "crowded_links": 4,
+    "state_rate": 30,
+    "connect_timeout": 10.0,
+    "retry": 20.0,
+    "max_attempts": 3,
+    "stale": 0.5,
+    "max_packet": 16000,
+    "max_signal_bytes": 16384,
+    "signals_per_10s": 120
+  }
 }

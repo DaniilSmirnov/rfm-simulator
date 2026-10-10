@@ -111,9 +111,15 @@ export class RallyRoom {
         this.send(ws, { type: 'hello', id: body.id, player: p.id });
         return;
       }
-      if (body.type !== 'sync') throw new RoomError(400, 'Некорректное сообщение.');
+      if (body.type !== 'sync' && body.type !== 'signal') throw new RoomError(400, 'Некорректное сообщение.');
       const session = ws.deserializeAttachment();
       if (!session?.token) throw new RoomError(401, 'Участник не найден. Войди в комнату заново.');
+      if (body.type === 'signal') {
+        // Relay direct-link setup to the other side's sockets; nothing is stored.
+        const route = this.room.signal(session.token, body.to, body.data, now);
+        for (const target of this.sockets(route.to)) this.send(target, { type: 'signal', from: route.from, data: body.data });
+        return;
+      }
       const result = this.room.sync({ ...body, token: session.token }, now);
       this.send(ws, { type: 'reply', id: body.id, ...result });
       this.fanOut(session.player);
@@ -122,6 +128,11 @@ export class RallyRoom {
       const known = error instanceof RoomError;
       if (!known) console.error(error);
       const status = known ? error.status : 500;
+      // A refused relay only concerns that link: the room session stays open.
+      if (body?.type === 'signal' && status !== 410) {
+        this.send(ws, { type: 'signal_error', status, error: known ? error.message : 'Сервер комнаты временно недоступен.' });
+        return;
+      }
       this.send(ws, { type: 'error', id: body?.id, status, error: known ? error.message : 'Сервер комнаты временно недоступен.', ...(status === 429 ? { retry_after: error.retryAfter ?? 10 } : {}) });
       if ([401, 404, 410].includes(status)) { try { ws.close(4000 + status, 'room'); } catch {} }
     }
