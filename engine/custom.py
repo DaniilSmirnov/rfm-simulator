@@ -17,5 +17,8 @@ module_webp_enabled = True
 module_godot_physics_3d_enabled = True
 # Browser WebSocket client for low-latency room sync (JS bridge, no TLS stack).
 module_websocket_enabled = True
+# Browser WebRTC data channels: direct host-guest links for driving state
+# (the room server only relays the connection setup).
+module_webrtc_enabled = True
 # Limit ThinLTO optimization memory and linker concurrency.
 linkflags = "-Wl,--threads=2,--thinlto-jobs=1"
