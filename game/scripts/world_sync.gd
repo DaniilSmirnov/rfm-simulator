@@ -126,10 +126,14 @@ static func split_world_by(full: Dictionary, sections: Dictionary) -> Dictionary
 func split_world(full: Dictionary) -> Dictionary:
 	return split_world_by(full, cold_sections())
 
+# The host's world, split into the hot part and the slow sections.
+func current_parts() -> Dictionary:
+	return split_world(world_state())
+
 # What the host uploads: the hot world every time, a cold section only when the
 # server does not hold its revision and it is not already in flight.
 func host_upload(body: Dictionary) -> void:
-	var parts = split_world(world_state())
+	var parts = current_parts()
 	body.world = parts.hot
 	var now = Time.get_ticks_msec()
 	var intervals = section_intervals()
@@ -183,6 +187,22 @@ func apply_collision(w: Dictionary) -> void:
 	for p in providers:
 		if p.collision and p.section in cold.sections:
 			p.apply.call(cold.fields, -1.0)
+
+# Only the slow sections of a server snapshot, while the hot world arrives over
+# a direct link.
+func apply_cold(w: Dictionary, sample_time: float) -> void:
+	_ensure()
+	var cold = cold_part(w)
+	if cold == null:
+		return
+	for p in providers:
+		if p.section != "" and p.section in cold.sections:
+			p.apply.call(cold.fields, sample_time)
+	var revisions = w.get("cold_revs", {})
+	if revisions is Dictionary:
+		for section in cold.sections:
+			if revisions.has(section):
+				cold_revs[section] = int(revisions[section])
 
 func apply_world(w: Dictionary, sample_time: float) -> void:
 	_ensure()

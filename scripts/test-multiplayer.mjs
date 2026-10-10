@@ -13,6 +13,10 @@ const web = process.argv.includes('--web');
 const socketMode = process.argv.includes('--socket');
 const transportArgs = socketMode ? [] : ['--room-transport=http'];
 const SOCKET_DELAY = 150;
+// With a WebRTC engine, browser clients also open a direct host-guest link; the
+// room socket (still delayed) only relays its setup.
+const engineManifest = JSON.parse(await readFile(new URL('../engine/manifest.json', import.meta.url), 'utf8'));
+const directMode = web && socketMode && engineManifest.webrtc === true;
 const workerPort = 8793;
 const processes = [];
 let browserFactory;
@@ -143,7 +147,7 @@ try {
     const {stat}=await import('node:fs/promises');const size=(await stat(join(output,'index.pck'))).size;
     const html=join(output,'index.html');await writeFile(html,(await readFile(html,'utf8')).replace(/"index\.pck":\s*\d+/g,`"index.pck":${size}`));
     const {chromium}=await import('playwright');
-    browserFactory=()=>chromium.launch({headless:true,executablePath:process.env.CHROMIUM_EXECUTABLE,args:['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
+    browserFactory=()=>chromium.launch({headless:true,executablePath:process.env.CHROMIUM_EXECUTABLE,args:['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-features=WebRtcHideLocalIpsWithMdns','--allow-loopback-in-peer-connection']});
   }
   async function client(role,room='') {
     if(web) {
@@ -158,6 +162,7 @@ try {
   await client('host');await until(()=>latest('host')?.connected,'host connects',web?120000:60000);
   await client('guest',latest('host').room);await until(()=>latest('guest')?.active,'prediction handshake',web?120000:60000);
   if(socketMode)await until(()=>['host','guest'].every(role=>logs.some(line=>line.startsWith(`[${role}] `)&&/(^|\] )ROOM_SOCKET open$/.test(line.slice(role.length+3)))),'both clients on WebSocket',web?60000:30000);
+  if(directMode)await until(()=>latest('host')?.direct>0 && latest('guest')?.direct_healthy,'direct link open and carrying the world',60000);
   command('host','resume');command('guest','forward');
   const start=latest('guest').pos;
   await until(()=>latest('guest').speed>1 && latest('guest').pending>0,'responsive prediction before acknowledgement',15000);
@@ -188,7 +193,8 @@ try {
   assert.equal(errors.length,0);
   if(web)assert.equal(latest("guest").safe_area_ready,true,"mobile Web client reads safe area through browser-local transport");
   if(socketMode)assert.ok(!logs.some(line=>line.includes('ROOM_SOCKET disabled')),'WebSocket stayed in use');
-  console.log(`PASS: ${web?'two Chromium clients (mobile guest)':'two Godot clients'}: ${socketMode?'WebSocket with 150ms RTT':'delayed HTTP, 2 lost responses'}, prediction, braking, convergence, pause/resume, recovery, exit/re-entry, leave/rejoin`);
+  if(directMode)await until(()=>latest('guest')?.direct_healthy,'direct link reopened after rejoin',60000);
+  console.log(`PASS: ${web?'two Chromium clients (mobile guest)':'two Godot clients'}: ${directMode?'WebRTC direct link, WebSocket setup with 150ms RTT':socketMode?'WebSocket with 150ms RTT':'delayed HTTP, 2 lost responses'}, prediction, braking, convergence, pause/resume, recovery, exit/re-entry, leave/rejoin`);
 } catch (error) {
   console.error(logs.filter(x => !x.includes('NETWORK_SAMPLE ')).slice(-100).join('\n'));
   if(process.env.GITHUB_ACTIONS) {

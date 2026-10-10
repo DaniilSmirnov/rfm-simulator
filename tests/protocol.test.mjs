@@ -86,6 +86,16 @@ test('protocol 2 guests are simulated by the host once they received the world',
   assert.equal(r.data.players[h.player].state.drive_enabled, false, 'the host is never simulated');
 });
 
+test('network classes from optional engine modules are reached through ClassDB', async () => {
+  // Older Web templates lack these modules: a bare identifier would stop the
+  // script from compiling, a ClassDB lookup just reports the class missing.
+  const dir = new URL('../game/scripts/', import.meta.url);
+  for (const file of (await readdir(dir)).filter(f => f.endsWith('.gd'))) {
+    const code = (await readFile(new URL(file, dir), 'utf8')).replace(/#.*$/gm, '').replace(/"(?:\\.|[^"\\])*"/g, '""');
+    assert.doesNotMatch(code, /\b(WebSocketPeer|WebRTCPeerConnection|WebRTCDataChannel|WebRTCMultiplayerPeer)\b/, `${file} names an optional network class directly`);
+  }
+});
+
 test('stage registry: one entry per catalog stage, each with an existing biome script', async () => {
   const {stages} = JSON.parse(await read('game/data/stages.json'));
   const catalog = JSON.parse(await read('game/data/store_catalog.json')).filter(p => p.type === 'stage');

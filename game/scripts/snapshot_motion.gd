@@ -27,8 +27,10 @@ func push(time: float, position: Vector3, rotation: Vector3, reset: bool = false
 		samples.pop_front()
 	return true
 
+# One snapshot interval plus jitter: about 100 ms for the 10 Hz server path,
+# about 60 ms for the 20 Hz direct link.
 func delay() -> float:
-	return clampf(average_interval + jitter * 2.0, 0.10, 0.25)
+	return clampf(average_interval + jitter * 2.0, 0.06, 0.25)
 
 func latest() -> Dictionary:
 	return samples[-1] if not samples.is_empty() else {"position": Vector3.ZERO, "rotation": Vector3.ZERO}

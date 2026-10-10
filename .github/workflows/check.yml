@@ -133,7 +133,7 @@ jobs:
 
       - name: Detect physical Web template
         id: physics
-        run: node -e 'const fs = require("node:fs"); const m = JSON.parse(fs.readFileSync("engine/manifest.json")); fs.appendFileSync(process.env.GITHUB_OUTPUT, "enabled=" + Boolean(m.physics_3d) + "\nwebsocket=" + Boolean(m.websocket) + "\n");'
+        run: node -e 'const fs = require("node:fs"); const m = JSON.parse(fs.readFileSync("engine/manifest.json")); fs.appendFileSync(process.env.GITHUB_OUTPUT, "enabled=" + Boolean(m.physics_3d) + "\nwebsocket=" + Boolean(m.websocket) + "\nwebrtc=" + Boolean(m.webrtc) + "\n");'
 
       - name: Verify exported physics in Chromium
         if: steps.physics.outputs.enabled == 'true'
@@ -142,7 +142,7 @@ jobs:
           node scripts/test-web-physics.mjs
           node scripts/test-multiplayer.mjs --web
 
-      - name: Verify browser multiplayer over WebSocket
+      - name: Verify browser multiplayer over WebSocket and the WebRTC direct link
         if: steps.physics.outputs.websocket == 'true'
         run: node scripts/test-multiplayer.mjs --web --socket
 

@@ -99,3 +99,48 @@ test('socket errors report rate limits and closed rooms', async () => {
   assert.equal(error.id, 4);
   assert.equal(guestWs.closed, 4410);
 });
+
+test('direct-link setup is relayed between the host and a guest only', async () => {
+  const { room, sockets } = fakeRoom();
+  await wait(0);
+  const now = Date.now();
+  const h = room.room.add('Host', now, true);
+  const g = room.room.add('Guest', now);
+  const g2 = room.room.add('Other', now);
+  const hostWs = await connect(room, sockets, h.token);
+  const guestWs = await connect(room, sockets, g.token);
+  const otherWs = await connect(room, sockets, g2.token);
+  for (const ws of [hostWs, guestWs, otherWs]) ws.take();
+  const offer = { kind: 'offer', sdp: 'v=0', session: 7 };
+  await room.webSocketMessage(guestWs, JSON.stringify({ type: 'signal', to: h.player, data: offer }));
+  assert.deepEqual(hostWs.take('signal'), [{ type: 'signal', from: g.player, data: offer }]);
+  assert.equal(otherWs.take('signal').length, 0, 'other members never see the setup');
+  const answer = { kind: 'answer', sdp: 'v=0', session: 7 };
+  await room.webSocketMessage(hostWs, JSON.stringify({ type: 'signal', to: g.player, data: answer }));
+  assert.equal(guestWs.take('signal')[0].data.kind, 'answer');
+  // Guests cannot open links to each other, and strangers cannot signal.
+  await room.webSocketMessage(guestWs, JSON.stringify({ type: 'signal', to: g2.player, data: offer }));
+  assert.equal(otherWs.take('signal').length, 0);
+  const refused = guestWs.take('signal_error')[0];
+  assert.equal(refused.status, 404);
+  assert.equal(guestWs.closed, null, 'a refused relay keeps the room session open');
+  await room.webSocketMessage(guestWs, JSON.stringify({ type: 'signal', to: h.player, data: { sdp: 'x'.repeat(20000) } }));
+  assert.equal(guestWs.take('signal_error')[0].status, 400);
+  const stranger = new FakeSocket();
+  sockets.push(stranger);
+  await room.webSocketMessage(stranger, JSON.stringify({ type: 'signal', to: h.player, data: offer }));
+  assert.equal(hostWs.take('signal').length, 0);
+});
+
+test('direct-link setup is rate limited per member', async () => {
+  const { room, sockets } = fakeRoom();
+  await wait(0);
+  const now = Date.now();
+  const h = room.room.add('Host', now, true);
+  const g = room.room.add('Guest', now);
+  const guestWs = await connect(room, sockets, g.token);
+  await connect(room, sockets, h.token);
+  guestWs.take();
+  for (let i = 0; i < 130; i++) await room.webSocketMessage(guestWs, JSON.stringify({ type: 'signal', to: h.player, data: { kind: 'candidate', session: 1 } }));
+  assert.ok(guestWs.take('signal_error').some(m => m.status === 429));
+});

@@ -171,6 +171,18 @@ export class RoomState {
       if (SECTION.test(section) && Number.isSafeInteger(revision)) p.cold_revs[section] = revision;
     }
   }
+  // Direct-link setup (WebRTC offer/answer/candidates) is relayed between the
+  // host and a guest of this room only; the payload is opaque to the server.
+  signal(token, to, data, now) {
+    if (this.data.closed) throw new RoomError(410, 'Создатель вышел. Комната закрыта.');
+    const p = this.member(token);
+    this.rateLimit(p, 'signal', now, protocol.direct.signals_per_10s, 10000);
+    const target = typeof to === 'string' ? this.data.players[to] : undefined;
+    if (!target || target.id === p.id || (p.id !== this.data.host && target.id !== this.data.host)) throw new RoomError(404, 'Участник не найден.');
+    if (!data || typeof data !== 'object' || Array.isArray(data) || JSON.stringify(data).length > protocol.direct.max_signal_bytes) throw new RoomError(400, 'Некорректное сообщение.');
+    p.seen = now;
+    return { from: p.id, to: target.id };
+  }
   heartbeat(token, now, background = false) {
     if (this.data.closed) throw new RoomError(410, 'Создатель вышел. Комната закрыта.');
     const player = this.member(token);
