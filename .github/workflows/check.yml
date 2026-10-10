@@ -127,6 +127,7 @@ jobs:
         run: |
           node scripts/test-platform-web.mjs dist
           node scripts/test-platform-web.mjs dist/vk
+          node scripts/test-room-input-web.mjs
 
       - name: Detect physical Web template
         id: physics

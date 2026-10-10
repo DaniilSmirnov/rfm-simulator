@@ -36,3 +36,8 @@ test('node test groups include VK, browser viewport and multiplayer regressions'
   'tests/room-core.test.mjs','tests/room-session.test.mjs'])
   assert.ok(combined.includes(f),f);
 });
+test('every node unit test file is registered in a shard',async()=>{
+ const combined=new Set(Object.values(nodeSuites).flat(1).flat());
+ for(const file of (await readdir(here)).filter(f=>f.endsWith('.test.mjs')))
+  assert.ok(combined.has('tests/'+file),'tests/'+file+' is not in nodeSuites');
+});

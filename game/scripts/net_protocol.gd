@@ -36,9 +36,16 @@ static func max_message_bytes() -> int:
 static func name_input_length() -> int:
 	return int(spec.get("name_input_length", 24))
 
+# The Web template is built without the RegEx module, so the id is checked
+# against the alphabet character by character.
 static func valid_room_id(id: String) -> bool:
-	var pattern = RegEx.create_from_string(str(spec.get("room_id_pattern", "^[A-F0-9]{6}$")))
-	return pattern.search(id) != null
+	if id.length() != room_id_length():
+		return false
+	var alphabet = str(spec.get("room_id_alphabet", "0123456789ABCDEF"))
+	for character in id:
+		if not alphabet.contains(character):
+			return false
+	return true
 
 static func room_id_length() -> int:
 	return int(spec.get("room_id_length", 6))

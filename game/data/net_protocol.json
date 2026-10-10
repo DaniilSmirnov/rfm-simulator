@@ -4,6 +4,7 @@
   "max_players": 8,
   "room_id_pattern": "^[A-F0-9]{6}$",
   "room_id_length": 6,
+  "room_id_alphabet": "0123456789ABCDEF",
   "sync_interval": 0.1,
   "max_message_bytes": 65536,
   "name_input_length": 24,

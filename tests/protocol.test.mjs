@@ -17,6 +17,32 @@ test('room protocol file is the single source of client and server limits', asyn
   assert.match(exportPresets, /include_filter="data\/\*\.json"/, 'the protocol file ships in Web builds');
 });
 
+test('room id alphabet and pattern describe the same format', () => {
+  const pattern = new RegExp(protocol.room_id_pattern);
+  const alphabet = [...protocol.room_id_alphabet];
+  assert.ok(pattern.test(alphabet.slice(0, protocol.room_id_length).join('').padEnd(protocol.room_id_length, alphabet[0])));
+  for (let code = 32; code < 127; code++) {
+    const c = String.fromCharCode(code);
+    assert.equal(pattern.test(c.repeat(protocol.room_id_length)), alphabet.includes(c), 'character ' + c);
+  }
+  assert.equal(pattern.test('A'.repeat(protocol.room_id_length + 1)), false);
+});
+
+test('game scripts avoid engine modules missing from the Web template', async () => {
+  const custom = await read('engine/custom.py');
+  assert.match(custom, /modules_enabled_by_default = False/);
+  // Disabled modules parse natively but fail to compile in the exported game.
+  const disabled = {RegEx: 'regex', XMLParser: 'xml', ZIPReader: 'zip'};
+  const dir = new URL('../game/scripts/', import.meta.url);
+  for (const file of (await readdir(dir)).filter(f => f.endsWith('.gd'))) {
+    const text = (await readFile(new URL(file, dir), 'utf8')).replace(/#.*$/gm, '');
+    for (const [symbol, module] of Object.entries(disabled)) {
+      if (custom.includes(`module_${module}_enabled = True`)) continue;
+      assert.doesNotMatch(text, new RegExp(`\\b${symbol}\\b`), `${file} uses ${symbol} (module_${module} is disabled)`);
+    }
+  }
+});
+
 test('web scripts accept exactly the protocol room id format', async () => {
   const charClass = protocol.room_id_pattern.match(/\[[^\]]+\]\{\d+\}/)[0];
   for (const path of ['web/room-session.js', 'web/platform/vk.js']) {
