@@ -1,6 +1,10 @@
 extends "res://tests/harness.gd"
 const Stage = preload("res://scripts/stage.gd")
 const RallyProps = preload("res://scripts/props.gd")
+# Names and bounds of the parts baked into a car's (or hinge's) merged mesh.
+func baked(node: Node) -> Dictionary:
+	return node.get_meta("baked_parts", {}) if node != null else {}
+
 func _initialize() -> void:
 	call_deferred("run")
 func run() -> void:
@@ -26,7 +30,7 @@ func run() -> void:
 		game.room.set_process(false)
 	check(host.car_choice.item_count == 10 and host.stage_choice.item_count == 5, "menu offers ten cars and five stages")
 	check(host.car.get_meta("model_source", "") == "granta_detailed" and host.car.get_meta("variant", -1) == 0, "first vehicle uses standalone detailed Granta model")
-	check(host.car.get_node_or_null("BodyShellGranta") != null and host.car.get_node_or_null("TrunkHinge") != null, "detailed Granta preserves body and animated trunk")
+	check(baked(host.car).has("BodyShellGranta") and host.car.get_node_or_null("TrunkHinge") != null, "detailed Granta preserves body and animated trunk")
 	var original_granta_hinge = host.car.get_node("TrunkHinge")
 	RallyProps.update_player_trunk(host.car, true, [true, true, true, true, true], 1.0)
 	check(original_granta_hinge.rotation.x < -0.8, "detailed Granta trunk opens")
@@ -41,32 +45,28 @@ func run() -> void:
 	var camping_lid = host.car.get_node_or_null("TrunkHinge")
 	var imported_lid_names = ["BodyShellHatchback_Lid", "Camping_glass_Lid", "Camping_trim_Lid", "Camping_lights_Lid"]
 	var imported_hatch_complete = camping_lid != null
+	# The lid parts are baked into one mesh on the hinge; their bounds stay in its meta.
+	var lid_parts: Dictionary = baked(camping_lid) if camping_lid != null else {}
 	for lid_name in imported_lid_names:
-		var lid = camping_lid.get_node_or_null(lid_name) if camping_lid != null else null
-		imported_hatch_complete = imported_hatch_complete and lid is MeshInstance3D and lid.mesh.get_surface_count() > 0
-	check(imported_hatch_complete, "imported hatch moves rear body, glass, trim and lamps together")
-	var rear_hatch_only = imported_hatch_complete and camping_lid.position.z >= 1.19
-	if rear_hatch_only:
-		for lid_name in imported_lid_names:
-			var lid_mesh: MeshInstance3D = camping_lid.get_node(lid_name)
-			for surface_index in range(lid_mesh.mesh.get_surface_count()):
-				var vertices: PackedVector3Array = lid_mesh.mesh.surface_get_arrays(surface_index)[Mesh.ARRAY_VERTEX]
-				for vertex in vertices:
-					if vertex.z < 1.19:
-						rear_hatch_only = false
-						break
+		imported_hatch_complete = imported_hatch_complete and lid_parts.has(lid_name)
+	check(imported_hatch_complete and camping_lid.get_node_or_null("BakedLid") != null, "imported hatch moves rear body, glass, trim and lamps together")
+	var rear_hatch_only = imported_hatch_complete
+	for lid_name in lid_parts:
+		var box: AABB = lid_parts[lid_name]
+		if box.position.z + camping_lid.position.z < 1.19:
+			rear_hatch_only = false
 	check(rear_hatch_only, "2112 trunk lid contains only the rear hatch, never passenger cabin panels")
-	var boat_static = host.car.get_node_or_null("CarModelDetails/Camping_boat") != null
-	var boat_mesh = host.car.get_node_or_null("CarModelDetails/Camping_boat") as MeshInstance3D
-	check(boat_mesh != null and boat_mesh.transform.basis.z.dot(Vector3.FORWARD) > 0.99, "imported OBJ parts rotate 180 degrees to match game driving direction")
-	check(camping_lid != null and camping_lid.get_node_or_null("Camping_glass_Lid") != null, "rear glazing remains attached to the hatch after correcting forward axis")
-	check(boat_static and camping_lid.get_node_or_null("Camping_boat_Lid") == null, "inflatable roof boat remains fixed when trunk opens")
+	var body_parts = baked(host.car)
+	var boat_static = body_parts.has("Camping_boat")
+	check(body_parts.has("Camping_headlights") and body_parts.Camping_headlights.get_center().z < -1.0, "imported OBJ parts rotate 180 degrees to match game driving direction")
+	check(lid_parts.has("Camping_glass_Lid"), "rear glazing remains attached to the hatch after correcting forward axis")
+	check(boat_static and not lid_parts.has("Camping_boat_Lid"), "inflatable roof boat remains fixed when trunk opens")
 	var original_hatch_position = camping_lid.transform if camping_lid != null else Transform3D.IDENTITY
 	RallyProps.update_player_trunk(host.car, true, [true, true, true, true, true], 1.0)
 	check(camping_lid != null and camping_lid.rotation.x < -0.8 and host.car.get_node("TrunkBoxes").visible, "imported rear hatch opens and exposes stored cargo")
 	RallyProps.update_player_trunk(host.car, false, [true, true, true, true, true], 1.0)
 	check(camping_lid != null and absf(camping_lid.rotation.x) < 0.01, "imported rear hatch closes completely")
-	check(host.car.get_node_or_null("BodyShellHatchback") != null and host.car.get_node_or_null("RoofHatchback") != null, "2112 has dedicated body, short roof and sloped-glasshouse geometry")
+	check(baked(host.car).has("BodyShellHatchback") and host.car.get_node_or_null("RoofHatchback") != null, "2112 has dedicated body, short roof and sloped-glasshouse geometry")
 	host.car_choice.select(9)
 	host.car_choice.cycle(1)
 	check(host.selected_car == 0, "next arrow returns to first car")
@@ -111,11 +111,15 @@ func run() -> void:
 	check(host.room.peers.guest.car.get_meta("model") == "Лесной внедорожник", "peer model uses selected car instead of room slot")
 	guest.select_player_car(9)
 	host.room._update_peers([{"id": "sport_guest", "name": "Друг на Sport sedan", "slot": 1, "car_model": 9, "state": guest.room.local_state()}])
-	check(host.room.peers.sport_guest.car.get_meta("model") == "Спортивный седан" and host.room.peers.sport_guest.car.get_node_or_null("BodyShellSportSedan") != null, "friends receive dedicated Sport sedan geometry")
-	var body = guest.car.get_node("BodyShellSportSedan")
-	check(body.material_override.albedo_color.is_equal_approx(Color("c92530")), "Sport sedan body has requested red paint")
-	check(guest.car.get_node_or_null("SportGrille") != null, "sport sedan has a single unbranded grille")
-	check(guest.car.get_children().filter(func(n): return str(n.name).begins_with("SportExhaust")).size() == 4, "Sport sedan has four visible exhaust tips")
+	check(host.room.peers.sport_guest.car.get_meta("model") == "Спортивный седан" and baked(host.room.peers.sport_guest.car).has("BodyShellSportSedan"), "friends receive dedicated Sport sedan geometry")
+	var red = false
+	var body_mesh: Mesh = guest.car.get_node("Baked").mesh
+	for surface in range(body_mesh.get_surface_count()):
+		for colour in body_mesh.surface_get_arrays(surface)[Mesh.ARRAY_COLOR]:
+			red = red or Vector3(colour.r - 0.788, colour.g - 0.145, colour.b - 0.188).length() < 0.01
+	check(red, "Sport sedan body has requested red paint")
+	check(baked(guest.car).has("SportGrille"), "sport sedan has a single unbranded grille")
+	check(baked(guest.car).keys().filter(func(n): return str(n).begins_with("SportExhaust")).size() == 4, "Sport sedan has four visible exhaust tips")
 	host.stage.fell(0, Vector3.RIGHT)
 	host.stage.update_fallen(2)
 	guest.room.apply_world(host.room.world_state())

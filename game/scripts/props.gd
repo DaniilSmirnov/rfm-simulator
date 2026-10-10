@@ -2,6 +2,8 @@ extends RefCounted
 class_name RallyProps
 const CampingHatchbackAsset = preload("res://scripts/camping_hatchback_asset.gd")
 const CarParts = preload("res://scripts/car_parts.gd")
+const MeshMerge = preload("res://scripts/mesh_merge.gd")
+const BlockText = preload("res://scripts/block_text.gd")
 const FOOD_PORTIONS = 10
 const CARGO_KINDS = ["table", "chairs", "grill", "firewood", "cauldron", "shovel"]
 const MUSHROOM_TEXTURES = {
@@ -168,6 +170,9 @@ static func player_avatar(variant: int = 0) -> Node3D:
 	arm.add_child(food)
 	food.position = Vector3(0, -0.5, -0.09)
 	food.hide()
+	# Imported body parts carry one surface per colour: one draw call each.
+	for part in root.find_children("Geometry*", "MeshInstance3D", true, false):
+		MeshMerge.flatten(part)
 	return root
 
 
@@ -468,22 +473,34 @@ static func player_car_sport_sedan() -> Node3D:
 	box(root, Vector3(0, 0.71, 2.385), Vector3(0.43, 0.13, 0.025), Color("e4e4dd"))
 	return add_player_trunk(root, 9)
 
-static func player_car(variant: int = 0) -> Node3D:
+# `bake` folds the static bodywork into one mesh (bake_car); pass false to
+# decorate the car first and bake it afterwards (judges_car).
+static func player_car(variant: int = 0, bake: bool = true) -> Node3D:
 	variant = posmod(variant, PLAYER_MODELS.size())
 	var p: Dictionary = PLAYER_MODELS[variant]
+	var car: Node3D = null
 	match str(p.model):
 		"granta":
-			return load("res://scripts/granta_model.gd").build()
+			car = load("res://scripts/granta_model.gd").build()
 		"niva":
-			var imported = load("res://scripts/niva_asset.gd").build()
-			if imported != null:
-				return imported
-			# Preserve a usable car while an asset import is incomplete.
+			# A missing import falls back to the procedural body below.
+			car = load("res://scripts/niva_asset.gd").build()
 		"camping_hatchback":
-			return player_car_camping_hatchback()
+			car = player_car_camping_hatchback()
 		"sport_sedan":
-			return player_car_sport_sedan()
-	return player_car_shell(variant)
+			car = player_car_sport_sedan()
+	if car == null:
+		car = player_car_shell(variant)
+	return bake_car(car, "player:%d" % variant) if bake else car
+
+# One mesh for the static body and one for the trunk lid; wheels, cargo and
+# lights that flash stay separate. Identical cars share the baked meshes.
+static func bake_car(car: Node3D, cache_key: String) -> Node3D:
+	MeshMerge.bake(car, cache_key)
+	var hinge = car.get_node_or_null("TrunkHinge")
+	if hinge != null:
+		MeshMerge.bake(hinge, cache_key + ":lid", [], "BakedLid")
+	return car
 
 # The generic faceted car of cars.json, built by the shared car_body.gd.
 static func player_car_shell(variant: int) -> Node3D:
@@ -578,33 +595,7 @@ static var RALLY_MODELS: Array = RallyCarModel.models
 
 # Compact block lettering uses only triangles, including on minimal Web templates.
 static func flag_wordmark(text: String, pixel: float) -> ArrayMesh:
-	var glyphs = {
-		"R": ["11110", "10001", "10001", "11110", "10100", "10010", "10001"],
-		"A": ["01110", "10001", "10001", "11111", "10001", "10001", "10001"],
-		"L": ["10000", "10000", "10000", "10000", "10000", "10000", "11111"],
-		"Y": ["10001", "10001", "01010", "00100", "00100", "00100", "00100"],
-		"F": ["11111", "10000", "10000", "11110", "10000", "10000", "10000"],
-		"N": ["10001", "11001", "11001", "10101", "10011", "10011", "10001"],
-		"M": ["10001", "11011", "10101", "10101", "10001", "10001", "10001"],
-		"P": ["11110", "10001", "10001", "11110", "10000", "10000", "10000"],
-		"S": ["01111", "10000", "10000", "01110", "00001", "00001", "11110"]
-	}
-	var vertices = PackedVector3Array()
-	var width = float(text.length() * 6 - 1)
-	for i in range(text.length()):
-		var rows: Array = glyphs.get(text.substr(i, 1), [])
-		for row in range(rows.size()):
-			for col in range(5):
-				if rows[row].substr(col, 1) != "1":
-					continue
-				var x = (i * 6 + col - width * 0.5) * pixel
-				var y = (3.5 - row) * pixel
-				var a = Vector3(x, y, 0)
-				var b = Vector3(x + pixel, y, 0)
-				var c = Vector3(x + pixel, y - pixel, 0)
-				var d = Vector3(x, y - pixel, 0)
-				vertices.append_array(PackedVector3Array([a, b, c, a, c, d]))
-	return panel_mesh(vertices)
+	return panel_mesh(BlockText.triangles(text, pixel))
 
 static func rally_fans_map_flag(parent: Node3D, pos: Vector3, yaw: float, index: int = 0) -> Node3D:
 	var root = Node3D.new()
@@ -668,7 +659,8 @@ static func label_3d(parent: Node3D, pos: Vector3, text: String, size: int, pixe
 	return label
 
 static func rally_car(variant: int, number_override: int = -1, sponsor_override: String = "") -> Node3D:
-	return RallyCarModel.build(variant, number_override, sponsor_override)
+	var car = RallyCarModel.build(variant, number_override, sponsor_override)
+	return bake_car(car, "rally:%d:%d:%s" % [car.get_meta("variant"), car.get_meta("number"), sponsor_override])
 
 static func course_car(role: String, zero_index: int = 0) -> Node3D:
 	if role == "zero":
@@ -686,7 +678,7 @@ static func course_car(role: String, zero_index: int = 0) -> Node3D:
 		light.material_override.emission_enabled = true
 		light.material_override.emission = light.material_override.albedo_color
 		light.material_override.emission_energy_multiplier = 2.5
-	return node
+	return bake_car(node, "police")
 
 static func update_course_lights(node: Node3D, clock: float) -> void:
 	var blue = node.get_node_or_null("BeaconBlue")
@@ -876,58 +868,13 @@ static func cargo_point(profile: Dictionary, index: int) -> Vector3:
 		return Vector3((index - 1) * 0.39, profile.floor + 0.18, profile.rear - 0.30)
 	return Vector3(-0.30 if index == 3 else 0.30, profile.floor + 0.43, profile.rear - 0.33)
 
+# The camp grill lives in grill_model.gd; these keep the public entry points.
 static func grill(parent: Node3D) -> Node3D:
-	var root = Node3D.new()
-	root.name = "PicnicGrill"
-	root.set_meta("servings", FOOD_PORTIONS)
-	parent.add_child(root)
-	box(root, Vector3(0, 0.65, 0), Vector3(1.05, 0.32, 0.55), Color("393d37"))
-	for x in [-0.43, 0.43]:
-		for z in [-0.2, 0.2]:
-			box(root, Vector3(x, 0.3, z), Vector3(0.05, 0.6, 0.05), Color("555c52"))
-	box(root, Vector3(0, 0.83, 0), Vector3(0.9, 0.03, 0.4), Color("d9612e"))
-	for i in range(5):
-		box(root, Vector3(-0.36 + i * 0.18, 0.87, 0), Vector3(0.02, 0.02, 0.8), Color("d9cdb4"))
-	# Ten visible parallel skewers. Each skewer is a removable child so all
-	# copies of a grill can show its exact remaining serving count.
-	for i in range(FOOD_PORTIONS):
-		var skewer_node = Node3D.new()
-		skewer_node.name = "FoodSkewer_%02d" % i
-		root.add_child(skewer_node)
-		var x = -0.42 + i * (0.84 / (FOOD_PORTIONS - 1))
-		box(skewer_node, Vector3(x, 0.93, 0), Vector3(0.012, 0.018, 0.72), Color("b9b3a3"))
-		box(skewer_node, Vector3(x, 0.95, -0.39), Vector3(0.018, 0.022, 0.16), Color("a57949"))
-		var meat_group = Node3D.new()
-		meat_group.name = "MeatPieces"
-		skewer_node.add_child(meat_group)
-		for z in [-0.22, 0, 0.22]:
-			var meat = box(meat_group, Vector3(x, 0.99, z), Vector3(0.048, 0.055, 0.075), Color("99502e").lightened(float(i % 3) * 0.035))
-			meat.rotation.y = float(i % 2) * 0.25
-		var mushroom_group = Node3D.new()
-		mushroom_group.name = "MushroomFood"
-		skewer_node.add_child(mushroom_group)
-		for z in [-0.2, 0.0, 0.2]:
-			cylinder(mushroom_group, Vector3(x, 0.96, z), 0.015, 0.012, 0.05, Color("d3c49b"), 5)
-			faceted(mushroom_group, Vector3(x, 1.0, z), Vector3(0.055, 0.035, 0.07), Color("956337"), 12, 6).name = "MushroomCap_%s" % str(z)
-		mushroom_group.hide()
-	return root
+	return load("res://scripts/grill_model.gd").build(parent)
 
 static func set_grill_servings(grill_node: Node3D, servings: int) -> void:
-	if grill_node == null:
-		return
-	var count = clampi(servings, 0, FOOD_PORTIONS)
-	var mushrooms = clampi(int(grill_node.get_meta("mushrooms", 0)), 0, FOOD_PORTIONS - count)
-	var state = Vector2i(count, mushrooms)
-	if grill_node.get_meta("serving_visual_state", Vector2i(-1, -1)) == state:
-		return
-	grill_node.set_meta("serving_visual_state", state)
-	grill_node.set_meta("servings", count)
-	for i in range(FOOD_PORTIONS):
-		var skewer_node = grill_node.get_node_or_null("FoodSkewer_%02d" % i)
-		if skewer_node != null:
-			skewer_node.visible = i < count + mushrooms
-			skewer_node.get_node("MeatPieces").visible = i < count
-			skewer_node.get_node("MushroomFood").visible = i >= count and i < count + mushrooms
+	load("res://scripts/grill_model.gd").set_servings(grill_node, servings)
+
 static func rope(parent: Node3D, a: Vector3, b: Vector3) -> MeshInstance3D:
 	var n = cylinder(parent, (a + b) / 2, 0.025, 0.025, a.distance_to(b), Color("e7b44c"), 5)
 	n.quaternion = Quaternion(Vector3.UP, (b - a).normalized())
@@ -950,6 +897,7 @@ static func course_official(role: String, variant: int = 0) -> Node3D:
 		for face in [-1.0, 1.0]:
 			box(vest_root, Vector3(0, y, face * 0.278), Vector3(0.62, 0.045, 0.014), Color("e5ece8"))
 	label_3d(vest_root, Vector3(0, 1.27, 0.265), "MARSHAL" if role == "marshal" else "СУДЬЯ", 36, 0.0018, Color("222c31"))
+	MeshMerge.bake(vest_root, "vest:" + role)
 	for side in ["LeftArm", "RightArm"]:
 		var arm = avatar.get_node(side)
 		arm.rotation.x = 0.08
@@ -965,7 +913,7 @@ static func course_official(role: String, variant: int = 0) -> Node3D:
 	return avatar
 
 static func judges_car() -> Node3D:
-	var car = player_car(6)
+	var car = player_car(6, false)
 	car.name = "JudgesCar"
 	car.set_meta("role", "judge_car")
 	car.set_meta("model", "Судейская машина")
@@ -981,7 +929,7 @@ static func judges_car() -> Node3D:
 	beacon.material_override.emission_enabled = true
 	beacon.material_override.emission = Color("ffaf26")
 	beacon.material_override.emission_energy_multiplier = 0.6
-	return car
+	return bake_car(car, "judges")
 
 # Opening bodywork is cut from the existing model, keeping its original shape.
 static func clip_panel(poly: Array, normal: Vector3, limit: float, inside: bool) -> Array:
