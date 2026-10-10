@@ -1,11 +1,6 @@
-extends SceneTree
+extends "res://tests/harness.gd"
 
-var failures = 0
 
-func check(ok: bool, description: String) -> void:
-	print(("PASS: " if ok else "FAIL: ") + description)
-	if not ok:
-		failures += 1
 
 func _initialize() -> void:
 	call_deferred("run")
@@ -74,4 +69,4 @@ func run() -> void:
 	game.queue_free()
 	await process_frame
 	print("VK INVITE UI RESULT: %d failures" % failures)
-	quit(1 if failures else 0)
+	finish()

@@ -1,10 +1,6 @@
-extends SceneTree
+extends "res://tests/harness.gd"
 const Predictor = preload("res://scripts/drive_prediction.gd")
 const Stage = preload("res://scripts/stage.gd")
-var failures = 0
-func check(ok: bool, title: String) -> void:
-	print(("PASS: " if ok else "FAIL: ") + title)
-	if not ok: failures += 1
 func _initialize() -> void:
 	call_deferred("run")
 func run() -> void:
@@ -45,7 +41,7 @@ func run() -> void:
 	client.reconcile(host.snapshot(), stage, 0)
 	check(client.pending.is_empty(), "budget-delayed commands eventually drain")
 	# A missing packet and an older reply are independent of simulation order.
-	for model in range(10):
+	for model in range(RallyProps.PLAYER_MODELS.size()):
 		client.reset(stage.at(100), 0)
 		host.reset(stage.at(100), 0)
 		for i in range(100):
@@ -137,4 +133,4 @@ func run() -> void:
 	village.free()
 	stage.free()
 	print("DRIVE PREDICTION RESULT: %d failures" % failures)
-	quit(1 if failures else 0)
+	finish()

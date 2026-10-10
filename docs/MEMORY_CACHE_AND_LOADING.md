@@ -3,7 +3,7 @@
 Normal Web/VK and desktop clients open the menu without building the terrain,
 forest, stage objects, spectators or player car. Menu cards load the selected
 480×240 WebP image; they no longer allocate SubViewports or preview cameras.
-There are ten car and three stage images, generated from the actual game.
+There is one image per car and per stage (`car_N`, `stage_N`, `backdrop_N`), generated from the actual game.
 The menu background uses a separately captured 1280×720 panorama of the selected
 stage, scaled to cover desktop/mobile viewports. Only the selected image is held;
 it is released when play begins. It does not intercept input or appear over the

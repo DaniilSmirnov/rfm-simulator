@@ -1,12 +1,7 @@
-extends SceneTree
+extends "res://tests/harness.gd"
 
 const Room = preload("res://scripts/room.gd")
-var failures = 0
 
-func check(ok: bool, message: String) -> void:
-	print(("PASS: " if ok else "FAIL: ") + message)
-	if not ok:
-		failures += 1
 
 func _initialize() -> void:
 	call_deferred("run")
@@ -22,4 +17,4 @@ func run() -> void:
 	check(instance.room_endpoint("sync") == "https://rally-test.example/api/rooms/AB12EF/sync", "sync targets correct room")
 	instance.free()
 	print("ROOM_ORIGIN_UNIT_RESULT ", failures)
-	quit(1 if failures else 0)
+	finish()

@@ -1,11 +1,4 @@
-extends SceneTree
-var failures = 0
-func check(ok: bool, title: String) -> void:
-	if ok:
-		print("PASS: " + title)
-	else:
-		failures += 1
-		push_error(title)
+extends "res://tests/harness.gd"
 func _initialize() -> void:
 	call_deferred("run")
 func run() -> void:
@@ -14,11 +7,15 @@ func run() -> void:
 	await process_frame
 	game.set_process(false)
 	game.room.set_process(false)
-	for variant in range(3):
+	for variant in range(RallyStage.STAGES.size()):
 		game.select_stage(variant)
 		var crowd = game.spectators
-		check(crowd.groups.size() == (4 if variant == 2 else 8), "NPC camps populate stage %d" % variant)
-		check(crowd.people.size() == (8 if variant == 2 else 12), "NPC spectators populate stage %d" % variant)
+		# Two people at every clearing camp (canyon summits are reached on foot and
+		# have none) plus one at each of four roadside spots outside the village.
+		var camps = game.stage.clearings.size() - (game.stage.canyon.mesas.size() if game.stage.desert else 0)
+		var roadside = 0 if game.stage.provence else 4
+		check(crowd.groups.size() == camps + roadside, "NPC camps populate stage %d" % variant)
+		check(crowd.people.size() == camps * 2 + roadside, "NPC spectators populate stage %d" % variant)
 		var clear_road = true
 		var grounded = true
 		for group in crowd.groups:
@@ -62,4 +59,4 @@ func run() -> void:
 	game.queue_free()
 	await process_frame
 	print("NPC RESULT: %d failures" % failures)
-	quit(1 if failures else 0)
+	finish()

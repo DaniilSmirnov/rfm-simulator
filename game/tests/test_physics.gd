@@ -1,11 +1,6 @@
-extends SceneTree
+extends "res://tests/harness.gd"
 const Motion = preload("res://scripts/vehicle_motion.gd")
 const Stage = preload("res://scripts/stage.gd")
-var failures = 0
-func check(ok: bool, title: String) -> void:
-	print(("PASS: " if ok else "FAIL: ") + title)
-	if not ok:
-		failures += 1
 
 func traverse(fps: float) -> Dictionary:
 	var stage = Stage.new()
@@ -75,4 +70,4 @@ func run() -> void:
 	await scene._shutdown_audio()
 	scene.queue_free()
 	await process_frame
-	quit(1 if failures else 0)
+	finish()

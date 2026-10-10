@@ -1,11 +1,6 @@
-extends SceneTree
+extends "res://tests/harness.gd"
 const Motion = preload("res://scripts/vehicle_motion.gd")
 const Handling = preload("res://scripts/player_handling.gd")
-var failures = 0
-func check(ok: bool, title: String) -> void:
-	print(("PASS: " if ok else "FAIL: ") + title)
-	if not ok:
-		failures += 1
 func _initialize() -> void:
 	call_deferred("run")
 func stopping(grip: float) -> float:
@@ -48,7 +43,7 @@ func run() -> void:
 	check(motion.velocity.is_zero_approx() and is_zero_approx(yaw), "airborne tyres cannot accelerate or steer the car")
 	check(Handling.profile(3).rear_bias == 1 and Handling.profile(0).rear_bias == 0 and Handling.profile(2).rear_bias == 0.5, "fleet has rear, front and all-wheel traction profiles")
 	var stable = true
-	for variant in range(10):
+	for variant in range(RallyProps.PLAYER_MODELS.size()):
 		motion = Motion.new()
 		motion.velocity = Vector3(0, 0, -19)
 		yaw = 0
@@ -84,4 +79,4 @@ func run() -> void:
 	game.queue_free()
 	await process_frame
 	print("PLAYER HANDLING RESULT: %d failures" % failures)
-	quit(1 if failures else 0)
+	finish()

@@ -1,4 +1,4 @@
-extends SceneTree
+extends "res://tests/harness.gd"
 # Solid scenery (houses, walls, furniture, lamps) on the Provençal village stage.
 const Stage = preload("res://scripts/stage.gd")
 const Traffic = preload("res://scripts/rally_traffic.gd")
@@ -10,11 +10,6 @@ class ExhaustiveSolids:
 		if indexed_obstacle_count != obstacles.size():
 			index()
 		return range(obstacles.size())
-var failures = 0
-func check(ok: bool, title: String) -> void:
-	print(("PASS: " if ok else "FAIL: ") + title)
-	if not ok:
-		failures += 1
 func _initialize() -> void:
 	call_deferred("run")
 func run() -> void:
@@ -133,4 +128,4 @@ func run() -> void:
 	game.queue_free()
 	await process_frame
 	print("STAGE SOLIDS RESULT: %d failures" % failures)
-	quit(1 if failures else 0)
+	finish()

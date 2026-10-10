@@ -1,9 +1,4 @@
-extends SceneTree
-var failures = 0
-func check(ok: bool, title: String) -> void:
-	print(("PASS: " if ok else "FAIL: ") + title)
-	if not ok:
-		failures += 1
+extends "res://tests/harness.gd"
 func _initialize() -> void:
 	call_deferred("run")
 func finish_vehicle(game) -> void:
@@ -26,7 +21,7 @@ func run() -> void:
 	await process_frame
 	game.set_process(false)
 	game.room.set_process(false)
-	for variant in range(3):
+	for variant in range(RallyStage.STAGES.size()):
 		game.playing = false
 		game.select_stage(variant)
 		game.start_game()
@@ -134,4 +129,4 @@ func run() -> void:
 		g.queue_free()
 	await process_frame
 	print("COURSE SCHEDULE RESULT: %d failures" % failures)
-	quit(1 if failures else 0)
+	finish()

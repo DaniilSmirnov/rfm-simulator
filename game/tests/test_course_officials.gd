@@ -1,16 +1,9 @@
-extends SceneTree
+extends "res://tests/harness.gd"
 const Stage = preload("res://scripts/stage.gd")
-var failures = 0
-func check(ok: bool, caption: String) -> void:
-	if ok:
-		print("PASS: " + caption)
-	else:
-		failures += 1
-		push_error(caption)
 func _initialize() -> void:
 	call_deferred("run")
 func run() -> void:
-	for variant in range(3):
+	for variant in range(RallyStage.STAGES.size()):
 		var stage = Stage.new(variant)
 		root.add_child(stage)
 		stage.build()
@@ -44,4 +37,4 @@ func run() -> void:
 		stage.queue_free()
 		await process_frame
 	print("COURSE OFFICIALS RESULT: %d failures" % failures)
-	quit(1 if failures else 0)
+	finish()

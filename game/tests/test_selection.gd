@@ -1,15 +1,6 @@
-extends SceneTree
+extends "res://tests/harness.gd"
 const Stage = preload("res://scripts/stage.gd")
 const RallyProps = preload("res://scripts/props.gd")
-var checks = 0
-var failures = 0
-func check(ok: bool, title: String) -> void:
-	checks += 1
-	if not ok:
-		failures += 1
-		push_error(title)
-	else:
-		print("PASS: " + title)
 func _initialize() -> void:
 	call_deferred("run")
 func run() -> void:
@@ -148,4 +139,4 @@ func run() -> void:
 		game.queue_free()
 	await process_frame
 	print("SELECTION RESULT: %d checks, %d failures" % [checks, failures])
-	quit(1 if failures else 0)
+	finish()

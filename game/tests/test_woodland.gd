@@ -1,14 +1,9 @@
-extends SceneTree
+extends "res://tests/harness.gd"
 const Stage = preload("res://scripts/stage.gd")
 class UnboundedStage:
 	extends "res://scripts/stage.gd"
 	func _trail_near(_pos: Vector3, _trail: Dictionary, _padding: float) -> bool:
 		return true
-var failures = 0
-func check(ok: bool, title: String) -> void:
-	print(("PASS: " if ok else "FAIL: ") + title)
-	if not ok:
-		failures += 1
 func _initialize() -> void:
 	call_deferred("run")
 func run() -> void:
@@ -120,4 +115,4 @@ func run() -> void:
 			check(other.woodland_details.get("MushroomCaps", 0) == 0, "the dry Provençal stage has no forest mushrooms")
 		other.free()
 	print("WOODLAND RESULT: %d failures" % failures)
-	quit(1 if failures else 0)
+	finish()

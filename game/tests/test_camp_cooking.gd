@@ -1,10 +1,5 @@
-extends SceneTree
+extends "res://tests/harness.gd"
 const Props = preload("res://scripts/props.gd")
-var failures = 0
-func check(ok: bool, title: String) -> void:
-	print(("PASS: " if ok else "FAIL: ") + title)
-	if not ok:
-		failures += 1
 
 func run_command(host, guest, action: String, placement: Dictionary = {}) -> void:
 	host.room._apply_command({"player": "guest", "action": action, "state": guest.room.local_state(), "placement": placement})
@@ -133,5 +128,5 @@ func run() -> void:
 		game.queue_free()
 	await process_frame
 	print("CAMP COOKING RESULT: %d failures" % failures)
-	quit(1 if failures else 0)
+	finish()
 

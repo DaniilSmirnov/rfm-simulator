@@ -4,7 +4,7 @@ func _initialize():
 func run():
  var game=load("res://tools/cpu_profile_game.gd").new()
  var args = OS.get_cmdline_user_args()
- var requested_stage = clampi(int(args[0]), 0, 3) if not args.is_empty() else 0
+ var requested_stage = clampi(int(args[0]), 0, RallyStage.STAGES.size() - 1) if not args.is_empty() else 0
  game.defer_world = true
  root.add_child(game)
  await process_frame

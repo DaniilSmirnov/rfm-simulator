@@ -174,7 +174,8 @@ Godot 4.4.1 native headless, seed=20261008, 8 экипажей с интерва
 
 ```sh
 godot --headless --path game --script res://tools/profile_cpu.gd -- 0 racing
-# Индекс 1: зима, 2: деревня. Без racing сохраняется countdown-сценарий.
+# Индекс СУ — позиция в RallyStage.STAGES: 0 лес, 1 зима, 2 деревня, 3 каньон, 4 Финский лес.
+# Без racing сохраняется countdown-сценарий.
 ```
 
 | СУ и режим | До, среднее / p95, мс | После, среднее / p95, мс |
@@ -227,7 +228,7 @@ iPhone или VK WebView; результат на устройстве треб�
 
 ```sh
 godot --headless --path game --script res://tools/profile_cpu.gd -- 0 offroad
-# Можно сочетать с racing для добавления AI экипажей.
+# racing — только вторым аргументом (AI экипажи); offroad можно добавить после него: -- 0 racing offroad.
 ```
 
 Последовательные headless запуски до/после, countdown без экипажей, seed=20261008,

@@ -1,11 +1,6 @@
-extends SceneTree
+extends "res://tests/harness.gd"
 # Contract shared by every selectable player car, including imported OBJ cars.
 const Props = preload("res://scripts/props.gd")
-var failures := 0
-func check(ok: bool, description: String) -> void:
-	print(("PASS: " if ok else "FAIL: ") + description)
-	if not ok:
-		failures += 1
 
 func _initialize() -> void:
 	call_deferred("run")
@@ -61,4 +56,4 @@ func run() -> void:
 		car.queue_free()
 		await process_frame
 	print("VEHICLE CONTRACT RESULT: %d failures" % failures)
-	quit(1 if failures else 0)
+	finish()

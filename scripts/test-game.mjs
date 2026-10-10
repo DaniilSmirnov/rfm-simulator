@@ -65,9 +65,12 @@ if(!importOK) {
     a.endsWith('.mjs')?join(root,a):a),120_000);
   }
   for(const filename of selected){
+   const timeoutMs=slowTests.has(filename)?180_000:90_000;
+   // The shared harness fails the test itself a few seconds before the runner
+   // would kill it, so a script error reports FAIL instead of a bare timeout.
    execute('Godot '+filename,godot,
-    ['--headless','--path',project,'--script','res://tests/'+filename],
-    slowTests.has(filename)?180_000:90_000);
+    ['--headless','--path',project,'--script','res://tests/'+filename,'--','--watchdog='+(timeoutMs/1000-5)],
+    timeoutMs);
   }
  }
 }

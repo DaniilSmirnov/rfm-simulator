@@ -1,12 +1,8 @@
-extends SceneTree
+extends "res://tests/harness.gd"
 # «Виноградники · провансальская деревня»: route, road sections, the village,
 # the countryside patchwork, village life and collectible grapes and figs.
 const Stage = preload("res://scripts/stage.gd")
 const Layout = preload("res://scripts/village_layout.gd")
-var failures = 0
-func check(ok: bool, title: String) -> void:
-	print(("PASS: " if ok else "FAIL: ") + title)
-	if not ok: failures += 1
 func _initialize() -> void:
 	call_deferred("run")
 
@@ -182,4 +178,4 @@ func run() -> void:
 	game.queue_free()
 	await process_frame
 	print("PROVENCE VILLAGE RESULT: %d failures" % failures)
-	quit(1 if failures else 0)
+	finish()

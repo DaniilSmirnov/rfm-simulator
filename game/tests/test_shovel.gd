@@ -1,10 +1,6 @@
-extends SceneTree
+extends "res://tests/harness.gd"
 const Stage = preload("res://scripts/stage.gd")
 const Props = preload("res://scripts/props.gd")
-var failures = 0
-func check(ok: bool, label: String) -> void:
-	print(("PASS: " if ok else "FAIL: ") + label)
-	if not ok: failures += 1
 func _initialize() -> void: call_deferred("run")
 func run() -> void:
 	var stage = Stage.new(1)
@@ -121,4 +117,4 @@ func run() -> void:
 	guest.free()
 	node.free()
 	root.free()
-	quit(failures)
+	finish()

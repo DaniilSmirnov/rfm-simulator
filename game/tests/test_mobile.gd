@@ -1,13 +1,4 @@
-extends SceneTree
-var checks = 0
-var failures = 0
-func check(ok: bool, title: String) -> void:
-	checks += 1
-	if not ok:
-		failures += 1
-		push_error(title)
-	else:
-		print("PASS: " + title)
+extends "res://tests/harness.gd"
 func _initialize() -> void:
 	call_deferred("run")
 func button(c: Control, action: String) -> Vector2:
@@ -277,4 +268,4 @@ func run() -> void:
 	await game._shutdown_audio()
 	game.queue_free()
 	await process_frame
-	quit(1 if failures else 0)
+	finish()

@@ -1,14 +1,5 @@
-extends SceneTree
+extends "res://tests/harness.gd"
 const Buffer = preload("res://scripts/snapshot_motion.gd")
-var checks = 0
-var failures = 0
-func check(ok: bool, title: String) -> void:
-	checks += 1
-	if not ok:
-		failures += 1
-		push_error(title)
-	else:
-		print("PASS: " + title)
 func _initialize() -> void:
 	call_deferred("run")
 func run() -> void:
@@ -124,4 +115,4 @@ func run() -> void:
 	game.queue_free()
 	await process_frame
 	print("NETWORK MOTION RESULT: %d checks, %d failures" % [checks, failures])
-	quit(1 if failures else 0)
+	finish()

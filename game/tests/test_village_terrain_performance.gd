@@ -1,9 +1,5 @@
-extends SceneTree
+extends "res://tests/harness.gd"
 const Stage = preload('res://scripts/stage.gd')
-var failures = 0
-func check(ok: bool, title: String):
-	print(('PASS: ' if ok else 'FAIL: ') + title)
-	if not ok: failures += 1
 func brute(stage, p: Vector3) -> Dictionary:
 	var best = INF
 	var station = 0.0
@@ -77,4 +73,4 @@ func run():
 	check(tiles.size() > 80 and local_bounds and triangles > 51204 and triangles < 140000, 'refined roadside terrain stays within geometry budget and local culling bounds (%d triangles)' % triangles)
 	stage.free()
 	print('VILLAGE TERRAIN/PERFORMANCE RESULT: %d failures' % failures)
-	quit(1 if failures else 0)
+	finish()

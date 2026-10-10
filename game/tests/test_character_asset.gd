@@ -1,10 +1,5 @@
-extends SceneTree
+extends "res://tests/harness.gd"
 const Props = preload("res://scripts/props.gd")
-var failed = false
-func check(ok: bool, message: String) -> void:
-	if not ok:
-		failed = true
-		push_error(message)
 func triangles(node: Node) -> int:
 	var count = node.mesh.get_faces().size() / 3 if node is MeshInstance3D else 0
 	for child in node.get_children():
@@ -56,4 +51,4 @@ func _initialize() -> void:
 		Props.pose_carry(carrier, kind, false)
 		check(carrier.get_node("LeftArm").rotation.is_zero_approx(), "%s: left arm drops when nothing is carried" % kind)
 		carrier.free()
-	quit(1 if failed else 0)
+	finish()

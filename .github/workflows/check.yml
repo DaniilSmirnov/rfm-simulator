@@ -9,9 +9,11 @@ on:
 permissions:
   contents: read
 
+# A newer push to the same pull request replaces the older run. Runs on main
+# are never cancelled: every merged commit gets a complete result.
 concurrency:
-  group: game-web-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: game-web-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   tests-and-visuals:
@@ -25,6 +27,8 @@ jobs:
     env:
       WRANGLER_SEND_METRICS: "false"
       LIBGL_ALWAYS_SOFTWARE: "true"
+      # Downloaded and verified by scripts/godot.mjs during the test shard.
+      GODOT: .cache/godot/Godot_v4.4.1-stable_linux.x86_64
     steps:
       - uses: actions/checkout@v4
         with:
@@ -38,29 +42,30 @@ jobs:
         run: node scripts/test-game.mjs --shard=${{ matrix.shard }}
 
       - name: Render desktop and mobile lobby
-        if: matrix.shard == 'world'
-        run: xvfb-run -a .cache/godot/Godot_v4.4.1-stable_linux.x86_64 --path game --script res://tests/lobby_preview.gd
+        # Previews are taken even when a test failed: they help diagnose it.
+        if: matrix.shard == 'world' && !cancelled()
+        run: xvfb-run -a $GODOT --path game --script res://tests/lobby_preview.gd
       - name: Render lightweight menu and staged loading
-        if: matrix.shard == 'world'
-        run: xvfb-run -a .cache/godot/Godot_v4.4.1-stable_linux.x86_64 --path game --script res://tests/memory_preview.gd
+        if: matrix.shard == 'world' && !cancelled()
+        run: xvfb-run -a $GODOT --path game --script res://tests/memory_preview.gd
       - name: Render text flag faces
-        if: matrix.shard == 'world'
-        run: xvfb-run -a .cache/godot/Godot_v4.4.1-stable_linux.x86_64 --path game --rendering-method gl_compatibility --script res://tests/flag_preview.gd
+        if: matrix.shard == 'world' && !cancelled()
+        run: xvfb-run -a $GODOT --path game --rendering-method gl_compatibility --script res://tests/flag_preview.gd
       - name: Render imported reference-style characters
-        if: matrix.shard == 'world'
-        run: xvfb-run -a .cache/godot/Godot_v4.4.1-stable_linux.x86_64 --path game --rendering-method gl_compatibility --script res://tests/character_preview.gd
+        if: matrix.shard == 'world' && !cancelled()
+        run: xvfb-run -a $GODOT --path game --rendering-method gl_compatibility --script res://tests/character_preview.gd
       - name: Render cooking stages
-        if: matrix.shard == 'world'
-        run: xvfb-run -a .cache/godot/Godot_v4.4.1-stable_linux.x86_64 --path game --rendering-method gl_compatibility --script res://tests/cooking_preview.gd
+        if: matrix.shard == 'world' && !cancelled()
+        run: xvfb-run -a $GODOT --path game --rendering-method gl_compatibility --script res://tests/cooking_preview.gd
       - name: Render landscape mobile controls
-        if: matrix.shard == 'world'
-        run: xvfb-run -a .cache/godot/Godot_v4.4.1-stable_linux.x86_64 --path game --rendering-method gl_compatibility --script res://tests/mobile_preview.gd
+        if: matrix.shard == 'world' && !cancelled()
+        run: xvfb-run -a $GODOT --path game --rendering-method gl_compatibility --script res://tests/mobile_preview.gd
       - name: Render vineyard and village reference views
-        if: matrix.shard == 'world'
-        run: xvfb-run -a .cache/godot/Godot_v4.4.1-stable_linux.x86_64 --path game --rendering-method gl_compatibility --script res://tests/city_preview.gd
+        if: matrix.shard == 'world' && !cancelled()
+        run: xvfb-run -a $GODOT --path game --rendering-method gl_compatibility --script res://tests/city_preview.gd
       - name: Render mushroom textures and verify color inversion
-        if: matrix.shard == 'world'
-        run: xvfb-run -a .cache/godot/Godot_v4.4.1-stable_linux.x86_64 --path game --rendering-method gl_compatibility --script res://tests/mushroom_preview.gd
+        if: matrix.shard == 'world' && !cancelled()
+        run: xvfb-run -a $GODOT --path game --rendering-method gl_compatibility --script res://tests/mushroom_preview.gd
 
       - uses: actions/upload-artifact@v4
         if: always()

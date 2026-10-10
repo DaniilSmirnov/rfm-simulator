@@ -1,9 +1,4 @@
-extends SceneTree
-var failures = 0
-func check(value: bool, message: String) -> void:
-	if not value:
-		failures += 1
-		push_error(message)
+extends "res://tests/harness.gd"
 func _initialize() -> void:
 	call_deferred("run")
 func run() -> void:
@@ -135,4 +130,4 @@ func run() -> void:
 	game.queue_free()
 	await process_frame
 	print("LOBBY_UI failures=", failures)
-	quit(1 if failures else 0)
+	finish()

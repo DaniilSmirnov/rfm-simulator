@@ -1,10 +1,5 @@
-extends SceneTree
-var failures = 0
+extends "res://tests/harness.gd"
 var frames = 0
-func check(ok: bool, message: String) -> void:
-	if not ok:
-		failures += 1
-		push_error(message)
 func _initialize() -> void:
 	call_deferred("run")
 func run() -> void:
@@ -90,4 +85,4 @@ func run() -> void:
 	await guest._shutdown_audio()
 	guest.free()
 	print("WORLD_LOADING frames=", frames, " failures=", failures)
-	quit(1 if failures else 0)
+	finish()

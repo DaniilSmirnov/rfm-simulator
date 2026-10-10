@@ -1,10 +1,5 @@
-extends SceneTree
+extends "res://tests/harness.gd"
 const Budget = preload("res://scripts/navigation_budget.gd")
-var failures = 0
-func check(ok: bool, label: String) -> void:
-	if not ok:
-		failures += 1
-		push_error(label)
 func _initialize():
 	var counts: Array = []
 	for fps in [24, 60, 144]:
@@ -25,4 +20,4 @@ func _initialize():
 		counts.append(admitted)
 	check(counts.max() - counts.min() <= 1, "same planning work across FPS")
 	print("NAVIGATION BUDGET RESULT: failures=", failures, " admitted=", counts)
-	quit(1 if failures else 0)
+	finish()

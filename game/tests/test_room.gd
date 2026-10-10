@@ -1,13 +1,4 @@
-extends SceneTree
-var checks = 0
-var failures = 0
-func check(ok: bool, name: String) -> void:
-	checks += 1
-	if not ok:
-		failures += 1
-		push_error(name)
-	else:
-		print("PASS: " + name)
+extends "res://tests/harness.gd"
 func _initialize() -> void:
 	call_deferred("run")
 func run() -> void:
@@ -167,4 +158,4 @@ func run() -> void:
 		await g._shutdown_audio()
 		g.queue_free()
 	await process_frame
-	quit(1 if failures else 0)
+	finish()

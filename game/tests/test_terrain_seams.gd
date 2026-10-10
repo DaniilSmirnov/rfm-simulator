@@ -1,15 +1,6 @@
-extends SceneTree
+extends "res://tests/harness.gd"
 
-var failures := 0
-var checks := 0
 
-func check(ok: bool, description: String) -> void:
-	checks += 1
-	if ok:
-		print("PASS: " + description)
-	else:
-		failures += 1
-		push_error("FAIL: " + description)
 
 func _initialize() -> void:
 	call_deferred("run")
@@ -41,4 +32,4 @@ func run() -> void:
 	check(mixed_boundaries > 0, "test covers actual fine/coarse boundaries")
 	stage.free()
 	print("TERRAIN SEAMS RESULT: %d checks, %d failures" % [checks, failures])
-	quit(1 if failures else 0)
+	finish()
