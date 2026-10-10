@@ -23,6 +23,7 @@ const samples = {};
 const tokenRoles = new Map();
 const controls = { host: {id:0,action:'pause'}, guest: {id:0,action:'pause'} };
 const latest = role => samples[role]?.at(-1);
+// Browser clients print through boot-diagnostics.js, which prefixes "[RFM startup] ".
 const logs = [];
 function observe(role, line) {
   if (line.includes('NETWORK_SAMPLE ')) {
@@ -156,7 +157,7 @@ try {
   }
   await client('host');await until(()=>latest('host')?.connected,'host connects',web?120000:60000);
   await client('guest',latest('host').room);await until(()=>latest('guest')?.active,'prediction handshake',web?120000:60000);
-  if(socketMode)await until(()=>['host','guest'].every(role=>logs.some(line=>line.startsWith(`[${role}] ROOM_SOCKET open`))),'both clients on WebSocket',web?60000:30000);
+  if(socketMode)await until(()=>['host','guest'].every(role=>logs.some(line=>line.startsWith(`[${role}] `)&&/(^|\] )ROOM_SOCKET open$/.test(line.slice(role.length+3)))),'both clients on WebSocket',web?60000:30000);
   command('host','resume');command('guest','forward');
   const start=latest('guest').pos;
   await until(()=>latest('guest').speed>1 && latest('guest').pending>0,'responsive prediction before acknowledgement',15000);
