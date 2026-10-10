@@ -88,19 +88,13 @@ func run() -> void:
 	summer.free()
 	var city = Stage.new(2)
 	city.build()
-	check(city.urban and city.clearings.size() == 4 and city.trees.is_empty(), "vineyard stage has four ordinary spectator spots without a separate parking entity")
-	check(city.city.village_houses >= 14 and city.get_node_or_null("VillageChurch") != null, "village has detailed houses and church")
-	check(city.city.thuja_count > 300, "village is enclosed by a dense thuja forest belt")
-	check(city.city.mixed_tree_count >= 900, "village outer forest has increased tree density")
-	# The start-side vines were intentionally replaced by lavender. Validate the
-	# current finish-side rows and one collectible grape bunch set per vine,
-	# instead of asserting the old two-sided vineyard population.
+	check(city.provence and city.clearings.size() == 4, "Provençal village stage has four spectator spots")
+	var counts: Dictionary = city.village.counts
+	check(int(counts.get("houses", 0)) >= 40 and city.get_node_or_null("VillageChurch") != null, "village has terraced stone houses and a church")
 	var grape_collectibles = city.collectibles.filter(func(item): return item.get("name", "") == "виноград")
-	check(city.city.vine_count > 1000 and grape_collectibles.size() == city.city.vine_count
-		and city.find_children("VineyardRow_18_*", "Node3D", true, false).is_empty()
-		and not city.find_children("VineyardRow_585_*", "Node3D", true, false).is_empty()
-		and city.city.lavender_count > 0,
-		"finish-side vineyards keep continuous rows and collectible grapes; start-side fields grow lavender")
+	check(int(counts.get("vines", 0)) > 500 and grape_collectibles.size() == int(counts.vines)
+		and int(counts.get("lavender", 0)) > 1000,
+		"lavender plateau before the village, collectible grapes in the vineyards after it")
 	city.free()
 	guest.select_player_car(2)
 	host.room.request_kind = "create"

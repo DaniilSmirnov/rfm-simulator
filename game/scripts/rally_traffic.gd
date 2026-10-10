@@ -46,7 +46,7 @@ static func recovery_speed(target: float, racer: Dictionary) -> float:
 
 static func line_limit(game, progress: float) -> float:
 	var station: float = game.stage.LENGTH - progress if game.course.pass_index == 2 else progress
-	return game.stage.road_width(station) * 0.5 + 1.4
+	return game.stage.road_width(station) * 0.5 + game.stage.shoulder(station)
 
 static func corner_line(game, racer: Dictionary, base: float) -> float:
 	if not racer.get("role", "racer") in ["racer", "zero"]: return base
@@ -104,7 +104,10 @@ static func plan(game: Node3D, racer: Dictionary) -> Dictionary:
 			closest = minf(closest, gap)
 	if blockers.is_empty():
 		return {"line": base, "speed": limit, "avoiding": false}
-	var candidates = [base, -2.95, 2.95, -1.5, 1.5]
+	# Passing lines never leave the usable width: on open roads this keeps the
+	# historic ±2.95 m, in narrow village streets it stays off the pavements.
+	var reach = maxf(1.0, line_limit(game, s) - 0.8)
+	var candidates = [base, -minf(2.95, reach), minf(2.95, reach), -minf(1.5, reach), minf(1.5, reach)]
 	var chosen = current
 	var best = INF
 	var distance = clampf(closest + 9, 12, 55) if closest != INF else 16.0
@@ -147,7 +150,7 @@ static func _clear_path(game, racer: Dictionary, target: float, distance: float)
 		point.y = stage.ground(point)
 		if not stage.rock_hit(previous, point, 0.95).is_empty() or stage.obstacle_hit(previous, point, 0.95, true) >= 0:
 			return false
-		if stage.urban and not stage.city.hit(previous, point, 0.95).is_empty():
+		if not stage.solids.hit(previous, point, 0.95).is_empty():
 			return false
 		previous = point
 	return true

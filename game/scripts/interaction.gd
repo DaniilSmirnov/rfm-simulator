@@ -26,8 +26,8 @@ func current() -> Dictionary:
 	if not game.cargo.at_open_trunk(game.chair_owner()):
 		offer(items, game.car.position + Vector3(0, 0.9, 0), 1.4, 4, "car", "Сесть в машину")
 	game.camp_cooking.offers(items, self)
-	if game.stage.urban and game.stage.city.bell != null:
-		offer(items, game.stage.city.bell.handle_position(), 0.35, 2.0, "church_bell", "Позвонить в колокол")
+	if game.stage.solids.bell != null:
+		offer(items, game.stage.solids.bell.handle_position(), 0.35, 2.0, "church_bell", "Позвонить в колокол")
 	if game.packing.active():
 		for item in game.packing.items():
 			if item.kind == "firewood" and game.camp_cooking.pot != null:
@@ -89,7 +89,7 @@ func select_target(items: Array) -> Dictionary:
 	# Terrain, trees, boulders and city buildings block reaching through scenery.
 	var start = game.camera.global_position
 	var end = start - game.camera.global_basis.z * maxf(0, target.depth - 0.35)
-	if game.stage.obstacle_hit(start, end, 0.05, true) >= 0 or not game.stage.rock_hit(start, end, 0.05).is_empty() or (game.stage.urban and not game.stage.city.hit(start, end, 0.05).is_empty()):
+	if game.stage.obstacle_hit(start, end, 0.05, true) >= 0 or not game.stage.rock_hit(start, end, 0.05).is_empty() or not game.stage.solids.hit(start, end, 0.05).is_empty():
 		return {}
 	for step in range(1, 9):
 		var point = start.lerp(end, step / 9.0)
@@ -104,7 +104,7 @@ func activate() -> void:
 	match target.action:
 		"church_bell":
 			if not game.room.submit("church_bell"):
-				game.stage.city.bell.pull(game.walker)
+				game.stage.solids.bell.pull(game.walker)
 		"mount_cauldron": game.camp_cooking.mount()
 		"mount_firewood": game.camp_cooking.light_under_pot()
 		"plov_cook": game.camp_cooking.start()

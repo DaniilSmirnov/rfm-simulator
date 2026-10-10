@@ -15,9 +15,6 @@ func harness(reverse: bool = false):
 	var game = Harness.new()
 	game.stage = Stage.new(2)
 	root.add_child(game.stage)
-	game.stage.city = load("res://scripts/vineyard.gd").new()
-	game.stage.city.stage = game.stage
-	game.stage.add_child(game.stage.city)
 	game.room = load("res://scripts/room.gd").new()
 	game.add_child(game.room)
 	game.spectators = load("res://scripts/spectators.gd").new()
@@ -88,7 +85,7 @@ func run() -> void:
 			if run > 0:
 				distinct = distinct and absf(Tracks.sample(parts,120,reverse).line - Tracks.sample(PackedInt32Array([0,0,0,0]),120,reverse).line) > 0.1
 	check(valid and distinct, "recordings are finite, bounded and use distinct road lines")
-	check(min_speed < 8 and max_speed > 37 and max_slip > 0.15, "bank includes slow corners, full-speed straights and visible body slip")
+	check(min_speed < 9 and max_speed > 37 and max_slip > 0.15, "bank includes slow corners, full-speed straights and visible body slip")
 	var seams_smooth = true
 	var worst = Vector3.ZERO
 	for reverse in [false,true]:

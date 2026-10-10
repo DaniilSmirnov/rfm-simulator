@@ -120,7 +120,7 @@ func valid_furniture_spot(spot: Vector3, kind: String, ignored_owner: String = "
 		return false
 	if stage.road_distance(spot) < 6.0:
 		return false
-	if stage.urban and not stage.city.hit(spot, spot, 0.8, false).is_empty():
+	if not stage.solids.hit(spot, spot, 0.8, false).is_empty():
 		return false
 	if not stage.rock_hit(spot, spot, 0.8, false).is_empty():
 		return false
@@ -613,15 +613,17 @@ func _build_environment() -> void:
 		env.ambient_light_energy = 0.4
 		env.fog_light_color = Color("aebdb4")
 		env.fog_density = 0.0014
-	elif stage.urban:
-		sky_mat.sky_top_color = Color("7e9eae")
-		sky_mat.sky_horizon_color = Color("d7d0bd")
-		sky_mat.ground_bottom_color = Color("727873")
-		sky_mat.ground_horizon_color = Color("d7d0bd")
-		env.ambient_light_color = Color("d2cfc2")
-		env.ambient_light_energy = 0.45
-		env.fog_light_color = Color("c4c5bc")
-		env.fog_density = 0.0015
+	elif stage.provence:
+		# Deep Provençal blue over a light, slightly dusty haze.
+		sky_mat.sky_top_color = Color("3d74bd")
+		sky_mat.sky_horizon_color = Color("cfdbe0")
+		sky_mat.ground_bottom_color = Color("6a6648")
+		sky_mat.ground_horizon_color = Color("cfdbe0")
+		env.ambient_light_color = Color("cdd1c6")
+		env.ambient_light_energy = 0.36
+		env.fog_light_color = Color("c4d0d6")
+		env.fog_density = 0.0005
+		env.fog_sky_affect = 0.25
 	world.environment = env
 	add_child(world)
 	var sun = DirectionalLight3D.new()
@@ -1163,12 +1165,10 @@ func _process(delta: float) -> void:
 	stage.snow.authoritative = not room.connected or room.is_host
 	if stage.winter:
 		stage.snow.update(delta)
-		if stage.alpine_life != null:
-			stage.alpine_life.update(delta, player_position())
 	stage.update_fallen(delta)
 	if stage.lakeland:
 		stage.water.update(delta)
-		stage.forest_life.update(delta, player_position())
+	stage.update_life(delta, player_position())
 	_update_sobriety(delta)
 	_update_intoxication(delta)
 	if in_car:
@@ -1282,19 +1282,18 @@ func _drive(delta: float) -> void:
 				impact_shake = minf(0.8, closing * 0.055)
 				rock_impact_timer = 0.4
 				toast("Удар о камень! Можно отъехать назад.")
-		if stage.urban:
-			var city_hit = stage.city.hit(previous, next, 0.85)
-			if not city_hit.is_empty():
-				next = city_hit.position
-				var impact_speed = vehicle_motion.velocity.length()
-				knock_city(city_hit, vehicle_motion.velocity)
-				var closing = vehicle_motion.rock_impulse(city_hit.normal, heading)
-				speed = vehicle_motion.velocity.dot(forward)
-				if closing > 1 and rock_impact_timer <= 0:
-					condition = maxf(0, condition - minf(20.0, closing * 0.85))
-					impact_shake = minf(0.8, impact_speed * 0.055)
-					rock_impact_timer = 0.4
-					toast("Столкновение с городским объектом!")
+		var solid_hit = stage.solids.hit(previous, next, 0.85)
+		if not solid_hit.is_empty():
+			next = solid_hit.position
+			var impact_speed = vehicle_motion.velocity.length()
+			knock_solid(solid_hit, vehicle_motion.velocity)
+			var closing = vehicle_motion.rock_impulse(solid_hit.normal, heading)
+			speed = vehicle_motion.velocity.dot(forward)
+			if closing > 1 and rock_impact_timer <= 0:
+				condition = maxf(0, condition - minf(20.0, closing * 0.85))
+				impact_shake = minf(0.8, impact_speed * 0.055)
+				rock_impact_timer = 0.4
+				toast("Столкновение с препятствием!")
 		var tree_index = stage.obstacle_hit(previous, next, 0.95, true)
 		var hit = tree_index >= 0
 		if hit and vehicle_motion.velocity.length() > 5 and not stage.fallen.has(tree_index):
@@ -1378,13 +1377,13 @@ func _walk_step(delta: float) -> void:
 	next.x = clampf(next.x, -185, 185)
 	next.z = clampf(next.z, -Stage.LENGTH + 5, 10)
 	var old_floor = walker.y - jump_height
-	var floor_height = stage.city.walking_floor(next, walker.y) if stage.urban and stage.city.has_method("walking_floor") else stage.walking_ground(next)
+	var floor_height = stage.solids.walking_floor(next, walker.y)
 	if stage.lakeland:
 		floor_height = stage.walk_floor(next, floor_height)
 		if stage.water.depth(next) > 0.2 and next.distance_to(walker) > 0.0001:
 			stage.water.wake(get_instance_id(), next, (next - walker) / maxf(delta, 0.001), minf(stage.water.depth(next), 1.0), delta, 0.35)
 	next.y = floor_height if jump_height <= 0 and floor_height >= old_floor - 0.45 else walker.y
-	var hit = (stage.desert and stage.canyon.walk_blocked(stage, next, walker.y)) or (stage.urban and not stage.city.hit(walker, next, 0.3).is_empty()) or not stage.rock_hit(walker, next, 0.3).is_empty() or stage.obstacle_hit(walker, next, 0.3, true) >= 0 or contact_blocked(walker, next, false)
+	var hit = (stage.desert and stage.canyon.walk_blocked(stage, next, walker.y)) or not stage.solids.hit(walker, next, 0.3).is_empty() or not stage.rock_hit(walker, next, 0.3).is_empty() or stage.obstacle_hit(walker, next, 0.3, true) >= 0 or contact_blocked(walker, next, false)
 	if not hit:
 		walker = next
 	else:
@@ -2019,12 +2018,12 @@ func _update_racers_step(delta: float) -> void:
 				if not driving:
 					RallyHandling.free_step(racer, stage, dt)
 				var contact = stage.rock_hit(previous, node.position, 0.85)
-				var city_contact = stage.city.hit(previous, node.position, 0.85) if stage.urban else {}
+				var city_contact = stage.solids.hit(previous, node.position, 0.85)
 				if not city_contact.is_empty() and (contact.is_empty() or previous.distance_squared_to(city_contact.position) < previous.distance_squared_to(contact.position)):
 					contact = city_contact
 				if not contact.is_empty():
 					if contact.has("kind"):
-						knock_city(contact, racer.motion.velocity)
+						knock_solid(contact, racer.motion.velocity)
 					node.position = contact.position
 					var impact: float = racer.motion.rock_impulse(contact.normal, node.rotation.y)
 					if impact > 9.0: racer.self_rejoin = false
@@ -2055,11 +2054,11 @@ func _update_racers_step(delta: float) -> void:
 				racer.state = "rock_bounce"
 				racer.age = 0.0
 				count_racer(racer)
-		if stage.urban and was_racing:
-			var city_hit = stage.city.hit(racer.previous, node.position, 0.85)
+		if was_racing:
+			var city_hit = stage.solids.hit(racer.previous, node.position, 0.85)
 			if not city_hit.is_empty():
 				var velocity: Vector3 = (node.position - racer.previous) / maxf(delta, 0.001)
-				knock_city(city_hit, velocity)
+				knock_solid(city_hit, velocity)
 				node.position = city_hit.position
 				racer.motion.velocity = velocity
 				racer.motion.velocity.y = 0
@@ -2152,8 +2151,8 @@ func _update_stones(delta: float) -> void:
 		for racer in racers:
 			if racer.state != "racing" or racer.get("drive_speed", 27.0) < 4 or not racer.motion.grounded or stones.size() >= 48:
 				continue
-			if stage.urban and stage.road_distance(racer.node.position) < Stage.WIDTH * 0.7:
-				continue # Clean asphalt does not throw a constant stream of gravel.
+			if not stage.loose_surface(racer.node.position):
+				continue # Clean asphalt and cobbles do not throw a constant stream of gravel.
 			var s: float = racer.s
 			var direction = race_direction(s)
 			var side = race_side(s) * (-1.0 if rng.randf() < 0.5 else 1.0)
@@ -2261,7 +2260,7 @@ func _update_hud() -> void:
 		cook_time >= 35, int(cook_time / 35 * 100) if cooking and cook_time < 35 else 0,
 		cooking, grill_servings, drink_time >= 0, drink_time >= 1.25, eat_time >= 0, eat_kind,
 		tow_target != null, int(tow_progress * 100), recovery_helpers, near_tow,
-		remaining_items, seated, stage.urban, bag.get("mushrooms", 0), bag.get("berries", 0),
+		remaining_items, seated, stage.provence, bag.get("mushrooms", 0), bag.get("berries", 0),
 		foraging.can_eat("berries"), pot, camp_cooking.phase if pot else "",
 		camp_cooking.servings if pot else 0,
 		int(camp_cooking.cook_time / camp_cooking.COOK_SECONDS * 100) if pot else 0,
@@ -2307,7 +2306,7 @@ func _update_hud() -> void:
 	elif near_tow:
 		hint_text += "   ·   Иди в машину, чтобы толкать · T — тяни пешком со стороны дороги"
 	if not in_car:
-		status_text += ("\nГРИБЫ %d · ЯГОДЫ/ВИНОГРАД %d" if stage.urban else "\nГРИБЫ %d · ЯГОДЫ %d") % [bag.mushrooms, bag.berries]
+		status_text += ("\nГРИБЫ %d · ЯГОДЫ/ВИНОГРАД %d" if stage.provence else "\nГРИБЫ %d · ЯГОДЫ %d") % [bag.mushrooms, bag.berries]
 		if not target.is_empty():
 			hint_text = "F — " + target.label + ("" if packing.active() else "   ·   Z/C/G/V — поставить предмет")
 		elif seated:
@@ -2420,7 +2419,9 @@ func _advance_gravel(stone: Dictionary, delta: float) -> bool:
 	var previous: Vector3 = stone.node.position
 	var next: Vector3 = previous + stone.velocity * delta + Vector3(0, -4.9 * delta * delta, 0)
 	stone.velocity.y -= 9.8 * delta
-	var contact = stage.city.hit(previous, next, 0.06, true, Vector3.ZERO) if stage.urban else stage.rock_hit(previous, next, 0.06)
+	var contact = stage.solids.hit(previous, next, 0.06, true, Vector3.ZERO)
+	if contact.is_empty():
+		contact = stage.rock_hit(previous, next, 0.06)
 	if not contact.is_empty():
 		next = contact.position
 		var normal: Vector3 = contact.normal
@@ -2486,13 +2487,13 @@ func count_racer(racer: Dictionary) -> void:
 	racer.counted = true
 	passed = mini(RALLY_CREW_LIMIT, passed + 1)
 
-func knock_city(contact: Dictionary, velocity: Vector3) -> void:
+func knock_solid(contact: Dictionary, velocity: Vector3) -> void:
 	if contact.get("kind", "") != "lamp" or velocity.length() <= 5:
 		return
 	if room.connected and not room.is_host:
 		lamp_requests[int(contact.id)] = velocity
 	else:
-		stage.city.knock_lamp(int(contact.id), velocity)
+		stage.solids.knock_lamp(int(contact.id), velocity)
 
 func sit_down() -> void:
 	var owner = chair_owner()

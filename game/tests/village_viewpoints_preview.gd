@@ -23,12 +23,10 @@ func run() -> void:
 	var church = game.stage.get_node("VillageChurch")
 	await shot(game.camera, church.transform * Vector3(35, 24, -35), church.transform * Vector3(0, 15, -8), "church")
 	await shot(game.camera, church.transform * Vector3(0, 1.82, -6.5), church.transform * Vector3(0, 2, 9), "nave")
-	await shot(game.camera, church.transform * Vector3(-1, 25.82, -11.1), game.stage.at(382) + Vector3.UP * 2, "tower-view")
-	var view = game.stage.city.viewpoints[0]
+	await shot(game.camera, church.transform * Vector3(-1, 25.82, -11.1), game.stage.village.square.center + Vector3.UP * 14, "tower-view")
+	var view = game.stage.solids.viewpoints[1]
 	await shot(game.camera, view.pose * Vector3(12, 10, -13), view.pose * Vector3(0, 3, 0), "house")
-	await shot(game.camera, view.pose * Vector3(2.2, 7.82, -3.2), game.stage.at(378) + Vector3.UP, "roof-view")
-	view = game.stage.city.viewpoints[1]
-	await shot(game.camera, view.pose * Vector3(2.2, 7.82, -3.2), game.stage.at(494) + Vector3.UP, "second-roof-view")
+	await shot(game.camera, view.pose * Vector3(2.2, 7.82, -3.2), game.stage.at(372) + Vector3.UP * 14, "roof-view")
 	await game._shutdown_audio()
 	game.queue_free()
 	await process_frame

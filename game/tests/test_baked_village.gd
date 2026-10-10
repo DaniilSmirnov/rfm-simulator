@@ -14,6 +14,8 @@ func _initialize() -> void:
 func render_signature(stage: Node3D) -> Array:
 	var result = []
 	for node in stage.find_children("*", "MultiMeshInstance3D", true, false):
+		if not node.has_meta("baked_instances"):
+			continue # local village life (bees) is rebuilt on load, not baked
 		if DisplayServer.get_name() != "headless":
 			var actual = node.multimesh.buffer
 			var expected = node.get_meta("baked_instances")
@@ -44,30 +46,25 @@ func run() -> void:
 	check(baked.loaded_baked, "village uses prepared scene")
 	check(render_signature(generated) == render_signature(baked), "terrain, spatial blocks and every MultiMesh transform survive serialization")
 	check(generated.collectibles == baked.collectibles and generated.trees == baked.trees and generated.rocks.size() == baked.rocks.size(), "deterministic collectible/tree/rock identities survive loading")
-	check(baked.trees.size() > 0 and baked.detail_tree_visuals.size() == baked.trees.size(), "near village forest and thuja have collision and falling visuals")
-	for id in [0, baked.detail_tree_groups.mixed[0]]:
+	check(baked.trees.size() > 0 and baked.detail_tree_visuals.size() == baked.trees.size(), "olives, cypresses, oaks and pines have collision and falling visuals")
+	for id in [0, baked.detail_tree_groups.Cypress[0]]:
 		var tree: Vector3 = baked.trees[id]
 		check(baked.obstacle_hit(tree + Vector3(-2, 0, 0), tree + Vector3(2, 0, 0), 0.85) >= 0, "loaded village tree blocks swept car contact")
 		check(baked.fell(id, Vector3.RIGHT), "loaded village tree can be knocked down")
 		baked.update_fallen(1.3)
 		check(baked.fallen[id].age == 1.3, "all loaded tree parts accept falling animation")
-	var stones = baked.rocks.filter(func(rock): return rock.get("village_stone", false))
-	check(not stones.is_empty(), "visible village stones are registered as collision obstacles")
-	if not stones.is_empty():
-		var stone: Dictionary = stones[0]
-		var p: Vector3 = stone.pos + Vector3.UP * stone.height * 0.5
-		check(not baked.rock_hit(p - Vector3(2, 0, 0), p + Vector3(2, 0, 0), 0.85, false).is_empty(), "loaded village stone blocks swept car contact")
-		p.y = baked.ground(p) + 0.06
-		check(not baked.rock_hit(p - Vector3(2, 0, 0), p + Vector3(2, 0, 0), 0.85, false).is_empty(), "tyres reach village stones below the car origin")
-	check(generated.city.walk_surfaces == baked.city.walk_surfaces and generated.city.viewpoints == baked.city.viewpoints, "stairs, roof support and viewpoints survive loading")
-	check(generated.city.obstacles.size() == baked.city.obstacles.size(), "all static collision volumes and lamps survive loading")
+	check(baked.village.counts == generated.village.counts and int(baked.village.counts.get("houses", 0)) > 0, "generator summary survives loading")
+	check(baked.village.anchors.keys() == generated.village.anchors.keys() and baked.village.anchors.get("cafe_seats", []).size() == generated.village.anchors.get("cafe_seats", []).size(), "village life anchors survive loading")
+	check(baked.life != null and baked.life.walkers.size() == generated.life.walkers.size() and baked.life.pigeons.size() == generated.life.pigeons.size(), "village life is rebuilt after loading")
+	check(generated.solids.walk_surfaces == baked.solids.walk_surfaces and generated.solids.viewpoints == baked.solids.viewpoints, "stairs, roof support and viewpoints survive loading")
+	check(generated.solids.obstacles.size() == baked.solids.obstacles.size(), "all static collision volumes and lamps survive loading")
 	var random = RandomNumberGenerator.new()
 	random.seed = 64810
 	for i in range(500):
-		var p = Vector3(random.randf_range(-130, 170), random.randf_range(1, 29), random.randf_range(-650, -250))
+		var p = Vector3(random.randf_range(-120, 80), random.randf_range(8, 36), random.randf_range(-560, -250))
 		var end = p + Vector3(random.randf_range(-20, 20), 0, random.randf_range(-20, 20))
-		check(generated.city.hit(p, end, 0.4) == baked.city.hit(p, end, 0.4), "loaded swept collision agrees with generator")
-		check(is_equal_approx(generated.city.walking_floor(p, p.y), baked.city.walking_floor(p, p.y)), "loaded walking support agrees with generator")
+		check(generated.solids.hit(p, end, 0.4) == baked.solids.hit(p, end, 0.4), "loaded swept collision agrees with generator")
+		check(is_equal_approx(generated.solids.walking_floor(p, p.y), baked.solids.walking_floor(p, p.y)), "loaded walking support agrees with generator")
 	var other = Stage.new(2)
 	other.capture_bake_buffers = true
 	root.add_child(other)
@@ -97,11 +94,11 @@ func run() -> void:
 		check(connected and part.hidden and part.pose.basis.determinant() == 0, "harvest hides the rendered instance")
 		var fresh = other.collectible_parts.VineyardGrapes[index]
 		check(not fresh.hidden and fresh.pose.basis.determinant() != 0 and fresh.mesh != part.mesh, "separate scenes do not share mutable harvest state")
-	check(baked.city.knock_lamp(0, Vector3.RIGHT) and not other.city.lamps[0].fallen, "lamps remain dynamic and independent")
-	check(baked.city.bell.pull(baked.city.bell.handle_position()) and baked.city.bell.audio.playing, "bell references and sound survive loading")
-	check(other.city.bell.serial == 0 and other.city.bell.pivot != baked.city.bell.pivot, "bell animation state is independent")
+	check(baked.solids.knock_lamp(0, Vector3.RIGHT) and not other.solids.lamps[0].fallen, "lamps remain dynamic and independent")
+	check(baked.solids.bell.pull(baked.solids.bell.handle_position()) and baked.solids.bell.audio.playing, "bell references and sound survive loading")
+	check(other.solids.bell.serial == 0 and other.solids.bell.pivot != baked.solids.bell.pivot, "bell animation state is independent")
 	await process_frame
-	check(baked.city.bell.pivot.rotation.z != 0, "loaded bell animates after pulling")
+	check(baked.solids.bell.pivot.rotation.z != 0, "loaded bell animates after pulling")
 	var empty = Stage.new(2)
 	root.add_child(empty)
 	check(not Baked.load_into(empty, "res://generated/missing.scn") and empty.get_child_count() == 0, "missing bake permits procedural fallback")

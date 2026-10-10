@@ -15,9 +15,6 @@ func drive(fps: int, reverse: bool = false) -> Dictionary:
 	var game = Harness.new()
 	game.stage = Stage.new(2)
 	root.add_child(game.stage)
-	game.stage.city = load("res://scripts/vineyard.gd").new()
-	game.stage.city.stage = game.stage
-	game.stage.add_child(game.stage.city)
 	game.room = load("res://scripts/room.gd").new()
 	game.add_child(game.room)
 	game.spectators = load("res://scripts/spectators.gd").new()
