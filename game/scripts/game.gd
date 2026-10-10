@@ -27,6 +27,7 @@ const RallyHandling = preload("res://scripts/rally_handling.gd")
 const RallyTracks = preload("res://scripts/rally_tracks.gd")
 const Props = preload("res://scripts/props.gd")
 const Stage = preload("res://scripts/stage.gd")
+const StageRegistry = preload("res://scripts/stage_registry.gd")
 const Spectators = preload("res://scripts/spectators.gd")
 var spectators: Node3D
 const MiniMap = preload("res://scripts/minimap.gd")
@@ -131,15 +132,9 @@ func flag_count(owner: String = "") -> int:
 	return personal_flags.get(key, []).size()
 
 func valid_furniture_spot(spot: Vector3, kind: String, ignored_owner: String = "") -> bool:
-	if stage.winter:
-		var radius = 0.9 if kind == "table" else 0.55
-		for x in [-radius, 0.0, radius]:
-			for z in [-radius, 0.0, radius]:
-				if stage.snow.loose_depth(stage, spot + Vector3(x, 0, z)) > 0.02: return false
-	if stage.desert and not stage.canyon.camp_supported(stage, spot):
+	# Dug out of the snow, level on terraces, dry by the lakes: the stage decides.
+	if not stage.biome.camp_allowed(spot, kind):
 		return false
-	if stage.lakeland and stage.water.depth(spot) > -0.05:
-		return false # Camp furniture stays on dry land, not in the lake.
 	if spectators != null and spectators.occupied(spot):
 		return false
 	if stage.road_distance(spot) < 6.0:
@@ -586,79 +581,40 @@ func _setup_input() -> void:
 			e.physical_keycode = key
 			InputMap.action_add_event(action, e)
 
+# Sky, fog, ambient light and sun of the selected stage (res://data/stages.json).
 func _build_environment() -> void:
 	var world = WorldEnvironment.new()
 	world_environment = world
+	var look = StageRegistry.section(stage.variant, "environment")
 	var env = Environment.new()
 	env.background_mode = Environment.BG_SKY
 	var sky = Sky.new()
 	var sky_mat = ProceduralSkyMaterial.new()
-	sky_mat.sky_top_color = Color("6f949f")
-	sky_mat.sky_horizon_color = Color("ddd9be")
-	sky_mat.ground_bottom_color = Color("64765b")
-	sky_mat.ground_horizon_color = Color("ddd9be")
+	sky_mat.sky_top_color = Color(look.sky_top)
+	sky_mat.sky_horizon_color = Color(look.sky_horizon)
+	sky_mat.ground_bottom_color = Color(look.ground_bottom)
+	sky_mat.ground_horizon_color = Color(look.ground_horizon)
+	if look.has("sky_curve"):
+		sky_mat.sky_curve = float(look.sky_curve)
 	sky.sky_material = sky_mat
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color("c6c9ae")
-	env.ambient_light_energy = 0.35
+	env.ambient_light_color = Color(look.ambient)
+	env.ambient_light_energy = float(look.ambient_energy)
 	env.tonemap_mode = Environment.TONE_MAPPER_LINEAR
 	env.fog_enabled = true
-	env.fog_light_color = Color("9ea995")
-	env.fog_density = 0.0018
-	if stage.winter:
-		# Crisp Côte d'Azur winter sky over the Alps: deep blue overhead,
-		# a pale haze down the valleys and low, warm January sun.
-		sky_mat.sky_top_color = Color("3f74ad")
-		sky_mat.sky_curve = 0.06
-		sky_mat.sky_horizon_color = Color("d4e3ee")
-		sky_mat.ground_bottom_color = Color("8d9aa6")
-		sky_mat.ground_horizon_color = Color("dfe9f0")
-		env.ambient_light_color = Color("c9dbef")
-		env.ambient_light_energy = 0.34
-		env.fog_light_color = Color("cfdde8")
-		env.fog_density = 0.0011
-	elif stage.desert:
-		sky_mat.sky_top_color = Color("5987ab")
-		sky_mat.sky_horizon_color = Color("e9c69a")
-		sky_mat.ground_bottom_color = Color("a95c3a")
-		sky_mat.ground_horizon_color = Color("e9c69a")
-		env.ambient_light_color = Color("efccaa")
-		env.ambient_light_energy = 0.42
-		env.fog_light_color = Color("d6a479")
-		env.fog_density = 0.0008
-	elif stage.lakeland:
-		# Bright northern summer: high pale sky, light haze over the lakes.
-		sky_mat.sky_top_color = Color("5f8fb8")
-		sky_mat.sky_horizon_color = Color("d9e3dd")
-		sky_mat.ground_bottom_color = Color("4e5f45")
-		sky_mat.ground_horizon_color = Color("d9e3dd")
-		env.ambient_light_color = Color("c9d6c8")
-		env.ambient_light_energy = 0.4
-		env.fog_light_color = Color("aebdb4")
-		env.fog_density = 0.0014
-	elif stage.provence:
-		# Deep Provençal blue over a light, slightly dusty haze.
-		sky_mat.sky_top_color = Color("3d74bd")
-		sky_mat.sky_horizon_color = Color("cfdbe0")
-		sky_mat.ground_bottom_color = Color("6a6648")
-		sky_mat.ground_horizon_color = Color("cfdbe0")
-		env.ambient_light_color = Color("cdd1c6")
-		env.ambient_light_energy = 0.36
-		env.fog_light_color = Color("c4d0d6")
-		env.fog_density = 0.0005
-		env.fog_sky_affect = 0.25
+	env.fog_light_color = Color(look.fog)
+	env.fog_density = float(look.fog_density)
+	if look.has("fog_sky_affect"):
+		env.fog_sky_affect = float(look.fog_sky_affect)
 	world.environment = env
 	add_child(world)
+	var light = StageRegistry.section(stage.variant, "sun")
 	var sun = DirectionalLight3D.new()
 	sunlight = sun
-	sun.rotation_degrees = Vector3(-36, -32, 0)
-	sun.light_color = Color("ffe3b2")
-	sun.light_energy = 0.85
-	if stage.winter:
-		sun.rotation_degrees = Vector3(-24, -48, 0)
-		sun.light_color = Color("fff0dc")
-		sun.light_energy = 0.78
+	sun.rotation_degrees = Vector3(light.rotation[0], light.rotation[1], light.rotation[2])
+	sun.light_color = Color(light.color)
+	sun.light_energy = float(light.energy)
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 120
 	add_child(sun)
@@ -1188,10 +1144,10 @@ func _process(delta: float) -> void:
 	elif course.phase in ["countdown", "intermission"]:
 		course.remaining = maxf(0, course.remaining - delta)
 	stage.snow.authoritative = room.is_authority()
-	if stage.winter:
+	if stage.has_snow:
 		stage.snow.update(delta)
 	stage.update_fallen(delta)
-	if stage.lakeland:
+	if stage.water != null:
 		stage.water.update(delta)
 	stage.update_life(delta, player_position())
 	_update_sobriety(delta)
@@ -1335,13 +1291,14 @@ func _drive(delta: float) -> void:
 		vehicle_motion.suspension(car, stage, dt, heading, (heading - previous_heading) / dt * speed)
 		if offroad and absf(speed) > 5:
 			condition = maxf(0, condition - dt * 0.15)
-	if stage.lakeland and vehicle_motion.flood > 0.25:
+	var flooded = stage.water != null and vehicle_motion.flood > 0.25
+	if flooded:
 		# Water in the cabin: the engine drowns unless the car leaves the lake.
 		condition = maxf(0, condition - delta * 6.0 * vehicle_motion.flood)
 		if vehicle_motion.flood > 0.3 and toast_time <= 0:
 			toast("Машина набирает воду! Выезжай на берег или выходи (F).")
 	if condition <= 0:
-		if stage.lakeland and vehicle_motion.flood > 0.25:
+		if flooded:
 			die("Легковушка утонула в финском озере.\nДальше только пешком.")
 			return
 		die("Легковушка сдалась раньше тебя.\nРазбитый СУ победил подвеску.")
@@ -1396,19 +1353,19 @@ func _walk_step(delta: float) -> void:
 	if motion.length() > 1:
 		motion = motion.normalized()
 	var dir = Vector3(motion.x, 0, motion.y).rotated(Vector3.UP, view_yaw)
-	var water_factor = stage.water.walk_factor(walker) if stage.lakeland else 1.0
+	var water_factor = stage.water.walk_factor(walker) if stage.water != null else 1.0
 	var wading = snow_wading()
 	var next = walker + dir * delta * water_factor * mushroom_effect.movement_multiplier() * lerpf(1.0, SNOW_WADE_SPEED, wading) * (1.4 if drink_time >= 0 or eat_time >= 0 else (RUN_SPEED if running() else WALK_SPEED))
 	next.x = clampf(next.x, -185, 185)
 	next.z = clampf(next.z, -Stage.LENGTH + 5, 10)
 	var old_floor = walker.y - jump_height
 	var floor_height = stage.solids.walking_floor(next, walker.y)
-	if stage.lakeland:
-		floor_height = stage.walk_floor(next, floor_height)
+	floor_height = stage.walk_floor(next, floor_height)
+	if stage.water != null:
 		if stage.water.depth(next) > 0.2 and next.distance_to(walker) > 0.0001:
 			stage.water.wake(get_instance_id(), next, (next - walker) / maxf(delta, 0.001), minf(stage.water.depth(next), 1.0), delta, 0.35)
 	next.y = floor_height if jump_height <= 0 and floor_height >= old_floor - 0.45 else walker.y
-	var hit = (stage.desert and stage.canyon.walk_blocked(stage, next, walker.y)) or not stage.solids.hit(walker, next, 0.3).is_empty() or not stage.rock_hit(walker, next, 0.3).is_empty() or stage.obstacle_hit(walker, next, 0.3, true) >= 0 or contact_blocked(walker, next, false)
+	var hit = stage.biome.walk_blocked(next, walker.y) or not stage.solids.hit(walker, next, 0.3).is_empty() or not stage.rock_hit(walker, next, 0.3).is_empty() or stage.obstacle_hit(walker, next, 0.3, true) >= 0 or contact_blocked(walker, next, false)
 	if not hit:
 		walker = next
 	else:
@@ -1430,12 +1387,12 @@ func _walk_step(delta: float) -> void:
 
 # 0 on firm ground, 1 when wading through a full-depth forest drift.
 func snow_wading() -> float:
-	if stage == null or not stage.winter or jump_height > 0.01: return 0.0
+	if stage == null or not stage.has_snow or jump_height > 0.01: return 0.0
 	return clampf(stage.snow_sink(walker) / (DeepSnowRules.FOOT_SINK * 0.78), 0.0, 1.0)
 
 func _snow_hint(delta: float) -> void:
 	snow_hint_clock = maxf(0.0, snow_hint_clock - delta)
-	var deep = stage.winter and stage.snow_sink(walker) > SNOW_HINT_DEPTH and jump_height <= 0.01
+	var deep = stage.has_snow and stage.snow_sink(walker) > SNOW_HINT_DEPTH and jump_height <= 0.01
 	if deep and not snow_stuck and snow_hint_clock <= 0.0:
 		var carry = cargo.held.get(chair_owner(), {})
 		if str(carry.get("kind", "")) == "shovel":
@@ -1451,7 +1408,7 @@ func running() -> bool:
 func jump() -> bool:
 	if not playing or in_car or seated or beers >= 30 or paused or dead or finished or drink_time >= 0 or eat_time >= 0 or jump_height > 0.01 or jump_velocity > 0:
 		return false
-	if stage.lakeland and stage.water.depth(walker) > 0.6:
+	if stage.water != null and stage.water.depth(walker) > 0.6:
 		return false # No push-off while wading deep or swimming.
 	jump_velocity = JUMP_SPEED
 	return true
@@ -2016,7 +1973,7 @@ func _update_racers_step(delta: float) -> void:
 			var desired_yaw = path_yaw + float(racer.get("drift_yaw", 0.0)) + recorded_yaw
 			var yaw = node.rotation.y + clampf(wrapf(desired_yaw - node.rotation.y, -PI, PI), -2.5 * delta, 2.5 * delta)
 			racer.motion.suspension(node, stage, delta, yaw, lateral_accel)
-			if stage.lakeland:
+			if stage.water != null:
 				var spray_depth = stage.water.depth(node.position)
 				if spray_depth > 0.0:
 					stage.water.wake(node.get_instance_id(), node.position, movement / maxf(delta, 0.001), spray_depth, delta, 1.3)
@@ -2285,7 +2242,7 @@ func _update_hud() -> void:
 		cook_time >= 35, int(cook_time / 35 * 100) if cooking and cook_time < 35 else 0,
 		cooking, grill_servings, drink_time >= 0, drink_time >= 1.25, eat_time >= 0, eat_kind,
 		tow_target != null, int(tow_progress * 100), recovery_helpers, near_tow,
-		remaining_items, seated, stage.provence, bag.get("mushrooms", 0), bag.get("berries", 0),
+		remaining_items, seated, stage.variant, bag.get("mushrooms", 0), bag.get("berries", 0),
 		foraging.can_eat("berries"), pot, camp_cooking.phase if pot else "",
 		camp_cooking.servings if pot else 0,
 		int(camp_cooking.cook_time / camp_cooking.COOK_SECONDS * 100) if pot else 0,
@@ -2331,7 +2288,7 @@ func _update_hud() -> void:
 	elif near_tow:
 		hint_text += "   ·   Иди в машину, чтобы толкать · T — тяни пешком со стороны дороги"
 	if not in_car:
-		status_text += ("\nГРИБЫ %d · ЯГОДЫ/ВИНОГРАД %d" if stage.provence else "\nГРИБЫ %d · ЯГОДЫ %d") % [bag.mushrooms, bag.berries]
+		status_text += "\nГРИБЫ %d · %s %d" % [bag.mushrooms, StageRegistry.value(stage.variant, "berries_hud"), bag.berries]
 		if not target.is_empty():
 			hint_text = "F — " + target.label + ("" if packing.active() else "   ·   Z/C/G/V — поставить предмет")
 		elif seated:
@@ -2455,7 +2412,7 @@ func _advance_gravel(stone: Dictionary, delta: float) -> bool:
 			stone.velocity -= normal * closing * 1.4
 			stone.velocity *= 0.7
 			stone.bounces = int(stone.get("bounces", 0)) + 1
-	if stage.lakeland and stage.water.depth(next) > 0.0 and next.y < stage.water.level(next):
+	if stage.water != null and stage.water.depth(next) > 0.0 and next.y < stage.water.level(next):
 		stage.water.splash(Vector3(next.x, stage.water.level(next), next.z), 0.2)
 		stone.node.position = next
 		return false

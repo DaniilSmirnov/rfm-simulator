@@ -24,7 +24,7 @@ func roadside(station: float, preferred_side: float, clearance: float) -> Dictio
 					continue
 				if not stage.solids.hit(point, point, clearance, false).is_empty():
 					continue
-				if stage.lakeland and stage.water.depth(point) > -0.3:
+				if stage.water != null and stage.water.depth(point) > -0.3:
 					continue
 				if stage.obstacle_hit(point, point, clearance) >= 0 or not stage.rock_hit(point, point, clearance, false).is_empty():
 					continue
@@ -60,7 +60,7 @@ func build() -> void:
 	arch(stage.LENGTH - 8.0, "Rally Fans Map", true)
 	station(24.0, 1.0, "Старт")
 	station(stage.LENGTH - 30.0, -1.0, "Финиш")
-	var positions: Array = [180.0, 420.0, 650.0] if stage.winter else [165.0, 365.0, 570.0, 730.0]
+	var positions: Array = stage.biome.marshal_stations()
 	for i in range(positions.size()):
 		var spot = roadside(positions[i], 1.0 if i % 2 == 0 else -1.0, 0.6)
 		if spot.is_empty():

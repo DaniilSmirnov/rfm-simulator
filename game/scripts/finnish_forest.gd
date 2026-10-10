@@ -1,4 +1,4 @@
-extends RefCounted
+extends "res://scripts/stage_biome.gd"
 # Deterministic geometry for the fifth stage, "Финский лес": a fast, flowing gravel
 # stage through a Finnish forest, with big crests, a chicane and lake shores.
 # The layout is original and is only inspired by the character of classic Finnish
@@ -110,20 +110,20 @@ func roughness(s: float) -> float:
 
 # ---------------------------------------------------------------- terrain
 
-func configure(stage) -> void:
+func configure() -> void:
 	# Roadside spectator areas: flat, dry, and well away from every lake.
 	for spot in [[128.0, 1.0, 15.0], [244.0, -1.0, 16.0], [486.0, 1.0, 15.0], [676.0, -1.0, 15.0]]:
 		var p = stage.at(spot[0]) + stage.side(spot[0]) * spot[1] * spot[2]
-		p.y = raw_ground(stage, p)
+		p.y = raw_ground(p)
 		stage.clearings.append(p)
 	yellow_house = stage.at(YELLOW_HOUSE_STATION) + Vector3(YELLOW_HOUSE_SIDE * YELLOW_HOUSE_OFFSET, 0, 0)
-	yellow_house.y = raw_ground(stage, yellow_house)
+	yellow_house.y = raw_ground(yellow_house)
 	reserved_spots.append({"pos": yellow_house, "radius": 9.0})
-	_configure_sauna(stage)
+	_configure_sauna()
 
 # The sauna stands where the first lake's shore is furthest from the road,
 # with a jetty running straight out into the water.
-func _configure_sauna(stage) -> void:
+func _configure_sauna() -> void:
 	var lake: Dictionary = LAKES[0]
 	var best_s = 0.0
 	var best_u = 0.0
@@ -135,7 +135,7 @@ func _configure_sauna(stage) -> void:
 	var side = float(lake.side)
 	var origin = Vector3(stage.at(best_s).x, 0, -best_s)
 	sauna = origin + Vector3(side * (best_u - 6.5), 0, 0)
-	sauna.y = raw_ground(stage, sauna)
+	sauna.y = raw_ground(sauna)
 	var start = origin + Vector3(side * (best_u - 1.5), 0, 0)
 	var end = origin + Vector3(side * (best_u + 10.0), 0, 0)
 	jetty = {"start": start, "end": end, "half_width": 0.9, "deck": float(lake.level) + 0.45, "station": best_s, "side": side}
@@ -164,7 +164,7 @@ func hills(pos: Vector3, distance: float) -> float:
 	var swell = sin(pos.x * 0.036 + pos.z * 0.019) * 1.3 + sin(pos.z * 0.057 - pos.x * 0.027) * 0.8 + sin(pos.x * 0.11) * sin(pos.z * 0.09) * 0.5
 	return swell * smoothstep(12.0, 30.0, distance)
 
-func land(stage, pos: Vector3, s: float, distance: float) -> float:
+func land(pos: Vector3, s: float, distance: float) -> float:
 	var p: Vector3 = stage.at(s)
 	var slope = maxf(0.0, distance - 10.0)
 	return p.y + roughness(s) * (1.0 - smoothstep(3.7, 8.0, distance)) + sin(pos.x * 0.07 + s * 0.013) * slope * 0.08 + slope * 0.2 + hills(pos, distance)
@@ -207,21 +207,21 @@ func carve(s: float, lat: float, base: float) -> float:
 		result = lerpf(result, bed, edge * reach)
 	return result
 
-func raw_ground(stage, pos: Vector3) -> float:
+func raw_ground(pos: Vector3) -> float:
 	var s: float = stage.road_s(pos)
 	var p: Vector3 = stage.at(s)
 	var lat = pos.x - p.x
 	var distance = absf(lat)
-	return carve(s, lat, land(stage, pos, s, distance))
+	return carve(s, lat, land(pos, s, distance))
 
-func ground(stage, pos: Vector3) -> float:
-	var height = raw_ground(stage, pos)
+func base_ground(pos: Vector3) -> float:
+	var height = raw_ground(pos)
 	for clearing in stage.clearings:
 		var d = Vector2(pos.x - clearing.x, pos.z - clearing.z).length()
 		height = lerpf(clearing.y, height, smoothstep(5.5, 11.5, d))
 	return height
 
-func grip(stage, pos: Vector3) -> float:
+func grip(pos: Vector3) -> float:
 	var s: float = stage.road_s(pos)
 	if stage.road_distance(pos) > road_width(s) * 0.55:
 		return 0.46
@@ -230,7 +230,7 @@ func grip(stage, pos: Vector3) -> float:
 
 # ---------------------------------------------------------------- water
 
-func water_body(stage, pos: Vector3) -> Dictionary:
+func water_body(pos: Vector3) -> Dictionary:
 	var s: float = stage.road_s(pos)
 	for body in BODIES:
 		if s < body.s0 or s > body.s1:
@@ -242,14 +242,14 @@ func water_body(stage, pos: Vector3) -> Dictionary:
 
 # Depth of water above the ground at pos; negative above the surface, and a very
 # large negative number outside every lake's footprint.
-func water_depth(stage, pos: Vector3) -> float:
-	var body = water_body(stage, pos)
+func water_depth(pos: Vector3) -> float:
+	var body = water_body(pos)
 	if body.is_empty():
 		return -1000.0
 	return body.level - stage.ground(pos)
 
-func nearest_water_level(stage, pos: Vector3) -> float:
-	var body = water_body(stage, pos)
+func nearest_water_level(pos: Vector3) -> float:
+	var body = water_body(pos)
 	return body.level if not body.is_empty() else -1000.0
 
 # True where a 2 m terrain tile must be used to keep shorelines smooth.
@@ -262,8 +262,8 @@ func shoreline_near(s: float, lat: float) -> bool:
 			return true
 	return false
 
-func terrain_color(stage, v: Vector3, variation: float) -> Color:
-	var level = nearest_water_level(stage, v)
+func terrain_color(v: Vector3) -> Color:
+	var level = nearest_water_level(v)
 	var s: float = stage.road_s(v)
 	var patch = (sin(v.x * 0.065) * sin(v.z * 0.041) + 1.0) * 0.5
 	var moss = Color("4b5b34").lerp(Color("5e6a3a"), patch)
@@ -279,9 +279,9 @@ func terrain_color(stage, v: Vector3, variation: float) -> Color:
 			color = sand.darkened(0.12).lerp(Color("3d4a42"), bed_depth)
 	if stage.road_distance(v) > 4.5 and stage.road_distance(v) < 8.0:
 		color = color.darkened(0.12)
-	return color.lightened(variation)
+	return color
 
-func road_color(p: Vector3, s: float, lateral: float) -> Color:
+func road_paint(p: Vector3, lateral: float) -> Color:
 	var base = Color("b3a283")
 	var shade = sin(p.x * 0.17 + p.z * 0.11) * 0.025 + sin(p.z * 0.29 - p.x * 0.07) * 0.015
 	# Dark wheel tracks and a loose pale crown between them.
@@ -289,16 +289,75 @@ func road_color(p: Vector3, s: float, lateral: float) -> Color:
 	var centre = exp(-pow(lateral / 0.55, 2.0))
 	return base.darkened(track * 0.16).lightened(centre * 0.05 + shade)
 
+# ---------------------------------------------------------------- stage hooks
+
+const Water = preload("res://scripts/water.gd")
+const ForestLife = preload("res://scripts/forest_life.gd")
+var forest_life: RefCounted = ForestLife.new()
+
+func make_water():
+	return Water.new()
+
+func terrain_tile_step(p: Vector3) -> float:
+	var s = stage.road_s(p)
+	if shoreline_near(s, p.x - stage.at(s).x):
+		return 2.0
+	return 2.0 if stage.road_distance(p) < 12.0 else 4.0
+
+func terrain_tiled() -> bool:
+	return true
+
+func road_color(p: Vector3, s: float) -> Color:
+	return road_paint(p, (p - stage.at(s)).dot(stage.side(s)))
+
+# No muddy ruts or puddles in the ford itself.
+func road_ruts(s: float) -> bool:
+	return absf(s - FORD_STATION) >= 30.0
+
+func walk_floor(pos: Vector3, height: float) -> float:
+	var deck = deck_height(pos)
+	if deck > height:
+		return deck
+	return stage.water.walk_floor(pos, height)
+
+# Camp furniture stays on dry land, not in the lake.
+func camp_allowed(spot: Vector3, _kind: String) -> bool:
+	return stage.water.depth(spot) <= -0.05
+
+func forest_tree_count() -> int:
+	return 7600
+
+func tree_blocked(p: Vector3) -> bool:
+	return stage.trail_distance(p) < 3.2 or reserved(p, 1.0) or stage.water.depth(p) > -0.4
+
+func roadside_rock_blocked(p: Vector3) -> bool:
+	return reserved(p, 1.0) or stage.water.depth(p) > -0.1
+
+func woodland_blocked(pos: Vector3, padding: float) -> bool:
+	return reserved(pos, padding) or stage.water.depth(pos) > -0.3 - padding * 0.3
+
+func build_details(cooperative: bool) -> void:
+	await stage.build_woodland(cooperative)
+	stage.water.build(stage)
+	build_scenery()
+	forest_life.build(stage)
+
+func build_horizon() -> void:
+	stage.build_ridges()
+
+func update_life(delta: float, focus: Vector3) -> void:
+	forest_life.update(delta, focus)
+
 # ---------------------------------------------------------------- scenery
 
-func build(stage) -> void:
-	_build_yellow_house(stage)
-	_build_jump_boards(stage)
-	_build_sauna(stage)
+func build_scenery() -> void:
+	_build_yellow_house()
+	_build_jump_boards()
+	_build_sauna()
 
 # Level a building on sloping ground: the floor sits on the highest corner and
 # a stone plinth reaches down to the lowest one, so nothing floats or sinks.
-func _level(stage, node: Node3D, half: Vector2, color: Color) -> void:
+func _level(node: Node3D, half: Vector2, color: Color) -> void:
 	var low = INF
 	var high = -INF
 	for corner in [Vector3(half.x, 0, half.y), Vector3(-half.x, 0, half.y), Vector3(half.x, 0, -half.y), Vector3(-half.x, 0, -half.y), Vector3.ZERO]:
@@ -310,14 +369,14 @@ func _level(stage, node: Node3D, half: Vector2, color: Color) -> void:
 	var depth = node.position.y - low + 0.5
 	Props.box(node, Vector3(0, 0.3 - depth * 0.5, 0), Vector3(half.x * 2.0 + 0.2, depth + 0.6, half.y * 2.0 + 0.2), color)
 
-func _build_yellow_house(stage) -> void:
+func _build_yellow_house() -> void:
 	var house = Node3D.new()
 	house.name = "YellowHouse"
 	stage.add_child(house)
 	house.position = yellow_house
 	var toward = stage.at(YELLOW_HOUSE_STATION) - yellow_house
 	house.rotation.y = atan2(toward.x, toward.z)
-	_level(stage, house, Vector2(4.6, 3.6), Color("6d6a62"))
+	_level(house, Vector2(4.6, 3.6), Color("6d6a62"))
 	Props.box(house, Vector3(0, 2.25, 0), Vector3(9.0, 3.3, 7.0), Color("e0b53e"))
 	for x in [-4.5, 4.5]:
 		Props.box(house, Vector3(x, 2.25, 0), Vector3(0.18, 3.4, 7.1), Color("f2eee2"))
@@ -339,13 +398,13 @@ func _build_yellow_house(stage) -> void:
 	barn.name = "RedShed"
 	stage.add_child(barn)
 	barn.position = shed
-	_level(stage, barn, Vector2(2.0, 1.6), Color("5f5a52"))
+	_level(barn, Vector2(2.0, 1.6), Color("5f5a52"))
 	Props.box(barn, Vector3(0, 2.0, 0), Vector3(4.0, 2.8, 3.2), Color("8b3a2a"))
 	Props.box(barn, Vector3(0, 3.55, 0), Vector3(4.4, 0.25, 3.6), Color("4a4540"))
 	stage.rocks.append({"pos": shed, "radius": 2.6, "height": 3.0, "building": true})
 
 # Spectators traditionally mark how far crews fly over the crest.
-func _build_jump_boards(stage) -> void:
+func _build_jump_boards() -> void:
 	for metres in [20, 30, 40, 50, 60]:
 		var s = YELLOW_HOUSE_STATION + float(metres)
 		var p = stage.at(s) + stage.side(s) * -YELLOW_HOUSE_SIDE * 6.6
@@ -357,14 +416,14 @@ func _build_jump_boards(stage) -> void:
 		Props.label_3d(board, Vector3(0, 0, 0.04), "%d м" % metres, 64, 0.005, Color("b0322a"))
 		Props.label_3d(board, Vector3(0, 0, -0.04), "%d м" % metres, 64, 0.005, Color("b0322a"), PI)
 
-func _build_sauna(stage) -> void:
+func _build_sauna() -> void:
 	var hut = Node3D.new()
 	hut.name = "LakeSauna"
 	stage.add_child(hut)
 	hut.position = sauna
 	var toward_lake = Vector3(float(jetty.side), 0, 0)
 	hut.rotation.y = atan2(toward_lake.x, toward_lake.z)
-	_level(stage, hut, Vector2(2.1, 1.8), Color("5d564c"))
+	_level(hut, Vector2(2.1, 1.8), Color("5d564c"))
 	for row in range(7):
 		Props.box(hut, Vector3(0, 0.45 + row * 0.32, 0), Vector3(4.0 - (row % 2) * 0.1, 0.3, 3.4 + (row % 2) * 0.1), Color("7a5634").lightened((row % 2) * 0.05))
 	for sign in [-1.0, 1.0]:

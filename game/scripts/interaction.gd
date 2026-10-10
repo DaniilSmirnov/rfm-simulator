@@ -37,7 +37,7 @@ func current() -> Dictionary:
 			offer(items, item.node.global_position + Vector3(0, item.height, 0), item.radius, 3.5, "pack", item.label, item.node.global_position)
 		return select_target(items)
 	if game.cargo.held.has(game.chair_owner()):
-		if game.cargo.held[game.chair_owner()].kind == "shovel" and game.stage.winter:
+		if game.cargo.held[game.chair_owner()].kind == "shovel" and game.stage.has_snow:
 			var ray = -game.camera.global_basis.z
 			for distance in range(1, 81):
 				var point = game.camera.global_position + ray * (distance * 0.05)

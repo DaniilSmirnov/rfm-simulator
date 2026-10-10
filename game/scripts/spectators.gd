@@ -19,33 +19,21 @@ func rebuild(cooperative: bool = false) -> void:
 	actor_targets.clear()
 	var stage = game.stage
 	for i in range(stage.clearings.size()):
-		if stage.desert and i < stage.canyon.mesas.size():
-			continue # Summits are reached on foot; do not spawn parked NPC cars there.
-		if cooperative:
-			await get_tree().process_frame
 		var clearing = stage.clearings[i]
 		var s = stage.road_s(clearing)
 		var outward = (clearing - stage.at(s)).normalized()
 		outward.y = 0
 		outward = outward.normalized()
-		var center = clearing + (stage.direction(s) * 7.0 if stage.provence else outward * 6.0)
-		if stage.provence:
-			# Keep a whole picnic group clear of both sides of every junction.
-			for offset in [7.0, -7.0, 14.0, -14.0, 21.0, -21.0, 0.0]:
-				var candidate = clearing + stage.direction(s) * offset
-				var available = true
-				for along in [-2.4, 0.0, 3.2]:
-					var spot = grounded(candidate + stage.direction(s) * along)
-					available = available and stage.road_distance(spot) > 6.0 and stage.solids.hit(spot, spot, 1.2, false).is_empty()
-				if available:
-					center = candidate
-					break
+		# The stage places the camp (or none, e.g. on a summit reached on foot).
+		var center = stage.biome.spectator_camp(i, clearing, s, outward)
+		if center == Vector3.INF:
+			continue
+		if cooperative:
+			await get_tree().process_frame
 		_add_group(center, s, i, 2)
 	# The shoulder is already free of trees; leave the driving lane unobstructed.
-	for i in range(4):
+	for i in range(4 if stage.biome.roadside_spectators() else 0):
 		var s = 85.0 + i * 190.0
-		if stage.provence:
-			continue # Village spectators use the roadside spots and the square.
 		var center = stage.at(s) + stage.side(s) * (7.2 if i % 2 == 0 else -7.2)
 		_add_group(center, s, i + stage.clearings.size(), 1)
 	update(clock, 0.0, false)

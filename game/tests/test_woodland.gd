@@ -67,11 +67,11 @@ func run() -> void:
 	var same = Stage.new()
 	for p in [Vector3(80, 0, -270), Vector3(-75, 0, -500)]:
 		check(stage.ground(p) == same.ground(p), "forest relief is deterministic for multiplayer")
-		check(absf(stage.forest_relief(p, 70)) > 0.1, "forest ground has local hill relief")
+		check(absf(stage.biome.land_relief(p, 70)) > 0.1, "forest ground has local hill relief")
 	var road = stage.at(80)
-	check(absf(stage.forest_relief(road, 0)) < 0.001, "forest relief leaves rally lane unchanged")
+	check(absf(stage.biome.land_relief(road, 0)) < 0.001, "forest relief leaves rally lane unchanged")
 	var ditch = stage.at(80) + stage.side(80) * 6.4
-	check(stage.forest_relief(ditch, 6.4) < -0.6, "roadside drainage ditch lowers ground")
+	check(stage.biome.land_relief(ditch, 6.4) < -0.6, "roadside drainage ditch lowers ground")
 	var clear = true
 	for c in stage.clearings:
 		clear = clear and absf(stage.ground(c) - c.y) < 0.01

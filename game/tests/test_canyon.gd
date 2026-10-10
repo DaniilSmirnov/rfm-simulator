@@ -22,7 +22,7 @@ func run() -> void:
 	check(max_height - min_height > 0.5, "dry riverbed contains physical waves and crests")
 	for mesa in stage.canyon.mesas:
 		var center: Vector3 = mesa.center
-		check(stage.canyon.camp_supported(stage, center), "summit supports the whole camp footprint")
+		check(stage.canyon.camp_supported(center), "summit supports the whole camp footprint")
 		check(stage.road_distance(center) > 40 and absf(center.x) + stage.canyon.OUTER_RADIUS < 185, "summit is clear of the road and inside player bounds")
 		for tier in range(stage.canyon.TIERS):
 			var radius = stage.canyon.OUTER_RADIUS - tier * stage.canyon.LEDGE_WIDTH
@@ -30,9 +30,9 @@ func run() -> void:
 			var old = center + Vector3.RIGHT * (radius + 0.1)
 			var low = stage.ground(old)
 			check(absf(stage.ground(next) - low - stage.canyon.LEDGE_RISE) < 0.005, "each lip is below the existing jump apex")
-			check(stage.canyon.walk_blocked(stage, next, low), "lip cannot be climbed by walking")
-			check(not stage.canyon.walk_blocked(stage, next, low + 0.75), "jumping feet clear the lip")
-			check(not stage.canyon.camp_supported(stage, next), "camp cannot straddle a ledge")
+			check(stage.canyon.walk_blocked(next, low), "lip cannot be climbed by walking")
+			check(not stage.canyon.walk_blocked(next, low + 0.75), "jumping feet clear the lip")
+			check(not stage.canyon.camp_supported(next), "camp cannot straddle a ledge")
 	var road: ArrayMesh = stage.get_node("StageRoadSurface").mesh
 	var vertices: PackedVector3Array = road.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
 	var contact = true

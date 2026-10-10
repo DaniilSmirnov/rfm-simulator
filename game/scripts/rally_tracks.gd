@@ -11,7 +11,7 @@ static func signature(stage) -> String:
 	return var_to_bytes(stage.points).hex_encode().sha256_text()
 
 static func available(stage) -> bool:
-	if stage.variant != 2 or BANK.runs.size() != COUNT * 2:
+	if not stage.biome.uses_baked_tracks() or BANK.runs.size() != COUNT * 2:
 		return false
 	if not stage.has_meta("rally_tracks_valid"):
 		stage.set_meta("rally_tracks_valid", BANK.schema == 1 and BANK.route_signature == signature(stage))

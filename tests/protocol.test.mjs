@@ -51,8 +51,7 @@ test('web scripts accept exactly the protocol room id format', async () => {
 });
 
 test('server content counts follow the catalog and the game stage list', async () => {
-  const stageGd = await read('game/scripts/stage.gd');
-  const stages = stageGd.match(/^const STAGES = \[(.*)\]$/m)[1].split('",').length;
+  const stages = JSON.parse(await read('game/data/stages.json')).stages.length;
   assert.equal(STAGE_COUNT, stages);
   const r = new RoomState();
   assert.equal(r.add('Host', 1000, true, {stage: 99}).stage, STAGE_COUNT - 1);
@@ -85,4 +84,18 @@ test('protocol 2 guests are simulated by the host once they received the world',
   r.sync({token: legacy.token, state: {...state(), drive_enabled: false}}, 1500);
   assert.equal(r.data.players[legacy.player].state.drive_enabled, false, 'older clients keep their own flag');
   assert.equal(r.data.players[h.player].state.drive_enabled, false, 'the host is never simulated');
+});
+
+test('stage registry: one entry per catalog stage, each with an existing biome script', async () => {
+  const {stages} = JSON.parse(await read('game/data/stages.json'));
+  const catalog = JSON.parse(await read('game/data/store_catalog.json')).filter(p => p.type === 'stage');
+  assert.deepEqual(catalog.map(p => p.content_id).sort((a, b) => a - b), stages.map((_, i) => i));
+  assert.equal(new Set(stages.map(s => s.id)).size, stages.length, 'stage ids are unique');
+  for (const [i, s] of stages.entries()) {
+    assert.equal(catalog.find(p => p.content_id === i).title, s.title, 'catalog title of stage ' + i);
+    const biome = await read(s.biome.replace('res://', 'game/'));
+    assert.match(biome, /^extends "res:\/\/scripts\/stage_biome\.gd"/, s.biome + ' implements the stage contract');
+  }
+  const stageGd = await read('game/scripts/stage.gd');
+  assert.doesNotMatch(stageGd.replace(/#.*$/gm, ''), /\bif (not )?(winter|provence|desert|lakeland)\b|variant == \d/, 'stage.gd does not branch on a stage identity');
 });

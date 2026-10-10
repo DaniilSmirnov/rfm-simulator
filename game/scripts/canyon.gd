@@ -1,5 +1,7 @@
-extends RefCounted
-# Deterministic geometry shared by driving, walking, camp placement and rendering.
+extends "res://scripts/stage_biome.gd"
+# «Красный каньон»: a desert stage descending into a canyon, with climbable
+# terraced mesas. Deterministic geometry shared by driving, walking, camp
+# placement and rendering.
 const LEDGE_RISE = 0.65 # Existing jump apex is 0.84 m.
 const LEDGE_WIDTH = 0.8
 const TIERS = 36
@@ -19,16 +21,16 @@ func route(s: float) -> Vector3:
 	y += sin(s / 16.0) * 0.7 + sin(s / 7.0) * 0.18
 	return Vector3(x, y, -s)
 
-func configure(stage) -> void:
+func configure() -> void:
 	for index in range(4):
 		var s = [100.0, 225.0, 590.0, 760.0][index]
 		var center = stage.at(s) + stage.side(s) * (72.0 if index % 2 == 0 else -72.0)
-		center.y = raw_ground(stage, center)
+		center.y = raw_ground(center)
 		mesas.append({"center": center, "station": s})
 		stage.clearings.append(center + Vector3(0, LEDGE_RISE * TIERS, 0))
 	for s in [180.0, 450.0, 650.0]:
 		var p = stage.at(s) + stage.side(s) * 15.0
-		p.y = base_ground(stage, p)
+		p.y = smooth_ground(p)
 		stage.clearings.append(p)
 
 func relief(s: float, lateral: float) -> float:
@@ -40,7 +42,7 @@ func relief(s: float, lateral: float) -> float:
 	var crest = pow(maxf(0.0, cos((s - 35.0) * TAU / 83.0)), 6.0) * 0.5
 	return bank + crown + rut + waves + crest
 
-func raw_ground(stage, pos: Vector3) -> float:
+func raw_ground(pos: Vector3) -> float:
 	var s: float = stage.road_s(pos)
 	var p: Vector3 = stage.at(s)
 	var lateral = (pos - p).dot(stage.side(s))
@@ -59,29 +61,68 @@ func radius_at(pos: Vector3, center: Vector3) -> float:
 	var relative = fposmod(angle, sector) - sector * 0.5
 	return offset.length() * cos(relative) / cos(sector * 0.5)
 
-func base_ground(stage, pos: Vector3) -> float:
-	var height = raw_ground(stage, pos)
+# Land with the mesas blended in, without their ledges: the rendered terrain.
+func smooth_ground(pos: Vector3) -> float:
+	var height = raw_ground(pos)
 	for mesa in mesas:
 		var distance = radius_at(pos, mesa.center)
 		height = lerpf(mesa.center.y, height, smoothstep(OUTER_RADIUS, OUTER_RADIUS + 8.0, distance))
 	return height
 
-func ground(stage, pos: Vector3) -> float:
+# Physical ground: the mesas are stepped ledges a walker must jump up.
+func base_ground(pos: Vector3) -> float:
 	for mesa in mesas:
 		var distance = radius_at(pos, mesa.center)
 		if distance < OUTER_RADIUS:
 			var tier = mini(TIERS, 1 + floori((OUTER_RADIUS - distance) / LEDGE_WIDTH))
 			return mesa.center.y + tier * LEDGE_RISE
-	return base_ground(stage, pos)
+	return smooth_ground(pos)
 
-func walk_blocked(stage, next: Vector3, feet_height: float) -> bool:
+# ---------------------------------------------------------------- stage hooks
+
+func terrain_vertex_height(x: float, z: float) -> float:
+	return smooth_ground(Vector3(x, 0, z)) - 0.25
+
+func terrain_color(v: Vector3) -> Color:
+	return Color("b56443").lerp(Color("dfac74"), (sin(v.y * 0.65) + 1.0) * 0.5)
+
+func road_width(s: float) -> float:
+	var narrow = smoothstep(230.0, 265.0, s) * (1.0 - smoothstep(405.0, 435.0, s))
+	var wash = smoothstep(540.0, 565.0, s) * (1.0 - smoothstep(655.0, 680.0, s))
+	return stage.WIDTH - narrow * 1.2 + wash * 1.6
+
+func road_color(p: Vector3, _s: float) -> Color:
+	return Color("d4a475").lightened(sin(p.z * 0.25 + p.x * 0.10) * 0.025)
+
+func road_strips() -> int:
+	return 8
+
+# Loose sand off the road and in the dry riverbed.
+func grip(pos: Vector3) -> float:
+	var s = stage.road_s(pos)
+	return 0.48 if stage.road_distance(pos) > road_width(s) * 0.5 or (s > 550.0 and s < 670.0) else 0.74
+
+func rally_speed(s: float) -> float:
+	return 17.0 if s > 240.0 and s < 420.0 else 26.0
+
+func clearing_signs() -> bool:
+	return false
+
+# Summits are reached on foot; NPC camps and their cars stay below.
+func spectator_camp(index: int, clearing: Vector3, _s: float, outward: Vector3) -> Vector3:
+	return Vector3.INF if index < mesas.size() else clearing + outward * 6.0
+
+func walk_blocked(next: Vector3, feet_height: float) -> bool:
 	# Grounded walkers cannot teleport up cliffs; airborne feet must clear a lip.
-	return ground(stage, next) > feet_height + 0.18
+	return base_ground(next) > feet_height + 0.18
 
-func camp_supported(stage, pos: Vector3) -> bool:
-	var height = ground(stage, pos)
+func camp_allowed(spot: Vector3, _kind: String) -> bool:
+	return camp_supported(spot)
+
+func camp_supported(pos: Vector3) -> bool:
+	var height = base_ground(pos)
 	for offset in [Vector3(1.4, 0, 0), Vector3(-1.4, 0, 0), Vector3(0, 0, 1.4), Vector3(0, 0, -1.4), Vector3(1.4, 0, 1.4), Vector3(-1.4, 0, 1.4), Vector3(1.4, 0, -1.4), Vector3(-1.4, 0, -1.4)]:
-		if absf(ground(stage, pos + offset) - height) > 0.22:
+		if absf(base_ground(pos + offset) - height) > 0.22:
 			return false
 	return true
 
@@ -90,7 +131,7 @@ func _triangle(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, color: Color
 		st.set_color(color)
 		st.add_vertex(point)
 
-func build(stage) -> void:
+func build_details(_cooperative: bool) -> void:
 	var st = SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	for mesa in mesas:
@@ -136,13 +177,13 @@ func build(stage) -> void:
 	for i in range(12):
 		var s = 30.0 + i * 70.0
 		var p: Vector3 = stage.at(s) + stage.side(s) * (155.0 if i % 2 == 0 else -155.0)
-		p.y = base_ground(stage, p)
+		p.y = smooth_ground(p)
 		var height = 35.0 + (i % 4) * 9.0
-		_build_butte(stage, p, height, i)
+		_build_butte(p, height, i)
 		stage.rocks.append({"pos": p, "radius": 28.0, "height": height})
 	for sign in [-1.0, 1.0]:
 		var p: Vector3 = stage.at(195.0) + stage.side(195.0) * sign * 15.0
-		p.y = base_ground(stage, p)
+		p.y = smooth_ground(p)
 		RallyProps.cylinder(stage, p + Vector3.UP * 10.0, 6.0, 3.8, 20.0, Color("a85338"), 7)
 		stage.rocks.append({"pos": p, "radius": 6.0, "height": 20.0})
 	var poses: Array = []
@@ -162,7 +203,7 @@ func build(stage) -> void:
 		colors.append(Color("8b8860"))
 	stage._detail_batch("CanyonDryScrub", stage.NATURE_BUSH, poses, colors)
 
-func _build_butte(stage, origin: Vector3, height: float, seed_index: int) -> void:
+func _build_butte(origin: Vector3, height: float, seed_index: int) -> void:
 	var st = SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var sectors = 12

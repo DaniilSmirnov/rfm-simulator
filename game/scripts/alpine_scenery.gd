@@ -48,7 +48,7 @@ static func bare_rock(stage, p: Vector3) -> bool:
 	if distance < 12.0:
 		return false
 	var s: float = stage.road_s(p)
-	return stage.alpine.rock(stage, p, s, distance, stage.at(s).y + distance * 0.5) > 0.55
+	return stage.alpine.rock(p, s, distance, stage.at(s).y + distance * 0.5) > 0.55
 
 # Spectator places, camps and glades stay open: no barriers, poles or rocks.
 static func keeps_clear(stage, p: Vector3, padding: float) -> bool:

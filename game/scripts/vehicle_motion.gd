@@ -15,7 +15,7 @@ var flood = 0.0
 func suspension(node: Node3D, stage, delta: float, yaw: float, lateral_accel: float = 0.0) -> void:
 	var forward = Vector3(-sin(yaw), 0, -cos(yaw))
 	var right = forward.cross(Vector3.UP)
-	var snowy = stage.has_method("vehicle_ground") and stage.winter
+	var snowy = "has_snow" in stage and stage.has_snow
 	var front: float = stage.vehicle_ground(node.position + forward * 1.15) if snowy else stage.ground(node.position + forward * 1.15)
 	var rear: float = stage.vehicle_ground(node.position - forward * 1.15) if snowy else stage.ground(node.position - forward * 1.15)
 	var left: float = stage.vehicle_ground(node.position - right * 0.7) if snowy else stage.ground(node.position - right * 0.7)
@@ -28,7 +28,7 @@ func suspension(node: Node3D, stage, delta: float, yaw: float, lateral_accel: fl
 		initialized = true
 	var steps = maxi(1, int(ceil(delta / (1.0 / 120.0))))
 	var dt = delta / steps
-	var watery = "lakeland" in stage and stage.lakeland
+	var watery = "water" in stage and stage.water != null
 	for i in range(steps):
 		var compression = floor_height - node.position.y
 		grounded = compression > -0.12
