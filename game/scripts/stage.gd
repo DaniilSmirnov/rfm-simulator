@@ -1,6 +1,7 @@
 extends Node3D
 class_name RallyStage
 
+const RouteIndex = preload("res://scripts/route_index.gd")
 const NATURE_TREE_MESHES = [
 	preload("res://models/nature/tree_trunk.tres"),
 	preload("res://models/nature/tree_crown_lower.tres"),
@@ -83,17 +84,10 @@ const TREE_CELL_SIZE = 16.0
 static var STAGES: Array = StageRegistry.captions()
 var variant = 0
 var points: PackedVector3Array = []
-# Nearest-segment index of a winding route (stations are not -z there).
-var route_segment_step = STEP
 # Winding routes find stations by searching the index (see stage_biome.gd).
 var winding = false
-var _last_route_group = 0
-var road_segment_starts = PackedVector2Array()
-var road_segment_deltas = PackedVector2Array()
-var road_segment_inverse_lengths = PackedFloat64Array()
-var road_group_low = PackedVector2Array()
-var road_group_high = PackedVector2Array()
-const ROAD_GROUP_SIZE = 8
+# Nearest-segment index of a winding route (stations are not -z there).
+var route_index = RouteIndex.new()
 var clearings: Array[Vector3] = []
 var trails: Array[Dictionary] = []
 var woodland_details: Dictionary = {}
@@ -145,7 +139,7 @@ func _init(selected: int = 0) -> void:
 		var samples = PackedVector3Array()
 		for i in range(int(LENGTH) + 1):
 			samples.append(biome.route(float(i)))
-		_index_route(samples, 1.0)
+		route_index.build(samples, 1.0)
 	biome.configure()
 
 func at(s: float) -> Vector3:
@@ -799,56 +793,11 @@ func detail_batch(name: String, mesh: Mesh, poses: Array, colors: Array, layer: 
 func build_woodland(cooperative: bool = false) -> void:
 	await woodland.build_woodland(cooperative)
 
-# Spatial index of a winding route given as samples every `step` stations.
-func _index_route(samples: PackedVector3Array, step: float) -> void:
-	route_segment_step = step
-	road_segment_starts.clear()
-	road_segment_deltas.clear()
-	road_segment_inverse_lengths.clear()
-	road_group_low.clear()
-	road_group_high.clear()
-	for i in range(samples.size() - 1):
-		var a = flat(samples[i])
-		var b = flat(samples[i + 1])
-		road_segment_starts.append(a)
-		road_segment_deltas.append(b - a)
-		road_segment_inverse_lengths.append(1.0 / maxf((b - a).length_squared(), 0.000001))
-		var group = int(i / ROAD_GROUP_SIZE)
-		if i % ROAD_GROUP_SIZE == 0:
-			road_group_low.append(a.min(b))
-			road_group_high.append(a.max(b))
-		else:
-			road_group_low[group] = road_group_low[group].min(a).min(b)
-			road_group_high[group] = road_group_high[group].max(a).max(b)
-
-# Nearest station and plan distance on the indexed route. Every segment that
-# could win is tested, so perpendicular streets and hairpins stay exact.
+# Nearest station and plan distance on the indexed route (route_index.gd).
 func route_nearest(pos: Vector3) -> Dictionary:
-	if road_segment_starts.is_empty():
-		_index_route(points, STEP)
-	var best = INF
-	var station = 0.0
-	var p = flat(pos)
-	# Successive queries are spatially coherent: start from the last winning group.
-	var seed = clampi(_last_route_group, 0, road_group_low.size() - 1)
-	# Visit the likely group first, then reject others by a conservative bound.
-	for pass_index in range(road_group_low.size() + 1):
-		var group = seed if pass_index == 0 else pass_index - 1
-		if pass_index > 0 and group == seed:
-			continue
-		if p.distance_squared_to(p.clamp(road_group_low[group], road_group_high[group])) > best:
-			continue
-		for i in range(group * ROAD_GROUP_SIZE, mini((group + 1) * ROAD_GROUP_SIZE, road_segment_starts.size())):
-			var a = road_segment_starts[i]
-			var segment = road_segment_deltas[i]
-			var ratio = clampf((p - a).dot(segment) * road_segment_inverse_lengths[i], 0.0, 1.0)
-			var distance = p.distance_squared_to(a + segment * ratio)
-			var candidate = (i + ratio) * route_segment_step
-			if distance < best or (distance == best and candidate < station):
-				best = distance
-				station = candidate
-	_last_route_group = int(station / route_segment_step) / ROAD_GROUP_SIZE
-	return {"s": station, "distance": sqrt(best)}
+	if route_index.starts.is_empty():
+		route_index.build(points, STEP)
+	return route_index.nearest(flat(pos))
 
 func rally_speed(s: float) -> float:
 	return biome.rally_speed(s)

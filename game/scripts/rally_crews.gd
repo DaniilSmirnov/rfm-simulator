@@ -13,6 +13,10 @@ const Stage = preload("res://scripts/stage.gd")
 const Traffic = preload("res://scripts/rally_traffic.gd")
 
 var game
+# A stone reuses its last floor sample within this sideways distance (m) while
+# it is at least this high (m) above it.
+const FLOOR_REUSE_DISTANCE = 0.4
+const FLOOR_REUSE_HEIGHT = 0.8
 
 func spawn_course_car(role: String, id: int, zero_index: int = 0) -> void:
 	if game.dead or game.finished or (game.room.is_guest()):
@@ -342,7 +346,15 @@ func advance_gravel(stone: Dictionary, delta: float) -> bool:
 		game.stage.water.splash(Vector3(next.x, game.stage.water.level(next), next.z), 0.2)
 		stone.node.position = next
 		return false
-	var floor_height = game.stage.ground(next) + 0.05
+	# Ground height is re-sampled once the stone drifts sideways or nears the
+	# last sampled floor; most of a flight is spent well above it.
+	var floor_height: float
+	if stone.has("floor_y") and Vector2(next.x, next.z).distance_to(stone.floor_xz) < FLOOR_REUSE_DISTANCE and next.y > float(stone.floor_y) + FLOOR_REUSE_HEIGHT:
+		floor_height = float(stone.floor_y)
+	else:
+		floor_height = game.stage.ground(next) + 0.05
+		stone.floor_xz = Vector2(next.x, next.z)
+		stone.floor_y = floor_height
 	var alive = true
 	if next.y <= floor_height:
 		next.y = floor_height

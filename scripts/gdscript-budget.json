@@ -5,7 +5,7 @@
   "game/scripts/props.gd": 1138,
   "game/scripts/game.gd": 1035,
   "game/scripts/village_architecture.gd": 974,
-  "game/scripts/stage.gd": 922
+  "game/scripts/stage.gd": 871
  },
  "longest_function": 211,
  "long_functions": 29,

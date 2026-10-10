@@ -8,6 +8,12 @@ const MAX_COMPETITION_SPEED = 140.0 / 3.6
 const MIN_CORNER_TARGET = 16.0
 const CORNER_FULL_EFFECT = 0.35
 const SPEED_LOOKAHEAD = [0.0, 16.0, 32.0, 48.0]
+# Lateral allowance (m) when skipping far objects before projecting them.
+const FAR_MARGIN = 40.0
+# Travel (m) over which obstacle probes along a passing line are reused.
+const PROBE_REFRESH = 2.0
+# Seconds a chosen passing line is kept before candidates are re-scored.
+const LANE_INTERVAL = 0.12
 
 static func profile(id: int) -> Dictionary:
 	return {"bias": sin(id * 1.91) * 0.55, "phase": fmod(id * 2.37, TAU), "pace": 0.96 + fmod(id * 0.618, 1.0) * 0.08}
@@ -80,11 +86,20 @@ static func plan(game: Node3D, racer: Dictionary) -> Dictionary:
 	for other in game.racers:
 		if other.id == racer.id:
 			continue
-		var other_speed = other.get("drive_speed", speed_limit(game, other, other.s)) if other.state == "racing" else 0.0
+		var other_speed = 0.0
+		if other.state == "racing":
+			other_speed = other.drive_speed if other.has("drive_speed") else speed_limit(game, other, other.s)
 		positions.append({"pos": other.node.position, "speed": other_speed})
 	var blockers: Array[Dictionary] = []
 	var closest = INF
+	# Projecting a point on the route is the costly step. The route is at least
+	# as long as any chord, so an object further away than the look-ahead plus
+	# a generous lateral allowance cannot pass the gap test below: skip it.
+	var horizon = maxf(38, limit * 2.2) + FAR_MARGIN
+	var here: Vector3 = racer.node.position
 	for object in positions:
+		if Vector2(object.pos.x - here.x, object.pos.z - here.z).length_squared() > horizon * horizon:
+			continue
 		var station: float = game.race_station(object.pos)
 		var gap = station - s
 		if gap < -6 or gap > maxf(38, limit * 2.2):
@@ -108,23 +123,32 @@ static func plan(game: Node3D, racer: Dictionary) -> Dictionary:
 	# historic ±2.95 m, in narrow village streets it stays off the pavements.
 	var reach = maxf(1.0, line_limit(game, s) - 0.8)
 	var candidates = [base, -minf(2.95, reach), minf(2.95, reach), -minf(1.5, reach), minf(1.5, reach)]
+	# Picking a passing line probes the road ahead for every candidate; it is
+	# redone ~8 times a second or when the set of blockers changes. Braking
+	# below still follows the blockers every step.
 	var chosen = current
 	var best = INF
-	var distance = clampf(closest + 9, 12, 55) if closest != INF else 16.0
-	for candidate in candidates:
-		var clear = true
-		for blocker in blockers:
-			if absf(candidate - blocker.line) < CLEARANCE:
-				clear = false
-				break
-		if not clear or not _clear_path(game, racer, candidate, distance):
-			continue
-		var cost = absf(candidate - base) * 0.5 + absf(candidate - current) * 0.25
-		if racer.get("avoiding", false):
-			cost += absf(candidate - racer.get("avoid_line", current)) * 0.8
-		if cost < best:
-			best = cost
-			chosen = candidate
+	var lane: Dictionary = racer.get("lane_choice", {})
+	if lane.is_empty() or racer.age < float(lane.age) or racer.age - float(lane.age) >= LANE_INTERVAL or int(lane.blockers) != blockers.size():
+		var distance = clampf(closest + 9, 12, 55) if closest != INF else 16.0
+		for candidate in candidates:
+			var clear = true
+			for blocker in blockers:
+				if absf(candidate - blocker.line) < CLEARANCE:
+					clear = false
+					break
+			if not clear or not _clear_path_cached(game, racer, candidate, distance):
+				continue
+			var cost = absf(candidate - base) * 0.5 + absf(candidate - current) * 0.25
+			if racer.get("avoiding", false):
+				cost += absf(candidate - racer.get("avoid_line", current)) * 0.8
+			if cost < best:
+				best = cost
+				chosen = candidate
+		racer.lane_choice = {"age": racer.age, "blockers": blockers.size(), "best": best, "chosen": chosen}
+	else:
+		best = float(lane.best)
+		chosen = float(lane.chosen)
 	var speed = limit
 	var advance = INF
 	# Brake until the actual lateral position clears the obstruction. Retain
@@ -137,6 +161,21 @@ static func plan(game: Node3D, racer: Dictionary) -> Dictionary:
 	if best == INF:
 		chosen = current
 	return {"line": chosen, "speed": speed, "avoiding": true, "advance": advance, "can_pass": best != INF}
+
+# Rocks, trees and walls barely change while a crew covers two metres, so
+# probe results are reused over that distance, like the corner-cut probe.
+static func _clear_path_cached(game, racer: Dictionary, target: float, distance: float) -> bool:
+	var probes: Dictionary = racer.get("path_probes", {})
+	if absf(racer.s - float(probes.get("s", -100.0))) > PROBE_REFRESH:
+		probes = {"s": racer.s}
+		racer.path_probes = probes
+	var key = snappedf(target, 0.01)
+	var cached = probes.get(key)
+	if cached != null and absf(float(cached.distance) - distance) < PROBE_REFRESH * 2.0:
+		return cached.clear
+	var clear = _clear_path(game, racer, target, distance)
+	probes[key] = {"distance": distance, "clear": clear}
+	return clear
 
 static func _clear_path(game, racer: Dictionary, target: float, distance: float) -> bool:
 	var stage = game.stage

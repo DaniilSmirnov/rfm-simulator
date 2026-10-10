@@ -4,14 +4,14 @@ func brute(stage, p: Vector3) -> Dictionary:
 	var best = INF
 	var station = 0.0
 	var point = stage.flat(p)
-	for i in range(stage.road_segment_starts.size()):
-		var a = stage.road_segment_starts[i]
-		var segment = stage.road_segment_deltas[i]
+	for i in range(stage.route_index.starts.size()):
+		var a = stage.route_index.starts[i]
+		var segment = stage.route_index.deltas[i]
 		var ratio = clampf((point - a).dot(segment) / maxf(segment.length_squared(), 0.000001), 0, 1)
 		var distance = point.distance_squared_to(a + segment * ratio)
 		if distance < best:
 			best = distance
-			station = (i + ratio) * stage.route_segment_step
+			station = (i + ratio) * stage.route_index.step
 	return {'s': station, 'distance': sqrt(best)}
 func _initialize():
 	call_deferred('run')

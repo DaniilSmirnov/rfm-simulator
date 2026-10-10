@@ -3,14 +3,20 @@ extends RefCounted
 const CELL = 1.5
 const RADIUS = 0.35
 const MAX_VISITS = 420
+# Seconds between full re-checks of the current route leg.
+const RECHECK = 0.25
+# Obstacle search margin (m) around a single step; the widest solid is a car
+# point of radius 1.0 plus the walker's RADIUS.
+const STEP_MARGIN = 3.0
 
 static func flat(p: Vector3) -> Vector2:
 	return Vector2(p.x, p.z)
 
-static func context(game, person: Dictionary, start: Vector3, goal: Vector3, roadside: bool) -> Dictionary:
+# Obstacles within `margin` metres of the box spanning start and goal.
+static func context(game, person: Dictionary, start: Vector3, goal: Vector3, roadside: bool, margin: float = 13.0) -> Dictionary:
 	var solids: Array = []
-	var low = flat(start).min(flat(goal)) - Vector2.ONE * 13
-	var high = flat(start).max(flat(goal)) + Vector2.ONE * 13
+	var low = flat(start).min(flat(goal)) - Vector2.ONE * margin
+	var high = flat(start).max(flat(goal)) + Vector2.ONE * margin
 	for rock in game.stage.rocks_in_bounds(low, high):
 		if rock.get("actor", null) == person.avatar:
 			continue
@@ -128,20 +134,36 @@ static func move(game, person: Dictionary, goal: Vector3, delta: float, roadside
 	if delta <= 0:
 		return
 	var start: Vector3 = person.avatar.position
-	goal.y = game.stage.ground(goal)
 	if flat(start).distance_to(flat(goal)) < 0.08:
 		return
 	if not person.has("navigation"):
 		person.navigation = {"goal": goal, "route": [], "retry": 0.0}
 	var state: Dictionary = person.navigation
 	state.retry = maxf(0, float(state.retry) - delta)
-	var ctx = context(game, person, start, goal, roadside)
+	# Homes and watch spots are fixed: their ground height is sampled once a
+	# second rather than every frame (dug snow can still change it).
+	state.goal_age = float(state.get("goal_age", INF)) + delta
+	if state.get("goal_xz", Vector2.INF) != flat(goal) or state.goal_age > 1.0:
+		state.goal_xz = flat(goal)
+		state.goal_y = game.stage.ground(goal)
+		state.goal_age = 0.0
+	goal.y = float(state.goal_y)
 	var changed = flat(state.goal).distance_to(flat(goal)) > 1.0
 	var route: Array = state.route
 	while not route.is_empty() and flat(start).distance_to(flat(route[0])) < 0.18:
 		route.pop_front()
-	var blocked = not route.is_empty() and not clear(game, start, route[0], ctx)
-	if changed or blocked or (route.is_empty() and state.retry <= 0):
+	# The whole leg ahead is re-validated a few times a second; the step taken
+	# this frame is always checked below, so nobody walks into a new obstacle.
+	state.recheck = float(state.get("recheck", 0.0)) - delta
+	var blocked = false
+	var needs_plan = changed or (route.is_empty() and state.retry <= 0)
+	var ctx: Dictionary = {}
+	if needs_plan or (not route.is_empty() and state.recheck <= 0.0):
+		ctx = context(game, person, start, goal, roadside)
+	if not route.is_empty() and state.recheck <= 0.0:
+		state.recheck = RECHECK
+		blocked = not clear(game, start, route[0], ctx)
+	if needs_plan or blocked:
 		if not game.spectators.navigation_budget.request(person.avatar.get_instance_id()):
 			return
 		state.goal = goal
@@ -154,7 +176,8 @@ static func move(game, person: Dictionary, goal: Vector3, delta: float, roadside
 	direction.y = 0
 	var next = start + direction.normalized() * minf(direction.length(), delta * 2.7)
 	next.y = game.stage.ground(next)
-	if clear(game, start, next, ctx):
+	# A step is a few centimetres: only obstacles right around it matter.
+	if clear(game, start, next, context(game, person, start, next, roadside, STEP_MARGIN)):
 		person.avatar.position = next
 	else:
 		state.route = []
