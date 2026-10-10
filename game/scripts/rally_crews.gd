@@ -13,6 +13,8 @@ const Stage = preload("res://scripts/stage.gd")
 const Traffic = preload("res://scripts/rally_traffic.gd")
 
 var game
+# Somebody is towing the local player's own car (set by recovery.gd).
+var car_towed = false
 # A stone reuses its last floor sample within this sideways distance (m) while
 # it is at least this high (m) above it.
 const FLOOR_REUSE_DISTANCE = 0.4
@@ -188,7 +190,7 @@ func update_racers_step(delta: float) -> void:
 					game.toast("Экипаж застрял. Нужен трос — T рядом с машиной.")
 		elif racer.state in ["stopped", "stranded"]:
 			racer.motion.suspension(node, game.stage, delta, node.rotation.y)
-			if racer.state == "stopped" and not service and racer.age > 18 and racer.node != game.tow_target and float(racer.get("recovery_progress", 0)) <= 0 and int(racer.get("recovery_helpers", 0)) == 0:
+			if racer.state == "stopped" and not service and racer.age > 18 and racer.node != game.tow_target and not racer.get("towed", false) and int(racer.get("recovery_helpers", 0)) == 0:
 				to_remove.append(racer)
 		if was_racing:
 			var contact = game.stage.rock_hit(racer.previous, node.position, 0.85)
@@ -368,17 +370,29 @@ func advance_gravel(stone: Dictionary, delta: float) -> bool:
 func can_tow_racer(racer: Dictionary) -> bool:
 	return racer.state in ["stranded", "stopped"] and is_instance_valid(racer.node)
 
-func nearby_tow_racer() -> bool:
+# Something within rope range of the walking player: a stuck crew or a
+# friend's car.
+func nearby_tow_target() -> bool:
+	if game.in_car:
+		return false
 	for racer in game.racers:
-		if not game.in_car and can_tow_racer(racer) and game.walker.distance_to(racer.node.position) < 6:
+		if can_tow_racer(racer) and game.walker.distance_to(racer.node.position) < Recovery.ROPE_RANGE:
+			return true
+	for peer in game.room.peers.values():
+		if peer.has("car") and is_instance_valid(peer.car) and game.walker.distance_to(peer.car.position) < Recovery.ROPE_RANGE:
 			return true
 	return false
 
 func recover_racer(racer: Dictionary) -> void:
 	racer.erase("rejoin_residual")
-	# Restart ahead of the impact, with no old slide/impulse or swept crash path.
-	racer.s = clampf(race_station(racer.node.position) + 12.0, 0, Stage.LENGTH - 2)
-	racer.node.position = race_at(racer.s)
+	# Restart where the car was brought onto the road, inside the carriageway,
+	# with no old slide/impulse or swept crash path.
+	racer.s = clampf(race_station(racer.node.position), 0, Stage.LENGTH - 2)
+	var side = race_side(racer.s)
+	var half = maxf(0.0, game.stage.road_width(game.stage.road_s(racer.node.position)) * 0.5 - 0.6)
+	var lateral = clampf((racer.node.position - race_at(racer.s)).dot(side), -half, half)
+	racer.node.position = race_at(racer.s) + side * lateral
+	racer.node.position.y = game.stage.ground(racer.node.position)
 	var direction = race_direction(racer.s)
 	racer.node.rotation = Vector3(0, atan2(-direction.x, -direction.z), 0)
 	racer.previous = racer.node.position
@@ -389,7 +403,7 @@ func recover_racer(racer: Dictionary) -> void:
 	racer.slide_speed = 0.0
 	racer.drift_yaw = 0.0
 	racer.yaw_rate = 0.0
-	racer.line = 0.0
+	racer.line = lateral
 	racer.avoiding = false
 	racer.avoid_line = 0.0
 	racer.drive_speed = Traffic.speed_limit(game, racer, racer.s)
@@ -397,7 +411,7 @@ func recover_racer(racer: Dictionary) -> void:
 	racer.kind = "pass"
 	count_racer(racer)
 	racer.age = 0.0
-	for key in ["recovery_start", "recovery_goal", "recovery_progress", "recovery_helpers"]:
+	for key in ["towed", "recovery_helpers"]:
 		racer.erase(key)
 	game.helped += 1
 
@@ -420,22 +434,23 @@ func clear_recovery_ropes() -> void:
 func draw_recovery_ropes() -> void:
 	clear_recovery_ropes()
 	for link in game.recovery_links:
-		for racer in game.racers:
-			if racer.id != int(link.racer):
-				continue
-			var origin = game.room.v(link.pos)
-			if link.player == game.room.player_id or (not game.room.connected and link.player == "local"):
-				origin = game.walker
-			elif game.room.peers.has(link.player) and game.room.peers[link.player].has("avatar"):
-				origin = game.room.peers[link.player].avatar.position
-			var rope = Props.rope(game, origin + Vector3(0, 1, 0), racer.node.position + Vector3(0, 0.5, 0))
-			game.recovery_ropes.append(rope)
-			if game.rope_mesh == null:
-				game.rope_mesh = rope
+		var towed = Recovery.link_node(game, link)
+		if towed == null:
+			continue
+		var origin = game.room.v(link.pos)
+		if link.player == game.room.player_id or (not game.room.connected and link.player == "local"):
+			origin = game.walker
+		elif game.room.peers.has(link.player) and game.room.peers[link.player].has("avatar"):
+			origin = game.room.peers[link.player].avatar.position
+		var rope = Props.rope(game, origin + Vector3(0, 1, 0), towed.position + Vector3(0, 0.5, 0))
+		game.recovery_ropes.append(rope)
+		if game.rope_mesh == null:
+			game.rope_mesh = rope
 
 func cancel_tow() -> void:
 	game.tow_target = null
-	game.tow_progress = 0
+	game.tow_distance = -1.0
+	car_towed = false
 	game.recovery_links.clear()
 	game.recovery_helpers = 0
 	clear_recovery_ropes()

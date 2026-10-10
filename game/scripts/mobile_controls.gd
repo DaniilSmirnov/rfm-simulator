@@ -75,7 +75,7 @@ func _layout() -> void:
 		target = game.hud_target if game.hud_target_frame == Engine.get_process_frames() else game.interaction.current()
 	var state: Array = [size, active(), landscape(), world_blocked(), game.in_car, game.placement_kind,
 		gear_open, game.seated, game.beers < 30, game.packing.active(), game.flag_count(),
-		game.foraging.can_eat("berries"), game.tow_target != null, game.nearby_tow_racer(), target.get("label", "")]
+		game.foraging.can_eat("berries"), game.tow_target != null, game.nearby_tow_target(), target.get("label", "")]
 	if state == layout_state:
 		return
 	layout_state = state
@@ -117,7 +117,7 @@ func _layout() -> void:
 					gear.append(["Флаг", "flag"])
 			if game.foraging.can_eat("berries"):
 				gear.append([str(StageRegistry.value(game.stage.variant, "berries")), "eat_berries"])
-			if game.tow_target != null or game.nearby_tow_racer():
+			if game.tow_target != null or game.nearby_tow_target():
 				add_button("Трос", "tow", true, Rect2(Vector2(size.x - edge - 360, size.y - edge - 256), Vector2(68, 68)))
 		if not gear.is_empty():
 			add_button("Лагерь", "gear", false, Rect2(Vector2(size.x - edge - 216, edge), Vector2(64, 56)))

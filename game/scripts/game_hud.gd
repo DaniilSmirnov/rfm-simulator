@@ -278,7 +278,7 @@ func update_hud() -> void:
 	if game.minimap.is_visible_in_tree() and now >= game.minimap_redraw_at:
 		game.minimap.queue_redraw()
 		game.minimap_redraw_at = now + 100
-	var near_tow = game.nearby_tow_racer() if game.tow_target == null else false
+	var near_tow = game.nearby_tow_target() if game.tow_target == null else false
 	var remaining_items = game.packing.remaining() if game.packing.active() else -1
 	var bag = game.foraging.stock() if not game.in_car else {}
 	var pot = game.camp_cooking.pot != null
@@ -290,7 +290,7 @@ func update_hud() -> void:
 		int(game.elapsed) if not game.mobile_mode else 0, game.camp != null, game.has_chairs, game.eaten, game.passed, game.helped, game.beers,
 		game.cook_time >= 35, int(game.cook_time / 35 * 100) if game.cooking and game.cook_time < 35 else 0,
 		game.cooking, game.grill_servings, game.drink_time >= 0, game.drink_time >= 1.25, game.eat_time >= 0, game.eat_kind,
-		game.tow_target != null, int(game.tow_progress * 100), game.recovery_helpers, near_tow,
+		game.tow_target != null, ceili(game.tow_distance), game.recovery_helpers, near_tow, game.crews.car_towed,
 		remaining_items, game.seated, game.stage.variant, bag.get("mushrooms", 0), bag.get("berries", 0),
 		game.foraging.can_eat("berries"), pot, game.camp_cooking.phase if pot else "",
 		game.camp_cooking.servings if pot else 0,
@@ -330,12 +330,12 @@ func update_hud() -> void:
 			info_text = "ЕДИМ ПЛОВ" if game.eat_kind == "plov" else ("ЕДИМ ЯГОДЫ" if game.eat_kind == "berries" else ("ЕДИМ ГРИБЫ" if game.eat_kind == "mushroom" else "ЕДИМ ШАШЛЫК"))
 		if game.beers >= 30:
 			info_text = "ТЫ ЛЕЖИШЬ · ОТДОХНИ ДО ВОССТАНОВЛЕНИЯ"
-		if game.tow_target != null:
-			info_text = "ПОМОЩЬ %d%% · УЧАСТНИКОВ %d" % [int(game.tow_progress * 100), game.recovery_helpers]
+	if game.crews.car_towed and game.tow_target == null:
+		info_text = "ТВОЮ МАШИНУ ТЯНУТ НА ТРОСЕ"
 	if game.tow_target != null:
-		info_text = "ВЫТАСКИВАЕМ ЭКИПАЖ   ·   %d%%   ·   УДЕРЖИВАЙ T" % int(game.tow_progress * 100)
+		info_text = tow_text()
 	elif near_tow:
-		hint_text += "   ·   Иди в машину, чтобы толкать · T — тяни пешком со стороны дороги"
+		hint_text += "   ·   T — тянуть тросом в любую сторону · иди на машину — толкать"
 	if not game.in_car:
 		status_text += "\nГРИБЫ %d · %s %d" % [bag.mushrooms, StageRegistry.value(game.stage.variant, "berries_hud"), bag.berries]
 		if not target.is_empty():
@@ -350,9 +350,11 @@ func update_hud() -> void:
 		hint_text = "Лагерь собран. Садитесь в свои машины через F; ждём всех друзей." if game.in_car else "Лагерь собран. Подойди к своей машине и нажми F."
 	if game.mobile_mode:
 		course_text = game.course.caption().replace("ПРОХОД ", "СУ ").replace(" · ПРЯМО", "").replace(" · ОБРАТНО", "").replace("ДО ОТКРЫТИЯ СУ", "СТАРТ ЧЕРЕЗ")
-		if game.in_car and game.tow_target == null:
+		if game.crews.car_towed or game.tow_target != null:
+			info_text = info_text.replace("УДЕРЖИВАЙ T", "УДЕРЖИВАЙ ТРОС")
+		elif game.in_car:
 			info_text = "%02d КМ/Ч · МАШИНА %d%%" % [int(absf(game.speed) * 3.6), int(game.condition)]
-		elif not game.in_car and game.drink_time < 0 and game.eat_time < 0 and game.beers < 30 and game.tow_target == null:
+		elif game.drink_time < 0 and game.eat_time < 0 and game.beers < 30:
 			if game.packing.active():
 				info_text = "ВЕРНУТЬ ВЕЩИ В БАГАЖНИК · ОСТАЛОСЬ %d" % remaining_items
 			else:
@@ -371,6 +373,15 @@ func update_hud() -> void:
 	set_hud_text(game.status_label, status_text)
 	set_hud_text(game.info_label, info_text)
 	set_hud_text(game.hint_label, hint_text)
+
+
+# The rope the local player holds: how far the crew still has to the road, or
+# whose car is being towed, and how many people help.
+func tow_text() -> String:
+	var helpers = " · ВМЕСТЕ: %d" % game.recovery_helpers if game.recovery_helpers > 1 else ""
+	if game.tow_distance < 0:
+		return "ТЯНЕМ МАШИНУ ДРУГА%s   ·   УДЕРЖИВАЙ T" % helpers
+	return "ВЫТАСКИВАЕМ ЭКИПАЖ · ДО ДОРОГИ %d М%s   ·   УДЕРЖИВАЙ T" % [ceili(game.tow_distance), helpers]
 
 func show_result(title: String, body: String) -> void:
 	game.mushroom_effect.clear()

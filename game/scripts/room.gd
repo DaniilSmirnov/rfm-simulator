@@ -36,7 +36,6 @@ var peers: Dictionary = {}
 var members: Dictionary = {}
 var host_id = ""
 var world_paused = false
-var tow_owner = ""
 # Commands: a guest queues them, the host applies and acknowledges them.
 var sequence = 0
 var commands: Array = []
@@ -507,7 +506,6 @@ func update_tow(delta: float) -> void:
 		if peer.state != null and server_clock() - float(peer.get("last_state_time", server_clock())) <= 1.0:
 			players[id] = peer.state
 	game.Recovery.update(game, players, delta)
-	tow_owner = str(game.recovery_links[0].player) if not game.recovery_links.is_empty() else ""
 
 func check_remote_collisions() -> void:
 	var people = [{"id": player_id, "state": local_state()}]

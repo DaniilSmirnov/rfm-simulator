@@ -111,7 +111,9 @@ func run() -> void:
 		print("REVERSE RESULT: s=%.2f target=%.2f speed=%.2f state=%s line=%.2f" % [follower.s, lead.s + 12, follower.drive_speed, follower.state, follower.line])
 	check(safe and follower.s > lead.s + 12, "reverse crew safely overtakes stranded car")
 	game.recover_racer(lead)
-	check(lead.state == "racing" and lead.node.position.distance_to(game.race_at(lead.s)) < 0.01 and (-lead.node.basis.z).dot(game.race_direction(lead.s)) > 0.99, "recovery rejoins road in reverse travel direction")
+	# The crew restarts on its own line across the road, where it was brought back.
+	var lane: Vector3 = game.race_at(lead.s) + game.race_side(lead.s) * lead.line - lead.node.position
+	check(lead.state == "racing" and Vector2(lane.x, lane.z).length() < 0.01 and (-lead.node.basis.z).dot(game.race_direction(lead.s)) > 0.99, "recovery rejoins road in reverse travel direction")
 	clear_cars(game)
 	game.course.phase = "racing"
 	game.spawn_racer("pass")

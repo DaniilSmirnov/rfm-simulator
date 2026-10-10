@@ -35,7 +35,7 @@ static func step(game, racer: Dictionary, dt: float) -> bool:
 	if racer.rejoin_time > 25.0 or game.stage.road_distance(node.position) > 35.0:
 		racer.self_rejoin = false
 		return false
-	if racer.node == game.tow_target or float(racer.get("recovery_progress", 0)) > 0 or int(racer.get("recovery_helpers", 0)) > 0:
+	if racer.node == game.tow_target or racer.get("towed", false) or int(racer.get("recovery_helpers", 0)) > 0:
 		racer.self_rejoin = false
 		return false
 	if not motion.grounded: return false

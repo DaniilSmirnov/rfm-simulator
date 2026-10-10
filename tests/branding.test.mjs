@@ -65,10 +65,16 @@ test('all project brand references use Rally Fans Map spelling', async () => {
 test('authored game content has no third-party vehicle brands or named crews', async () => {
   const props = await readFile(new URL('../game/scripts/props.gd', import.meta.url), 'utf8');
   assert.doesNotMatch(props, /BMW|Lada|Hyundai|Kia Rio|Renault|ВАЗ|ТАТНЕФТЬ|Крылов|Ярош|KidneyGrille|var badge\s*=/i);
-  const rallyModels = props.split('const RALLY_MODELS = [')[1].split('\n]')[0];
-  const sponsors = [...rallyModels.matchAll(/"sponsor": "([^"]+)"/g)].map(match => match[1]);
-  assert.equal(sponsors.length, 6);
-  assert.ok(sponsors.every(sponsor => sponsor === 'Rally Fans Map'));
+  // The rally fleet is data: every car is unbranded and carries the club sponsor.
+  const fleetText = await readFile(new URL('../game/data/rally_cars.json', import.meta.url), 'utf8');
+  const fleet = JSON.parse(fleetText);
+  const brands = /BMW|Lada|Hyundai|Kia|Renault|Subaru|Mitsubishi|Lancer|Impreza|Audi|quattro|Lancia|Stratos|Peugeot|Ford|Escort|Volvo|Toyota|Celica|ВАЗ|Жигули|ТАТНЕФТЬ/i;
+  assert.doesNotMatch(fleetText, brands);
+  assert.ok(fleet.cars.length >= 6);
+  assert.equal(fleet.defaults.sponsor, 'Rally Fans Map');
+  assert.ok(fleet.cars.every(car => (car.sponsor ?? fleet.defaults.sponsor) === 'Rally Fans Map'));
+  const model = await readFile(new URL('../game/scripts/rally_car_model.gd', import.meta.url), 'utf8');
+  assert.doesNotMatch(model, brands);
   assert.match(props, /name = "SportGrille"/);
   assert.match(props, /"FANS MAP"/);
   const room = await readFile(new URL('../game/scripts/room_lobby.gd', import.meta.url), 'utf8');
