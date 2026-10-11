@@ -21,7 +21,12 @@ var car_towed = false
 const FLOOR_REUSE_DISTANCE = 0.4
 const FLOOR_REUSE_HEIGHT = 0.8
 # Condition (%) a crew knocks off the local player's car when it rams it.
-const CAR_RAM_DAMAGE = 30.0
+const CAR_RAM_MIN_SPEED = 3.0
+const CAR_RAM_FULL_SPEED = 20.0
+const CAR_RAM_MAX_DAMAGE = 30.0
+
+static func car_ram_damage(impact_speed: float) -> float:
+	return CAR_RAM_MAX_DAMAGE * clampf((impact_speed - CAR_RAM_MIN_SPEED) / (CAR_RAM_FULL_SPEED - CAR_RAM_MIN_SPEED), 0.0, 1.0)
 
 func spawn_course_car(role: String, id: int, zero_index: int = 0) -> void:
 	if game.dead or game.finished or (game.room.is_guest()):
@@ -270,9 +275,12 @@ func update_racers_step(delta: float) -> void:
 					game.toast("Столкновение машин! Экипаж остановился.")
 					if blocker == game.car.position:
 						# The crew rams the local player's car: it takes the damage.
-						game.condition = maxf(0.0, game.condition - CAR_RAM_DAMAGE)
-						game.impact_shake = 0.8
-						game.toast("Раллийная машина врезалась в твою легковушку!")
+						var impact_speed = racer.motion.velocity.length() if racer.state in ["offroad", "rock_bounce"] else racer.previous.distance_to(node.position) / maxf(delta, 0.001)
+						var damage = car_ram_damage(impact_speed)
+						if damage > 0.0:
+							game.condition = maxf(0.0, game.condition - damage)
+							game.impact_shake = clampf(damage / CAR_RAM_MAX_DAMAGE, 0.1, 1.0)
+							game.toast("Раллийная машина врезалась в твою легковушку!")
 					break
 		if racer.state in ["stranded", "stopped"]:
 			count_racer(racer)
