@@ -265,8 +265,8 @@ func ambulance_step(racer: Dictionary) -> void:
 		var room = maxf(0.0, game.stage.road_width(game.stage.road_s(r.pos)) * 0.5 - 1.2)
 		racer.bias = clampf(lateral, -room, room)
 	# Yielding to the casualty must still allow treatment from a safe stop.
-	var safe_stop = racer.node.position.distance_to(r.pos) <= 10.0 and float(racer.get("drive_speed", 0.0)) <= 0.2
-	if float(racer.s) >= target - 0.5 or (float(racer.s) >= target - 10.0 and safe_stop):
+	var safe_stop = racer.node.position.distance_to(r.pos) <= 4.5 and float(racer.get("drive_speed", 0.0)) <= 0.2
+	if float(racer.s) >= target - 0.5 or (float(racer.s) >= target - 2.9 and safe_stop):
 		racer.state = "parked"
 		racer.drive_speed = 0.0
 		racer.treating = racer.target_key
