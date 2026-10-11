@@ -118,6 +118,7 @@ func run() -> void:
 
 	# A crew ramming the player's car damages it; nobody dies.
 	game.injuries.records.clear()
+	game.course.red_flag = false
 	for racer in game.racers.duplicate():
 		racer.node.queue_free()
 		game.racers.erase(racer)
@@ -137,6 +138,8 @@ func run() -> void:
 		if rammer.state in ["stopped", "stranded"]:
 			break
 	check(rammer.state in ["stopped", "stranded"] and game.condition < 100.0 and not game.dead, "a crew ramming the player's car damages it")
+	check(game.crews.car_ram_damage(1.0) == 0.0 and game.crews.car_ram_damage(20.0) == game.crews.CAR_RAM_MAX_DAMAGE, "slow contact has no damage while high-speed collisions reach full impact damage")
+	check(game.crews.car_ram_damage(10.0) > 0.0 and game.crews.car_ram_damage(10.0) < game.crews.CAR_RAM_MAX_DAMAGE, "intermediate impact velocity causes proportionate vehicle damage")
 
 	# Guests: the host's knockdown of a guest reaches that guest.
 	var guest = await make_game("Guest")
