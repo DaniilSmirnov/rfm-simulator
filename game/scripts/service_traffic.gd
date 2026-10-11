@@ -16,9 +16,10 @@ static func people(game) -> Array:
 		if not game.injuries.is_down(str(person.key)):
 			result.append(person)
 	# Injured people can be displaced from their ordinary walking positions.
-	for record in game.injuries.records.values():
+	for key in game.injuries.records:
+		var record: Dictionary = game.injuries.records[key]
 		if record.has("pos") and str(record.get("phase", "")) != "limp":
-			result.append({"pos": record.pos})
+			result.append({"key": str(key), "pos": record.pos})
 	return result
 
 static func cars(game, racer: Dictionary) -> Array:
@@ -77,8 +78,14 @@ static func pedestrian_plan(game, racer: Dictionary, plan: Dictionary) -> Dictio
 		# Stop before anyone in the swept lateral corridor; do not steer around
 		# a person who is crossing or lying on the carriageway.
 		if line < minf(current, plan.line) - PERSON_CLEARANCE or line > maxf(current, plan.line) + PERSON_CLEARANCE: continue
+		var is_assigned_casualty = racer.get("role", "") == "ambulance" and str(racer.get("target_key", "")) != "" and str(person.get("key", "")) == str(racer.get("target_key", ""))
 		plan.speed = minf(plan.speed, sqrt(2.0 * 18.0 * maxf(0.0, gap - 5.0)))
 		plan.advance = minf(float(plan.get("advance", INF)), maxf(0.0, gap - 4.0))
+		if is_assigned_casualty:
+			# The ambulance must be allowed to move onto the shoulder toward its
+			# own patient; the swept service guard still prevents contact.
+			plan.can_pass = true
+			continue
 		# A departing ambulance may move sideways into its planned clear lane
 		# while forward travel stays blocked. The swept guard validates each step.
 		var passing = racer.get("role", "") == "ambulance" and float(racer.get("target_s", -1.0)) < 0.0 and plan.get("can_pass", false)

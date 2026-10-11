@@ -66,6 +66,10 @@ func run() -> void:
 	check(Vector2(lying.pos.x - start.x, lying.pos.z - start.z).length() > 1.0, "the hit throws the body away from where it stood")
 	check(absf(lying.pos.y - game.stage.ground(lying.pos) - 0.25) < 0.3 and absf(lying.rot.z - PI / 2) < 0.01, "the person lies on the ground")
 	check(game.find_children("KnockedBody", "", true, false).size() <= 1, "the physics body is released once landed")
+	# Rescue someone thrown well off the carriageway: the van must use the
+	# shoulder and cannot declare treatment solely because its route station matches.
+	lying.pos = game.race_at(lying.station) + game.race_side(lying.station) * 9.0
+	lying.pos.y = game.stage.ground(lying.pos) + 0.25
 
 	# Red flag: no crew starts while the ambulance is out.
 	var clock: float = game.spawn_clock
