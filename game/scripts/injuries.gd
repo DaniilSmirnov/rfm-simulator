@@ -23,7 +23,7 @@ const PLAYER_CAR_SPEED = 5.0
 const CREW_SPEED = 2.0
 const MAX_FLIGHT = 5.0
 const MAX_LAUNCH = 13.0
-const TREAT_SECONDS = 5.0
+const TREAT_SECONDS = 15.0
 const LIMP_SECONDS = 60.0
 const LIMP_FACTOR = 0.55
 # Terrain collision under a flight: PATCH × PATCH vertices, one metre apart.
@@ -313,13 +313,23 @@ func _update_host(delta: float) -> void:
 				var ambulance = _ambulance(int(r.ambulance))
 				if ambulance.is_empty():
 					_assign(r, key)
-				elif ambulance.state == "parked" and ambulance.get("treating", "") == key:
+				elif _ambulance_at_casualty(ambulance, r):
+					# Start treatment from the actual stopped position. A traffic
+					# guard can stop the van beside a casualty before the dispatch
+					# state is updated, so the state marker alone is not reliable.
+					ambulance.state = "parked"
+					ambulance.drive_speed = 0.0
+					ambulance.treating = key
 					r.treat += delta
 					if r.treat >= TREAT_SECONDS:
 						_stand(key, r)
 						ambulance.treating = ""
 						_retarget(ambulance)
 						continue
+				else:
+					r.treat = 0.0
+					if str(ambulance.get("treating", "")) == key:
+						ambulance.treating = ""
 			"limp":
 				r.limp = maxf(0.0, float(r.limp) - delta)
 				if r.limp <= 0.0:
@@ -327,6 +337,9 @@ func _update_host(delta: float) -> void:
 				continue
 		_pose(key, r.pos, r.rot, 1.0)
 	game.course.red_flag = red_flag()
+
+func _ambulance_at_casualty(ambulance: Dictionary, record: Dictionary) -> bool:
+	return ambulance.node.position.distance_to(record.pos) <= 8.0 and float(ambulance.get("drive_speed", 0.0)) <= 0.2 and float(ambulance.s) >= float(record.station) - 6.0
 
 func _retarget_all() -> void:
 	for racer in game.racers:

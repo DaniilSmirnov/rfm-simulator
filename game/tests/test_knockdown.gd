@@ -83,9 +83,17 @@ func run() -> void:
 		game._update_racers(1.0 / 30.0)
 		game.injuries.update(1.0 / 30.0)
 		parked = parked or van.state == "parked"
-		if not game.injuries.down:
+		if parked:
 			break
 	check(parked and absf(van.s - lying.station) <= 6.0 and van.node.position.distance_to(lying.pos) <= 8.0, "the ambulance parks within safe treatment range")
+	# Simulate a traffic stop that reaches the patient but misses the dispatch
+	# marker; proximity and a real stop must still start the treatment timer.
+	van.erase("treating")
+	for i in range(14 * 30):
+		game.injuries.update(1.0 / 30.0)
+	check(game.injuries.down, "treatment takes the full fifteen seconds after the ambulance stops")
+	for i in range(30):
+		game.injuries.update(1.0 / 30.0)
 	check(not game.injuries.down and game.injuries.limp > 55.0, "after treatment the player stands up and limps")
 	check(game.injuries.local_avatar == null and game.walker.distance_to(lying.pos) < 1.0, "the player gets up where they lay")
 	check(absf(game.injuries.walk_factor() - game.injuries.LIMP_FACTOR) < 0.001, "limping slows walking")
