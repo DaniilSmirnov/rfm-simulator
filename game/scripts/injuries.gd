@@ -23,7 +23,8 @@ const PLAYER_CAR_SPEED = 5.0
 const CREW_SPEED = 2.0
 const MAX_FLIGHT = 5.0
 const MAX_LAUNCH = 13.0
-const TREAT_SECONDS = 15.0
+const TREAT_SECONDS = 3.0
+const Medics = preload("res://scripts/ambulance_medics.gd")
 const LIMP_SECONDS = 60.0
 const LIMP_FACTOR = 0.55
 # Terrain collision under a flight: PATCH × PATCH vertices, one metre apart.
@@ -36,6 +37,7 @@ const BODY_OFFSET = Vector3(0, -0.85, 0)
 const AMBULANCE_ID = 500
 
 var game
+var medics = Medics.new()
 # Host: key -> {"phase": "flying"|"lying"|"limp", "pos", "rot", "time", "body",
 # "patch", "station", "ambulance", "treat", "limp", "home"}.
 var records: Dictionary = {}
@@ -230,7 +232,7 @@ func _knocked(key: String) -> void:
 # one leaves the start.
 func _assign(record: Dictionary, key: String) -> void:
 	for racer in game.racers:
-		if racer.get("role", "") == "ambulance" and float(racer.s) < float(record.station) - 6.0:
+		if racer.get("role", "") == "ambulance" and (float(racer.s) < float(record.station) - 6.0 or racer.node.position.distance_to(record.pos) <= Medics.WALK_RADIUS):
 			record.ambulance = racer.id
 			_retarget(racer)
 			return
@@ -246,11 +248,13 @@ func _assign(record: Dictionary, key: String) -> void:
 
 # Head for the nearest casualty ahead that this ambulance looks after.
 func _retarget(racer: Dictionary) -> void:
+	if medics.active.has(int(racer.id)):
+		return
 	var best = INF
 	var target_key = ""
 	for key in records:
 		var r: Dictionary = records[key]
-		if int(r.ambulance) == racer.id and r.phase != "limp" and float(r.station) >= float(racer.s) - 1.0 and float(r.station) < best:
+		if int(r.ambulance) == racer.id and r.phase != "limp" and (float(r.station) >= float(racer.s) - 1.0 or racer.node.position.distance_to(r.pos) <= Medics.WALK_RADIUS) and float(r.station) < best:
 			best = float(r.station)
 			target_key = key
 	racer.target_key = target_key
@@ -258,7 +262,7 @@ func _retarget(racer: Dictionary) -> void:
 	if target_key == "":
 		racer.bias = 0.0
 	# A parked ambulance moves on once its medics are done.
-	if racer.state == "parked" and str(racer.get("treating", "")) == "":
+	if racer.state == "parked":
 		racer.state = "racing"
 
 # Called by rally_crews for an ambulance on the move: slow down onto the
@@ -275,10 +279,9 @@ func ambulance_step(racer: Dictionary) -> void:
 		racer.bias = clampf(lateral, -room, room)
 	# Yielding to the casualty must still allow treatment from a safe stop.
 	var safe_stop = racer.node.position.distance_to(r.pos) <= 8.0 and float(racer.get("drive_speed", 0.0)) <= 0.2
-	if float(racer.s) >= target - 6.0 and safe_stop:
+	if safe_stop or (float(racer.s) >= target - 4.5 and _ambulance_at_casualty(racer, r)):
 		racer.state = "parked"
 		racer.drive_speed = 0.0
-		racer.treating = racer.target_key
 
 # Speed cap for an ambulance closing on its stop (m/s), see Traffic.speed_limit.
 static func ambulance_speed(racer: Dictionary, s: float) -> float:
@@ -292,11 +295,13 @@ static func ambulance_speed(racer: Dictionary, s: float) -> float:
 # ---------------------------------------------------------------- frame
 
 func update(delta: float) -> void:
+	medics.injuries = self
 	_held.clear()
 	if authority():
 		_update_host(delta)
 	else:
 		_update_guest(delta)
+	medics.update(delta)
 	if limp > 0.0 and not down:
 		limp = maxf(0.0, limp - delta)
 
@@ -313,23 +318,18 @@ func _update_host(delta: float) -> void:
 				var ambulance = _ambulance(int(r.ambulance))
 				if ambulance.is_empty():
 					_assign(r, key)
-				elif _ambulance_at_casualty(ambulance, r):
-					# Start treatment from the actual stopped position. A traffic
-					# guard can stop the van beside a casualty before the dispatch
-					# state is updated, so the state marker alone is not reliable.
-					ambulance.state = "parked"
-					ambulance.drive_speed = 0.0
-					ambulance.treating = key
-					r.treat += delta
-					if r.treat >= TREAT_SECONDS:
-						_stand(key, r)
-						ambulance.treating = ""
+				elif not medics.active.has(int(ambulance.id)):
+					# A landing can move the casualty behind the van. Dispatch a
+					# replacement if it is too far to reach on foot; never abandon it.
+					if float(r.station) < float(ambulance.s) - 1.0 and ambulance.node.position.distance_to(r.pos) > Medics.WALK_RADIUS:
+						r.ambulance = -1
 						_retarget(ambulance)
-						continue
-				else:
-					r.treat = 0.0
-					if str(ambulance.get("treating", "")) == key:
-						ambulance.treating = ""
+						_assign(r, key)
+					elif str(ambulance.get("target_key", "")) == key and _ambulance_at_casualty(ambulance, r):
+						r.rescue_retry = maxf(0.0, float(r.get("rescue_retry", 0.0)) - delta)
+						if r.rescue_retry <= 0.0:
+							r.rescue_retry = 1.0
+							medics.start(ambulance, key)
 			"limp":
 				r.limp = maxf(0.0, float(r.limp) - delta)
 				if r.limp <= 0.0:
@@ -342,7 +342,7 @@ func _ambulance_at_casualty(ambulance: Dictionary, record: Dictionary) -> bool:
 	# Route progress is only a dispatch hint. An impact can displace a casualty
 	# off the road, so station values can differ even when the ambulance is
 	# physically stopped beside them.
-	return ambulance.node.position.distance_to(record.pos) <= 8.0 and float(ambulance.get("drive_speed", 0.0)) <= 0.2
+	return ambulance.node.position.distance_to(record.pos) <= Medics.WALK_RADIUS and float(ambulance.get("drive_speed", 0.0)) <= 0.2
 
 func _retarget_all() -> void:
 	for racer in game.racers:
@@ -442,6 +442,11 @@ func apply_snapshot(entries: Array) -> void:
 		if not seen.has(key):
 			targets.erase(key)
 	for key in previous_targets:
+		if not seen.has(key) and not str(key).begins_with("player:"):
+			var avatar = avatar_of(str(key))
+			if avatar != null:
+				avatar.rotation = Vector3(0, avatar.rotation.y, 0)
+				avatar.position.y = game.stage.ground(avatar.position)
 		if str(key).begins_with("villager:") and not seen.has(key):
 			_set_villager_knocked(str(key), false)
 	for entry in entries:

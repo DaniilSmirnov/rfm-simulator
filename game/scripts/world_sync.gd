@@ -67,6 +67,7 @@ func rebuild() -> void:
 	providers.append(_subsystem("camp_cooking", func(): return game.camp_cooking, "snapshot", "apply_snapshot"))
 	providers.append(provider("racers", "", ["racers", "recovery_links"], _racers_snapshot, _racers_apply))
 	providers.append(_subsystem("injuries", func(): return game.injuries, "snapshot", "apply_snapshot"))
+	providers.append(_subsystem("medics", func(): return game.injuries.medics, "snapshot", "apply_snapshot"))
 	providers.append(provider("outcome", "", ["dead", "finished", "title", "text"], _outcome_snapshot, _outcome_apply))
 
 # A subsystem that already owns snapshot()/apply_snapshot() under one key.

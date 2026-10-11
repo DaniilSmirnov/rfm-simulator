@@ -164,7 +164,7 @@ static func move(game, person: Dictionary, goal: Vector3, delta: float, roadside
 		state.recheck = RECHECK
 		blocked = not clear(game, start, route[0], ctx)
 	if needs_plan or blocked:
-		if not game.spectators.navigation_budget.request(person.avatar.get_instance_id()):
+		if not person.get("navigation_budget", game.spectators.navigation_budget).request(person.avatar.get_instance_id()):
 			return
 		state.goal = goal
 		state.route = plan(game, start, goal, ctx)
