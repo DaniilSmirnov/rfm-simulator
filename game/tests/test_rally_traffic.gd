@@ -186,8 +186,8 @@ func run() -> void:
 		service.line = 0.0
 		service.node.position = game.race_at(service.s)
 		game.walker = game.race_at(service.s + 6.0)
-		var plan = game.crews.ServiceTraffic.pedestrian_plan(game, service, {"speed": 20.0, "line": 0.0, "can_pass": true})
-		check(plan.speed < 20.0 and plan.advance <= 2.1 and not plan.can_pass, "service vehicle brakes before a pedestrian")
+		var safety_plan = game.crews.ServiceTraffic.pedestrian_plan(game, service, {"speed": 20.0, "line": 0.0, "can_pass": true})
+		check(safety_plan.speed < 20.0 and safety_plan.advance <= 2.1 and not safety_plan.can_pass, "service vehicle brakes before a pedestrian")
 		var before = game.crews.ServiceTraffic.save(service)
 		service.node.position = game.walker
 		service.s += 6.0
