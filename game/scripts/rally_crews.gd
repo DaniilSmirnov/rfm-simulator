@@ -269,14 +269,14 @@ func update_racers_step(delta: float) -> void:
 					blockers.append(other.node.position)
 			for blocker in blockers:
 				if Motion.swept_hit(racer.previous + Vector3(0, 0.65, 0), node.position + Vector3(0, 0.65, 0), blocker + Vector3(0, 0.65, 0), 2.5):
+					var collision_speed = racer.motion.velocity.length() if racer.state in ["offroad", "rock_bounce"] else racer.previous.distance_to(node.position) / maxf(delta, 0.001)
 					node.position = racer.previous
 					racer.state = "stranded" if racer.kind in ["stuck", "crash"] else "stopped"
 					racer.age = 0
 					game.toast("Столкновение машин! Экипаж остановился.")
 					if blocker == game.car.position:
 						# The crew rams the local player's car: it takes the damage.
-						var impact_speed = racer.motion.velocity.length() if racer.state in ["offroad", "rock_bounce"] else racer.previous.distance_to(node.position) / maxf(delta, 0.001)
-						var damage = car_ram_damage(impact_speed)
+						var damage = car_ram_damage(collision_speed)
 						if damage > 0.0:
 							game.condition = maxf(0.0, game.condition - damage)
 							game.impact_shake = clampf(damage / CAR_RAM_MAX_DAMAGE, 0.1, 1.0)
