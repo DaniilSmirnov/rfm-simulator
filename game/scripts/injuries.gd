@@ -339,7 +339,10 @@ func _update_host(delta: float) -> void:
 	game.course.red_flag = red_flag()
 
 func _ambulance_at_casualty(ambulance: Dictionary, record: Dictionary) -> bool:
-	return ambulance.node.position.distance_to(record.pos) <= 8.0 and float(ambulance.get("drive_speed", 0.0)) <= 0.2 and float(ambulance.s) >= float(record.station) - 6.0
+	# Route progress is only a dispatch hint. An impact can displace a casualty
+	# off the road, so station values can differ even when the ambulance is
+	# physically stopped beside them.
+	return ambulance.node.position.distance_to(record.pos) <= 8.0 and float(ambulance.get("drive_speed", 0.0)) <= 0.2
 
 func _retarget_all() -> void:
 	for racer in game.racers:
