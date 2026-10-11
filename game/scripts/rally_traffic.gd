@@ -1,6 +1,7 @@
 extends RefCounted
 # Host-side rally line selection. Guests consume the existing pose snapshots.
 const Tracks = preload("res://scripts/rally_tracks.gd")
+const Injuries = preload("res://scripts/injuries.gd")
 const CLEARANCE = 2.85
 const MAX_LINE = 3.05
 const BRAKE = 18.0
@@ -43,7 +44,8 @@ static func speed_limit(game: Node3D, racer: Dictionary, s: float) -> float:
 		var reference = Tracks.sample(racer.get("track_parts", PackedInt32Array()), s, game.course.pass_index == 2, role == "zero")
 		var target = minf(MAX_COMPETITION_SPEED, float(reference.speed) * racer.get("pace", 1.0)) if not reference.is_empty() else competition_target(game.stage, s, racer.get("pace", 1.0), game.course.pass_index == 2)
 		return recovery_speed(target, racer) if role == "racer" else target
-	return maxf(0.0, game.race_speed(s) * racer.get("pace", 1.0))
+	var cap = Injuries.ambulance_speed(racer, s) if role == "ambulance" else INF
+	return minf(maxf(0.0, game.race_speed(s) * racer.get("pace", 1.0)), cap)
 
 static func recovery_speed(target: float, racer: Dictionary) -> float:
 	# Lift off progressively when the rear steps out, then regain pace as it settles.

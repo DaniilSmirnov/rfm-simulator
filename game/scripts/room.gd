@@ -318,7 +318,7 @@ func _render_guest_world(delta: float) -> void:
 			var pose = world_sync.racer_motion[racer.id].render(server_clock(), frozen)
 			racer.node.position = pose.position
 			racer.node.rotation = pose.rotation
-	game.draw_recovery_ropes()
+	game.crews.draw_recovery_ropes()
 	if nearest != null:
 		game.rally_audio.position = nearest.position
 		game.rally_audio.pitch_scale = 1.8
@@ -346,7 +346,7 @@ func lamp_requests() -> Array:
 
 func local_state() -> Dictionary:
 	return {"drive_enabled": prediction_enabled, "drive_inputs": prediction.outgoing() if prediction_enabled else [], "pos": a(game.player_position()), "car": a(game.car.position), "heading": snappedf(game.heading, 0.001), "tilt": a(game.car.rotation), "yaw": snappedf(game.view_yaw, 0.001), "pitch": snappedf(game.view_pitch, 0.001), "in_car": game.in_car,
-		"tow": Input.is_action_pressed("tow") and not game.in_car and not game.paused and not game.dead and not game.finished and game.beers < 30 and game.drink_time < 0 and game.eat_time < 0,
+		"tow": Input.is_action_pressed("tow") and not game.in_car and not game.injuries.down and not game.paused and not game.dead and not game.finished and game.beers < 30 and game.drink_time < 0 and game.eat_time < 0,
 		"push": a(game.walking_intent()), "speed": snappedf(game.speed, 0.01), "beers": game.beers, "trees": tree_requests(), "lamps": lamp_requests(), "beer": snappedf(game.drink_time, 0.01), "eat": snappedf(game.eat_time, 0.01), "food_kind": game.eat_kind, "food_species": game.food_species, "seated": game.seated, "running": game.running(), "airborne": game.jump_height > 0.01}
 
 # ---------------------------------------------------------------- peers
@@ -508,10 +508,6 @@ func update_tow(delta: float) -> void:
 	game.Recovery.update(game, players, delta)
 
 func check_remote_collisions() -> void:
-	var people = [{"id": player_id, "state": local_state()}]
-	for peer in peers.values():
-		if peer.state != null:
-			people.append({"id": peer.id, "state": peer.state})
 	for peer in peers.values():
 		if peer.state == null:
 			continue
@@ -525,21 +521,11 @@ func check_remote_collisions() -> void:
 			var index = int(request.id)
 			if index >= 0 and index < game.stage.trees.size() and current.distance_to(game.stage.trees[index]) < 4 and absf(float(peer.state.get("speed", 0))) > 1:
 				game.knock_tree(index, v(request.dir))
-		if absf(float(peer.state.get("speed", 0))) > 5:
-			for person in people:
-				if person.id != peer.id and not person.state.in_car and game.Motion.swept_hit(previous + Vector3(0, 0.7, 0), current + Vector3(0, 0.7, 0), v(person.state.pos) + Vector3(0, 0.7, 0), 1.55):
-					game.die("Легковушка сбила участника вашей компании.")
-					return
+		# A friend's car (not simulated here) throws people it runs into.
+		var speed = absf(float(peer.state.get("speed", 0)))
+		if speed > game.injuries.PLAYER_CAR_SPEED and current.distance_to(previous) > 0.001:
+			game.injuries.vehicle_sweep(previous, current, (current - previous).normalized() * speed, game.injuries.PLAYER_CAR_SPEED)
 		peer.last_car = current
-	for peer in peers.values():
-		if peer.state == null:
-			continue
-		for r in game.racers:
-			if r.state in ["racing", "offroad", "rock_bounce"]:
-				var pos = v(peer.state.pos)
-				if game.Motion.swept_hit(r.get("previous", r.node.position) + Vector3(0, 0.7, 0), r.node.position + Vector3(0, 0.7, 0), pos + Vector3(0, 0.7, 0), 2.6 if peer.state.in_car else 1.65):
-					game.die("Раллийная машина задела участника вашей компании.\nСовместный выезд окончен.")
-					return
 
 # ---------------------------------------------------------------- leaving
 
@@ -592,21 +578,17 @@ func drive_context(owner: String) -> Dictionary:
 	var contacts: Array = []
 	for group in game.spectators.groups:
 		contacts.append({"position": group.car.position})
-	for person in game.spectators.people:
-		contacts.append({"position": person.avatar.position})
 	for racer in game.racers:
 		contacts.append({"position": racer.node.position})
 	if owner != player_id:
 		contacts.append({"position": game.car.position})
-		if not game.in_car:
-			contacts.append({"position": game.walker, "person": true})
 	for id in peers:
-		var peer = peers[id]
-		if id == owner or peer.state == null:
-			continue
-		contacts.append({"position": v(peer.state.car)})
-		if not peer.state.in_car:
-			contacts.append({"position": v(peer.state.pos), "person": true})
+		if id != owner and peers[id].state != null:
+			contacts.append({"position": v(peers[id].state.car)})
+	# Everybody on foot except the driver; people lying after a hit are passed.
+	for person in game.injuries.people():
+		if person.key != "player:" + owner and not game.injuries.is_down(person.key):
+			contacts.append({"position": person.pos, "person": true})
 	return {"contacts": contacts, "racing": game.racing}
 
 func apply_drive_events(solver, authoritative: bool) -> void:
@@ -616,7 +598,7 @@ func apply_drive_events(solver, authoritative: bool) -> void:
 			"city": game.knock_solid(event.hit, event.velocity)
 			"person":
 				if authoritative:
-					game.die("Легковушка сбила участника вашей компании.")
+					game.injuries.knock_near(event.position, event.velocity, solver.node.position)
 			"impact":
 				if not authoritative:
 					game.impact_shake = minf(0.8, float(event.speed) * 0.055)

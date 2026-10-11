@@ -42,6 +42,7 @@ func run() -> void:
 			if only.is_empty() or i in only:
 				builders.append(func(): return props.rally_car(i))
 		builders.append(func(): return props.course_car("police"))
+		builders.append(func(): return props.course_car("ambulance"))
 	var world = Node3D.new()
 	root.add_child(world)
 	var env = WorldEnvironment.new()

@@ -19,6 +19,8 @@ var car_towed = false
 # it is at least this high (m) above it.
 const FLOOR_REUSE_DISTANCE = 0.4
 const FLOOR_REUSE_HEIGHT = 0.8
+# Condition (%) a crew knocks off the local player's car when it rams it.
+const CAR_RAM_DAMAGE = 30.0
 
 func spawn_course_car(role: String, id: int, zero_index: int = 0) -> void:
 	if game.dead or game.finished or (game.room.is_guest()):
@@ -142,6 +144,8 @@ func update_racers_step(delta: float) -> void:
 			var desired_yaw = path_yaw + float(racer.get("drift_yaw", 0.0)) + recorded_yaw
 			var yaw = node.rotation.y + clampf(wrapf(desired_yaw - node.rotation.y, -PI, PI), -2.5 * delta, 2.5 * delta)
 			racer.motion.suspension(node, game.stage, delta, yaw, lateral_accel)
+			if racer.get("role", "") == "ambulance":
+				game.injuries.ambulance_step(racer)
 			if game.stage.water != null:
 				var spray_depth = game.stage.water.depth(node.position)
 				if spray_depth > 0.0:
@@ -188,7 +192,7 @@ func update_racers_step(delta: float) -> void:
 				racer.age = 0.0
 				if racer.state == "stranded":
 					game.toast("Экипаж застрял. Нужен трос — T рядом с машиной.")
-		elif racer.state in ["stopped", "stranded"]:
+		elif racer.state in ["stopped", "stranded", "parked"]:
 			racer.motion.suspension(node, game.stage, delta, node.rotation.y)
 			if racer.state == "stopped" and not service and racer.age > 18 and racer.node != game.tow_target and not racer.get("towed", false) and int(racer.get("recovery_helpers", 0)) == 0:
 				to_remove.append(racer)
@@ -228,16 +232,16 @@ func update_racers_step(delta: float) -> void:
 				else:
 					racer.state = "stranded" if racer.kind in ["stuck", "crash"] else "stopped"
 					racer.age = 0
-			if Motion.swept_hit(racer.previous + Vector3(0, 0.7, 0), node.position + Vector3(0, 0.7, 0), game.player_position() + Vector3(0, 0.7, 0), 2.6 if game.in_car else 1.65):
-				game.die("Раллийная машина попала в тебя.\nНа этом выезд закончился.")
-				return
-		if racer.state in ["racing", "offroad", "rock_bounce"]:
+			# People on foot are thrown (injuries.gd); the ambulance never hits anyone.
+			if racer.get("role", "") != "ambulance":
+				game.injuries.vehicle_sweep(racer.previous, node.position, (node.position - racer.previous) / maxf(delta, 0.001), game.injuries.CREW_SPEED)
+		if racer.state in ["racing", "offroad", "rock_bounce"] and racer.get("role", "") != "ambulance":
 			var blockers = [game.car.position]
 			for peer in game.room.peers.values():
 				if peer.state != null:
 					blockers.append(game.room.v(peer.state.car))
 			for other in game.racers:
-				if other.id < racer.id or other.state in ["stopped", "stranded"]:
+				if other.id < racer.id or other.state in ["stopped", "stranded", "parked"]:
 					blockers.append(other.node.position)
 			for blocker in blockers:
 				if Motion.swept_hit(racer.previous + Vector3(0, 0.65, 0), node.position + Vector3(0, 0.65, 0), blocker + Vector3(0, 0.65, 0), 2.5):
@@ -245,6 +249,11 @@ func update_racers_step(delta: float) -> void:
 					racer.state = "stranded" if racer.kind in ["stuck", "crash"] else "stopped"
 					racer.age = 0
 					game.toast("Столкновение машин! Экипаж остановился.")
+					if blocker == game.car.position:
+						# The crew rams the local player's car: it takes the damage.
+						game.condition = maxf(0.0, game.condition - CAR_RAM_DAMAGE)
+						game.impact_shake = 0.8
+						game.toast("Раллийная машина врезалась в твою легковушку!")
 					break
 		if racer.state in ["stranded", "stopped"]:
 			count_racer(racer)

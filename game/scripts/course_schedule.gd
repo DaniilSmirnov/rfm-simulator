@@ -7,6 +7,8 @@ var phase = "countdown"
 var remaining = OPENING_SECONDS
 var zero_index = 0
 var active_id = -1
+# An ambulance is on the stage (injuries.gd): no crew starts meanwhile.
+var red_flag = false
 
 func update(game, delta: float) -> void:
 	if not game.playing or game.paused or game.dead or game.finished or (game.room.is_guest()):
@@ -29,7 +31,9 @@ func update(game, delta: float) -> void:
 				game.spawn_course_car("opening_police", active_id)
 		"racing":
 			game.race_clock += delta
-			if game.rally_spawn_count < game.RALLY_CREW_LIMIT:
+			if red_flag:
+				pass
+			elif game.rally_spawn_count < game.RALLY_CREW_LIMIT:
 				game.spawn_clock -= delta
 				if game.spawn_clock <= 0:
 					game.spawn_racer()
@@ -88,12 +92,12 @@ func phase_caption() -> String:
 			return "ДО ОБРАТНОГО ПРОХОДА %02d:%02d" % [seconds / 60, seconds % 60]
 		"opening_police": return "ОТКРЫТИЕ СУ · ПОЛИЦИЯ"
 		"zero": return "НУЛЕВОЙ ЭКИПАЖ %d/3 · № 0" % zero_index
-		"racing": return "СУ ОТКРЫТ · ГОНЩИКИ"
+		"racing": return "КРАСНЫЙ ФЛАГ · СКОРАЯ НА СУ" if red_flag else "СУ ОТКРЫТ · ГОНЩИКИ"
 		"closing_police": return "ЗАКРЫТИЕ СУ · ПОЛИЦИЯ"
 		_: return "СУ ЗАКРЫТ"
 
 func snapshot() -> Dictionary:
-	return {"pass_index": pass_index, "phase": phase, "remaining": remaining, "zero_index": zero_index, "active_id": active_id}
+	return {"pass_index": pass_index, "phase": phase, "remaining": remaining, "zero_index": zero_index, "active_id": active_id, "red_flag": red_flag}
 
 func apply_snapshot(data: Dictionary) -> void:
 	pass_index = clampi(int(data.get("pass_index", 1)), 1, 2)
@@ -101,3 +105,4 @@ func apply_snapshot(data: Dictionary) -> void:
 	remaining = clampf(float(data.get("remaining", OPENING_SECONDS)), 0, OPENING_SECONDS)
 	zero_index = clampi(int(data.get("zero_index", 0)), 0, 3)
 	active_id = int(data.get("active_id", -1))
+	red_flag = data.get("red_flag", false) == true

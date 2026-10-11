@@ -107,6 +107,8 @@ func update(world_time: float, delta: float, guest: bool) -> void:
 	else:
 		clock = world_time
 	for person in people:
+		if game.injuries.holds(person.avatar):
+			continue
 		var previous_position: Vector3 = person.avatar.position
 		var pose = activity(person.id, clock)
 		var group: Dictionary = groups[int(person.group)]
@@ -270,7 +272,7 @@ func passing_car(point: Vector3) -> bool:
 func push_helpers() -> Dictionary:
 	var result = {}
 	for person in people:
-		if person.helper < 0 or person.action != "push":
+		if person.helper < 0 or person.action != "push" or game.injuries.holds(person.avatar):
 			continue
 		for racer in game.racers:
 			if racer.id == person.helper and game.can_tow_racer(racer):

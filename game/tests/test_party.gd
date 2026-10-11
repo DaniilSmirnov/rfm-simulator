@@ -119,9 +119,11 @@ func run() -> void:
 	var person = game.room.v(remote.pos)
 	game.speed = 2
 	check(game.contact_blocked(person + Vector3(-3, 0, 0), person + Vector3(-1, 0, 0), true) and not game.dead, "slow vehicle contact stops without killing pedestrian")
-	game.speed = 12
-	game.contact_blocked(person + Vector3(-3, 0, 0), person + Vector3(-1, 0, 0), true)
-	check(game.dead, "fast personal car impact ends shared outing")
+	# A fast car throws the friend (injuries.gd) instead of ending the outing.
+	game.injuries.vehicle_sweep(person + Vector3(-3, 0, 0), person + Vector3(-1, 0, 0), Vector3(12, 0, 0), game.injuries.PLAYER_CAR_SPEED)
+	check(game.injuries.is_down("player:friend") and not game.dead, "fast personal car throws the friend down")
+	check(not game.contact_blocked(person + Vector3(-3, 0, 0), person + Vector3(-1, 0, 0), true), "cars pass a friend lying on the ground")
+	game.injuries.records.clear()
 	game.dead = false
 	game.menu.hide()
 	var index = 0

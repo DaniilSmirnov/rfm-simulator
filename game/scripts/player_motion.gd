@@ -37,6 +37,8 @@ func drive(delta: float) -> void:
 		var next = previous + game.vehicle_motion.velocity * dt
 		next.x = clampf(next.x, -185, 185)
 		next.z = clampf(next.z, -Stage.LENGTH + 5, 10)
+		# Fast enough, the car throws people in its way instead of stopping.
+		game.injuries.vehicle_sweep(previous, next, game.vehicle_motion.velocity, game.injuries.PLAYER_CAR_SPEED)
 		var rock_hit = game.stage.rock_hit(previous, next, 0.85)
 		if not rock_hit.is_empty():
 			next = rock_hit.position
@@ -101,14 +103,16 @@ func contact_blocked(start: Vector3, end: Vector3, driving: bool) -> bool:
 	for group in game.spectators.groups:
 		cars.append(group.car.position)
 	for person in game.spectators.people:
-		cars.append(person.avatar.position) # Solid spectators without affecting player-owned chair counts.
+		if not game.injuries.holds(person.avatar):
+			# Spectators are solid for walkers; drivers meet them as people.
+			(people if driving else cars).append(person.avatar.position)
 	for racer in game.racers:
 		cars.append(racer.node.position)
 	for peer in game.room.peers.values():
 		if peer.state == null:
 			continue
 		cars.append(game.room.v(peer.state.car))
-		if not peer.state.in_car:
+		if not peer.state.in_car and not game.injuries.is_down("player:%s" % peer.id):
 			people.append(game.room.v(peer.state.pos))
 	for other in cars:
 		if Motion.swept_hit(start + Vector3(0, 0.65, 0), end + Vector3(0, 0.65, 0), other + Vector3(0, 0.65, 0), 2.5 if driving else 1.75):
@@ -118,8 +122,6 @@ func contact_blocked(start: Vector3, end: Vector3, driving: bool) -> bool:
 	for person in people:
 		if Motion.swept_hit(start + Vector3(0, 0.7, 0), end + Vector3(0, 0.7, 0), person + Vector3(0, 0.7, 0), 1.55 if driving else 0.6):
 			if end.distance_to(person) <= start.distance_to(person):
-				if driving and absf(game.speed) > 5 and (game.room.is_authority()):
-					game.die("Легковушка сбила участника вашей компании.")
 				return true
 	return false
 
@@ -131,7 +133,7 @@ func walk(delta: float) -> void:
 		remaining -= step
 
 func walk_step(delta: float) -> void:
-	if game.beers >= 30 or game.seated:
+	if game.beers >= 30 or game.seated or game.injuries.down:
 		return
 	var motion = Vector2(Input.get_axis("left", "right"), Input.get_axis("forward", "back"))
 	if motion.length() > 1:
@@ -139,7 +141,7 @@ func walk_step(delta: float) -> void:
 	var dir = Vector3(motion.x, 0, motion.y).rotated(Vector3.UP, game.view_yaw)
 	var water_factor = game.stage.water.walk_factor(game.walker) if game.stage.water != null else 1.0
 	var wading = snow_wading()
-	var next = game.walker + dir * delta * water_factor * game.mushroom_effect.movement_multiplier() * lerpf(1.0, game.SNOW_WADE_SPEED, wading) * (1.4 if game.drink_time >= 0 or game.eat_time >= 0 else (game.RUN_SPEED if running() else game.WALK_SPEED))
+	var next = game.walker + dir * delta * water_factor * game.injuries.walk_factor() * game.mushroom_effect.movement_multiplier() * lerpf(1.0, game.SNOW_WADE_SPEED, wading) * (1.4 if game.drink_time >= 0 or game.eat_time >= 0 else (game.RUN_SPEED if running() else game.WALK_SPEED))
 	next.x = clampf(next.x, -185, 185)
 	next.z = clampf(next.z, -Stage.LENGTH + 5, 10)
 	var old_floor = game.walker.y - game.jump_height
@@ -187,10 +189,10 @@ func snow_hint(delta: float) -> void:
 	game.snow_stuck = deep
 
 func running() -> bool:
-	return not game.in_car and not game.seated and game.beers < 30 and not game.paused and not game.dead and not game.finished and game.drink_time < 0 and game.eat_time < 0 and Input.is_action_pressed("sprint") and (absf(Input.get_axis("left", "right")) + absf(Input.get_axis("forward", "back"))) > 0.01
+	return not game.in_car and not game.seated and game.beers < 30 and game.injuries.limp <= 0.0 and not game.injuries.down and not game.paused and not game.dead and not game.finished and game.drink_time < 0 and game.eat_time < 0 and Input.is_action_pressed("sprint") and (absf(Input.get_axis("left", "right")) + absf(Input.get_axis("forward", "back"))) > 0.01
 
 func jump() -> bool:
-	if not game.playing or game.in_car or game.seated or game.beers >= 30 or game.paused or game.dead or game.finished or game.drink_time >= 0 or game.eat_time >= 0 or game.jump_height > 0.01 or game.jump_velocity > 0:
+	if not game.playing or game.in_car or game.seated or game.beers >= 30 or game.injuries.down or game.injuries.limp > 0.0 or game.paused or game.dead or game.finished or game.drink_time >= 0 or game.eat_time >= 0 or game.jump_height > 0.01 or game.jump_velocity > 0:
 		return false
 	if game.stage.water != null and game.stage.water.depth(game.walker) > 0.6:
 		return false # No push-off while wading deep or swimming.
@@ -199,6 +201,9 @@ func jump() -> bool:
 
 func update_camera(delta: float) -> void:
 	if game.capture_mode:
+		return
+	if game.injuries.down:
+		game.injuries.update_camera(delta)
 		return
 	game.impact_shake = maxf(0, game.impact_shake - delta)
 	game.collapse_time = minf(0.8, game.collapse_time + delta) if game.beers >= 30 else 0.0
@@ -230,8 +235,8 @@ func toggle_car() -> void:
 		return
 	if game.jump_height > 0.01 or game.jump_velocity > 0:
 		return
-	if game.beers >= 30:
-		game.toast("Ты лежишь. Дождись восстановления — три минуты.")
+	if game.beers >= 30 or game.injuries.down:
+		game.toast("Ты лежишь. Дождись восстановления — три минуты." if game.beers >= 30 else "Ты лежишь. Дождись скорую.")
 		return
 	if game.drink_time >= 0 or game.eat_time >= 0:
 		game.toast("Сначала закончи есть или пить и освободи руки.")

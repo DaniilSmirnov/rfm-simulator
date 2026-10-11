@@ -51,9 +51,10 @@ func solid(parent: Node3D, local: Vector3, radius: float, height: float) -> void
 	collider.shape = shape
 	body.add_child(collider)
 	var record = Records.rock(parent.position + local.rotated(Vector3.UP, parent.rotation.y), radius, height, Records.OFFICIAL)
+	if parent.get_meta("role", "") in ["marshal", "judge"]:
+		parent.set_meta("solid_record", record)
 	if parent.get_meta("role", "") == "marshal":
 		record.actor = parent
-		parent.set_meta("solid_record", record)
 	stage.rocks.append(record)
 
 func build() -> void:
@@ -154,6 +155,8 @@ func station(s: float, sign: float, title: String) -> void:
 func update(game, delta: float, guest: bool) -> void:
 	for person in people:
 		var avatar: Node3D = person.avatar
+		if game.injuries.holds(avatar):
+			continue
 		var previous: Vector3 = avatar.position
 		var facing = avatar.position - Vector3(0, 0, 1)
 		if guest and targets.has(person.id):
@@ -199,7 +202,7 @@ func update(game, delta: float, guest: bool) -> void:
 func push_helpers(game) -> Dictionary:
 	var result = {}
 	for person in people:
-		if person.action != "push" or person.helper < 0:
+		if person.action != "push" or person.helper < 0 or game.injuries.holds(person.avatar):
 			continue
 		for racer in game.racers:
 			if racer.id == person.helper and game.can_tow_racer(racer):
