@@ -25,7 +25,7 @@ const CAR_RAM_MIN_SPEED = 3.0
 const CAR_RAM_FULL_SPEED = 20.0
 const CAR_RAM_MAX_DAMAGE = 30.0
 
-static func car_ram_damage(impact_speed: float) -> float:
+func car_ram_damage(impact_speed: float) -> float:
 	return CAR_RAM_MAX_DAMAGE * clampf((impact_speed - CAR_RAM_MIN_SPEED) / (CAR_RAM_FULL_SPEED - CAR_RAM_MIN_SPEED), 0.0, 1.0)
 
 func spawn_course_car(role: String, id: int, zero_index: int = 0) -> void:
