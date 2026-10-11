@@ -100,18 +100,31 @@ func update_racers_step(delta: float) -> void:
 		var was_racing = racer.state == "racing"
 		racer.age += delta
 		var service = racer.get("role", "racer") != "racer"
+		var red_hold = game.course.red_flag and racer.get("role", "racer") != "ambulance"
 		if service:
 			Props.update_course_lights(node, game.elapsed)
 		if racer.state == "racing":
 			var traffic = Traffic.plan(game, racer)
+			if red_hold:
+				traffic.speed = 0.0
+				traffic.line = racer.line
+				traffic.can_pass = false
 			racer.avoiding = traffic.avoiding
 			racer.avoid_line = traffic.line
 			var actual_speed = move_toward(float(racer.get("drive_speed", race_speed(racer.s))), float(traffic.speed), delta * (Traffic.BRAKE if traffic.speed < racer.get("drive_speed", 0) else 8.0))
 			actual_speed = minf(actual_speed, float(traffic.get("advance", INF)) / maxf(delta, 0.001))
 			racer.drive_speed = actual_speed
+			# Keep the racing state: no towing/despawn or timetable transition while
+			# waiting. Freeze lateral corrections too, so stopped cars cannot creep.
+			if red_hold and actual_speed <= 0.0:
+				racer.slide_speed = 0.0
+				racer.motion.suspension(node, game.stage, delta, node.rotation.y)
+				continue
 			var race_speed = maxf(actual_speed, 0.1)
 			var advance = RallyHandling.advance(game.stage, racer.s, delta * actual_speed, game.course.pass_index == 2, racer.line + racer.slide)
 			racer.s += minf(advance, float(traffic.get("advance", INF)))
+			if red_hold:
+				racer.s = minf(racer.s, Stage.LENGTH - 1.0)
 			# A crew braking just short of lateral clearance must finish its slow
 			# manoeuvre; tying all steering motion to zero forward speed deadlocks it.
 			var lateral_rate = minf(2.8, actual_speed * 0.14)
@@ -150,7 +163,7 @@ func update_racers_step(delta: float) -> void:
 				var spray_depth = game.stage.water.depth(node.position)
 				if spray_depth > 0.0:
 					game.stage.water.wake(node.get_instance_id(), node.position, movement / maxf(delta, 0.001), spray_depth, delta, 1.3)
-			if racer.get("role", "racer") in ["racer", "zero"] and ((s >= racer.focus and racer.kind != "pass") or absf(racer.slide) > 3.4 or absf(racer.line + racer.slide) > Traffic.line_limit(game, s) + 0.8):
+			if racer.get("role", "racer") in ["racer", "zero"] and ((not red_hold and s >= racer.focus and racer.kind != "pass") or absf(racer.slide) > 3.4 or absf(racer.line + racer.slide) > Traffic.line_limit(game, s) + 0.8):
 				racer.state = "offroad"
 				racer.age = 0
 				if racer.kind == "pass":
@@ -162,16 +175,16 @@ func update_racers_step(delta: float) -> void:
 				game.toast("ВЫЛЕТ! Отойди с траектории!")
 			elif s > racer.focus + 45 and not racer.counted:
 				count_racer(racer)
-			if s >= Stage.LENGTH - 1:
+			if s >= Stage.LENGTH - 1 and not red_hold:
 				to_remove.append(racer)
 		elif racer.state in ["offroad", "rock_bounce"]:
 			var steps = maxi(1, int(ceil(delta / RallyHandling.STEP)))
 			var dt = delta / steps
 			for step in range(steps):
 				var previous: Vector3 = node.position
-				var driving = racer.get("self_rejoin", false) and racer.age > 0.6 and RallyRejoin.step(game, racer, dt)
+				var driving = not red_hold and racer.get("self_rejoin", false) and racer.age > 0.6 and RallyRejoin.step(game, racer, dt)
 				if not driving:
-					RallyHandling.free_step(racer, game.stage, dt)
+					RallyHandling.free_step(racer, game.stage, dt, red_hold)
 				var contact = game.stage.rock_hit(previous, node.position, 0.85)
 				var city_contact = game.stage.solids.hit(previous, node.position, 0.85)
 				if not city_contact.is_empty() and (contact.is_empty() or previous.distance_squared_to(city_contact.position) < previous.distance_squared_to(contact.position)):
@@ -194,7 +207,7 @@ func update_racers_step(delta: float) -> void:
 					game.toast("Экипаж застрял. Нужен трос — T рядом с машиной.")
 		elif racer.state in ["stopped", "stranded", "parked"]:
 			racer.motion.suspension(node, game.stage, delta, node.rotation.y)
-			if racer.state == "stopped" and not service and racer.age > 18 and racer.node != game.tow_target and not racer.get("towed", false) and int(racer.get("recovery_helpers", 0)) == 0:
+			if racer.state == "stopped" and not red_hold and not service and racer.age > 18 and racer.node != game.tow_target and not racer.get("towed", false) and int(racer.get("recovery_helpers", 0)) == 0:
 				to_remove.append(racer)
 		if was_racing:
 			var contact = game.stage.rock_hit(racer.previous, node.position, 0.85)
