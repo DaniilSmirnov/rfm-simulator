@@ -109,6 +109,12 @@ func run() -> void:
 	check(game.injuries.is_down("marshal:%d" % marshal.id), "a fast car throws a marshal")
 	check(game.stage.rock_hit(post + Vector3(2, 0.2, 0), post - Vector3(2, -0.2, 0), 0.85).is_empty(), "a thrown marshal no longer blocks cars like a rock")
 	check(ambulance(game).size() > 0, "a new ambulance comes for them")
+	# Under the red flag every marshal still standing waves a red flag.
+	game.injuries.update(0.0)
+	game.stage.officials.update(game, 0.1, false)
+	var others = game.stage.officials.people.filter(func(p): return p.id != marshal.id)
+	check(not others.is_empty() and others.all(func(p): return p.action == "flag" and p.avatar.get_node("RightArm/RedFlag").visible), "standing marshals wave red flags")
+	check(not marshal.avatar.get_node("RightArm/RedFlag").visible, "the knocked-down marshal shows no flag")
 
 	# A crew ramming the player's car damages it; nobody dies.
 	game.injuries.records.clear()

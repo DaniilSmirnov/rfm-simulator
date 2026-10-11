@@ -70,6 +70,7 @@ func build() -> void:
 			push_error("No safe marshal position on stage %d" % stage.variant)
 			continue
 		var marshal = Props.course_official("marshal", i)
+		red_flag(marshal)
 		add_child(marshal)
 		marshal.position = spot.pos
 		var toward = stage.at(spot.s) - marshal.position
@@ -77,6 +78,15 @@ func build() -> void:
 		marshals.append(marshal)
 		solid(marshal, Vector3.ZERO, 0.33, 1.75)
 		people.append({"id": i, "avatar": marshal, "home": marshal.position, "helper": -1, "action": "watch"})
+
+# A red flag in the marshal's right hand, shown while the stage is red-flagged.
+static func red_flag(marshal: Node3D) -> void:
+	var flag = Node3D.new()
+	flag.name = "RedFlag"
+	marshal.get_node("RightArm").add_child(flag)
+	Props.box(flag, Vector3(0, -0.95, -0.05), Vector3(0.025, 0.9, 0.025), Color("d8d2c0"))
+	Props.box(flag, Vector3(0, -1.22, -0.29), Vector3(0.015, 0.34, 0.46), Color("d6262b"))
+	flag.hide()
 
 func arch(s: float, caption: String, finish: bool) -> void:
 	var gate = Node3D.new()
@@ -155,7 +165,9 @@ func station(s: float, sign: float, title: String) -> void:
 func update(game, delta: float, guest: bool) -> void:
 	for person in people:
 		var avatar: Node3D = person.avatar
+		var flag: Node3D = avatar.get_node("RightArm/RedFlag")
 		if game.injuries.holds(avatar):
+			flag.hide() # A knocked-down marshal drops the flag.
 			continue
 		var previous: Vector3 = avatar.position
 		var facing = avatar.position - Vector3(0, 0, 1)
@@ -177,7 +189,7 @@ func update(game, delta: float, guest: bool) -> void:
 				facing = avatar.position + road
 			else:
 				Navigation.move(game, person, person.home, delta)
-				person.action = "watch"
+				person.action = "flag" if game.course.red_flag else "watch"
 				var nearest = 65.0
 				facing = game.stage.at(game.stage.road_s(person.home))
 				for crew in game.racers:
@@ -195,6 +207,13 @@ func update(game, delta: float, guest: bool) -> void:
 		for side in ["Left", "Right"]:
 			avatar.get_node(side + "Arm").rotation.x = PI / 2 if person.action == "push" else 0.08
 			avatar.get_node(side + "Leg").rotation.x = sin(game.elapsed * 8 + person.id) * 0.4 * (-1 if side == "Left" else 1) if moving else 0.0
+		# Red flag on the stage: the flag is raised high and waved side to side.
+		var right: Node3D = avatar.get_node("RightArm")
+		flag.visible = person.action == "flag"
+		right.rotation.z = 0.0
+		if flag.visible:
+			right.rotation.x = 2.7
+			right.rotation.z = sin(game.elapsed * 6.0 + person.id) * 0.35
 		# Keep manual swept collisions and the real static shape with the moving actor.
 		var record: Dictionary = avatar.get_meta("solid_record")
 		record.pos = avatar.position
