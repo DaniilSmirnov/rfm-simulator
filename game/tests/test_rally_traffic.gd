@@ -174,6 +174,48 @@ func run() -> void:
 	check(game.course.phase_caption().contains("КРАСНЫЙ ФЛАГ"), "red-flag status is visible")
 	game.course.red_flag = false
 	clear_cars(game)
+	# Service traffic yields to pedestrians, including emergency swept stops.
+	game.course.pass_index = 1
+	game.course.red_flag = false
+	for role in ["ambulance", "opening_police", "closing_police"]:
+		clear_cars(game)
+		game.spawn_racer("pass")
+		var service = game.racers[0]
+		service.role = role
+		service.s = 180.0
+		service.line = 0.0
+		service.node.position = game.race_at(service.s)
+		game.walker = game.race_at(service.s + 6.0)
+		var plan = game.crews.ServiceTraffic.pedestrian_plan(game, service, {"speed": 20.0, "line": 0.0, "can_pass": true})
+		check(plan.speed < 20.0 and plan.advance <= 2.1 and not plan.can_pass, "service vehicle brakes before a pedestrian")
+		var before = game.crews.ServiceTraffic.save(service)
+		service.node.position = game.walker
+		service.s += 6.0
+		check(game.crews.ServiceTraffic.guard(game, service, before), "swept guard stops service vehicle crossing a pedestrian")
+		check(service.node.position == before.position and service.s == before.s and service.state == "racing", "safety stop preserves route state for resuming")
+		game.walker = Vector3(170, 2, 5)
+		service.node.position = game.car.position
+		check(game.crews.ServiceTraffic.guard(game, service, before), "service vehicle cannot pass through a player car")
+	# The ambulance uses the verge around every stopped course-vehicle role.
+	for blocker_role in ["racer", "zero", "opening_police", "closing_police"]:
+		var queue = pair(game, false, 175.0)
+		queue[0].role = blocker_role
+		queue[1].role = "ambulance"
+		queue[1].track_parts = PackedInt32Array()
+		var bypass = game.Traffic.plan(game, queue[1])
+		check(bypass.get("can_pass", false) and absf(bypass.line) >= game.crews.ServiceTraffic.CAR_CLEARANCE, "ambulance plans a clear shoulder pass around stopped course vehicles")
+		check(bypass.speed <= 6.0, "shoulder pass uses a reduced speed")
+	# A casualty on the road can be treated from the safe braking distance.
+	var medical = game.racers[1]
+	medical.role = "ambulance"
+	medical.target_key = "test:casualty"
+	medical.target_s = medical.s + 5.0
+	medical.drive_speed = 0.0
+	game.injuries.records[medical.target_key] = {"pos": game.race_at(medical.target_s)}
+	game.injuries.ambulance_step(medical)
+	check(medical.state == "parked" and medical.get("treating", "") == "test:casualty", "ambulance treats casualty without driving into them")
+	game.injuries.records.erase("test:casualty")
+	clear_cars(game)
 	await game._shutdown_audio()
 	game.queue_free()
 	await process_frame

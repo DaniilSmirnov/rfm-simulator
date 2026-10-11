@@ -10,6 +10,7 @@ const RallyRejoin = preload("res://scripts/rally_rejoin.gd")
 const RallyTracks = preload("res://scripts/rally_tracks.gd")
 const Recovery = preload("res://scripts/recovery.gd")
 const Stage = preload("res://scripts/stage.gd")
+const ServiceTraffic = preload("res://scripts/service_traffic.gd")
 const Traffic = preload("res://scripts/rally_traffic.gd")
 
 var game
@@ -97,6 +98,7 @@ func update_racers_step(delta: float) -> void:
 	for racer in game.racers:
 		var node: Node3D = racer.node
 		racer.previous = node.position
+		var service_before = ServiceTraffic.save(racer)
 		var was_racing = racer.state == "racing"
 		racer.age += delta
 		var service = racer.get("role", "racer") != "racer"
@@ -105,6 +107,8 @@ func update_racers_step(delta: float) -> void:
 			Props.update_course_lights(node, game.elapsed)
 		if racer.state == "racing":
 			var traffic = Traffic.plan(game, racer)
+			if ServiceTraffic.applies(racer):
+				traffic = ServiceTraffic.pedestrian_plan(game, racer, traffic)
 			if red_hold:
 				traffic.speed = 0.0
 				traffic.line = racer.line
@@ -157,6 +161,8 @@ func update_racers_step(delta: float) -> void:
 			var desired_yaw = path_yaw + float(racer.get("drift_yaw", 0.0)) + recorded_yaw
 			var yaw = node.rotation.y + clampf(wrapf(desired_yaw - node.rotation.y, -PI, PI), -2.5 * delta, 2.5 * delta)
 			racer.motion.suspension(node, game.stage, delta, yaw, lateral_accel)
+			if ServiceTraffic.guard(game, racer, service_before):
+				continue
 			if racer.get("role", "") == "ambulance":
 				game.injuries.ambulance_step(racer)
 			if game.stage.water != null:
@@ -245,10 +251,10 @@ func update_racers_step(delta: float) -> void:
 				else:
 					racer.state = "stranded" if racer.kind in ["stuck", "crash"] else "stopped"
 					racer.age = 0
-			# People on foot are thrown (injuries.gd); the ambulance never hits anyone.
-			if racer.get("role", "") != "ambulance":
+			# Competitors can hit people; police and ambulances yield and use the safety guard.
+			if not ServiceTraffic.applies(racer):
 				game.injuries.vehicle_sweep(racer.previous, node.position, (node.position - racer.previous) / maxf(delta, 0.001), game.injuries.CREW_SPEED)
-		if racer.state in ["racing", "offroad", "rock_bounce"] and racer.get("role", "") != "ambulance":
+		if racer.state in ["racing", "offroad", "rock_bounce"] and not ServiceTraffic.applies(racer):
 			var blockers = [game.car.position]
 			for peer in game.room.peers.values():
 				if peer.state != null:
