@@ -1,6 +1,7 @@
 extends RefCounted
 # Host-side rally line selection. Guests consume the existing pose snapshots.
 const Tracks = preload("res://scripts/rally_tracks.gd")
+const ServiceTraffic = preload("res://scripts/service_traffic.gd")
 const Injuries = preload("res://scripts/injuries.gd")
 const CLEARANCE = 2.85
 const MAX_LINE = 3.05
@@ -125,6 +126,11 @@ static func plan(game: Node3D, racer: Dictionary) -> Dictionary:
 	# historic ±2.95 m, in narrow village streets it stays off the pavements.
 	var reach = maxf(1.0, line_limit(game, s) - 0.8)
 	var candidates = [base, -minf(2.95, reach), minf(2.95, reach), -minf(1.5, reach), minf(1.5, reach)]
+	if racer.get("role", "") == "ambulance":
+		reach += 2.0 # Search the verge too; terrain/solid probes must approve it.
+		for edge in [reach, maxf(0.0, reach - 0.75), maxf(0.0, reach - 1.5)]:
+			candidates.append(-edge)
+			candidates.append(edge)
 	# Picking a passing line probes the road ahead for every candidate; it is
 	# redone ~8 times a second or when the set of blockers changes. Braking
 	# below still follows the blockers every step.
@@ -136,7 +142,7 @@ static func plan(game: Node3D, racer: Dictionary) -> Dictionary:
 		for candidate in candidates:
 			var clear = true
 			for blocker in blockers:
-				if absf(candidate - blocker.line) < CLEARANCE:
+				if absf(candidate - blocker.line) < (ServiceTraffic.CAR_CLEARANCE + 0.3 if ServiceTraffic.applies(racer) else CLEARANCE):
 					clear = false
 					break
 			if not clear or not _clear_path_cached(game, racer, candidate, distance):
@@ -151,12 +157,12 @@ static func plan(game: Node3D, racer: Dictionary) -> Dictionary:
 	else:
 		best = float(lane.best)
 		chosen = float(lane.chosen)
-	var speed = limit
+	var speed = minf(limit, 6.0) if racer.get("role", "") == "ambulance" and absf(chosen) > 2.95 else limit
 	var advance = INF
 	# Brake until the actual lateral position clears the obstruction. Retain
 	# "racing" while waiting, so towing the blocker lets the queue restart.
 	for blocker in blockers:
-		if blocker.gap >= 0 and (best == INF or absf(current - blocker.line) < CLEARANCE):
+		if blocker.gap >= 0 and (best == INF or absf(current - blocker.line) < (ServiceTraffic.CAR_CLEARANCE + 0.3 if ServiceTraffic.applies(racer) else CLEARANCE)):
 			var safe = sqrt(2 * BRAKE * maxf(0, blocker.gap - 8))
 			speed = minf(speed, safe)
 			advance = minf(advance, maxf(0, blocker.gap - 7))
@@ -189,6 +195,10 @@ static func _clear_path(game, racer: Dictionary, target: float, distance: float)
 		var line = lerpf(current, target, smoothstep(0, minf(26, distance * 0.65), ahead))
 		var point = game.race_at(s) + game.race_side(s) * line
 		point.y = stage.ground(point)
+		if racer.get("role", "") == "ambulance":
+			if absf(line) > line_limit(game, s) + 1.2: return false
+			if absf(point.y - previous.y) > maxf(0.5, point.distance_to(previous) * 0.45): return false
+			if stage.water != null and stage.water.depth(point) > 0.2: return false
 		if not stage.rock_hit(previous, point, 0.95).is_empty() or stage.obstacle_hit(previous, point, 0.95, true) >= 0:
 			return false
 		if not stage.solids.hit(previous, point, 0.95).is_empty():
