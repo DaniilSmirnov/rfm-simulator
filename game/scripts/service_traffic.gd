@@ -9,7 +9,12 @@ static func applies(racer: Dictionary) -> bool:
 	return racer.get("role", "racer") in ["ambulance", "opening_police", "closing_police"]
 
 static func people(game) -> Array:
-	var result = game.injuries.people()
+	var result: Array = []
+	# Keep injury avatars discoverable for animation, but block service traffic
+	# only with standing people and the actual displaced body positions.
+	for person in game.injuries.people():
+		if not game.injuries.is_down(str(person.key)):
+			result.append(person)
 	# Injured people can be displaced from their ordinary walking positions.
 	for record in game.injuries.records.values():
 		if record.has("pos"):
