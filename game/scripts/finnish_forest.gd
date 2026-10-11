@@ -294,6 +294,7 @@ func road_paint(p: Vector3, lateral: float) -> Color:
 
 const Water = preload("res://scripts/water.gd")
 const ForestLife = preload("res://scripts/forest_life.gd")
+const MeshMerge = preload("res://scripts/mesh_merge.gd")
 var forest_life: RefCounted = ForestLife.new()
 
 func make_water():
@@ -355,6 +356,12 @@ func build_scenery() -> void:
 	_build_yellow_house()
 	_build_jump_boards()
 	_build_sauna()
+	# Static scenery is dozens of boxes; one merged mesh per structure keeps it
+	# to a single draw call (the boat merges too and still floats as a whole).
+	for node_name in ["YellowHouse", "RedShed", "JumpBoards", "LakeSauna", "Jetty", "RowingBoat"]:
+		var node = stage.get_node_or_null(node_name)
+		if node != null:
+			MeshMerge.bake(node)
 
 # Level a building on sloping ground: the floor sits on the highest corner and
 # a stone plinth reaches down to the lowest one, so nothing floats or sinks.
@@ -406,16 +413,21 @@ func _build_yellow_house() -> void:
 
 # Spectators traditionally mark how far crews fly over the crest.
 func _build_jump_boards() -> void:
+	var boards = Node3D.new()
+	boards.name = "JumpBoards"
+	stage.add_child(boards)
 	for metres in [20, 30, 40, 50, 60]:
 		var s = YELLOW_HOUSE_STATION + float(metres)
 		var p = stage.at(s) + stage.side(s) * -YELLOW_HOUSE_SIDE * 6.6
 		p.y = stage.ground(p)
-		Props.cylinder(stage, p + Vector3(0, 0.6, 0), 0.05, 0.05, 1.2, Color("d9d4c6"), 5)
-		var board = Props.box(stage, p + Vector3(0, 1.25, 0), Vector3(0.9, 0.5, 0.06), Color("f4f2ea"))
+		Props.cylinder(boards, p + Vector3(0, 0.6, 0), 0.05, 0.05, 1.2, Color("d9d4c6"), 5)
+		var board = Props.box(boards, p + Vector3(0, 1.25, 0), Vector3(0.9, 0.5, 0.06), Color("f4f2ea"))
 		var direction = stage.direction(s)
 		board.rotation.y = atan2(-direction.x, -direction.z)
-		Props.label_3d(board, Vector3(0, 0, 0.04), "%d м" % metres, 64, 0.005, Color("b0322a"))
-		Props.label_3d(board, Vector3(0, 0, -0.04), "%d м" % metres, 64, 0.005, Color("b0322a"), PI)
+		# Captions stay real text: the boards are seen up close at the jump.
+		for face in [[0.04, 0.0], [-0.04, PI]]:
+			var caption = Props.label_3d(board, Vector3(0, 0, face[0]), "%d м" % metres, 64, 0.005, Color("b0322a"), face[1])
+			caption.set_meta("unbatched", true)
 
 func _build_sauna() -> void:
 	var hut = Node3D.new()
@@ -439,10 +451,13 @@ func _build_sauna() -> void:
 	var length = start.distance_to(end)
 	var direction = (end - start).normalized()
 	var deck = float(jetty.deck)
+	var pier = Node3D.new()
+	pier.name = "Jetty"
+	stage.add_child(pier)
 	var planks = int(length / 0.42)
 	for i in range(planks):
 		var p = start + direction * (i + 0.5) * (length / planks)
-		var plank = Props.box(stage, Vector3(p.x, deck, p.z), Vector3(1.8, 0.07, 0.36), Color("8c6a46").lightened((i % 3) * 0.03))
+		var plank = Props.box(pier, Vector3(p.x, deck, p.z), Vector3(1.8, 0.07, 0.36), Color("8c6a46").lightened((i % 3) * 0.03))
 		plank.rotation.y = atan2(direction.x, direction.z)
 	for i in range(int(length / 2.2) + 1):
 		var p = start + direction * minf(length, i * 2.2)
@@ -450,7 +465,7 @@ func _build_sauna() -> void:
 		for sign in [-1.0, 1.0]:
 			var post = p + across * sign * 0.8
 			var bottom = stage.ground(post) - 0.3
-			Props.cylinder(stage, Vector3(post.x, (bottom + deck) * 0.5, post.z), 0.09, 0.09, deck - bottom, Color("5b4733"), 5)
+			Props.cylinder(pier, Vector3(post.x, (bottom + deck) * 0.5, post.z), 0.09, 0.09, deck - bottom, Color("5b4733"), 5)
 	# Rowing boat tied at the end of the jetty; it floats on the waves.
 	boat = Node3D.new()
 	boat.name = "RowingBoat"

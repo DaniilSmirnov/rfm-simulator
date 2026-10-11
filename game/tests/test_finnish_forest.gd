@@ -111,6 +111,13 @@ func run() -> void:
 		life.update(0.1, duck_start + Vector3(2, 0, 0))
 	check(duck.node.position.distance_to(duck_start) > 1.0 and stage.water.depth(duck.node.position) > 0.4, "ducks paddle away from people and stay on the water")
 	check(stage.get_node_or_null("YellowHouse") != null and stage.get_node_or_null("LakeSauna") != null and stage.get_node_or_null("RowingBoat") != null, "farmhouse, lake sauna, jetty and boat are built")
+	# Draw calls: each structure is one merged mesh, not dozens of boxes.
+	var merged = true
+	for structure in ["YellowHouse", "RedShed", "JumpBoards", "LakeSauna", "Jetty", "RowingBoat"]:
+		var node = stage.get_node_or_null(structure)
+		merged = merged and node != null and node.has_meta("baked_parts") and node.find_children("*", "MeshInstance3D", true, false).filter(func(m): return m.mesh != null).size() <= 2
+	check(merged, "farmyard, sauna, jetty, boat and jump boards are merged meshes")
+	check(life.ducks[0].node.find_children("*", "MeshInstance3D", true, false).size() == 1, "a duck is one mesh")
 	for clearing in stage.clearings:
 		check(stage.water.depth(clearing) < -0.5 and stage.road_distance(clearing) > 9.0, "spectator clearing is dry and off the road")
 
@@ -183,6 +190,14 @@ func run() -> void:
 	game.select_stage(4)
 	await game.start_game()
 	check(game.stage.lakeland and game.stage.water.surfaces.size() == 3, "game starts on the lake stage")
+	# The minimap draws all lake cells as one cached texture (it used to cost
+	# one draw call per cell, ~2 700 per frame).
+	game.minimap.size = Vector2(264, 205)
+	var lake_map = game.minimap._water_texture()
+	check(game.stage.water.minimap_cells.size() > 1000 and lake_map != null and lake_map.get_size() == Vector2(264, 205), "minimap lakes are one texture")
+	check(game.minimap._water_texture() == lake_map, "minimap lake texture is reused between redraws")
+	var painted = lake_map.get_image().get_used_rect()
+	check(painted.size.x > 20 and painted.size.y > 20, "minimap lake texture shows the lakes")
 	var npc_dry = true
 	for group in game.spectators.groups:
 		npc_dry = npc_dry and game.stage.water.depth(group.car.position) < 0.0 and game.stage.water.depth(group.table.position) < 0.0

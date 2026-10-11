@@ -1,14 +1,22 @@
 extends Control
 const StageRegistry = preload("res://scripts/stage_registry.gd")
+const WATER_COLOR = Color("4f7f9c")
+const WATER_DOT_RADIUS = 2.6
 var game: Node
+# Lakes are static: they are rasterised once per map size into one texture.
+# Drawing every lake cell as its own circle cost one draw call per cell
+# (~2 700 on «Финский лес», more than the whole 3D scene of other stages).
+var water_texture: ImageTexture
+var water_key = ""
+var background: StyleBoxFlat
 
 func _draw() -> void:
 	if not is_instance_valid(game):
 		return
 	draw_style_box(_background(), Rect2(Vector2.ZERO, size))
-	if game.stage.water != null:
-		for cell in game.stage.water.minimap_cells:
-			draw_circle(project(Vector3(cell.x, 0, cell.y)), 2.6, Color("4f7f9ccc"))
+	var water = _water_texture()
+	if water != null:
+		draw_texture(water, Vector2.ZERO)
 	for i in range(game.stage.points.size() - 1):
 		draw_line(project(game.stage.points[i]), project(game.stage.points[i + 1]), Color("c4b48d"), 3, true)
 	if game.camp != null:
@@ -39,8 +47,47 @@ func player_direction() -> Vector2:
 func project(p: Vector3) -> Vector2:
 	return Vector2(size.x * 0.5 + p.x * 0.6, size.y - 12 + p.z / RallyStage.LENGTH * (size.y - 26))
 
+func _water_texture() -> ImageTexture:
+	var water = game.stage.water
+	if water == null or water.minimap_cells.is_empty():
+		return null
+	var width = int(ceil(size.x))
+	var height = int(ceil(size.y))
+	if width <= 0 or height <= 0:
+		return null
+	var key = "%d:%dx%d:%d" % [water.get_instance_id(), width, height, water.minimap_cells.size()]
+	if key == water_key and water_texture != null:
+		return water_texture
+	# Same dots as before, stamped by the engine instead of drawn one by one.
+	# Overlapping dots used to stack to near-opaque water; the stamped dots
+	# saturate the same way and keep soft edges at the shore.
+	var image = Image.create_empty(width, height, false, Image.FORMAT_RGBA8)
+	var brush = _water_brush()
+	var half = brush.get_width() / 2
+	var brush_rect = Rect2i(Vector2i.ZERO, brush.get_size())
+	for cell in water.minimap_cells:
+		var center = project(Vector3(cell.x, 0, cell.y))
+		image.blend_rect(brush, brush_rect, Vector2i(roundi(center.x) - half, roundi(center.y) - half))
+	water_texture = ImageTexture.create_from_image(image)
+	water_key = key
+	return water_texture
+
+# Antialiased dot of WATER_DOT_RADIUS in the opaque water colour.
+func _water_brush() -> Image:
+	var reach = int(ceil(WATER_DOT_RADIUS + 0.5))
+	var side = reach * 2 + 1
+	var brush = Image.create_empty(side, side, false, Image.FORMAT_RGBA8)
+	var center = Vector2(reach + 0.5, reach + 0.5)
+	for y in range(side):
+		for x in range(side):
+			var edge = clampf(WATER_DOT_RADIUS + 0.5 - center.distance_to(Vector2(x + 0.5, y + 0.5)), 0.0, 1.0)
+			brush.set_pixel(x, y, Color(WATER_COLOR, edge))
+	return brush
+
 func _background() -> StyleBoxFlat:
-	var style = StyleBoxFlat.new()
-	style.bg_color = Color(str(StageRegistry.value(game.stage.variant, "minimap"))) if is_instance_valid(game) else Color("26352be8")
-	style.set_corner_radius_all(12)
-	return style
+	var color = Color(str(StageRegistry.value(game.stage.variant, "minimap"))) if is_instance_valid(game) else Color("26352be8")
+	if background == null:
+		background = StyleBoxFlat.new()
+		background.set_corner_radius_all(12)
+	background.bg_color = color
+	return background
