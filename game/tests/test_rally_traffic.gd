@@ -239,7 +239,7 @@ func run() -> void:
 		game.stage.life.walkers.clear()
 		game.stage.life.walkers.append_array(saved_walkers)
 		walker_node.queue_free()
-	# A casualty on the road can be treated from the safe braking distance.
+	# Park at a safe braking distance; the doctor starts treatment after walking.
 	var medical = obstacle_ambulance
 	medical.role = "ambulance"
 	medical.target_key = "test:casualty"
@@ -247,7 +247,8 @@ func run() -> void:
 	medical.drive_speed = 0.0
 	game.injuries.records[medical.target_key] = {"pos": game.race_at(medical.target_s)}
 	game.injuries.ambulance_step(medical)
-	check(medical.state == "parked" and medical.get("treating", "") == "test:casualty", "ambulance treats casualty without driving into them")
+	check(medical.state == "parked" and medical.drive_speed == 0.0, "ambulance parks without driving into the casualty")
+	check(str(medical.get("treating", "")) == "", "parking alone does not start treatment before the doctor arrives")
 	game.injuries.records.erase("test:casualty")
 	clear_cars(game)
 	await game._shutdown_audio()

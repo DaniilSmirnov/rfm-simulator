@@ -86,16 +86,23 @@ func run() -> void:
 		if parked:
 			break
 	check(parked and absf(van.s - lying.station) <= 6.0 and van.node.position.distance_to(lying.pos) <= 8.0, "the ambulance parks within safe treatment range")
-	# Route projection may lag behind a casualty displaced from the road.
-	# Proximity and a real stop must still start the treatment timer.
+	# Route projection may lag behind the casualty; the doctor's approach must
+	# use the physical position, and treatment starts only after reaching them.
 	van.s = lying.station - 7.0
 	van.erase("treating")
-	for i in range(14 * 30):
+	for i in range(600):
 		game.injuries.update(1.0 / 30.0)
-	check(game.injuries.down, "treatment takes the full fifteen seconds after the ambulance stops")
-	for i in range(30):
-		game.injuries.update(1.0 / 30.0)
-	check(not game.injuries.down and game.injuries.limp > 55.0, "after treatment the player stands up and limps")
+		if game.injuries.medics.active.has(int(van.id)) and game.injuries.medics.active[int(van.id)].state == "treating":
+			break
+	var doctor: Dictionary = game.injuries.medics.active.get(int(van.id), {})
+	check(not doctor.is_empty() and doctor.state == "treating" and doctor.avatar.position.distance_to(lying.pos) < 1.3, "the doctor exits and walks to the casualty despite route projection lag")
+	check(game.injuries.down and lying.treat == 0.0, "walking time does not count towards treatment")
+	for i in range(29):
+		game.injuries.update(0.1)
+	check(game.injuries.down and doctor.avatar.get_node("MedicalTorso").rotation.x < -0.9, "the doctor bends over the patient for the full three seconds")
+	game.injuries.update(0.1)
+	check(not game.injuries.down and game.injuries.limp > 55.0, "after three seconds of treatment the player stands up and limps")
+	check(van.state == "parked" and doctor.state == "returning", "the ambulance waits for its doctor to return")
 	check(game.injuries.local_avatar == null and game.walker.distance_to(lying.pos) < 1.0, "the player gets up where they lay")
 	check(absf(game.injuries.walk_factor() - game.injuries.LIMP_FACTOR) < 0.001, "limping slows walking")
 	Input.action_press("sprint")

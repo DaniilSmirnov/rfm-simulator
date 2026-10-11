@@ -17,7 +17,7 @@ export const groups = Object.freeze({
   "test_rally_rejoin.gd", "test_rally_smoothness.gd", "test_rally_tracks.gd", "test_rally_traffic.gd", "test_room.gd", "test_direct_link.gd",
   "test_physics.gd", "test_food_fleet.gd", "test_foraging.gd",
   "test_poison_mushrooms.gd", "test_network_motion.gd", "test_tow_recovery.gd",
-  "test_crew_limit.gd", "test_drive_prediction.gd", "test_route_index.gd", "test_knockdown.gd",
+  "test_crew_limit.gd", "test_drive_prediction.gd", "test_route_index.gd", "test_knockdown.gd", "test_ambulance_medics.gd",
  ],
  world: [
   "test_baked_village.gd", "test_village_landmarks.gd", "test_navigation_budget.gd",
@@ -33,7 +33,7 @@ export const nodeSuites = Object.freeze({
  core: [
   ["--test", "tests/platform.test.mjs", "tests/auth-vk.test.mjs", "tests/payments-vk.test.mjs",
    "tests/store.test.mjs", "tests/deploy-cloudflare.test.mjs", "tests/fullscreen.test.mjs",
-   "tests/mobile-viewport.test.mjs", "tests/mobile-host-pause.test.mjs",
+   "tests/mobile-viewport.test.mjs", "tests/mobile-host-pause.test.mjs", "tests/pointer-capture.test.mjs",
    "tests/test-catalog.test.mjs", "tests/room-input.test.mjs",
    "tests/rate-limits.test.mjs", "tests/gdscript-lint.test.mjs"],
   ["--test", "tests/branding.test.mjs", "tests/boot-diagnostics.test.mjs",
