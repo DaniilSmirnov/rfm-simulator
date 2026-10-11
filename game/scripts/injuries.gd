@@ -79,26 +79,20 @@ func walk_factor() -> float:
 # Everybody who can be hit: {"key", "pos" (feet), "avatar"}.
 func people() -> Array:
 	var result: Array = []
-	if not game.in_car and not down:
+	if not game.in_car:
 		result.append({"key": local_key(), "pos": game.walker, "avatar": local_avatar})
 	for id in game.room.peers:
 		var peer = game.room.peers[id]
-		if peer.state != null and not peer.state.in_car and not is_down("player:%s" % id):
+		if peer.state != null and not peer.state.in_car:
 			result.append({"key": "player:%s" % id, "pos": game.room.v(peer.state.pos), "avatar": peer.get("avatar")})
 	if game.spectators != null:
 		for person in game.spectators.people:
-			if is_down("npc:%d" % person.id):
-				continue
 			result.append({"key": "npc:%d" % person.id, "pos": person.avatar.position, "avatar": person.avatar})
 	var officials = game.stage.officials if game.stage != null and "officials" in game.stage else null
 	if officials != null:
 		for person in officials.people:
-			if is_down("marshal:%d" % person.id):
-				continue
 			result.append({"key": "marshal:%d" % person.id, "pos": person.avatar.position, "avatar": person.avatar})
 		for i in range(officials.judges.size()):
-			if is_down("judge:%d" % i):
-				continue
 			result.append({"key": "judge:%d" % i, "pos": officials.judges[i].position, "avatar": officials.judges[i]})
 	return result
 
@@ -271,8 +265,8 @@ func ambulance_step(racer: Dictionary) -> void:
 		var room = maxf(0.0, game.stage.road_width(game.stage.road_s(r.pos)) * 0.5 - 1.2)
 		racer.bias = clampf(lateral, -room, room)
 	# Yielding to the casualty must still allow treatment from a safe stop.
-	var safe_stop = racer.node.position.distance_to(r.pos) <= 8.0 and float(racer.get("drive_speed", 0.0)) <= 0.2
-	if float(racer.s) >= target - 0.5 or (float(racer.s) >= target - 6.0 and safe_stop):
+	var safe_stop = racer.node.position.distance_to(r.pos) <= 10.0 and float(racer.get("drive_speed", 0.0)) <= 0.2
+	if float(racer.s) >= target - 0.5 or (float(racer.s) >= target - 10.0 and safe_stop):
 		racer.state = "parked"
 		racer.drive_speed = 0.0
 		racer.treating = racer.target_key
