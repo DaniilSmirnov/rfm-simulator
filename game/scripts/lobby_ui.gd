@@ -13,7 +13,7 @@ var purchase_status: Label
 var return_button: Button
 var host_pause: PanelContainer
 var help_button: Button
-var help_dialog: ConfirmationDialog
+var help_dialog: AcceptDialog
 const SUPPORT_EMAIL = "rallyfansmap@yandex.com"
 var audio_controls: VBoxContainer
 var volume_label: Label
@@ -78,12 +78,12 @@ func finish(parent: Control) -> void:
 	help_button.offset_top = -68
 	help_button.offset_bottom = -24
 	help_button.pressed.connect(_open_help)
-	help_dialog = ConfirmationDialog.new()
+	help_dialog = AcceptDialog.new()
 	help_dialog.name = "SupportDialog"
 	help_dialog.title = "Помощь и поддержка"
 	help_dialog.dialog_text = "Если возникла проблема с игрой, напишите нам:\n" + SUPPORT_EMAIL + "\n\nНажмите «Скопировать адрес», затем отправьте письмо из удобной почты."
 	help_dialog.ok_button_text = "Скопировать адрес"
-	help_dialog.cancel_button_text = "Закрыть"
+	help_dialog.add_cancel_button("Закрыть")
 	help_dialog.confirmed.connect(_copy_support_email)
 	ui.add_child(help_dialog)
 	# Backdrop fills the viewport independently of the inset HUD root.
