@@ -17,7 +17,7 @@ static func people(game) -> Array:
 			result.append(person)
 	# Injured people can be displaced from their ordinary walking positions.
 	for record in game.injuries.records.values():
-		if record.has("pos"):
+		if record.has("pos") and str(record.get("phase", "")) != "limp":
 			result.append({"pos": record.pos})
 	return result
 
@@ -67,6 +67,12 @@ static func guard(game, racer: Dictionary, before: Dictionary) -> bool:
 static func pedestrian_plan(game, racer: Dictionary, plan: Dictionary) -> Dictionary:
 	var current: float = racer.line + racer.slide
 	for person in people(game):
+		# Assigned casualty is approached using the medical parking controller.
+		# A separate swept guard still prevents colliding with their body.
+		if racer.get("role", "") == "ambulance" and game.injuries.records.has(str(racer.get("target_key", ""))):
+			var casualty: Dictionary = game.injuries.records[str(racer.target_key)]
+			if person.pos.distance_squared_to(casualty.pos) < 0.01:
+				continue
 		if racer.node.position.distance_squared_to(person.pos) > 10000.0: continue
 		var station: float = game.race_station(person.pos)
 		var gap: float = station - racer.s
