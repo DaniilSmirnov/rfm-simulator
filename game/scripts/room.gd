@@ -95,6 +95,9 @@ func connect_room(id: String) -> void:
 	if id != "" and not NetProtocol.valid_room_id(id):
 		ui.status.text = "ID состоит из %d символов: 0–9 и A–F." % NetProtocol.room_id_length()
 		return
+	# This runs directly from the create/join button. Capture here, before the
+	# server response calls start_game() after its asynchronous request.
+	game._request_game_mouse_capture()
 	room_id = id
 	ui.status.text = "Подключаемся…"
 	ui.set_entry_enabled(false)

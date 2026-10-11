@@ -482,6 +482,9 @@ func start_game() -> void:
 		return
 	if loading_world:
 		return
+	# Request pointer lock before prepare_world() can yield. Browsers only honor
+	# pointer-lock requests made during a trusted user gesture.
+	_request_game_mouse_capture()
 	if not world_ready:
 		await prepare_world()
 	playing = true
@@ -498,14 +501,15 @@ func start_game() -> void:
 	for panel in hud_panels:
 		panel.show()
 	mobile_sidebar.show()
-	# Automated startup has no browser user gesture. Pointer lock is tested separately.
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if mobile_mode or "--smoke-test" in OS.get_cmdline_user_args() or (room.connected and OS.has_feature("web")) else Input.MOUSE_MODE_CAPTURED
+	_request_game_mouse_capture()
 	toast("Найди подходящее место и разложи лагерь. Установка стола засчитывает выбор места.")
 	if not ("--script" in OS.get_cmdline_args() or "--smoke-test" in OS.get_cmdline_user_args() or "--capture" in OS.get_cmdline_user_args() or "--capture-menu" in OS.get_cmdline_user_args()):
 		_show_stage_safety_gate()
 
 func _show_stage_safety_gate() -> void:
 	hud.show_stage_safety_gate()
+func _request_game_mouse_capture() -> void:
+	hud.request_game_mouse_capture()
 
 func _update_invite_button() -> void:
 	hud.update_invite_button()
@@ -566,7 +570,7 @@ func _menu_action() -> void:
 	elif paused:
 		paused = false
 		menu.hide()
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if mobile_mode else Input.MOUSE_MODE_CAPTURED
+		_request_game_mouse_capture()
 	else:
 		room.connect_room("")
 
@@ -603,7 +607,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if not playing or paused or dead or finished:
 		return
-	if event is InputEventMouseButton and event.pressed and not mobile_mode and room.connected:
+	if event is InputEventMouseButton and event.pressed and not mobile_mode and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	if event is InputEventMouseMotion and not mobile_mode:
 		view_yaw -= event.relative.x * 0.0025

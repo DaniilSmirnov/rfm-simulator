@@ -9,6 +9,12 @@ const StageRegistry = preload("res://scripts/stage_registry.gd")
 
 var game
 
+func request_game_mouse_capture() -> void:
+	if game.mobile_mode or "--smoke-test" in OS.get_cmdline_user_args():
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	else:
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
 func panel(color: Color) -> StyleBoxFlat:
 	var p = StyleBoxFlat.new()
 	p.bg_color = color
@@ -574,4 +580,4 @@ func show_stage_safety_gate() -> void:
 func accept_stage_safety_gate() -> void:
 	game.safety_gate = null
 	game.paused = false
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if game.mobile_mode or game.room.connected and OS.has_feature("web") else Input.MOUSE_MODE_CAPTURED
+	game._request_game_mouse_capture()
