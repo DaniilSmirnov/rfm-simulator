@@ -167,6 +167,10 @@ func update_racers_step(delta: float) -> void:
 			var yaw = node.rotation.y + clampf(wrapf(desired_yaw - node.rotation.y, -PI, PI), -2.5 * delta, 2.5 * delta)
 			racer.motion.suspension(node, game.stage, delta, yaw, lateral_accel)
 			if ServiceTraffic.guard(game, racer, service_before):
+				# A guarded stop can also be the prescribed medical parking
+				# position; do not skip dispatch while the casualty is ahead.
+				if racer.get("role", "") == "ambulance":
+					game.injuries.ambulance_step(racer)
 				continue
 			if racer.get("role", "") == "ambulance":
 				game.injuries.ambulance_step(racer)
