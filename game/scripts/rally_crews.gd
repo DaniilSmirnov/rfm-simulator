@@ -380,13 +380,15 @@ func can_tow_racer(racer: Dictionary) -> bool:
 	return racer.state in ["stranded", "stopped"] and is_instance_valid(racer.node)
 
 # Something within rope range of the walking player: a stuck crew or a
-# friend's car.
+# player's car, including their own.
 func nearby_tow_target() -> bool:
 	if game.in_car:
 		return false
 	for racer in game.racers:
 		if can_tow_racer(racer) and game.walker.distance_to(racer.node.position) < Recovery.ROPE_RANGE:
 			return true
+	if game.walker.distance_to(game.car.position) < Recovery.ROPE_RANGE:
+		return true
 	for peer in game.room.peers.values():
 		if peer.has("car") and is_instance_valid(peer.car) and game.walker.distance_to(peer.car.position) < Recovery.ROPE_RANGE:
 			return true
