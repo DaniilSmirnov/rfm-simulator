@@ -81,6 +81,11 @@ static func plan(game: Node3D, racer: Dictionary) -> Dictionary:
 	var base = float(racer.track_reference.line) if not racer.track_reference.is_empty() else clampf(nominal(racer, s), -1.45, 1.45)
 	base = corner_line(game, racer, base)
 	var positions: Array[Dictionary] = [{"pos": game.car.position, "speed": 0.0}]
+	# Once treatment is complete, an ambulance must safely pass people
+	# still standing near the scene instead of remaining red-flagged forever.
+	if racer.get("role", "") == "ambulance" and float(racer.get("target_s", -1.0)) < 0.0:
+		for person in ServiceTraffic.people(game):
+			positions.append({"pos": person.pos, "speed": 0.0})
 	for peer in game.room.peers.values():
 		if peer.state != null:
 			positions.append({"pos": game.room.v(peer.state.car), "speed": 0.0})
