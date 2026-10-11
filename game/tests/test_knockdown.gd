@@ -86,8 +86,9 @@ func run() -> void:
 		if parked:
 			break
 	check(parked and absf(van.s - lying.station) <= 6.0 and van.node.position.distance_to(lying.pos) <= 8.0, "the ambulance parks within safe treatment range")
-	# Simulate a traffic stop that reaches the patient but misses the dispatch
-	# marker; proximity and a real stop must still start the treatment timer.
+	# Route projection may lag behind a casualty displaced from the road.
+	# Proximity and a real stop must still start the treatment timer.
+	van.s = lying.station - 7.0
 	van.erase("treating")
 	for i in range(14 * 30):
 		game.injuries.update(1.0 / 30.0)
