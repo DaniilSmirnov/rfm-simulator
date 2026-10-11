@@ -143,25 +143,25 @@ func run() -> void:
 		for role in ["racer", "zero"]:
 			clear_cars(game)
 			game.spawn_racer("pass")
-			var waiting = game.racers[0]
-			waiting.role = role
-			waiting.s = 150.0
-			waiting.node.position = game.race_at(waiting.s)
-			waiting.drive_speed = 20.0
-			waiting.slide = 0.0
-			waiting.slide_speed = 0.0
+			var red_flag_car = game.racers[0]
+			red_flag_car.role = role
+			red_flag_car.s = 150.0
+			red_flag_car.node.position = game.race_at(red_flag_car.s)
+			red_flag_car.drive_speed = 20.0
+			red_flag_car.slide = 0.0
+			red_flag_car.slide_speed = 0.0
 			game.course.red_flag = true
 			game._update_racers(1.0 / 60.0)
-			check(waiting.drive_speed > 0.0 and waiting.drive_speed < 20.0 and waiting.s > 150.0, "red flag brakes progressively instead of freezing immediately")
+			check(red_flag_car.drive_speed > 0.0 and red_flag_car.drive_speed < 20.0 and red_flag_car.s > 150.0, "red flag brakes progressively instead of freezing immediately")
 			game._update_racers(2.0)
-			check(waiting.drive_speed == 0.0 and waiting.state == "racing", "competitors and zeros stop without becoming stranded")
-			var held: Vector3 = waiting.node.position
-			waiting.age = 25.0
+			check(red_flag_car.drive_speed == 0.0 and red_flag_car.state == "racing", "competitors and zeros stop without becoming stranded")
+			var held: Vector3 = red_flag_car.node.position
+			red_flag_car.age = 25.0
 			game._update_racers(1.0)
-			check(game.racers.has(waiting) and Vector2(waiting.node.position.x - held.x, waiting.node.position.z - held.z).length() < 0.001, "red-flag wait neither creeps nor despawns")
+			check(game.racers.has(red_flag_car) and Vector2(red_flag_car.node.position.x - held.x, red_flag_car.node.position.z - held.z).length() < 0.001, "red-flag wait neither creeps nor despawns")
 			game.course.red_flag = false
 			game._update_racers(0.5)
-			check(waiting.drive_speed > 0.0 and waiting.node.position.distance_to(held) > 0.1, "crews resume when the red flag clears")
+			check(red_flag_car.drive_speed > 0.0 and red_flag_car.node.position.distance_to(held) > 0.1, "crews resume when the red flag clears")
 	clear_cars(game)
 	game.spawn_racer("pass")
 	var ambulance = game.racers[0]
