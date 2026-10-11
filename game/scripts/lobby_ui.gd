@@ -1,6 +1,12 @@
 extends Node
+# Main menu presentation: car and stage cards with their own purchase buttons,
+# site and support links, volume, host-pause banner and the menu backdrop.
+# Ownership remains in PlatformService and the backend.
 const NetProtocol = preload("res://scripts/net_protocol.gd")
-# Shared presentation only: ownership remains in PlatformService and the backend.
+const UiKit = preload("res://scripts/ui_kit.gd")
+const SUPPORT_EMAIL = "rallyfansmap@yandex.com"
+const AUDIO_SETTINGS_PATH = "user://audio_settings.cfg"
+const KINDS = ["МАШИНА", "СПЕЦУЧАСТОК"]
 var game: Node3D
 var background: TextureRect
 var images: Array[TextureRect] = []
@@ -13,12 +19,12 @@ var purchase_status: Label
 var return_button: Button
 var host_pause: PanelContainer
 var help_button: Button
-var help_dialog: PanelContainer
-const SUPPORT_EMAIL = "rallyfansmap@yandex.com"
+var help_dialog: Control
+var about_button: Button
+var about_dialog: Control
 var audio_controls: VBoxContainer
 var volume_label: Label
 var volume_slider: HSlider
-const AUDIO_SETTINGS_PATH = "user://audio_settings.cfg"
 var master_base_db = 0.0
 var last_size = Vector2.ZERO
 var last_playing = false
@@ -26,152 +32,119 @@ var last_playing = false
 func _is_vk_platform() -> bool:
 	return game.platform_service != null and game.platform_service.profile.get("platform", "") == "vk"
 
-func _open_help() -> void:
-	# mailto: is not reliably handled inside the VK client WebView.
-	if _is_vk_platform():
-		help_dialog.show()
-		return
-	if OS.shell_open("mailto:" + SUPPORT_EMAIL) != OK:
-		help_dialog.show()
+# ---------------------------------------------------------------- selection
 
-func _copy_support_email() -> void:
-	if OS.has_feature("web"):
-		# Bridge copy is supported inside VK mobile WebViews where Clipboard APIs
-		# and mailto handlers can be restricted. Catch rejection explicitly.
-		var script = "(function(){var text=" + JSON.stringify(SUPPORT_EMAIL) + ";if(window.vkBridge && typeof window.vkBridge.send==='function'){window.vkBridge.send('VKWebAppCopyText',{text:text}).catch(function(){if(navigator.clipboard)navigator.clipboard.writeText(text).catch(function(){});});return true;}if(navigator.clipboard){navigator.clipboard.writeText(text).catch(function(){});return true;}return false;})()"
-		var started = JavaScriptBridge.eval(script, true)
-		if started == true:
-			game.toast("Адрес поддержки: " + SUPPORT_EMAIL)
-			return
-	DisplayServer.clipboard_set(SUPPORT_EMAIL)
-	game.toast("Адрес поддержки: " + SUPPORT_EMAIL)
-
-func _build_help_dialog(parent: Control) -> void:
-	help_dialog = PanelContainer.new()
-	help_dialog.name = "SupportDialog"
-	help_dialog.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-	help_dialog.offset_left = -215
-	help_dialog.offset_right = 215
-	help_dialog.offset_top = -115
-	help_dialog.offset_bottom = 115
-	help_dialog.mouse_filter = Control.MOUSE_FILTER_STOP
-	parent.add_child(help_dialog)
-	var help_content = VBoxContainer.new()
-	help_content.name = "Content"
-	help_content.add_theme_constant_override("separation", 12)
-	help_dialog.add_child(help_content)
-	var help_title = Label.new()
-	help_title.text = "Помощь и поддержка"
-	help_content.add_child(help_title)
-	var help_text = Label.new()
-	help_text.name = "Message"
-	help_text.text = "Если возникла проблема с игрой, напишите нам:\n" + SUPPORT_EMAIL + "\n\nСкопируйте адрес и отправьте письмо из удобной почты."
-	help_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	help_content.add_child(help_text)
-	var help_actions = HBoxContainer.new()
-	help_actions.name = "Actions"
-	help_content.add_child(help_actions)
-	var copy_button = Button.new()
-	copy_button.text = "Скопировать адрес"
-	copy_button.pressed.connect(_copy_support_email)
-	help_actions.add_child(copy_button)
-	var close_button = Button.new()
-	close_button.name = "Close"
-	close_button.text = "Закрыть"
-	close_button.pressed.connect(help_dialog.hide)
-	help_actions.add_child(close_button)
-	help_dialog.hide()
+func build_selection(parent: Control) -> void:
+	var cards = UiKit.hbox(parent, 14)
+	for kind in KINDS:
+		var card = UiKit.expand(UiKit.card(cards, UiKit.SURFACE_RAISED, Vector2(12, 12)))
+		card.name = "CarCard" if kind == "МАШИНА" else "StageCard"
+		var column = UiKit.vbox(card, 8)
+		UiKit.label(column, kind, "caption")
+		add_preview(column, kind)
+		var choice = preload("res://scripts/menu_choice.gd").new()
+		choice.custom_minimum_size.y = 42
+		choice.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		column.add_child(choice)
+		var state = UiKit.label(column, "", "muted")
+		states.append(state)
+		var buy = UiKit.button(column, "", "secondary", 40)
+		buy.add_theme_font_size_override("font_size", 15)
+		buy.hide()
+		if kind == "МАШИНА":
+			game.car_choice = choice
+			for model in game.Props.PLAYER_MODELS:
+				choice.add_item(model.name)
+			choice.item_selected.connect(game.select_player_car)
+			car_purchase_button = buy
+			buy.pressed.connect(func(): game.platform_service.buy(game.platform_service.product("car", game.car_choice.selected).get("sku", "")))
+		else:
+			game.stage_choice = choice
+			for title in game.Stage.STAGES:
+				choice.add_item(title.get_slice("·", 0).strip_edges())
+			choice.item_selected.connect(game.select_stage)
+			choice.tooltip_text = "В комнате СУ выбирает создатель. Все участники играют на одной трассе."
+			purchase_button = buy
+			buy.pressed.connect(func(): game.platform_service.buy(game.platform_service.product("stage", game.stage_choice.selected).get("sku", "")))
+	# VK purchases: one status line with a re-check, under both cards.
+	purchase_actions = UiKit.hbox(parent, 12)
+	purchase_actions.name = "PurchaseStatus"
+	purchase_actions.alignment = BoxContainer.ALIGNMENT_END
+	purchase_status = UiKit.expand(UiKit.wrap(UiKit.label(purchase_actions, "", "muted")))
+	purchase_status.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	check_purchase = UiKit.button(purchase_actions, "ПРОВЕРИТЬ ПОКУПКУ", "ghost", 40)
+	check_purchase.add_theme_font_size_override("font_size", 15)
+	check_purchase.pressed.connect(func(): game.platform_service.refresh_store())
+	purchase_actions.hide()
 
 func add_preview(parent: Control, kind: String) -> void:
 	var image = TextureRect.new()
 	image.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	image.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	image.custom_minimum_size = Vector2(220, 150)
+	image.custom_minimum_size = Vector2(220, 140)
 	image.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	image.tooltip_text = "Превью машины" if kind == "МАШИНА" else "Превью спецучастка"
 	parent.add_child(image)
 	images.append(image)
-	var state = game._label(parent, "", 15)
-	states.append(state)
-	image.tooltip_text = "Превью машины" if kind == "МАШИНА" else "Превью спецучастка"
 
-func finish(parent: Control) -> void:
-	_build_audio_controls(parent)
-	background = TextureRect.new()
-	background.name = "StageBackdrop"
-	background.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	background.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	background.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	background.modulate = Color(0.8, 0.8, 0.8, 1)
-	var ui = game.menu.get_parent()
-	help_button = Button.new()
+# ---------------------------------------------------------------- links
+
+func build_links(parent: Control) -> void:
+	about_button = UiKit.button(parent, "О НАС", "ghost", 40)
+	about_button.name = "AboutButton"
+	about_button.tooltip_text = "Сайт Rally Fans Map: " + UiKit.BRAND_URL
+	about_button.add_theme_font_size_override("font_size", 15)
+	about_button.pressed.connect(_open_about)
+	help_button = UiKit.button(parent, "ПОМОЩЬ", "ghost", 40)
 	help_button.name = "HelpButton"
-	help_button.text = "Помощь"
 	help_button.tooltip_text = "Написать в поддержку: " + SUPPORT_EMAIL
-	ui.add_child(help_button)
-	help_button.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
-	help_button.offset_left = -148
-	help_button.offset_right = -24
-	help_button.offset_top = -68
-	help_button.offset_bottom = -24
+	help_button.add_theme_font_size_override("font_size", 15)
 	help_button.pressed.connect(_open_help)
-	_build_help_dialog(ui)
-	# Backdrop fills the viewport independently of the inset HUD root.
-	var backdrop_root = Control.new()
-	backdrop_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	ui.get_parent().add_child(backdrop_root)
-	ui.get_parent().move_child(backdrop_root, 0)
-	backdrop_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	backdrop_root.add_child(background)
-	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	return_button = Button.new()
-	return_button.text = "В ГЛАВНОЕ МЕНЮ"
-	return_button.custom_minimum_size.y = 44
-	return_button.pressed.connect(game.return_to_main_menu)
-	parent.add_child(return_button)
-	return_button.hide()
-	host_pause = PanelContainer.new()
-	game.menu.get_parent().add_child(host_pause)
-	host_pause.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
-	host_pause.offset_left = -270
-	host_pause.offset_right = 270
-	host_pause.offset_top = 110
-	host_pause.add_theme_stylebox_override("panel", game._panel(Color("23342bf5")))
-	var text = game._label(host_pause, "Хозяин поставил игру на паузу\nЖдём продолжения выезда", 20, Color("ffe4a5"))
-	text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	host_pause.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	host_pause.hide()
-	var actions = HBoxContainer.new()
-	purchase_actions = actions
-	parent.add_child(actions)
-	purchase_button = Button.new()
-	purchase_button.custom_minimum_size.y = 40
-	purchase_button.pressed.connect(func(): game.platform_service.buy(game.platform_service.product("stage", game.stage_choice.selected).get("sku", "")))
-	purchase_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	purchase_button.add_theme_font_size_override("font_size", 14)
-	actions.add_child(purchase_button)
-	car_purchase_button = Button.new()
-	car_purchase_button.custom_minimum_size.y = 40
-	car_purchase_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	car_purchase_button.add_theme_font_size_override("font_size", 14)
-	car_purchase_button.pressed.connect(func(): game.platform_service.buy(game.platform_service.product("car", game.car_choice.selected).get("sku", "")))
-	actions.add_child(car_purchase_button)
-	check_purchase = Button.new()
-	check_purchase.text = "ПРОВЕРИТЬ ПОКУПКУ"
-	check_purchase.custom_minimum_size.y = 40
-	check_purchase.pressed.connect(func(): game.platform_service.refresh_store())
-	check_purchase.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	check_purchase.add_theme_font_size_override("font_size", 14)
-	actions.add_child(check_purchase)
-	purchase_status = game._label(parent, "", 14)
-	purchase_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	car_purchase_button.hide()
-	purchase_button.hide()
-	check_purchase.hide()
-	purchase_status.hide()
-	refresh.call_deferred()
 
-func _build_audio_controls(parent: Control) -> void:
+# A small window with an address and two actions; used where the WebView may
+# not open mailto: or external links (VK clients).
+func _link_dialog(name: String, title: String, message: String, actions: Array) -> Control:
+	var modal = UiKit.modal(game.hud.dialog_layer, name)
+	UiKit.label(modal.content, title, "heading")
+	var text = UiKit.wrap(UiKit.label(modal.content, message, "body"))
+	text.name = "Message"
+	var row = UiKit.hbox(modal.content, 10)
+	row.name = "Actions"
+	for action in actions:
+		var button = UiKit.expand(UiKit.button(row, action[0], action[1], 44))
+		button.pressed.connect(action[2])
+	var close = UiKit.expand(UiKit.button(row, "ЗАКРЫТЬ", "ghost", 44))
+	close.name = "Close"
+	close.pressed.connect(modal.root.hide)
+	return modal.root
+
+func _open_help() -> void:
+	# mailto: is not reliably handled inside the VK client WebView.
+	if _is_vk_platform() or OS.shell_open("mailto:" + SUPPORT_EMAIL) != OK:
+		help_dialog.show()
+
+func _open_about() -> void:
+	# External links can be swallowed by the VK WebView: offer the address too.
+	if _is_vk_platform() or not UiKit.open_url(UiKit.BRAND_URL):
+		about_dialog.show()
+
+func _copy(text: String, message: String) -> void:
+	if OS.has_feature("web"):
+		# Bridge copy is supported inside VK mobile WebViews where Clipboard APIs
+		# and mailto handlers can be restricted. Catch rejection explicitly.
+		var script = "(function(){var text=" + JSON.stringify(text) + ";if(window.vkBridge && typeof window.vkBridge.send==='function'){window.vkBridge.send('VKWebAppCopyText',{text:text}).catch(function(){if(navigator.clipboard)navigator.clipboard.writeText(text).catch(function(){});});return true;}if(navigator.clipboard){navigator.clipboard.writeText(text).catch(function(){});return true;}return false;})()"
+		if JavaScriptBridge.eval(script, true) == true:
+			game.toast(message)
+			return
+	DisplayServer.clipboard_set(text)
+	game.toast(message)
+
+func _copy_support_email() -> void:
+	_copy(SUPPORT_EMAIL, "Адрес поддержки: " + SUPPORT_EMAIL)
+
+# ---------------------------------------------------------------- settings
+
+func build_audio(parent: Control) -> void:
 	master_base_db = AudioServer.get_bus_volume_db(AudioServer.get_bus_index("Master"))
 	var settings = ConfigFile.new()
 	var percent = 100.0
@@ -179,16 +152,15 @@ func _build_audio_controls(parent: Control) -> void:
 		var saved = settings.get_value("audio", "volume", 100.0)
 		if (saved is float or saved is int) and is_finite(float(saved)):
 			percent = clampf(float(saved), 0.0, 100.0)
-	audio_controls = VBoxContainer.new()
+	audio_controls = UiKit.vbox(parent, 4)
 	audio_controls.name = "AudioSettings"
-	parent.add_child(audio_controls)
-	volume_label = game._label(audio_controls, "", 17, Color("dfb270"))
+	volume_label = UiKit.label(audio_controls, "", "caption")
 	volume_slider = HSlider.new()
 	volume_slider.name = "MasterVolume"
 	volume_slider.min_value = 0
 	volume_slider.max_value = 100
 	volume_slider.step = 1
-	volume_slider.custom_minimum_size = Vector2(0, 44)
+	volume_slider.custom_minimum_size = Vector2(0, 40)
 	volume_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	volume_slider.tooltip_text = "Громкость всех звуков. 0 — без звука."
 	audio_controls.add_child(volume_slider)
@@ -201,13 +173,52 @@ func _build_audio_controls(parent: Control) -> void:
 		if config.save(AUDIO_SETTINGS_PATH) != OK:
 			game.toast("Не удалось сохранить громкость.")
 	)
-	audio_controls.hide()
 
 func _apply_volume(percent: float) -> void:
 	var master = AudioServer.get_bus_index("Master")
 	AudioServer.set_bus_mute(master, percent <= 0)
 	AudioServer.set_bus_volume_db(master, master_base_db + linear_to_db(maxf(percent / 100.0, 0.0001)))
-	volume_label.text = "Звук выключен" if percent <= 0 else "Громкость · %d%%" % roundi(percent)
+	volume_label.text = "ЗВУК ВЫКЛЮЧЕН" if percent <= 0 else "ГРОМКОСТЬ · %d%%" % roundi(percent)
+
+# ---------------------------------------------------------------- assembly
+
+func finish(parent: Control) -> void:
+	return_button = UiKit.button(parent, "В ГЛАВНОЕ МЕНЮ", "ghost", 44)
+	return_button.name = "ReturnButton"
+	return_button.pressed.connect(game.return_to_main_menu)
+	return_button.hide()
+	help_dialog = _link_dialog("SupportDialog", "Помощь и поддержка", "Если с игрой что-то не так, напиши нам:\n" + SUPPORT_EMAIL + "\n\nСкопируй адрес и отправь письмо из удобной почты.", [["СКОПИРОВАТЬ АДРЕС", "primary", _copy_support_email]])
+	about_dialog = _link_dialog("AboutDialog", UiKit.BRAND_NAME, "Игру делает Rally Fans Map — карта и сообщество болельщиков ралли.\n" + UiKit.BRAND_URL, [["ОТКРЫТЬ САЙТ", "primary", func(): UiKit.open_url(UiKit.BRAND_URL)], ["СКОПИРОВАТЬ", "secondary", func(): _copy(UiKit.BRAND_URL, "Ссылка скопирована: " + UiKit.BRAND_URL)]])
+	# Backdrop fills the viewport independently of the inset HUD root.
+	background = TextureRect.new()
+	background.name = "StageBackdrop"
+	background.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	background.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	background.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	background.modulate = Color(0.72, 0.72, 0.72, 1)
+	var canvas = game.mobile_ui.get_parent()
+	var backdrop_root = Control.new()
+	backdrop_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	canvas.add_child(backdrop_root)
+	canvas.move_child(backdrop_root, 0)
+	backdrop_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	backdrop_root.add_child(background)
+	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	host_pause = PanelContainer.new()
+	host_pause.name = "HostPause"
+	host_pause.add_theme_stylebox_override("panel", UiKit.panel_style(UiKit.SURFACE, Vector2(22, 14)))
+	game.mobile_ui.add_child(host_pause)
+	host_pause.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+	host_pause.offset_left = -240
+	host_pause.offset_right = 240
+	host_pause.offset_top = 96
+	host_pause.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var pause_box = UiKit.vbox(host_pause, 4)
+	UiKit.label(pause_box, "ПАУЗА", "caption").horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var text = UiKit.wrap(UiKit.label(pause_box, "Создатель выезда поставил игру на паузу.\nЖдём продолжения.", "body"))
+	text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	host_pause.hide()
+	refresh.call_deferred()
 
 func allowed(kind: String, index: int) -> bool:
 	return game.platform_service == null or game.platform_service.can_use(kind, index)
@@ -227,17 +238,21 @@ func refresh() -> void:
 	purchase_button.disabled = service.busy if service != null else true
 	purchase_button.text = ("ТЕСТ: " if product.get("payment_mode") == "test" else "") + "ОТКРЫТЬ СУ · " + vote_price(int(product.get("price", 0)))
 	check_purchase.visible = service != null and service.profile.get("platform") == "vk" and (can_buy or can_buy_car or not service.purchase_message.is_empty()) and not game.playing
-	purchase_actions.visible = purchase_button.visible or car_purchase_button.visible or check_purchase.visible
 	check_purchase.disabled = service.busy if service != null else true
 	purchase_status.text = service.purchase_message if service != null else ""
 	purchase_status.visible = not purchase_status.text.is_empty() and not game.playing
+	purchase_actions.visible = check_purchase.visible or purchase_status.visible
 	var car_ok = allowed("car", game.car_choice.selected)
 	var stage_ok = allowed("stage", game.stage_choice.selected)
 	for i in range(2):
 		var ok = car_ok if i == 0 else stage_ok
 		var bought = service != null and service.owns("car" if i == 0 else "stage", game.car_choice.selected if i == 0 else game.stage_choice.selected)
-		states[i].text = ("Куплено · доступно для выезда" if bought else "Доступно для выезда") if ok else ("Закрыто · доступна покупка" if ((i == 1 and can_buy) or (i == 0 and can_buy_car)) else "Закрыто · продажи ещё не открыты")
-		states[i].add_theme_color_override("font_color", Color("b2bea1") if ok else Color("ffbc83"))
+		var purchasable = (i == 1 and can_buy) or (i == 0 and can_buy_car)
+		# Free and available needs no note; only ownership and locks are shown.
+		states[i].text = ("Куплено" if bought else "") if ok else ("Закрыто · можно открыть" if purchasable else "Закрыто · скоро в продаже")
+		# A visible purchase button already says the content is closed.
+		states[i].visible = not states[i].text.is_empty() and not (car_purchase_button if i == 0 else purchase_button).visible
+		states[i].add_theme_color_override("font_color", UiKit.MUTED if ok else UiKit.WARNING)
 	background.visible = not game.playing
 	background.texture = null if game.playing else load("res://textures/previews/backdrop_%d.webp" % game.selected_stage)
 	images[0].texture = load("res://textures/previews/car_%d.webp" % game.selected_car)
@@ -253,37 +268,20 @@ func _process(_delta: float) -> void:
 		last_size = size
 		last_playing = game.playing
 		var compact = game.mobile_mode or size.y < 650
-		var width = minf(size.x - 48, 600 if game.playing else 920)
-		game.menu.offset_left = -width / 2
-		game.menu.offset_right = width / 2
-		var height = 220.0 if game.playing else minf(size.y - 40, 630)
-		game.menu.offset_top = -height / 2
-		game.menu.offset_bottom = height / 2
 		for image in images:
-			image.custom_minimum_size.y = 90 if compact else 130
-		game.menu_title.add_theme_font_size_override("font_size", 25 if compact else 34)
+			image.custom_minimum_size.y = (72 if game.mobile_mode else 100) if compact else 140
 		refresh()
-	# Main menu has no duplicate heading or instructions; game dialogs retain theirs.
-	game.menu_title.visible = game.playing or game.dead or game.finished
-	game.menu_text.visible = game.menu_title.visible
-	if not game.mobile_mode:
-		var minimum = game.menu.get_combined_minimum_size()
-		var extent = Vector2(maxf(minf(size.x - 48, 600 if game.playing else 920), minimum.x), maxf(minf(size.y - 40, 220 if game.playing else 630), minimum.y))
-		var factor = minf(1.0, minf(maxf(size.x - 48, 1) / extent.x, maxf(size.y - 40, 1) / extent.y))
-		game.menu.offset_left = -extent.x / 2
-		game.menu.offset_right = extent.x / 2
-		game.menu.offset_top = -extent.y / 2
-		game.menu.offset_bottom = extent.y / 2
-		game.menu.pivot_offset = extent / 2
-		game.menu.scale = Vector2.ONE * factor
+	game.hud.layout_menu()
+	var result = game.dead or game.finished
 	if game.room != null:
-		host_pause.visible = game.room.is_guest() and game.room.world_paused and not game.paused and not game.dead and not game.finished
-	game.draw_distance_controls.visible = game.playing and game.paused and not game.dead and not game.finished
+		# Phones keep the entry block short: the status line shows only news.
+		game.room.ui.status.visible = not (game.mobile_mode and game.room.ui.status.text == game.room.ui.default_hint)
+		host_pause.visible = game.room.is_guest() and game.room.world_paused and not game.paused and not result
 	return_button.visible = game.playing
-	help_button.visible = game.menu.visible and (not game.playing or game.paused) and not game.dead and not game.finished
-	audio_controls.visible = game.playing and game.paused and not game.dead and not game.finished
-	if game.mobile_mode:
-		var active_hud = game.playing and not game.paused and not game.dead and not game.finished and not host_pause.visible
+	if not game.mobile_mode:
+		game.mobile_top.visible = game.playing
+	else:
+		var active_hud = game.playing and not game.paused and not result and not host_pause.visible
 		game.mobile_top.visible = active_hud
 		game.mobile_bottom.visible = active_hud and not game.info_label.text.is_empty()
 

@@ -268,14 +268,7 @@ func _mobile_safe_response(result: int, code: int, _headers: PackedStringArray, 
 	hud.mobile_safe_response(result, code, _headers, body)
 
 func _set_paused(value: bool) -> void:
-	paused = value
-	menu.visible = paused
-	menu_title.text = "Перерыв на природе"
-	menu_text.text = "Пауза. Ралли, мангал и таймеры остановлены.\n\nHome — вернуть машину на дорогу.\nF8 / F9 — показать застревание / вылет.\n\nПродолжить — кнопкой или Esc."
-	start_button.text = "ПРОДОЛЖИТЬ"
-	menu_text.text = "Выезд приостановлен. Продолжить или вернуться в меню." if room.is_authority() else "Твоя пауза. Остальные игроки продолжают выезд."
-	_update_invite_button()
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if paused or mobile_mode else Input.MOUSE_MODE_CAPTURED
+	hud.set_paused(value)
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch and event.pressed and not mobile_mode:

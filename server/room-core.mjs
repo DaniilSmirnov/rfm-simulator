@@ -49,7 +49,7 @@ export class RoomState {
     const car_model = Number.isSafeInteger(options.car_model) && options.car_model >= 0 && options.car_model < CAR_COUNT ? options.car_model : slot;
     if (host) this.data.stage = Number.isSafeInteger(options.stage) ? Math.max(0, Math.min(STAGE_COUNT - 1, options.stage)) : 0;
     const id = crypto.randomUUID();
-    const p = { id, slot, car_model, token: crypto.randomUUID(), name: String(name || 'Овощ').replace(/[\u0000-\u001f]/g, '').trim().slice(0, protocol.name_max_length) || 'Овощ', seen: now, state: null, seq: 0, protocol: Number.isSafeInteger(options.protocol) ? options.protocol : 0 };
+    const p = { id, slot, car_model, token: crypto.randomUUID(), name: String(name || 'Фанат').replace(/[\u0000-\u001f]/g, '').trim().slice(0, protocol.name_max_length) || 'Фанат', seen: now, state: null, seq: 0, protocol: Number.isSafeInteger(options.protocol) ? options.protocol : 0 };
     this.data.players[id] = p;
     if (host) this.data.host = id;
     return { player: id, token: p.token, host, name: p.name, slot, car_model, stage: this.data.stage ?? 0 };

@@ -53,7 +53,7 @@
         place-items: center;
         border: 1px solid rgba(246, 234, 209, .38);
         border-radius: 12px;
-        background: rgba(23, 36, 43, .82);
+        background: rgba(19, 29, 23, .82);
         color: #f6ead1;
         box-shadow: 0 4px 18px rgba(0, 0, 0, .24);
         -webkit-backdrop-filter: blur(8px);

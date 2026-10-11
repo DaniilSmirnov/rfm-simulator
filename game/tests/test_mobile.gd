@@ -54,6 +54,10 @@ func run() -> void:
 	for b in c.buttons:
 		check(not b.rect.intersects(Rect2(c.look_center - Vector2.ONE * c.LOOK_RADIUS, Vector2.ONE * c.LOOK_RADIUS * 2)), "look stick does not overlap button: " + b.action)
 		check(c.button_icon(b) != null, "visible button has an icon: " + b.action)
+	for i in range(c.buttons.size()):
+		for j in range(i + 1, c.buttons.size()):
+			check(not c.buttons[i].rect.intersects(c.buttons[j].rect), "touch buttons never overlap: %s / %s" % [c.buttons[i].action, c.buttons[j].action])
+	check(not game.mobile_bottom.get_global_rect().intersects(Rect2(c.get_global_transform() * (c.look_center - Vector2.ONE * c.LOOK_RADIUS), Vector2.ONE * c.LOOK_RADIUS * 2)), "status card stays between the sticks")
 	c.touch_begin(40, Vector2(c.size.x * 0.6, 150))
 	check(not c.fingers.has(40), "free right-side touches do not capture camera")
 	game._update_hud()

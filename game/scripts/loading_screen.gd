@@ -1,4 +1,6 @@
 extends CanvasLayer
+# Full-screen progress while the stage is built on entry.
+const UiKit = preload("res://scripts/ui_kit.gd")
 var game: Node3D
 var overlay: ColorRect
 var caption: Label
@@ -7,23 +9,25 @@ var history: Array[String] = []
 func _ready() -> void:
 	layer = 20
 	overlay = ColorRect.new()
-	overlay.color = Color("17241bf5")
+	overlay.color = Color("131d17")
+	overlay.theme = UiKit.theme()
 	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(overlay)
 	var center = CenterContainer.new()
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	overlay.add_child(center)
-	var box = VBoxContainer.new()
-	box.custom_minimum_size = Vector2(320, 0)
-	box.add_theme_constant_override("separation", 18)
-	center.add_child(box)
-	var title = game._label(box, "ГОТОВИМ ВЫЕЗД", 26, Color("ffe4a5"))
+	var box = UiKit.vbox(center, 18)
+	box.custom_minimum_size = Vector2(360, 0)
+	var brand = UiKit.brand(box, 52)
+	brand.alignment = BoxContainer.ALIGNMENT_CENTER
+	var title = UiKit.label(box, "ГОТОВИМ ВЫЕЗД", "heading")
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	caption = game._label(box, "Подготовка", 20)
-	caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	bar = ProgressBar.new()
-	bar.custom_minimum_size.y = 24
+	bar.custom_minimum_size.y = 10
+	bar.show_percentage = false
 	box.add_child(bar)
+	caption = UiKit.label(box, "Подготовка", "muted")
+	caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	overlay.hide()
 func show_loading() -> void:
 	history.clear()

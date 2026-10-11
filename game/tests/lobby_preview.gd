@@ -42,8 +42,8 @@ func run() -> void:
 	await game.start_game()
 	game.paused = true
 	game.menu.show()
-	game.menu_title.text = "Перерыв на природе"
-	game.menu_text.text = "Выезд приостановлен. Продолжить или вернуться в меню."
+	game.menu_title.text = "Пауза"
+	game.menu_text.text = "Ралли, мангал и таймеры остановлены."
 	game.start_button.text = "ПРОДОЛЖИТЬ"
 	await capture(game, "mobile-pause")
 	game.paused = false

@@ -1,6 +1,15 @@
 extends Control
 class_name RallyMobileControls
 const StageRegistry = preload("res://scripts/stage_registry.gd")
+const UiKit = preload("res://scripts/ui_kit.gd")
+# Touch layout in canvas units (960×540 landscape, inside the safe area).
+const EDGE = 24.0
+const GAP = 8.0
+const TILE = Vector2(72, 64)
+const TOP = Vector2(64, 60)
+const STICK_FILL = Color("1d2b23aa")
+const STICK_LINE = Color("d7b479aa")
+const SHORT_LABELS = {"Вернуть коробку в багажник": "Вернуть", "Собрать казан с подставкой": "Убрать казан", "Потушить и собрать костёр": "Убрать костёр", "Сесть в машину": "В машину", "Сесть на стул": "На стул", "Встать со стула": "Встать", "Собрать гриб": "Собрать", "Собрать ягоды": "Собрать", "Собрать виноград": "Виноград", "Насадить гриб": "Насадить", "Съесть шашлык": "Шашлык", "Съесть гриб": "Есть гриб", "Выпить пиво": "Пиво", "Потушить и собрать мангал": "Убрать мангал", "Поставить казан на костёр": "На костёр", "Добавить ингредиенты и готовить плов": "Готовить плов", "Съесть плов": "Плов"}
 
 var game: Node
 var fingers: Dictionary = {}
@@ -14,7 +23,7 @@ var last_in_car = true
 var map_open = false
 var gear_open = false
 var gear_rect = Rect2()
-var button_styles: Array[StyleBoxFlat] = []
+var styles: Dictionary = {}
 var stick_center = Vector2.ZERO
 const STICK_RADIUS = 62.0
 const LOOK_RADIUS = STICK_RADIUS
@@ -29,13 +38,11 @@ func _ready() -> void:
 	resized.connect(reset_input)
 	for name in ICON_NAMES.values() + ["door", "eye"]:
 		icons[name] = load("res://textures/ui/mobile/" + name + ".svg")
-	for color in [Color("22342bd9"), Color("dfa963f2"), Color("dfb270e6")]:
-		var style = StyleBoxFlat.new()
-		style.bg_color = color
-		style.border_color = Color("d7b479")
-		style.set_border_width_all(2)
-		style.set_corner_radius_all(18)
-		button_styles.append(style)
+	var tile = func(color: Color, border: Color) -> StyleBoxFlat:
+		var style = UiKit.box(color, border, 14, Vector2.ZERO)
+		style.set_border_width_all(2 if border.a > 0 else 0)
+		return style
+	styles = {"normal": tile.call(Color("1d2b23d9"), Color("d7b47966")), "primary": tile.call(Color(UiKit.ACCENT, 0.94), Color.TRANSPARENT), "pressed": tile.call(UiKit.ACCENT_HOVER, Color.TRANSPARENT), "drawer": UiKit.box(Color("16221be6"), Color("d7b47966"), 16, Vector2.ZERO)}
 
 func active() -> bool:
 	return game != null and game.playing and not game.paused and not game.dead and not game.finished
@@ -66,10 +73,26 @@ func landscape() -> bool:
 func add_button(label: String, action: String, hold: bool, rect: Rect2) -> void:
 	buttons.append({"label": label, "action": action, "hold": hold, "rect": rect})
 
+# Tile in the action grid above the right stick: columns count from the right
+# edge, rows from the bottom; span 2 makes the wide main action.
+func grid_rect(column: int, row: int, span: int = 1) -> Rect2:
+	var bottom = look_center.y - LOOK_RADIUS - 14
+	var width = TILE.x * span + GAP * (span - 1)
+	var right = size.x - EDGE - column * (TILE.x + GAP)
+	return Rect2(Vector2(right - width, bottom - TILE.y - row * (TILE.y + GAP)), Vector2(width, TILE.y))
+
+# Short caption for the contextual action ("Сесть в машину" → "В машину").
+func action_caption(target: Dictionary) -> String:
+	if target.is_empty():
+		return "Действие"
+	var text = str(target.label)
+	for long_text in SHORT_LABELS:
+		text = text.replace(long_text, SHORT_LABELS[long_text])
+	return text.replace("Собрать ", "Убрать ")
+
 func _layout() -> void:
-	var edge = 24.0
 	if not _has_role("stick"):
-		stick_center = Vector2(edge + 84, size.y - edge - 80)
+		stick_center = Vector2(EDGE + 84, size.y - EDGE - 80)
 	var target: Dictionary = {}
 	if active() and not game.in_car:
 		target = game.hud_target if game.hud_target_frame == Engine.get_process_frames() else game.interaction.current()
@@ -84,51 +107,61 @@ func _layout() -> void:
 	gear_rect = Rect2()
 	if not active() or not landscape():
 		return
-	look_center = Vector2(size.x - edge - 84, size.y - edge - 80)
-	var gear: Array[Array] = []
+	look_center = Vector2(size.x - EDGE - 84, size.y - EDGE - 80)
+	var gear: Array = []
 	if not world_blocked():
 		if game.placement_kind != "":
 			var actions = [["Поставить", "placement_confirm"], ["Повернуть", "placement_rotate"], ["Отмена", "placement_cancel"]]
 			for i in range(actions.size()):
-				add_button(actions[i][0], actions[i][1], false, Rect2(Vector2(size.x / 2 - 158 + i * 108, size.y - edge - 64), Vector2(100, 64)))
+				add_button(actions[i][0], actions[i][1], false, Rect2(Vector2(size.x / 2 - 148 + i * 100, size.y - EDGE - 168), Vector2(92, TILE.y)))
 		elif game.in_car:
-			# Two large pedals under the right thumb; reverse is a separate hold.
-			add_button("Выйти", "interact", false, Rect2(Vector2(size.x - edge - 280, size.y - edge - 188), Vector2(88, 64)))
-			add_button("Назад", "back", true, Rect2(Vector2(size.x - edge - 280, size.y - edge - 256), Vector2(88, 56)))
-			add_button("Тормоз", "brake", true, Rect2(Vector2(size.x - edge - 184, size.y - edge - 256), Vector2(88, 112)))
-			add_button("Газ", "forward", true, Rect2(Vector2(size.x - edge - 88, size.y - edge - 256), Vector2(88, 112)))
-			gear = [["Вернуть", "recover"]]
+			gear = _layout_driving()
 		else:
-			var label = "Действие"
-			if not target.is_empty():
-				label = str(target.label).replace("Вернуть коробку в багажник", "Вернуть").replace("Собрать казан с подставкой", "Убрать казан").replace("Потушить и собрать костёр", "Убрать костёр").replace("Сесть в машину", "В машину").replace("Сесть на стул", "На стул").replace("Встать со стула", "Встать").replace("Собрать гриб", "Собрать").replace("Собрать ягоды", "Собрать").replace("Собрать виноград", "Виноград").replace("Насадить гриб", "Насадить").replace("Съесть шашлык", "Шашлык").replace("Съесть гриб", "Есть гриб").replace("Выпить пиво", "Пиво").replace("Потушить и собрать мангал", "Убрать мангал").replace("Поставить казан на костёр", "На костёр").replace("Добавить ингредиенты и готовить плов", "Готовить плов").replace("Съесть плов", "Плов").replace("Собрать ", "Убрать ")
-			add_button(label, "interact", false, Rect2(Vector2(size.x - edge - 96, size.y - edge - 256), Vector2(96, 100)))
-			if not game.seated and game.beers < 30:
-				add_button("Бег", "sprint", true, Rect2(Vector2(size.x - edge - 280, size.y - edge - 256), Vector2(64, 72)))
-				add_button("Прыжок", "jump", false, Rect2(Vector2(size.x - edge - 204, size.y - edge - 256), Vector2(96, 64)))
-			gear = []
-			if not game.packing.active():
-				gear.append(["Стол", "table"])
-				gear.append(["Стул", "chairs"])
-				gear.append(["Мангал", "grill"])
-				gear.append(["Дрова", "firewood"])
-				gear.append(["Казан", "cauldron"])
-				if game.flag_count() < game.FLAGS_PER_PLAYER:
-					gear.append(["Флаг", "flag"])
-			if game.foraging.can_eat("berries"):
-				gear.append([str(StageRegistry.value(game.stage.variant, "berries")), "eat_berries"])
-			if game.tow_target != null or game.nearby_tow_target():
-				add_button("Трос", "tow", true, Rect2(Vector2(size.x - edge - 360, size.y - edge - 256), Vector2(68, 68)))
+			gear = _layout_walking(target)
 		if not gear.is_empty():
-			add_button("Лагерь", "gear", false, Rect2(Vector2(size.x - edge - 216, edge), Vector2(64, 56)))
+			add_button("Лагерь", "gear", false, Rect2(Vector2(size.x - EDGE - 3 * TOP.x - 2 * GAP, EDGE), TOP))
 		if gear_open and game.placement_kind == "":
-			var rows = ceili(gear.size() / 3.0)
-			var origin = Vector2(size.x / 2 - 154, size.y - edge - rows * 64 - 12)
-			gear_rect = Rect2(origin - Vector2(8, 8), Vector2(316, rows * 64 + 8))
-			for i in range(gear.size()):
-				add_button(gear[i][0], gear[i][1], false, Rect2(origin + Vector2((i % 3) * 104, (i / 3) * 64), Vector2(96, 56)))
-	add_button("Пауза", "pause_demo", false, Rect2(Vector2(size.x - edge - 64, edge), Vector2(64, 56)))
-	add_button("Карта", "map", false, Rect2(Vector2(size.x - edge - 140, edge), Vector2(64, 56)))
+			_layout_drawer(gear)
+	add_button("Пауза", "pause_demo", false, Rect2(Vector2(size.x - EDGE - TOP.x, EDGE), TOP))
+	add_button("Карта", "map", false, Rect2(Vector2(size.x - EDGE - 2 * TOP.x - GAP, EDGE), TOP))
+
+# Two tall pedals under the right thumb; reverse and exit beside them.
+func _layout_driving() -> Array:
+	var bottom = look_center.y - LOOK_RADIUS - 14
+	var pedal = Vector2(88, 120)
+	add_button("Газ", "forward", true, Rect2(Vector2(size.x - EDGE - pedal.x, bottom - pedal.y), pedal))
+	add_button("Тормоз", "brake", true, Rect2(Vector2(size.x - EDGE - 2 * pedal.x - GAP, bottom - pedal.y), pedal))
+	var side = size.x - EDGE - 2 * pedal.x - 2 * GAP - TILE.x
+	add_button("Назад", "back", true, Rect2(Vector2(side, bottom - pedal.y), Vector2(TILE.x, 56)))
+	add_button("Выйти", "interact", false, Rect2(Vector2(side, bottom - 56), Vector2(TILE.x, 56)))
+	return [["Вернуть", "recover"]]
+
+func _layout_walking(target: Dictionary) -> Array:
+	add_button(action_caption(target), "interact", false, grid_rect(0, 0, 2))
+	if not game.seated and game.beers < 30:
+		add_button("Прыжок", "jump", false, grid_rect(2, 0))
+		add_button("Бег", "sprint", true, grid_rect(2, 1))
+	if game.tow_target != null or game.nearby_tow_target():
+		add_button("Трос", "tow", true, grid_rect(0, 1))
+	var gear: Array = []
+	if not game.packing.active():
+		gear = [["Стол", "table"], ["Стул", "chairs"], ["Мангал", "grill"], ["Дрова", "firewood"], ["Казан", "cauldron"]]
+		if game.flag_count() < game.FLAGS_PER_PLAYER:
+			gear.append(["Флаг", "flag"])
+	if game.foraging.can_eat("berries"):
+		gear.append([str(StageRegistry.value(game.stage.variant, "berries")), "eat_berries"])
+	return gear
+
+# The camp drawer opens above the status card, between the two sticks.
+func _layout_drawer(gear: Array) -> void:
+	var tile = Vector2(88, TILE.y)
+	var columns = mini(3, gear.size())
+	var rows = ceili(gear.size() / 3.0)
+	var extent = Vector2(columns * tile.x + (columns - 1) * GAP, rows * tile.y + (rows - 1) * GAP)
+	var origin = Vector2(size.x / 2 - extent.x / 2, size.y - EDGE - 100 - extent.y)
+	gear_rect = Rect2(origin - Vector2(GAP, GAP), extent + Vector2(GAP, GAP) * 2)
+	for i in range(gear.size()):
+		add_button(gear[i][0], gear[i][1], false, Rect2(origin + Vector2((i % 3) * (tile.x + GAP), (i / 3) * (tile.y + GAP)), tile))
 
 func _input(event: InputEvent) -> void:
 	if not active() or not landscape():
@@ -286,31 +319,44 @@ func _draw() -> void:
 		return
 	var font = ThemeDB.fallback_font
 	if not landscape():
-		draw_string(font, Vector2(0, size.y / 2), "Поверните устройство горизонтально", HORIZONTAL_ALIGNMENT_CENTER, size.x, 24, Color.WHITE)
+		draw_string(font, Vector2(0, size.y / 2), "Поверните устройство горизонтально", HORIZONTAL_ALIGNMENT_CENTER, size.x, 24, UiKit.TEXT)
 		return
 	if gear_open and gear_rect.has_area():
-		draw_style_box(button_styles[0], gear_rect)
-	draw_circle(stick_center, STICK_RADIUS, Color("25352baa"))
-	draw_arc(stick_center, STICK_RADIUS, 0, TAU, 40, Color("dfb270"), 3, true)
-	# Circular driving joystick; pedals independently control throttle and brake.
-	draw_circle(stick_center + stick * 48, 28, Color("e3b16bdd"))
-	var text = "ДЖОЙСТИК" if game.in_car else "ИДТИ"
-	draw_string(font, stick_center + Vector2(-42, 94), text, HORIZONTAL_ALIGNMENT_CENTER, 84, 18, Color("f3e8cd"))
+		draw_style_box(styles.drawer, gear_rect)
+	_draw_stick(stick_center, stick, null)
 	if not map_open and not gear_open and not world_blocked():
-		draw_circle(look_center, LOOK_RADIUS, Color("25352baa"))
-		draw_arc(look_center, LOOK_RADIUS, 0, TAU, 40, Color("dfb270"), 3, true)
-		draw_circle(look_center + look * 48, 28, Color("e3b16bdd"))
-		draw_texture_rect(icons["eye"], Rect2(look_center + look * 48 - Vector2(14, 14), Vector2(28, 28)), false, Color("22342b"))
+		_draw_stick(look_center, look, icons["eye"])
 	for button in buttons:
-		var pressed = false
-		for finger in fingers.values():
-			if finger.kind == "button" and finger.button.action == button.action and finger.pressed:
-				pressed = true
-		var emphasized = button.action == "forward" or (button.action == "interact" and not game.in_car)
-		var style = button_styles[1 if pressed else (2 if emphasized else 0)]
-		draw_style_box(style, button.rect)
-		var text_color = Color("22342b") if pressed or emphasized else Color("f6ead1")
-		var icon = button_icon(button)
-		if icon != null:
-			var extent = 36.0 if button.rect.size.y < 80 else 44.0
-			draw_texture_rect(icon, Rect2(button.rect.get_center() - Vector2.ONE * extent / 2, Vector2.ONE * extent), false, text_color)
+		_draw_button(button, font)
+
+func _draw_stick(center: Vector2, offset: Vector2, icon: Texture2D) -> void:
+	draw_circle(center, STICK_RADIUS, STICK_FILL)
+	draw_arc(center, STICK_RADIUS, 0, TAU, 48, STICK_LINE, 2.0, true)
+	var knob = center + offset * 46
+	draw_circle(knob, 26, UiKit.ACCENT)
+	if icon != null:
+		draw_texture_rect(icon, Rect2(knob - Vector2(13, 13), Vector2(26, 26)), false, UiKit.ON_ACCENT)
+
+# Every touch button is the same tile: icon above, caption below. The main
+# action (gas, contextual action) is amber; a held button lights up.
+func _draw_button(button: Dictionary, font: Font) -> void:
+	var pressed = false
+	for finger in fingers.values():
+		if finger.kind == "button" and finger.button.action == button.action and finger.pressed:
+			pressed = true
+	var emphasized = button.action == "forward" or (button.action == "interact" and not game.in_car)
+	var rect: Rect2 = button.rect
+	draw_style_box(styles.pressed if pressed else (styles.primary if emphasized else styles.normal), rect)
+	var color = UiKit.ON_ACCENT if pressed or emphasized else UiKit.TEXT
+	var caption_size = 13 if rect.size.x < 80 else 14
+	var icon = button_icon(button)
+	var extent = 34.0 if rect.size.y >= 100 else 24.0
+	var icon_top = rect.position.y + (rect.size.y - extent - caption_size - 6) / 2
+	if icon != null:
+		draw_texture_rect(icon, Rect2(Vector2(rect.get_center().x - extent / 2, icon_top), Vector2.ONE * extent), false, color)
+	var text = String(button.label)
+	var width = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, caption_size).x
+	while width > rect.size.x - 8 and caption_size > 10:
+		caption_size -= 1
+		width = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, caption_size).x
+	draw_string(font, Vector2(rect.position.x, icon_top + extent + 4 + font.get_ascent(caption_size)), text, HORIZONTAL_ALIGNMENT_CENTER, rect.size.x, caption_size, color)
