@@ -380,7 +380,8 @@ func update_hud() -> void:
 func tow_text() -> String:
 	var helpers = " · ВМЕСТЕ: %d" % game.recovery_helpers if game.recovery_helpers > 1 else ""
 	if game.tow_distance < 0:
-		return "ТЯНЕМ МАШИНУ ДРУГА%s   ·   УДЕРЖИВАЙ T" % helpers
+		var whose = "СВОЮ МАШИНУ" if game.tow_target == game.car else "МАШИНУ ДРУГА"
+		return "ТЯНЕМ %s%s   ·   УДЕРЖИВАЙ T" % [whose, helpers]
 	return "ВЫТАСКИВАЕМ ЭКИПАЖ · ДО ДОРОГИ %d М%s   ·   УДЕРЖИВАЙ T" % [ceili(game.tow_distance), helpers]
 
 func show_result(title: String, body: String) -> void:

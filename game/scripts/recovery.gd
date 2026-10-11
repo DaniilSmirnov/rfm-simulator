@@ -1,7 +1,6 @@
 extends RefCounted
 # Towing and pushing cars by hand: rally crews stuck off the road and the cars
-# of other players. It runs where the cars are simulated, the host (or a solo
-# game), from every player's state and from NPC helpers; guests see the result
+# of players, including their own. It runs on the host (or in a solo game), from every player's state and from NPC helpers; guests see the result
 # through the room snapshot.
 #
 # A rope pulls a car towards the person holding it, from any side and to
@@ -51,7 +50,7 @@ static func update(game, players: Dictionary, delta: float) -> void:
 		var p: Dictionary = participants[id]
 		if p.get("in_car", true) or p.get("seated", false) or p.get("airborne", false) or int(p.get("beers", 0)) >= 30:
 			continue
-		var effort = _effort(game, str(id), p, targets)
+		var effort = _effort(game, p, targets)
 		if effort.is_empty():
 			continue
 		var key: String = effort.target.key
@@ -80,7 +79,9 @@ static func _targets(game, players: Dictionary) -> Array:
 	for racer in game.racers:
 		if game.can_tow_racer(racer):
 			result.append({"key": "racer:%d" % racer.id, "racer": racer, "pos": racer.node.position})
-	if game.room.connected:
+	if not game.room.connected:
+		result.append({"key": "car:local", "owner": "local", "pos": game.car.position})
+	else:
 		for id in players:
 			var position = car_position(game, str(id))
 			if position != null:
@@ -88,7 +89,7 @@ static func _targets(game, players: Dictionary) -> Array:
 	return result
 
 # The nearest target this person pulls (rope) or pushes (walking into it).
-static func _effort(game, id: String, p: Dictionary, targets: Array) -> Dictionary:
+static func _effort(game, p: Dictionary, targets: Array) -> Dictionary:
 	var pos: Vector3 = game.room.v(p.pos)
 	var push: Vector3 = game.room.v(p.get("push", [0, 0, 0]))
 	push.y = 0
@@ -97,8 +98,8 @@ static func _effort(game, id: String, p: Dictionary, targets: Array) -> Dictiona
 	for target in targets:
 		if target.has("racer") and int(p.get("racer", target.racer.id)) != target.racer.id:
 			continue
-		# Nobody tows their own car; marshals and spectators only help crews.
-		if target.has("owner") and (target.owner == id or p.has("racer")):
+		# Marshals and spectators only help crews.
+		if target.has("owner") and p.has("racer"):
 			continue
 		var offset: Vector3 = target.pos - pos
 		if absf(offset.y) > 3:
@@ -149,7 +150,7 @@ static func _drag(game, target: Dictionary, force: Vector3, delta: float, reach:
 # simulation of a guest's car. Null when the player is unknown.
 static func car_position(game, owner: String):
 	var room = game.room
-	if owner == room.player_id:
+	if owner == (room.player_id if room.connected else "local"):
 		return game.car.position
 	if room.host_drives.has(owner):
 		return room.host_drives[owner].node.position
@@ -159,7 +160,7 @@ static func car_position(game, owner: String):
 
 static func move_car(game, owner: String, next: Vector3, yaw: float, delta: float) -> void:
 	var room = game.room
-	if owner == room.player_id:
+	if owner == (room.player_id if room.connected else "local"):
 		game.car.position = next
 		if not game.in_car and not is_nan(yaw):
 			game.heading = rotate_toward(game.heading, yaw, TURN_RATE * delta)
@@ -206,7 +207,7 @@ static func link_node(game, link: Dictionary) -> Node3D:
 				return racer.node
 		return null
 	var owner = str(link.get("car", ""))
-	if owner == game.room.player_id:
+	if owner == (game.room.player_id if game.room.connected else "local"):
 		return game.car
 	if game.room.peers.has(owner) and game.room.peers[owner].has("car"):
 		return game.room.peers[owner].car
