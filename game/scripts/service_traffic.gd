@@ -9,10 +9,15 @@ static func applies(racer: Dictionary) -> bool:
 	return racer.get("role", "racer") in ["ambulance", "opening_police", "closing_police"]
 
 static func people(game) -> Array:
-	var result = game.injuries.people()
+	var result: Array = []
+	# Keep injury avatars discoverable for animation, but block service traffic
+	# only with standing people and the actual displaced body positions.
+	for person in game.injuries.people():
+		if not game.injuries.is_down(str(person.key)):
+			result.append(person)
 	# Injured people can be displaced from their ordinary walking positions.
 	for record in game.injuries.records.values():
-		if record.has("pos"):
+		if record.has("pos") and str(record.get("phase", "")) != "limp":
 			result.append({"pos": record.pos})
 	return result
 
@@ -74,8 +79,12 @@ static func pedestrian_plan(game, racer: Dictionary, plan: Dictionary) -> Dictio
 		if line < minf(current, plan.line) - PERSON_CLEARANCE or line > maxf(current, plan.line) + PERSON_CLEARANCE: continue
 		plan.speed = minf(plan.speed, sqrt(2.0 * 18.0 * maxf(0.0, gap - 5.0)))
 		plan.advance = minf(float(plan.get("advance", INF)), maxf(0.0, gap - 4.0))
-		plan.line = racer.line
-		plan.can_pass = false
+		# A departing ambulance may move sideways into its planned clear lane
+		# while forward travel stays blocked. The swept guard validates each step.
+		var passing = racer.get("role", "") == "ambulance" and float(racer.get("target_s", -1.0)) < 0.0 and plan.get("can_pass", false)
+		if not passing:
+			plan.line = racer.line
+			plan.can_pass = false
 	return scenery_plan(game, racer, plan)
 
 static func scenery_plan(game, racer: Dictionary, plan: Dictionary) -> Dictionary:

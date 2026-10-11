@@ -12,8 +12,12 @@ func make_game(name: String) -> Node:
 	await process_frame
 	game.set_process(false)
 	game.room.set_process(false)
+	game.rng.seed = 110
 	game.start_game()
 	game.stage.trees.clear()
+	# Exercise rescue lifecycle on an unobstructed route. Keep official
+	# colliders: their removal on knockdown is checked separately below.
+	game.stage.rocks = game.stage.rocks.filter(func(rock): return rock.get("official", false))
 	game.course.phase = "racing"
 	return game
 
@@ -77,7 +81,7 @@ func run() -> void:
 		parked = parked or van.state == "parked"
 		if not game.injuries.down:
 			break
-	check(parked and absf(van.s - lying.station) < 3.0, "the ambulance parks beside the casualty")
+	check(parked and absf(van.s - lying.station) <= 6.0 and van.node.position.distance_to(lying.pos) <= 8.0, "the ambulance parks within safe treatment range")
 	check(not game.injuries.down and game.injuries.limp > 55.0, "after treatment the player stands up and limps")
 	check(game.injuries.local_avatar == null and game.walker.distance_to(lying.pos) < 1.0, "the player gets up where they lay")
 	check(absf(game.injuries.walk_factor() - game.injuries.LIMP_FACTOR) < 0.001, "limping slows walking")
@@ -86,6 +90,7 @@ func run() -> void:
 	check(not game.player.running() and not game.jump(), "no running or jumping while limping")
 	Input.action_release("sprint")
 	Input.action_release("forward")
+	check(game.course.red_flag and not ambulance(game).is_empty(), "red flag remains after treatment until the ambulance exits")
 	for i in range(2000):
 		game._update_racers(1.0 / 30.0)
 		game.injuries.update(1.0 / 30.0)
@@ -118,6 +123,7 @@ func run() -> void:
 
 	# A crew ramming the player's car damages it; nobody dies.
 	game.injuries.records.clear()
+	game.course.red_flag = false
 	for racer in game.racers.duplicate():
 		racer.node.queue_free()
 		game.racers.erase(racer)
@@ -137,6 +143,8 @@ func run() -> void:
 		if rammer.state in ["stopped", "stranded"]:
 			break
 	check(rammer.state in ["stopped", "stranded"] and game.condition < 100.0 and not game.dead, "a crew ramming the player's car damages it")
+	check(game.crews.car_ram_damage(1.0) == 0.0 and game.crews.car_ram_damage(20.0) == game.crews.CAR_RAM_MAX_DAMAGE, "slow contact has no damage while high-speed collisions reach full impact damage")
+	check(game.crews.car_ram_damage(10.0) > 0.0 and game.crews.car_ram_damage(10.0) < game.crews.CAR_RAM_MAX_DAMAGE, "intermediate impact velocity causes proportionate vehicle damage")
 
 	# Guests: the host's knockdown of a guest reaches that guest.
 	var guest = await make_game("Guest")

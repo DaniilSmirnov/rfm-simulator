@@ -13,7 +13,7 @@ var purchase_status: Label
 var return_button: Button
 var host_pause: PanelContainer
 var help_button: Button
-var help_dialog: ConfirmationDialog
+var help_dialog: PanelContainer
 const SUPPORT_EMAIL = "rallyfansmap@yandex.com"
 var audio_controls: VBoxContainer
 var volume_label: Label
@@ -29,10 +29,10 @@ func _is_vk_platform() -> bool:
 func _open_help() -> void:
 	# mailto: is not reliably handled inside the VK client WebView.
 	if _is_vk_platform():
-		help_dialog.popup_centered(Vector2i(440, 230))
+		help_dialog.show()
 		return
 	if OS.shell_open("mailto:" + SUPPORT_EMAIL) != OK:
-		help_dialog.popup_centered(Vector2i(440, 230))
+		help_dialog.show()
 
 func _copy_support_email() -> void:
 	if OS.has_feature("web"):
@@ -45,6 +45,42 @@ func _copy_support_email() -> void:
 			return
 	DisplayServer.clipboard_set(SUPPORT_EMAIL)
 	game.toast("Адрес поддержки: " + SUPPORT_EMAIL)
+
+func _build_help_dialog(parent: Control) -> void:
+	help_dialog = PanelContainer.new()
+	help_dialog.name = "SupportDialog"
+	help_dialog.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	help_dialog.offset_left = -215
+	help_dialog.offset_right = 215
+	help_dialog.offset_top = -115
+	help_dialog.offset_bottom = 115
+	help_dialog.mouse_filter = Control.MOUSE_FILTER_STOP
+	parent.add_child(help_dialog)
+	var help_content = VBoxContainer.new()
+	help_content.name = "Content"
+	help_content.add_theme_constant_override("separation", 12)
+	help_dialog.add_child(help_content)
+	var help_title = Label.new()
+	help_title.text = "Помощь и поддержка"
+	help_content.add_child(help_title)
+	var help_text = Label.new()
+	help_text.name = "Message"
+	help_text.text = "Если возникла проблема с игрой, напишите нам:\n" + SUPPORT_EMAIL + "\n\nСкопируйте адрес и отправьте письмо из удобной почты."
+	help_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	help_content.add_child(help_text)
+	var help_actions = HBoxContainer.new()
+	help_actions.name = "Actions"
+	help_content.add_child(help_actions)
+	var copy_button = Button.new()
+	copy_button.text = "Скопировать адрес"
+	copy_button.pressed.connect(_copy_support_email)
+	help_actions.add_child(copy_button)
+	var close_button = Button.new()
+	close_button.name = "Close"
+	close_button.text = "Закрыть"
+	close_button.pressed.connect(help_dialog.hide)
+	help_actions.add_child(close_button)
+	help_dialog.hide()
 
 func add_preview(parent: Control, kind: String) -> void:
 	var image = TextureRect.new()
@@ -78,14 +114,7 @@ func finish(parent: Control) -> void:
 	help_button.offset_top = -68
 	help_button.offset_bottom = -24
 	help_button.pressed.connect(_open_help)
-	help_dialog = ConfirmationDialog.new()
-	help_dialog.name = "SupportDialog"
-	help_dialog.title = "Помощь и поддержка"
-	help_dialog.dialog_text = "Если возникла проблема с игрой, напишите нам:\n" + SUPPORT_EMAIL + "\n\nНажмите «Скопировать адрес», затем отправьте письмо из удобной почты."
-	help_dialog.ok_button_text = "Скопировать адрес"
-	help_dialog.cancel_button_text = "Закрыть"
-	help_dialog.confirmed.connect(_copy_support_email)
-	ui.add_child(help_dialog)
+	_build_help_dialog(ui)
 	# Backdrop fills the viewport independently of the inset HUD root.
 	var backdrop_root = Control.new()
 	backdrop_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
