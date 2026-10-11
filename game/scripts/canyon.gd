@@ -9,7 +9,11 @@ const TOP_RADIUS = 9.0
 const OUTER_RADIUS = TOP_RADIUS + TIERS * LEDGE_WIDTH
 const SIDES = 32
 const Records = preload("res://scripts/stage_records.gd")
+const DetailLayer = preload("res://scripts/detail_layer.gd")
 var mesas: Array[Dictionary] = []
+var dust: CPUParticles3D
+var dust_focus := Vector3.ZERO
+var dust_seen := false
 
 func route(s: float) -> Vector3:
 	var descent = smoothstep(245.0, 415.0, s)
@@ -85,15 +89,22 @@ func terrain_vertex_height(x: float, z: float) -> float:
 	return smooth_ground(Vector3(x, 0, z)) - 0.25
 
 func terrain_color(v: Vector3) -> Color:
-	return Color("b56443").lerp(Color("dfac74"), (sin(v.y * 0.65) + 1.0) * 0.5)
+	var s = stage.road_s(v)
+	var strata = (sin(v.y * 0.42 + v.x * 0.015) + 1.0) * 0.5
+	var base = Color("a45638").lerp(Color("e4b184"), strata)
+	var wash = smoothstep(535.0, 575.0, s) * (1.0 - smoothstep(645.0, 680.0, s))
+	base = base.lerp(Color("c9a56e"), wash * 0.55)
+	return base.lightened(sin(v.x * 0.09 + v.z * 0.06) * 0.035)
 
 func road_width(s: float) -> float:
 	var narrow = smoothstep(230.0, 265.0, s) * (1.0 - smoothstep(405.0, 435.0, s))
 	var wash = smoothstep(540.0, 565.0, s) * (1.0 - smoothstep(655.0, 680.0, s))
 	return stage.WIDTH - narrow * 1.2 + wash * 1.6
 
-func road_color(p: Vector3, _s: float) -> Color:
-	return Color("d4a475").lightened(sin(p.z * 0.25 + p.x * 0.10) * 0.025)
+func road_color(p: Vector3, s: float) -> Color:
+	var wash = smoothstep(540.0, 565.0, s) * (1.0 - smoothstep(655.0, 680.0, s))
+	var base = Color("d4a475").lerp(Color("b99262"), wash * 0.4)
+	return base.lightened(sin(p.z * 0.25 + p.x * 0.10) * 0.03 + sin(p.x * 0.41) * 0.012)
 
 func road_strips() -> int:
 	return 8
@@ -203,6 +214,113 @@ func build_details(_cooperative: bool) -> void:
 		poses.append(Transform3D(Basis.from_scale(Vector3(size, size * 0.55, size)), p))
 		colors.append(Color("8b8860"))
 	stage.detail_batch("CanyonDryScrub", stage.NATURE_BUSH, poses, colors)
+	_scatter_desert()
+	_build_dust()
+
+func _desert_open(p: Vector3) -> bool:
+	if stage.road_distance(p) < 9.0:
+		return false
+	for mesa in mesas:
+		if radius_at(p, mesa.center) < OUTER_RADIUS + 3.0:
+			return false
+	for i in range(12):
+		var s = 30.0 + i * 70.0
+		var butte = stage.at(s) + stage.side(s) * (155.0 if i % 2 == 0 else -155.0)
+		if Vector2(p.x - butte.x, p.z - butte.z).length() < 26.0:
+			return false
+	return true
+
+func _scatter_desert() -> void:
+	var rng = RandomNumberGenerator.new()
+	rng.seed = 20261011
+	var scrub_p: Array = []
+	var scrub_c: Array = []
+	var grass_p: Array = []
+	var grass_c: Array = []
+	var stone_p: Array = []
+	var stone_c: Array = []
+	var trunk_p: Array = []
+	var trunk_c: Array = []
+	var crown_p: Array = []
+	var crown_c: Array = []
+	var scrub_colors = [Color("6d7342"), Color("8d7c49"), Color("54633c"), Color("a08b5c")]
+	for i in range(640):
+		var p = Vector3(rng.randf_range(-175, 175), 0, rng.randf_range(-830, 10))
+		if not _desert_open(p):
+			continue
+		p.y = stage.terrain_surface_height(p)
+		var yaw = rng.randf() * TAU
+		var kind = i % 16
+		if kind < 7:
+			var size = rng.randf_range(0.45, 1.55)
+			var squash = rng.randf_range(0.35, 0.85)
+			var wide = size * rng.randf_range(0.75, 1.15)
+			var basis = Basis(Vector3.UP, yaw).scaled(Vector3(size, size * squash, wide))
+			scrub_p.append(Transform3D(basis, p))
+			scrub_c.append(scrub_colors[i % 4])
+		elif kind < 11:
+			var size = rng.randf_range(0.7, 1.6)
+			var basis = Basis(Vector3.UP, yaw).scaled(Vector3(size, rng.randf_range(0.5, 1.5), size * 0.7))
+			grass_p.append(Transform3D(basis, p))
+			grass_c.append(Color("c2a45a").lerp(Color("8a8450"), rng.randf()))
+		elif kind < 14:
+			var radius = rng.randf_range(0.22, 0.85)
+			stone_p.append(stage.woodland.shared_stone_pose(p, radius, yaw))
+			stone_c.append(Color("a08a72").lightened(rng.randf_range(-0.06, 0.08)))
+		else:
+			var height = rng.randf_range(2.8, 6.2)
+			var basis = Basis(Vector3.UP, yaw)
+			trunk_p.append(stage.woodland.shared_tree_pose(p, height, 0, basis))
+			trunk_c.append(Color("6a5140"))
+			crown_p.append(stage.woodland.shared_tree_pose(p, height * 0.42, 1, basis))
+			crown_c.append(Color("6e6244"))
+	stage.detail_batch("CanyonSage", stage.NATURE_BUSH, scrub_p, scrub_c, DetailLayer.tiled(240.0))
+	stage.detail_batch("CanyonDryGrass", stage.NATURE_GRASS, grass_p, grass_c, DetailLayer.tiled(160.0))
+	stage.detail_batch("CanyonStones", stage.NATURE_STONE, stone_p, stone_c, DetailLayer.tiled(200.0))
+	stage.detail_batch("CanyonSnagTrunks", stage.NATURE_TREE_MESHES[0], trunk_p, trunk_c, DetailLayer.tiled(260.0))
+	stage.detail_batch("CanyonSnagCrowns", stage.NATURE_TREE_MESHES[1], crown_p, crown_c, DetailLayer.tiled(260.0))
+
+func update_life(delta: float, focus: Vector3) -> void:
+	super.update_life(delta, focus)
+	if dust == null:
+		return
+	var speed := 0.0
+	if dust_seen and delta > 0.0:
+		speed = focus.distance_to(dust_focus) / delta
+	dust_focus = focus
+	dust_seen = true
+	dust.position = focus + Vector3.UP * 0.35
+	dust.emitting = speed > 6.0
+
+func _build_dust() -> void:
+	dust = CPUParticles3D.new()
+	dust.name = "CanyonDust"
+	var quad = QuadMesh.new()
+	quad.size = Vector2(0.55, 0.55)
+	var mat = StandardMaterial3D.new()
+	mat.albedo_color = Color(0.72, 0.55, 0.38, 0.45)
+	mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.vertex_color_use_as_albedo = true
+	quad.material = mat
+	dust.mesh = quad
+	dust.amount = 36
+	dust.lifetime = 1.3
+	dust.explosiveness = 0.15
+	dust.local_coords = false
+	dust.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	dust.emission_sphere_radius = 1.1
+	dust.direction = Vector3(0.2, 0.6, 0)
+	dust.spread = 40.0
+	dust.gravity = Vector3(0.4, 0.15, 0)
+	dust.initial_velocity_min = 0.4
+	dust.initial_velocity_max = 1.4
+	dust.scale_amount_min = 0.8
+	dust.scale_amount_max = 1.8
+	dust.emitting = false
+	dust.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	stage.add_child(dust)
 
 func _build_butte(origin: Vector3, height: float, seed_index: int) -> void:
 	var st = SurfaceTool.new()
