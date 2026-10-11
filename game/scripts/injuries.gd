@@ -152,6 +152,8 @@ func knock(key: String, feet: Vector3, velocity: Vector3, car: Vector3) -> bool:
 			avatar.get_meta("solid_record").pos.y = -1000.0
 	records[key] = record
 	_assign(record, key)
+	# Broadcast the emergency immediately, not only on the next update tick.
+	game.course.red_flag = true
 	_knocked(key)
 	return true
 
