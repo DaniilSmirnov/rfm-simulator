@@ -83,19 +83,18 @@ func run() -> void:
 	person.avatar.position.y = game.stage.ground(person.avatar.position)
 	crowd.update(82, 0, false)
 	check(person.action == "push" and crowd.push_helpers().size() == 1, "NPC contributes only after reaching pushing position")
+	var pushed_from: Vector3 = racer.node.position
 	game.Recovery.update(game, {}, 0.5)
-	var solo: float = racer.get("recovery_progress", 0)
-	check(solo > 0.05 and game.recovery_helpers == 1, "NPC effort physically moves car")
-	racer.erase("recovery_start")
-	racer.erase("recovery_goal")
-	racer.erase("recovery_progress")
-	racer.node.position = racer.previous - road * 0.1
+	var solo: float = racer.node.position.distance_to(pushed_from)
+	check(solo > 0.05 and racer.recovery_helpers == 1, "NPC effort physically moves car")
+	racer.node.position = pushed_from
 	person.avatar.position = racer.node.position - road * 2
 	person.avatar.position.y = game.stage.ground(person.avatar.position)
 	crowd.update(83, 0, false)
-	var player = {"pos": game.room.a(racer.node.position + road * 3), "in_car": false, "tow": true, "push": [0, 0, 0], "beers": 0}
+	var player = {"pos": game.room.a(racer.node.position + road * 5), "in_car": false, "tow": true, "push": [0, 0, 0], "beers": 0}
+	var both_from: Vector3 = racer.node.position
 	game.Recovery.update(game, {"player": player}, 0.5)
-	check(racer.get("recovery_progress", 0) > solo * 1.8 and game.recovery_helpers == 2, "player and NPC recovery efforts stack")
+	check(racer.node.position.distance_to(both_from) > solo * 1.8 and racer.recovery_helpers == 2, "player and NPC recovery efforts stack")
 	var snapshot = crowd.actor_snapshot()
 	crowd.apply_actor_snapshot(snapshot)
 	person.avatar.position += Vector3(3, 0, 0)

@@ -151,7 +151,7 @@ var helped = 0
 var elapsed = 0.0
 var toast_time = 0.0
 var tow_target: Node3D
-var tow_progress = 0.0
+var tow_distance = -1.0 # metres the towed crew has to the road; -1: a friend's car
 var racers: Array[Dictionary] = []
 var rng = RandomNumberGenerator.new()
 var title_label: Label
@@ -1009,8 +1009,8 @@ func _advance_gravel(stone: Dictionary, delta: float) -> bool:
 func can_tow_racer(racer: Dictionary) -> bool:
 	return crews.can_tow_racer(racer)
 
-func nearby_tow_racer() -> bool:
-	return crews.nearby_tow_racer()
+func nearby_tow_target() -> bool:
+	return crews.nearby_tow_target()
 
 func recover_racer(racer: Dictionary) -> void:
 	crews.recover_racer(racer)

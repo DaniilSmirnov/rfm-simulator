@@ -99,8 +99,9 @@ func run() -> void:
 	marshal.avatar.position = rear
 	officials.update(game, 0, false)
 	check(marshal.action == "push" and officials.push_helpers(game).size() == 1, "marshal joins pushing after reaching car")
+	var pushed_from: Vector3 = racer.node.position
 	game.Recovery.update(game, {}, 0.5)
-	check(racer.get("recovery_progress", 0) > 0 and game.recovery_helpers >= 1, "marshal pushing moves the actual rally car")
+	check(racer.node.position.distance_to(pushed_from) > 0.1 and racer.recovery_helpers >= 1, "marshal pushing moves the actual rally car")
 	var record: Dictionary = marshal.avatar.get_meta("solid_record")
 	check(record.pos == marshal.avatar.position, "marshal collision follows moving actor")
 	var poses = officials.snapshot()

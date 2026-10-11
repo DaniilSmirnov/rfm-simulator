@@ -65,7 +65,7 @@ func rebuild() -> void:
 	providers.append(_subsystem("cargo", func(): return game.cargo, "snapshot", "apply_snapshot", "cargo"))
 	providers.append(provider("progress", "", ["racing", "passed", "helped", "elapsed"], _progress_snapshot, _progress_apply))
 	providers.append(_subsystem("camp_cooking", func(): return game.camp_cooking, "snapshot", "apply_snapshot"))
-	providers.append(provider("racers", "", ["racers", "tow", "tow_progress", "tow_owner", "recovery_links", "recovery_helpers"], _racers_snapshot, _racers_apply))
+	providers.append(provider("racers", "", ["racers", "recovery_links"], _racers_snapshot, _racers_apply))
 	providers.append(provider("outcome", "", ["dead", "finished", "title", "text"], _outcome_snapshot, _outcome_apply))
 
 # A subsystem that already owns snapshot()/apply_snapshot() under one key.
@@ -348,12 +348,12 @@ func _racers_snapshot() -> Dictionary:
 			entry.role = r.role
 		if int(r.get("zero_index", 0)) != 0:
 			entry.zero_index = r.zero_index
-		if float(r.get("recovery_progress", 0)) != 0.0:
-			entry.recovery_progress = snappedf(float(r.recovery_progress), 0.01)
+		if r.get("towed", false):
+			entry.towed = true
 		if int(r.get("recovery_helpers", 0)) != 0:
 			entry.recovery_helpers = r.recovery_helpers
 		racers.append(entry)
-	return {"racers": racers, "tow": game.tow_target.get_meta("room_id") if game.tow_target != null else -1, "tow_progress": game.tow_progress, "tow_owner": room.tow_owner, "recovery_links": game.recovery_links, "recovery_helpers": game.recovery_helpers}
+	return {"racers": racers, "recovery_links": game.recovery_links}
 
 func _racers_apply(w: Dictionary, sample_time: float) -> void:
 	if not w.has("racers"):
@@ -365,7 +365,7 @@ func _racers_apply(w: Dictionary, sample_time: float) -> void:
 		for local in game.racers:
 			if local.id == r.id:
 				local.state = r.state
-				local.recovery_progress = float(r.get("recovery_progress", 0))
+				local.towed = r.get("towed", false)
 				local.recovery_helpers = int(r.get("recovery_helpers", 0))
 				exists = true
 				break
@@ -389,10 +389,6 @@ func _racers_apply(w: Dictionary, sample_time: float) -> void:
 			racer_targets.erase(local.id)
 			racer_motion.erase(local.id)
 	game._cancel_tow()
-	for local in game.racers:
-		if local.id == w.get("tow", -1):
-			game.tow_target = local.node
-	game.tow_progress = float(w.get("tow_progress", 0.0))
 	game.recovery_links = w.get("recovery_links", []).duplicate(true)
-	game.recovery_helpers = int(w.get("recovery_helpers", 0))
+	game.Recovery.local_target(game)
 	game.draw_recovery_ropes()

@@ -84,10 +84,16 @@ func run() -> void:
 	check(host.room.peers.guest.can.visible, "remote drinking animation shows beer can")
 	host.stage.trees.clear()
 	host.stage.rocks.clear()
-	host.room.update_tow(3)
-	check(host.tow_target != null and host.room.tow_owner == "guest" and host.tow_progress > 0, "guest holds rope on foot without its own car")
-	guest_state.pos = host.room.a(host.racers[0].node.position + host.Recovery.road_direction(host, host.racers[0]) * 3)
-	host.room.update_tow(3.1)
+	var stuck: Vector3 = host.racers[0].node.position
+	host.room.update_tow(1)
+	check(host.recovery_links.size() == 1 and host.recovery_links[0].player == "guest" and host.racers[0].node.position.distance_to(stuck) > 0.3, "guest holds rope on foot without its own car")
+	for i in range(80):
+		if host.racers[0].state == "racing":
+			break
+		guest_state.pos = host.room.a(host.racers[0].node.position + host.Recovery.road_direction(host, host.racers[0]) * 4)
+		host.room.peers.guest.state.pos = guest_state.pos
+		host.room.peers.guest.last_state_time = host.room.server_clock()
+		host.room.update_tow(0.5)
 	check(host.helped == 1 and host.racers[0].state == "racing", "guest tow frees shared rally crew")
 	host.racers[0].node.rotation = Vector3(0.15, 0.2, -0.18)
 	host._update_stones(0.1)
