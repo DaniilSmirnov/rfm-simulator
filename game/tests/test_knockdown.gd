@@ -96,6 +96,12 @@ func run() -> void:
 	if not ambulance(game).is_empty():
 		var emergency = ambulance(game)
 		print("AMBULANCE EXIT DIAG: state=%s station=%.2f speed=%.2f target=%.2f red_flag=%s" % [str(emergency.state), float(emergency.s), float(emergency.get("drive_speed", 0.0)), float(emergency.get("target_s", -1.0)), str(game.course.red_flag)])
+		var diagnostic_plan = game.Traffic.plan(game, emergency)
+		print("AMBULANCE ROUTE DIAG: line=%.2f intended=%.2f planned_speed=%.2f advance=%.2f can_pass=%s position=%s" % [float(emergency.get("line", 0.0)), float(diagnostic_plan.get("line", 0.0)), float(diagnostic_plan.get("speed", 0.0)), float(diagnostic_plan.get("advance", -1.0)), str(diagnostic_plan.get("can_pass", false)), str(emergency.node.position)])
+		for candidate in game.crews.ServiceTraffic.cars(game, emergency) + game.crews.ServiceTraffic.people(game):
+			var location: Vector3 = candidate if candidate is Vector3 else candidate.pos
+			if emergency.node.position.distance_to(location) < 20.0:
+				print("AMBULANCE NEARBY: distance=%.2f position=%s" % [emergency.node.position.distance_to(location), str(location)])
 	check(ambulance(game).is_empty() and not game.course.red_flag, "the ambulance leaves the stage and the red flag is lifted")
 	game.injuries.update(61.0)
 	game.injuries.update(0.1)
