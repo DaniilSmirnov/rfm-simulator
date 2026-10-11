@@ -208,8 +208,39 @@ func run() -> void:
 		var bypass = game.Traffic.plan(game, queue[1])
 		check(bypass.get("can_pass", false) and absf(bypass.line) >= game.crews.ServiceTraffic.CAR_CLEARANCE, "ambulance plans a clear shoulder pass around stopped course vehicles")
 		check(bypass.speed <= 6.0, "shoulder pass uses a reduced speed")
+	# Static scenery used to make service traffic brake to zero forever. It now
+	# selects a clear shoulder line and keeps moving around the obstruction.
+	clear_cars(game)
+	game.spawn_racer("pass")
+	var obstacle_ambulance = game.racers[0]
+	obstacle_ambulance.role = "ambulance"
+	obstacle_ambulance.s = 180.0
+	obstacle_ambulance.node.position = game.race_at(obstacle_ambulance.s)
+	var obstacle_position: Vector3 = game.race_at(obstacle_ambulance.s + 25.0)
+	obstacle_position.y = game.stage.ground(obstacle_position)
+	game.stage.rocks.append({"pos": obstacle_position, "radius": 1.2, "height": 1.1})
+	var detour = game.crews.ServiceTraffic.pedestrian_plan(game, obstacle_ambulance, {"speed": 20.0, "line": 0.0, "can_pass": false})
+	check(detour.get("can_pass", false) and absf(detour.line) > 2.0 and detour.speed > 0.0, "ambulance steers around a roadside obstacle instead of stopping short")
+	game.stage.rocks.clear()
+	# Village walkers are numerous and can move along the road. The ambulance
+	# should pass a standing villager safely instead of waiting indefinitely.
+	if game.stage.life != null and "walkers" in game.stage.life:
+		var saved_walkers: Array = game.stage.life.walkers.duplicate()
+		game.stage.life.walkers.clear()
+		game.car.position = Vector3(10000, 0, 10000)
+		var walker_node = Node3D.new()
+		game.add_child(walker_node)
+		var walker_position: Vector3 = game.race_at(obstacle_ambulance.s + 24.0)
+		walker_position.y = game.stage.ground(walker_position)
+		walker_node.position = walker_position
+		game.stage.life.walkers.append({"id": 999, "node": walker_node, "path": [], "t": 0.0, "direction": 1.0, "speed": 1.0, "pause": 0.0, "knocked": false})
+		var crowd_detour = game.crews.ServiceTraffic.pedestrian_plan(game, obstacle_ambulance, {"speed": 20.0, "line": 0.0, "can_pass": false})
+		check(crowd_detour.get("can_pass", false) and absf(crowd_detour.line) > 2.0 and crowd_detour.speed > 0.0, "ambulance safely passes a standing village resident")
+		game.stage.life.walkers.clear()
+		game.stage.life.walkers.append_array(saved_walkers)
+		walker_node.queue_free()
 	# A casualty on the road can be treated from the safe braking distance.
-	var medical = game.racers[1]
+	var medical = obstacle_ambulance
 	medical.role = "ambulance"
 	medical.target_key = "test:casualty"
 	medical.target_s = medical.s + 5.0

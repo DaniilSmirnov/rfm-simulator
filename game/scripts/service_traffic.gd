@@ -79,6 +79,14 @@ static func pedestrian_plan(game, racer: Dictionary, plan: Dictionary) -> Dictio
 		# a person who is crossing or lying on the carriageway.
 		if line < minf(current, plan.line) - PERSON_CLEARANCE or line > maxf(current, plan.line) + PERSON_CLEARANCE: continue
 		var is_assigned_casualty = racer.get("role", "") == "ambulance" and str(racer.get("target_key", "")) != "" and str(person.get("key", "")) == str(racer.get("target_key", ""))
+		if racer.get("role", "") == "ambulance" and str(person.get("key", "")).begins_with("villager:"):
+			var detour = _pedestrian_detour(game, racer, plan, gap)
+			if detour != INF:
+				plan.line = detour
+				plan.speed = minf(float(plan.speed), 6.0)
+				plan.can_pass = true
+				plan.avoiding = true
+				continue
 		plan.speed = minf(plan.speed, sqrt(2.0 * 18.0 * maxf(0.0, gap - 5.0)))
 		plan.advance = minf(float(plan.get("advance", INF)), maxf(0.0, gap - 4.0))
 		if is_assigned_casualty:
@@ -96,6 +104,7 @@ static func pedestrian_plan(game, racer: Dictionary, plan: Dictionary) -> Dictio
 
 static func scenery_plan(game, racer: Dictionary, plan: Dictionary) -> Dictionary:
 	var previous: Vector3 = racer.node.position
+	var obstacle_ahead = -1.0
 	for i in range(1, 13):
 		var ahead = i * 5.0
 		var station: float = minf(game.stage.LENGTH - 0.01, racer.s + ahead)
@@ -103,9 +112,80 @@ static func scenery_plan(game, racer: Dictionary, plan: Dictionary) -> Dictionar
 		var point: Vector3 = game.race_at(station) + game.race_side(station) * line
 		point.y = game.stage.ground(point)
 		if not game.stage.rock_hit(previous, point, 1.1).is_empty() or game.stage.obstacle_hit(previous, point, 1.1, true) >= 0 or not game.stage.solids.hit(previous, point, 1.1).is_empty():
-			var room = maxf(0.0, ahead - 7.0)
-			plan.speed = minf(plan.speed, sqrt(2.0 * 18.0 * room))
-			plan.advance = minf(float(plan.get("advance", INF)), room)
+			obstacle_ahead = ahead
 			break
 		previous = point
+	if obstacle_ahead >= 0.0 and racer.get("role", "") == "ambulance":
+		var distance = clampf(obstacle_ahead + 18.0, 18.0, 75.0)
+		var current = float(racer.get("line", 0.0)) + float(racer.get("slide", 0.0))
+		var limit: float = game.stage.road_width(racer.s) * 0.5 + game.stage.shoulder(racer.s)
+		var candidates: Array[float] = [float(plan.line)]
+		for offset in [1.5, 2.5, 3.5, 4.5, 5.5]:
+			candidates.append(clampf(float(plan.line) - offset, -limit + 0.7, limit - 0.7))
+			candidates.append(clampf(float(plan.line) + offset, -limit + 0.7, limit - 0.7))
+		var chosen = INF
+		var best = INF
+		for candidate in candidates:
+			if absf(candidate - current) < 0.1 or not _detour_clear(game, racer, candidate, distance):
+				continue
+			var cost = absf(candidate - float(plan.line)) + absf(candidate - current) * 0.25
+			if cost < best:
+				best = cost
+				chosen = candidate
+		if chosen != INF:
+			plan.line = chosen
+			plan.speed = minf(float(plan.speed), 6.0)
+			plan.can_pass = true
+			plan.avoiding = true
+			return plan
+	var room = maxf(0.0, obstacle_ahead - 7.0)
+	if obstacle_ahead >= 0.0:
+		plan.speed = minf(float(plan.speed), sqrt(2.0 * 18.0 * room))
+		plan.advance = minf(float(plan.get("advance", INF)), room)
 	return plan
+
+static func _detour_clear(game, racer: Dictionary, target_line: float, distance: float) -> bool:
+	var start: Vector3 = racer.node.position
+	var previous = start
+	var current = float(racer.get("line", 0.0)) + float(racer.get("slide", 0.0))
+	var target_key = str(racer.get("target_key", ""))
+	for i in range(1, 7):
+		var ahead = distance * i / 6.0
+		var station: float = minf(game.stage.LENGTH - 0.01, racer.s + ahead)
+		var line = lerpf(current, target_line, smoothstep(0.0, minf(14.0, distance * 0.45), ahead))
+		var point: Vector3 = game.race_at(station) + game.race_side(station) * line
+		point.y = game.stage.ground(point)
+		if absf(line) > game.stage.road_width(station) * 0.5 + game.stage.shoulder(station) + 0.5:
+			return false
+		if not game.stage.rock_hit(previous, point, 1.1).is_empty() or game.stage.obstacle_hit(previous, point, 1.1, true) >= 0 or not game.stage.solids.hit(previous, point, 1.1).is_empty():
+			return false
+		if game.stage.water != null and game.stage.water.depth(point) > 0.2:
+			return false
+		for person in people(game):
+			if str(person.get("key", "")) == target_key:
+				continue
+			if approaching_hit(previous + Vector3(0, 0.7, 0), point + Vector3(0, 0.7, 0), person.pos + Vector3(0, 0.7, 0), PERSON_CLEARANCE):
+				return false
+		for car in cars(game, racer):
+			if approaching_hit(previous + Vector3(0, 0.7, 0), point + Vector3(0, 0.7, 0), car + Vector3(0, 0.7, 0), CAR_CLEARANCE):
+				return false
+		previous = point
+	return true
+
+static func _pedestrian_detour(game, racer: Dictionary, plan: Dictionary, gap: float) -> float:
+	var distance = clampf(gap + 14.0, 18.0, 36.0)
+	var base = float(plan.line)
+	var current = float(racer.get("line", 0.0)) + float(racer.get("slide", 0.0))
+	var station: float = minf(game.stage.LENGTH - 0.01, racer.s + distance)
+	var limit: float = game.stage.road_width(station) * 0.5 + game.stage.shoulder(station) - 0.7
+	var chosen = INF
+	var best = INF
+	for offset in [2.8, 3.8, 4.8, 5.8]:
+		for candidate in [base - offset, base + offset]:
+			if absf(candidate) > limit or not _detour_clear(game, racer, candidate, distance):
+				continue
+			var cost = absf(candidate - base) + absf(candidate - current) * 0.25
+			if cost < best:
+				best = cost
+				chosen = candidate
+	return chosen
