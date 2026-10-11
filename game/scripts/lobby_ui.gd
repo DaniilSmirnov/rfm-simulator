@@ -13,6 +13,7 @@ var purchase_status: Label
 var return_button: Button
 var host_pause: PanelContainer
 var help_button: Button
+var help_dialog: ConfirmationDialog
 const SUPPORT_EMAIL = "rallyfansmap@yandex.com"
 var audio_controls: VBoxContainer
 var volume_label: Label
@@ -21,6 +22,29 @@ const AUDIO_SETTINGS_PATH = "user://audio_settings.cfg"
 var master_base_db = 0.0
 var last_size = Vector2.ZERO
 var last_playing = false
+
+func _is_vk_platform() -> bool:
+	return game.platform_service != null and game.platform_service.profile.get("platform", "") == "vk"
+
+func _open_help() -> void:
+	# mailto: is not reliably handled inside the VK client WebView.
+	if _is_vk_platform():
+		help_dialog.popup_centered(Vector2i(440, 230))
+		return
+	if OS.shell_open("mailto:" + SUPPORT_EMAIL) != OK:
+		help_dialog.popup_centered(Vector2i(440, 230))
+
+func _copy_support_email() -> void:
+	if OS.has_feature("web"):
+		# Bridge copy is supported inside VK mobile WebViews where Clipboard APIs
+		# and mailto handlers can be restricted. Catch rejection explicitly.
+		var script = "(function(){var text=" + JSON.stringify(SUPPORT_EMAIL) + ";if(window.vkBridge && typeof window.vkBridge.send==='function'){window.vkBridge.send('VKWebAppCopyText',{text:text}).catch(function(){if(navigator.clipboard)navigator.clipboard.writeText(text).catch(function(){});});return true;}if(navigator.clipboard){navigator.clipboard.writeText(text).catch(function(){});return true;}return false;})()"
+		var started = JavaScriptBridge.eval(script, true)
+		if started == true:
+			game.toast("Адрес поддержки: " + SUPPORT_EMAIL)
+			return
+	DisplayServer.clipboard_set(SUPPORT_EMAIL)
+	game.toast("Адрес поддержки: " + SUPPORT_EMAIL)
 
 func add_preview(parent: Control, kind: String) -> void:
 	var image = TextureRect.new()
@@ -53,10 +77,15 @@ func finish(parent: Control) -> void:
 	help_button.offset_right = -24
 	help_button.offset_top = -68
 	help_button.offset_bottom = -24
-	help_button.pressed.connect(func():
-		if OS.shell_open("mailto:" + SUPPORT_EMAIL) != OK:
-			game.toast("Напишите в поддержку: " + SUPPORT_EMAIL)
-	)
+	help_button.pressed.connect(_open_help)
+	help_dialog = ConfirmationDialog.new()
+	help_dialog.name = "SupportDialog"
+	help_dialog.title = "Помощь и поддержка"
+	help_dialog.dialog_text = "Если возникла проблема с игрой, напишите нам:\n" + SUPPORT_EMAIL + "\n\nНажмите «Скопировать адрес», затем отправьте письмо из удобной почты."
+	help_dialog.ok_button_text = "Скопировать адрес"
+	help_dialog.cancel_button_text = "Закрыть"
+	help_dialog.confirmed.connect(_copy_support_email)
+	ui.add_child(help_dialog)
 	# Backdrop fills the viewport independently of the inset HUD root.
 	var backdrop_root = Control.new()
 	backdrop_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
