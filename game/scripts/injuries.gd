@@ -83,16 +83,22 @@ func people() -> Array:
 		result.append({"key": local_key(), "pos": game.walker, "avatar": local_avatar})
 	for id in game.room.peers:
 		var peer = game.room.peers[id]
-		if peer.state != null and not peer.state.in_car:
+		if peer.state != null and not peer.state.in_car and not is_down("player:%s" % id):
 			result.append({"key": "player:%s" % id, "pos": game.room.v(peer.state.pos), "avatar": peer.get("avatar")})
 	if game.spectators != null:
 		for person in game.spectators.people:
+			if is_down("npc:%d" % person.id):
+				continue
 			result.append({"key": "npc:%d" % person.id, "pos": person.avatar.position, "avatar": person.avatar})
 	var officials = game.stage.officials if game.stage != null and "officials" in game.stage else null
 	if officials != null:
 		for person in officials.people:
+			if is_down("marshal:%d" % person.id):
+				continue
 			result.append({"key": "marshal:%d" % person.id, "pos": person.avatar.position, "avatar": person.avatar})
 		for i in range(officials.judges.size()):
+			if is_down("judge:%d" % i):
+				continue
 			result.append({"key": "judge:%d" % i, "pos": officials.judges[i].position, "avatar": officials.judges[i]})
 	return result
 
