@@ -144,7 +144,7 @@ func run() -> void:
 	check(racer.node.position == start, "pause freezes towing")
 	game.paused = false
 
-	# Players tow each other's cars; nobody tows their own.
+	# Players tow each other's cars and their own.
 	strand(game, racer, 600)
 	game.room.connected = true
 	game.room.player_id = "host"
@@ -171,15 +171,44 @@ func run() -> void:
 	game.hud_state = []
 	game._update_hud()
 	check(game.info_label.text.contains("ТВОЮ МАШИНУ ТЯНУТ"), "the HUD tells the owner their car is on a rope")
-	# Holding the rope beside one's own car does nothing.
+	# A guest can pull their own car on the host.
 	game.room.peers.helper.state.tow = false
 	friend.tow = true
 	friend.pos = game.room.a(moved + Vector3(4, 0, 0))
 	game.room.peers.friend.state = friend
 	var parked = game.room.v(game.room.peers.friend.state.car)
 	game.room.update_tow(0.5)
-	check(game.room.v(game.room.peers.friend.state.car) == parked and game.recovery_links.is_empty(), "nobody tows their own car")
+	check(flat_distance(game.room.v(game.room.peers.friend.state.car), parked) > 0.3, "guest tows their own car on the host")
+	check(game.recovery_links.any(func(link): return link.get("car", "") == "friend" and link.player == "friend"), "own-car rope identifies the guest as both owner and puller")
 	game.room.peers.clear()
+
+	# The local car works both in a room and offline (where the owner is "local").
+	for online in [true, false]:
+		game.room.connected = online
+		game.car.position = own
+		game.walker = own + Vector3(-4, 0, 0)
+		game.walker.y = game.stage.ground(game.walker)
+		check(game.nearby_tow_target(), "own car is discoverable on foot")
+		game.mobile_controls._layout()
+		check(game.mobile_controls.buttons.any(func(b): return b.action == "tow"), "mobile rope is available beside own car")
+		Input.action_press("tow")
+		if online:
+			game.room.update_tow(0.5)
+		else:
+			game._update_tow(0.5)
+		check(flat_distance(game.car.position, own) > 0.3, "owner pulls their car online and offline")
+		check(game.tow_target == game.car and game.rope_mesh != null, "own-car rope resolves to the local car")
+		game.hud_state = []
+		game._update_hud()
+		check(game.info_label.text.contains("ТЯНЕМ СВОЮ МАШИНУ"), "HUD identifies own car")
+		Input.action_release("tow")
+		var released: Vector3 = game.car.position
+		if online:
+			game.room.update_tow(0.5)
+		else:
+			game._update_tow(0.5)
+		check(game.car.position == released and game.tow_target == null, "releasing own-car rope stops towing")
+	game.car.position = Vector3(170, 0, 0)
 
 	# Late guests receive all ropes; repeated snapshots do not duplicate them.
 	game.room.player_id = ""
