@@ -46,6 +46,42 @@ func _copy_support_email() -> void:
 	DisplayServer.clipboard_set(SUPPORT_EMAIL)
 	game.toast("Адрес поддержки: " + SUPPORT_EMAIL)
 
+func _build_help_dialog(parent: Control) -> void:
+	help_dialog = PanelContainer.new()
+	help_dialog.name = "SupportDialog"
+	help_dialog.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	help_dialog.offset_left = -215
+	help_dialog.offset_right = 215
+	help_dialog.offset_top = -115
+	help_dialog.offset_bottom = 115
+	help_dialog.mouse_filter = Control.MOUSE_FILTER_STOP
+	parent.add_child(help_dialog)
+	var help_content = VBoxContainer.new()
+	help_content.name = "Content"
+	help_content.add_theme_constant_override("separation", 12)
+	help_dialog.add_child(help_content)
+	var help_title = Label.new()
+	help_title.text = "Помощь и поддержка"
+	help_content.add_child(help_title)
+	var help_text = Label.new()
+	help_text.name = "Message"
+	help_text.text = "Если возникла проблема с игрой, напишите нам:\n" + SUPPORT_EMAIL + "\n\nСкопируйте адрес и отправьте письмо из удобной почты."
+	help_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	help_content.add_child(help_text)
+	var help_actions = HBoxContainer.new()
+	help_actions.name = "Actions"
+	help_content.add_child(help_actions)
+	var copy_button = Button.new()
+	copy_button.text = "Скопировать адрес"
+	copy_button.pressed.connect(_copy_support_email)
+	help_actions.add_child(copy_button)
+	var close_button = Button.new()
+	close_button.name = "Close"
+	close_button.text = "Закрыть"
+	close_button.pressed.connect(help_dialog.hide)
+	help_actions.add_child(close_button)
+	help_dialog.hide()
+
 func add_preview(parent: Control, kind: String) -> void:
 	var image = TextureRect.new()
 	image.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -78,36 +114,7 @@ func finish(parent: Control) -> void:
 	help_button.offset_top = -68
 	help_button.offset_bottom = -24
 	help_button.pressed.connect(_open_help)
-	help_dialog = PanelContainer.new()
-	help_dialog.name = "SupportDialog"
-	help_dialog.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-	help_dialog.offset_left = -215
-	help_dialog.offset_right = 215
-	help_dialog.offset_top = -115
-	help_dialog.offset_bottom = 115
-	help_dialog.mouse_filter = Control.MOUSE_FILTER_STOP
-	ui.add_child(help_dialog)
-	var help_content = VBoxContainer.new()
-	help_content.add_theme_constant_override("separation", 12)
-	help_dialog.add_child(help_content)
-	var help_title = Label.new()
-	help_title.text = "Помощь и поддержка"
-	help_content.add_child(help_title)
-	var help_text = Label.new()
-	help_text.text = "Если возникла проблема с игрой, напишите нам:\n" + SUPPORT_EMAIL + "\n\nСкопируйте адрес и отправьте письмо из удобной почты."
-	help_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	help_content.add_child(help_text)
-	var help_actions = HBoxContainer.new()
-	help_content.add_child(help_actions)
-	var copy_button = Button.new()
-	copy_button.text = "Скопировать адрес"
-	copy_button.pressed.connect(_copy_support_email)
-	help_actions.add_child(copy_button)
-	var close_button = Button.new()
-	close_button.text = "Закрыть"
-	close_button.pressed.connect(help_dialog.hide)
-	help_actions.add_child(close_button)
-	help_dialog.hide()
+	_build_help_dialog(ui)
 	# Backdrop fills the viewport independently of the inset HUD root.
 	var backdrop_root = Control.new()
 	backdrop_root.mouse_filter = Control.MOUSE_FILTER_IGNORE

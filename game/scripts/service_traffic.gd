@@ -67,12 +67,6 @@ static func guard(game, racer: Dictionary, before: Dictionary) -> bool:
 static func pedestrian_plan(game, racer: Dictionary, plan: Dictionary) -> Dictionary:
 	var current: float = racer.line + racer.slide
 	for person in people(game):
-		# Assigned casualty is approached using the medical parking controller.
-		# A separate swept guard still prevents colliding with their body.
-		if racer.get("role", "") == "ambulance" and game.injuries.records.has(str(racer.get("target_key", ""))):
-			var casualty: Dictionary = game.injuries.records[str(racer.target_key)]
-			if person.pos.distance_squared_to(casualty.pos) < 0.01:
-				continue
 		if racer.node.position.distance_squared_to(person.pos) > 10000.0: continue
 		var station: float = game.race_station(person.pos)
 		var gap: float = station - racer.s
@@ -85,8 +79,12 @@ static func pedestrian_plan(game, racer: Dictionary, plan: Dictionary) -> Dictio
 		if line < minf(current, plan.line) - PERSON_CLEARANCE or line > maxf(current, plan.line) + PERSON_CLEARANCE: continue
 		plan.speed = minf(plan.speed, sqrt(2.0 * 18.0 * maxf(0.0, gap - 5.0)))
 		plan.advance = minf(float(plan.get("advance", INF)), maxf(0.0, gap - 4.0))
-		plan.line = racer.line
-		plan.can_pass = false
+		# A departing ambulance may move sideways into its planned clear lane
+		# while forward travel stays blocked. The swept guard validates each step.
+		var passing = racer.get("role", "") == "ambulance" and float(racer.get("target_s", -1.0)) < 0.0 and plan.get("can_pass", false)
+		if not passing:
+			plan.line = racer.line
+			plan.can_pass = false
 	return scenery_plan(game, racer, plan)
 
 static func scenery_plan(game, racer: Dictionary, plan: Dictionary) -> Dictionary:

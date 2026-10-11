@@ -32,8 +32,9 @@ func run() -> void:
 	game.platform_service.profile = {"platform": "vk"}
 	check(game.lobby_ui.help_button != null and game.lobby_ui.help_dialog != null, "help action has a support dialog")
 	game.lobby_ui._open_help()
-	check(game.lobby_ui.help_dialog.visible and game.lobby_ui.help_dialog.get_child(0).get_child(1).text.contains(game.lobby_ui.SUPPORT_EMAIL), "VK help displays support email without relying on mailto")
-	game.lobby_ui.help_dialog.hide()
+	check(game.lobby_ui.help_dialog.visible and game.lobby_ui.help_dialog.get_node("Content/Message").text.contains(game.lobby_ui.SUPPORT_EMAIL), "VK help displays support email without relying on mailto")
+	game.lobby_ui.help_dialog.get_node("Content/Actions/Close").pressed.emit()
+	check(not game.lobby_ui.help_dialog.visible, "support dialog closes through its button")
 
 	game.platform_service.catalog[1].purchase_enabled = true
 	game.platform_service.catalog[1].price = 20

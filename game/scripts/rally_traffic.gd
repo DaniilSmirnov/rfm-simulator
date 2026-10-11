@@ -179,8 +179,8 @@ static func plan(game: Node3D, racer: Dictionary) -> Dictionary:
 # probe results are reused over that distance, like the corner-cut probe.
 static func _clear_path_cached(game, racer: Dictionary, target: float, distance: float) -> bool:
 	var probes: Dictionary = racer.get("path_probes", {})
-	if absf(racer.s - float(probes.get("s", -100.0))) > PROBE_REFRESH:
-		probes = {"s": racer.s}
+	if absf(racer.s - float(probes.get("s", -100.0))) > PROBE_REFRESH or absf(float(racer.line) - float(probes.get("line", INF))) > 0.2:
+		probes = {"s": racer.s, "line": racer.line}
 		racer.path_probes = probes
 	var key = snappedf(target, 0.01)
 	var cached = probes.get(key)
@@ -194,6 +194,7 @@ static func _clear_path(game, racer: Dictionary, target: float, distance: float)
 	var stage = game.stage
 	var previous: Vector3 = racer.node.position
 	var current: float = racer.get("line", 0.0) + racer.slide
+	var radius = 1.1 if ServiceTraffic.applies(racer) else 0.95
 	for i in range(1, 7):
 		var ahead = distance * i / 6.0
 		var s: float = minf(stage.LENGTH - 0.01, racer.s + ahead)
@@ -204,9 +205,9 @@ static func _clear_path(game, racer: Dictionary, target: float, distance: float)
 			if absf(line) > line_limit(game, s) + 1.2: return false
 			if absf(point.y - previous.y) > maxf(0.5, point.distance_to(previous) * 0.45): return false
 			if stage.water != null and stage.water.depth(point) > 0.2: return false
-		if not stage.rock_hit(previous, point, 0.95).is_empty() or stage.obstacle_hit(previous, point, 0.95, true) >= 0:
+		if not stage.rock_hit(previous, point, radius).is_empty() or stage.obstacle_hit(previous, point, radius, true) >= 0:
 			return false
-		if not stage.solids.hit(previous, point, 0.95).is_empty():
+		if not stage.solids.hit(previous, point, radius).is_empty():
 			return false
 		previous = point
 	return true
