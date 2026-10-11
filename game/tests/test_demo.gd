@@ -119,12 +119,14 @@ func run() -> void:
 	Input.action_release("tow")
 	check(scene.helped == 1 and r.kind == "pass" and r.state == "racing", "tow releases crew to race")
 	check(scene.rope_mesh == null, "tow rope cleared")
-	# Collision with an actual moving car must end the run.
+	# A moving car knocks the spectator down; the outing goes on.
 	scene.spawn_racer("pass")
 	var moving = scene.racers[-1]
 	scene.walker = scene.stage.at(moving.s + 2.7)
 	scene._update_racers(0.1)
-	check(scene.dead, "moving rally car collision kills spectator")
+	check(scene.injuries.down and not scene.dead, "moving rally car knocks the spectator down")
+	scene.injuries.records.clear()
+	scene.injuries.down = false
 	# Victory is separate from death and includes complete picnic.
 	scene.dead = false
 	scene.passed = scene.RALLY_CREW_LIMIT

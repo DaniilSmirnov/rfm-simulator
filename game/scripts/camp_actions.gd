@@ -59,7 +59,7 @@ func begin_placement(kind: String) -> void:
 		return
 	if game.seated:
 		game.stand_up()
-	if game.in_car or game.beers >= 30:
+	if game.in_car or game.beers >= 30 or game.injuries.down:
 		game.toast("Для размещения выйди из машины и встань на ноги.")
 		return
 	if kind in game.cargo.KINDS and not game.cargo.take(kind):
@@ -259,7 +259,7 @@ func update_cooking(delta: float) -> void:
 			game.toast("Шашлык готов! Подойди к лагерю и нажми X.")
 
 func drink_beer() -> bool:
-	if game.beers >= 30:
+	if game.beers >= 30 or game.injuries.down:
 		return false
 	if game.cargo.held.has(game.chair_owner()):
 		return false

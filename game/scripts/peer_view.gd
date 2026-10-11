@@ -37,6 +37,9 @@ static func animate(game: Node, peer: Dictionary, delta: float, clock: float, fr
 	peer.car.position = car_pose.position
 	peer.car.rotation = car_pose.rotation
 	Props.animate_wheels(peer.car)
+	if game.injuries.holds(peer.avatar):
+		peer.avatar.visible = true
+		return
 	var avatar_pose = peer.avatar_motion.render(clock, frozen)
 	peer.avatar.position = avatar_pose.position
 	peer.avatar.rotation.y = avatar_pose.rotation.y

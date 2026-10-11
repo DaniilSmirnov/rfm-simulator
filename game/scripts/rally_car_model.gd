@@ -51,6 +51,43 @@ static func build(variant: int, number_override: int = -1, sponsor_override: Str
 		_taxi(root, f)
 	return root
 
+# Ambulance van of the course: a long box body with a glazed cab, red band,
+# red crosses and "СКОРАЯ" on the sides, blue and red beacons on the cab roof.
+static func ambulance() -> Node3D:
+	var p: Dictionary = spec.get("course", {}).get("ambulance", models[0])
+	var root = Node3D.new()
+	root.name = "Ambulance"
+	var f = CarBody.build(root, p)
+	var white = Color(p.color)
+	var red = Color("cf2a2a")
+	# The rear compartment is closed: panel over the glass behind the cab.
+	var floor_y: float = f.floor
+	var box_from = float(p.pillar) + 0.05
+	var box_to = f.rear - 0.06
+	P.box(root, Vector3(0, (floor_y + f.height) * 0.5, (box_from + box_to) * 0.5), Vector3(f.glass_half * 2 + 0.03, f.height - floor_y + 0.02, box_to - box_from), white)
+	var mid_y = (f.base + f.height) * 0.5
+	for side in [-1.0, 1.0]:
+		var x: float = side * (f.glass_half + 0.03)
+		var yaw = side * PI / 2
+		P.box(root, Vector3(side * (f.half + 0.01), f.bonnet - 0.12, 0.2), Vector3(0.012, 0.16, f.rear - f.front - 0.5), red)
+		_cross(root, Vector3(x, mid_y + 0.25, (box_from + box_to) * 0.5 + 0.35), 0.55, red, true)
+		P.label_3d(root, Vector3(x + side * 0.004, mid_y - 0.3, (box_from + box_to) * 0.5), "СКОРАЯ", 64, 0.0032, red, yaw)
+	_cross(root, Vector3(0, f.height + 0.03, (box_from + box_to) * 0.5), 0.8, red, false)
+	P.box(root, Vector3(0, f.height + 0.05, float(f.shape[1]) + 0.2), Vector3(1.2, 0.08, 0.28), Color("27323c"))
+	P.box(root, Vector3(-0.34, f.height + 0.16, float(f.shape[1]) + 0.2), Vector3(0.42, 0.15, 0.25), Color("247fff")).name = "BeaconBlue"
+	P.box(root, Vector3(0.34, f.height + 0.16, float(f.shape[1]) + 0.2), Vector3(0.42, 0.15, 0.25), Color("ff4038")).name = "BeaconRed"
+	return root
+
+# A red cross of arm length `size`, flat on a side (x = pos.x) or on the roof.
+static func _cross(root: Node3D, pos: Vector3, size: float, color: Color, on_side: bool) -> void:
+	var thick = size * 0.32
+	if on_side:
+		P.box(root, pos, Vector3(0.012, size, thick), color)
+		P.box(root, pos, Vector3(0.012, thick, size), color)
+	else:
+		P.box(root, pos, Vector3(thick, 0.012, size), color)
+		P.box(root, pos, Vector3(size, 0.012, thick), color)
+
 static func police() -> Node3D:
 	var p: Dictionary = spec.get("course", {}).get("police", models[0])
 	var root = Node3D.new()

@@ -125,7 +125,7 @@ func step(c: Dictionary, stage, model: int) -> void:
 			if Motion.swept_hit(previous + Vector3(0, 0.7, 0), next + Vector3(0, 0.7, 0), other + Vector3(0, 0.7, 0), radius) and next.distance_to(other) <= previous.distance_to(other):
 				blocked = true
 				if contact.get("person", false) and absf(motion.velocity.dot(forward)) > 5:
-					emit_event({"kind": "person"})
+					emit_event({"kind": "person", "position": other, "velocity": motion.velocity})
 		if blocked:
 			condition = maxf(0, condition - motion.velocity.length() * 1.4)
 			emit_event({"kind": "impact", "speed": motion.velocity.length()})

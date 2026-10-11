@@ -17,7 +17,7 @@ func current() -> Dictionary:
 		return {}
 	if game.in_car:
 		return {"action": "car", "label": "Выйти из машины"} if absf(game.speed) <= 1 else {}
-	if game.beers >= 30:
+	if game.beers >= 30 or game.injuries.down:
 		return {}
 	if game.seated:
 		return {"action": "stand", "label": "Встать со стула"}

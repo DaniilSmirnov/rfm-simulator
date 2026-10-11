@@ -669,8 +669,8 @@ static func course_car(role: String, zero_index: int = 0) -> Node3D:
 		node.set_meta("model", "Нулевой экипаж %d" % zero_index)
 		node.set_meta("role", role)
 		return node
-	var node = RallyCarModel.police()
-	node.set_meta("model", "Замыкающая полиция" if role == "closing_police" else "Полиция открытия СУ")
+	var node = RallyCarModel.ambulance() if role == "ambulance" else RallyCarModel.police()
+	node.set_meta("model", {"ambulance": "Скорая помощь", "closing_police": "Замыкающая полиция"}.get(role, "Полиция открытия СУ"))
 	node.set_meta("number", 0)
 	node.set_meta("role", role)
 	for light in [node.get_node("BeaconBlue"), node.get_node("BeaconRed")]:
@@ -678,7 +678,7 @@ static func course_car(role: String, zero_index: int = 0) -> Node3D:
 		light.material_override.emission_enabled = true
 		light.material_override.emission = light.material_override.albedo_color
 		light.material_override.emission_energy_multiplier = 2.5
-	return bake_car(node, "police")
+	return bake_car(node, "ambulance" if role == "ambulance" else "police")
 
 static func update_course_lights(node: Node3D, clock: float) -> void:
 	var blue = node.get_node_or_null("BeaconBlue")

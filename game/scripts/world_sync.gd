@@ -66,6 +66,7 @@ func rebuild() -> void:
 	providers.append(provider("progress", "", ["racing", "passed", "helped", "elapsed"], _progress_snapshot, _progress_apply))
 	providers.append(_subsystem("camp_cooking", func(): return game.camp_cooking, "snapshot", "apply_snapshot"))
 	providers.append(provider("racers", "", ["racers", "recovery_links"], _racers_snapshot, _racers_apply))
+	providers.append(_subsystem("injuries", func(): return game.injuries, "snapshot", "apply_snapshot"))
 	providers.append(provider("outcome", "", ["dead", "finished", "title", "text"], _outcome_snapshot, _outcome_apply))
 
 # A subsystem that already owns snapshot()/apply_snapshot() under one key.
@@ -391,4 +392,4 @@ func _racers_apply(w: Dictionary, sample_time: float) -> void:
 	game._cancel_tow()
 	game.recovery_links = w.get("recovery_links", []).duplicate(true)
 	game.Recovery.local_target(game)
-	game.draw_recovery_ropes()
+	game.crews.draw_recovery_ropes()

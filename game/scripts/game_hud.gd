@@ -279,6 +279,7 @@ func update_hud() -> void:
 		game.minimap.queue_redraw()
 		game.minimap_redraw_at = now + 100
 	var near_tow = game.nearby_tow_target() if game.tow_target == null else false
+	var injury = game.injuries.hud_line()
 	var remaining_items = game.packing.remaining() if game.packing.active() else -1
 	var bag = game.foraging.stock() if not game.in_car else {}
 	var pot = game.camp_cooking.pot != null
@@ -290,7 +291,7 @@ func update_hud() -> void:
 		int(game.elapsed) if not game.mobile_mode else 0, game.camp != null, game.has_chairs, game.eaten, game.passed, game.helped, game.beers,
 		game.cook_time >= 35, int(game.cook_time / 35 * 100) if game.cooking and game.cook_time < 35 else 0,
 		game.cooking, game.grill_servings, game.drink_time >= 0, game.drink_time >= 1.25, game.eat_time >= 0, game.eat_kind,
-		game.tow_target != null, ceili(game.tow_distance), game.recovery_helpers, near_tow, game.crews.car_towed,
+		game.tow_target != null, ceili(game.tow_distance), game.recovery_helpers, near_tow, game.crews.car_towed, injury,
 		remaining_items, game.seated, game.stage.variant, bag.get("mushrooms", 0), bag.get("berries", 0),
 		game.foraging.can_eat("berries"), pot, game.camp_cooking.phase if pot else "",
 		game.camp_cooking.servings if pot else 0,
@@ -334,6 +335,10 @@ func update_hud() -> void:
 		info_text = "ТВОЮ МАШИНУ ТЯНУТ НА ТРОСЕ"
 	if game.tow_target != null:
 		info_text = tow_text()
+	if injury != "":
+		info_text = injury
+		if game.injuries.down:
+			hint_text = "Лежи и жди скорую · мышь — осмотреться"
 	elif near_tow:
 		hint_text += "   ·   T — тянуть тросом в любую сторону · иди на машину — толкать"
 	if not game.in_car:
@@ -350,7 +355,7 @@ func update_hud() -> void:
 		hint_text = "Лагерь собран. Садитесь в свои машины через F; ждём всех друзей." if game.in_car else "Лагерь собран. Подойди к своей машине и нажми F."
 	if game.mobile_mode:
 		course_text = game.course.caption().replace("ПРОХОД ", "СУ ").replace(" · ПРЯМО", "").replace(" · ОБРАТНО", "").replace("ДО ОТКРЫТИЯ СУ", "СТАРТ ЧЕРЕЗ")
-		if game.crews.car_towed or game.tow_target != null:
+		if injury != "" or game.crews.car_towed or game.tow_target != null:
 			info_text = info_text.replace("УДЕРЖИВАЙ T", "УДЕРЖИВАЙ ТРОС")
 		elif game.in_car:
 			info_text = "%02d КМ/Ч · МАШИНА %d%%" % [int(absf(game.speed) * 3.6), int(game.condition)]

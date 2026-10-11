@@ -10,6 +10,7 @@ var crews = preload("res://scripts/rally_crews.gd").new()
 var player = preload("res://scripts/player_motion.gd").new()
 var camp_actions = preload("res://scripts/camp_actions.gd").new()
 var hud = preload("res://scripts/game_hud.gd").new()
+var injuries = preload("res://scripts/injuries.gd").new()
 var seated = false
 var jump_height = 0.0
 var jump_velocity = 0.0
@@ -202,7 +203,7 @@ var hud_target_frame = -1
 var minimap_redraw_at = 0
 
 func _init() -> void:
-	for system in [crews, player, camp_actions, hud]:
+	for system in [crews, player, camp_actions, hud, injuries]:
 		system.game = self
 
 func actor_pos() -> Vector3:
@@ -706,6 +707,7 @@ func _process(delta: float) -> void:
 	Props.animate_wheels(car)
 	cargo.update(delta)
 	camp_cooking.update(delta, room.is_guest())
+	injuries.update(delta)
 	spectators.update(elapsed, delta, room.is_guest())
 	stage.officials.update(self, delta, room.is_guest())
 	foraging.update_visuals()
@@ -928,12 +930,6 @@ func walking_intent() -> Vector3:
 
 func _update_tow(delta: float) -> void:
 	crews.update_tow(delta)
-
-func _clear_recovery_ropes() -> void:
-	crews.clear_recovery_ropes()
-
-func draw_recovery_ropes() -> void:
-	crews.draw_recovery_ropes()
 
 func _cancel_tow() -> void:
 	crews.cancel_tow()

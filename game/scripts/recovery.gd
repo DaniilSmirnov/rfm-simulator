@@ -36,7 +36,7 @@ static func road_gap(game, pos: Vector3) -> float:
 
 static func update(game, players: Dictionary, delta: float) -> void:
 	if game.paused or game.dead or game.finished:
-		game._clear_recovery_ropes()
+		game.crews.clear_recovery_ropes()
 		return
 	game.recovery_links.clear()
 	var targets = _targets(game, players)
@@ -49,6 +49,8 @@ static func update(game, players: Dictionary, delta: float) -> void:
 	for id in participants:
 		var p: Dictionary = participants[id]
 		if p.get("in_car", true) or p.get("seated", false) or p.get("airborne", false) or int(p.get("beers", 0)) >= 30:
+			continue
+		if game.injuries.is_down("player:%s" % id):
 			continue
 		var effort = _effort(game, p, targets)
 		if effort.is_empty():
@@ -71,7 +73,7 @@ static func update(game, players: Dictionary, delta: float) -> void:
 		if helpers.has(target.key):
 			_drag(game, target, forces[target.key], delta, float(slack.get(target.key, INF)))
 	local_target(game)
-	game.draw_recovery_ropes()
+	game.crews.draw_recovery_ropes()
 
 # Crews that may be towed, and the cars of all players in the room.
 static func _targets(game, players: Dictionary) -> Array:
