@@ -188,7 +188,7 @@ func finish(parent: Control) -> void:
 	return_button.pressed.connect(game.return_to_main_menu)
 	return_button.hide()
 	help_dialog = _link_dialog("SupportDialog", "Помощь и поддержка", "Если с игрой что-то не так, напиши нам:\n" + SUPPORT_EMAIL + "\n\nСкопируй адрес и отправь письмо из удобной почты.", [["СКОПИРОВАТЬ АДРЕС", "primary", _copy_support_email]])
-	about_dialog = _link_dialog("AboutDialog", UiKit.BRAND_NAME, "Игру делает Rally Fans Map — карта и сообщество болельщиков ралли.\n" + UiKit.BRAND_URL, [["ОТКРЫТЬ САЙТ", "primary", func(): UiKit.open_url(UiKit.BRAND_URL)], ["СКОПИРОВАТЬ", "secondary", func(): _copy(UiKit.BRAND_URL, "Ссылка скопирована: " + UiKit.BRAND_URL)]])
+	about_dialog = _link_dialog("AboutDialog", UiKit.BRAND_NAME, "Rally Fans Simulator сделан командой Rally Fans Map. Подробнее о проекте — на сайте:\n" + UiKit.BRAND_URL, [["ОТКРЫТЬ САЙТ", "primary", func(): UiKit.open_url(UiKit.BRAND_URL)], ["СКОПИРОВАТЬ", "secondary", func(): _copy(UiKit.BRAND_URL, "Ссылка скопирована: " + UiKit.BRAND_URL)]])
 	# Backdrop fills the viewport independently of the inset HUD root.
 	background = TextureRect.new()
 	background.name = "StageBackdrop"

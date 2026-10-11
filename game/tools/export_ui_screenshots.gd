@@ -3,7 +3,8 @@ extends SceneTree
 # mobile (add --mobile-controls), optionally as a VK player.
 #   xvfb-run godot --path game --rendering-driver opengl3 --resolution 844x390 \
 #     --script res://tools/export_ui_screenshots.gd -- --state=pause --vk --mobile-controls --out=/tmp/pause.png
-# States: menu, hud, car, pause, guest_pause, result, safety, help, loading.
+# States: menu, hud, drawer, car, pause, guest_pause, result, safety, help,
+# about, loading.
 
 func _initialize() -> void:
 	call_deferred("run")
@@ -29,12 +30,14 @@ func run() -> void:
 	if state == "menu":
 		game.select_stage(stage)
 		game.stage_choice.select(stage)
-	if state in ["hud", "car", "pause", "guest_pause", "result", "safety"]:
+	if state in ["hud", "drawer", "car", "pause", "guest_pause", "result", "safety"]:
 		await game.start_game()
 		game._prepare_capture()
 		game.camera.position = game.camp.position + Vector3(10, 5, 12)
 		await frames(4)
-		if state == "car":
+		if state == "drawer" and game.mobile_controls != null:
+			game.mobile_controls.gear_open = true
+		elif state == "car":
 			game.walker = game.car.position + Vector3(1.5, 0, 0)
 			game._toggle_car()
 		elif state == "pause":
@@ -51,6 +54,8 @@ func run() -> void:
 			game._show_stage_safety_gate()
 	elif state == "help":
 		game.lobby_ui.help_dialog.show()
+	elif state == "about":
+		game.lobby_ui.about_dialog.show()
 	elif state == "loading":
 		game.loading_screen.show_loading()
 		game.loading_screen.caption.text = "Деревья и подлесок"
