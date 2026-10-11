@@ -79,7 +79,7 @@ func walk_factor() -> float:
 # Everybody who can be hit: {"key", "pos" (feet), "avatar"}.
 func people() -> Array:
 	var result: Array = []
-	if not game.in_car:
+	if not game.in_car and not down:
 		result.append({"key": local_key(), "pos": game.walker, "avatar": local_avatar})
 	for id in game.room.peers:
 		var peer = game.room.peers[id]
