@@ -12,12 +12,13 @@ extends RefCounted
 # world snapshot and pose the bodies from it; the ambulance travels as a course
 # vehicle (role "ambulance") with the other racers.
 #
-# Keys: "player:<id>" ("player:local" solo), "npc:<id>", "marshal:<id>",
-# "judge:<index>".
+# Keys: "player:<id>" ("player:local" solo), "npc:<id>", "villager:<id>",
+# "marshal:<id>", "judge:<index>".
 const Props = preload("res://scripts/props.gd")
 const Motion = preload("res://scripts/vehicle_motion.gd")
 # Reach (m) from a car centre: a little over the 1.55 m at which cars stop for people.
 const HIT_RADIUS = 1.65
+const VILLAGER_HIT_RADIUS = 2.2
 const PLAYER_CAR_SPEED = 5.0
 const CREW_SPEED = 2.0
 const MAX_FLIGHT = 5.0
@@ -88,6 +89,10 @@ func people() -> Array:
 	if game.spectators != null:
 		for person in game.spectators.people:
 			result.append({"key": "npc:%d" % person.id, "pos": person.avatar.position, "avatar": person.avatar})
+	var life = game.stage.life if game.stage != null and "life" in game.stage else null
+	if life != null and "walkers" in life:
+		for walker in life.walkers:
+			result.append({"key": "villager:%d" % int(walker.id), "pos": walker.node.position, "avatar": walker.node})
 	var officials = game.stage.officials if game.stage != null and "officials" in game.stage else null
 	if officials != null:
 		for person in officials.people:
@@ -116,7 +121,8 @@ func vehicle_sweep(previous: Vector3, next: Vector3, velocity: Vector3, min_spee
 		if is_down(person.key):
 			continue
 		var feet: Vector3 = person.pos
-		if Motion.swept_hit(previous + Vector3(0, 0.7, 0), next + Vector3(0, 0.7, 0), feet + Vector3(0, 0.7, 0), HIT_RADIUS):
+		var radius = VILLAGER_HIT_RADIUS if str(person.key).begins_with("villager:") else HIT_RADIUS
+		if Motion.swept_hit(previous + Vector3(0, 0.7, 0), next + Vector3(0, 0.7, 0), feet + Vector3(0, 0.7, 0), radius):
 			hit = knock(person.key, feet, velocity, previous) or hit
 	return hit
 
@@ -150,6 +156,8 @@ func knock(key: String, feet: Vector3, velocity: Vector3, car: Vector3) -> bool:
 		if avatar.has_meta("solid_record"):
 			# Officials are rocks for cars and walkers; a casualty is not.
 			avatar.get_meta("solid_record").pos.y = -1000.0
+	if key.begins_with("villager:"):
+		_set_villager_knocked(key, true)
 	records[key] = record
 	_assign(record, key)
 	# Broadcast the emergency immediately, not only on the next update tick.
@@ -369,6 +377,8 @@ func _stand(key: String, r: Dictionary) -> void:
 	_pose(key, spot, Vector3(0, float(r.rot.y), 0), 1.0)
 	if avatar != null and avatar.has_meta("solid_record"):
 		avatar.get_meta("solid_record").pos = avatar.position
+	if key.begins_with("villager:"):
+		_set_villager_knocked(key, false)
 	if key.begins_with("player:"):
 		r.phase = "limp"
 		r.limp = LIMP_SECONDS
@@ -405,6 +415,7 @@ func snapshot() -> Array:
 	return result
 
 func apply_snapshot(entries: Array) -> void:
+	var previous_targets = targets.duplicate()
 	var seen: Dictionary = {}
 	for entry in entries:
 		if not entry is Dictionary or not entry.get("pos") is Array or not entry.get("rot") is Array:
@@ -414,6 +425,13 @@ func apply_snapshot(entries: Array) -> void:
 	for key in targets.keys():
 		if not seen.has(key):
 			targets.erase(key)
+	for key in previous_targets:
+		if str(key).begins_with("villager:") and not seen.has(key):
+			_set_villager_knocked(str(key), false)
+	for entry in entries:
+		var key = str(entry.get("key", "")) if entry is Dictionary else ""
+		if key.begins_with("villager:") and str(entry.get("phase", "")) != "limp":
+			_set_villager_knocked(key, true)
 	var mine = targets.get(local_key())
 	var was_down = down
 	if mine != null and str(mine.phase) != "limp":
@@ -500,3 +518,9 @@ func _pose(key: String, pos: Vector3, rot: Vector3, weight: float) -> void:
 	var goal = Basis.from_euler(rot)
 	avatar.position = avatar.position.lerp(pos, weight)
 	avatar.quaternion = avatar.quaternion.slerp(goal.get_rotation_quaternion(), weight)
+
+func _set_villager_knocked(key: String, knocked: bool) -> void:
+	if game.stage == null or not "life" in game.stage or game.stage.life == null:
+		return
+	var id = key.get_slice(":", 1).to_int()
+	game.stage.life.set_walker_knocked(id, knocked)

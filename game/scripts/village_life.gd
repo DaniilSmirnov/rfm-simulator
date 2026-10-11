@@ -4,8 +4,8 @@ extends RefCounted
 # old men on a bench, pigeons that flutter up when a car passes, swallows,
 # cats, laundry and tricolour flags in the breeze, chimney smoke, the fountain,
 # bees over the lavender and grape pickers with a little vineyard tractor.
-# All of it is local scenery: nothing here is synchronised or collides, and
-# only the part near the camera is animated.
+# All of it is local scenery; villager injury poses are synchronized by the
+# host's injury stream. Only the part near the camera is animated.
 const Props = preload("res://scripts/props.gd")
 const Layout = preload("res://scripts/village_layout.gd")
 const LIFE_RANGE = 130.0
@@ -104,7 +104,28 @@ func _walkers() -> void:
 			p.y = stage.ground(p)
 			path.append(p)
 		var avatar = person(i + 1, accessories[i])
-		walkers.append({"node": avatar, "path": path, "t": rng.randf() * (path.size() - 1), "direction": 1.0 if i % 2 == 0 else -1.0, "speed": rng.randf_range(0.9, 1.25), "pause": 0.0})
+		walkers.append({"id": i + 1, "node": avatar, "path": path, "t": rng.randf() * (path.size() - 1), "direction": 1.0 if i % 2 == 0 else -1.0, "speed": rng.randf_range(0.9, 1.25), "pause": 0.0, "knocked": false})
+
+func set_walker_knocked(id: int, knocked: bool) -> void:
+	for walker in walkers:
+		if int(walker.get("id", -1)) != id:
+			continue
+		walker.knocked = knocked
+		var node: Node3D = walker.node
+		if knocked:
+			return
+		# Resume the stroll from the closest point to where the ambulance helped.
+		var path: Array = walker.path
+		var closest = INF
+		for i in range(path.size()):
+			var distance = node.position.distance_squared_to(path[i])
+			if distance < closest:
+				closest = distance
+				walker.t = float(i)
+		walker.pause = 2.0
+		_legs(node, 0.0)
+		node.get_node("RightArm").rotation = Vector3.ZERO
+		return
 
 func _cafe_regulars() -> void:
 	var seats: Array = anchors("cafe_seats")
@@ -415,6 +436,8 @@ func _update_walkers(dt: float, focus: Vector3) -> void:
 	for walker in walkers:
 		var node: Node3D = walker.node
 		var path: Array = walker.path
+		if walker.get("knocked", false):
+			continue
 		if path.size() < 2 or not near(node.position, focus):
 			continue
 		# A rally car is coming: stop on the pavement, face it and wave.

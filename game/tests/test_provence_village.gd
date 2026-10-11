@@ -135,6 +135,15 @@ func run() -> void:
 	stage.update_life(0.1, parked)
 	check(walker.node.position.distance_to(parked) < 0.001 and walker.node.get_node("RightArm").rotation.x > 2.0, "villagers stop and wave as a rally car passes")
 	racer.node.position = Vector3(1000, 0, 1000)
+	var villager_key = "villager:%d" % walker.id
+	check(game.injuries.vehicle_sweep(parked + Vector3(0, 0, 3), parked - Vector3(0, 0, 3), Vector3(0, 0, -12), game.injuries.CREW_SPEED), "a rally car can knock down a village resident")
+	check(game.injuries.is_down(villager_key) and walker.knocked, "the knocked-down villager enters the shared injury state")
+	var injury_snapshot = game.injuries.snapshot()
+	check(injury_snapshot.any(func(item): return item.key == villager_key), "villager injury state is included in multiplayer snapshots")
+	var knocked_position = walker.node.position
+	stage.update_life(0.1, knocked_position)
+	check(walker.node.position.distance_to(knocked_position) < 0.001, "normal village walking does not move a knocked-down resident")
+	check(not game.injuries.vehicle_sweep(parked + Vector3(0, 0, 3), parked - Vector3(0, 0, 3), Vector3(0, 0, -12), game.injuries.CREW_SPEED), "a knocked-down resident cannot be hit repeatedly")
 	var swing_before = life.laundry[0].node.rotation
 	stage.update_life(0.3, life.laundry[0].node.position)
 	check(life.laundry[0].node.rotation != swing_before, "laundry moves in the breeze")
