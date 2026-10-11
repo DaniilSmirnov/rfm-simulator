@@ -77,6 +77,8 @@ func run() -> void:
 		parked = parked or van.state == "parked"
 		if not game.injuries.down:
 			break
+	if not (parked and absf(van.s - lying.station) < 3.0):
+		print("AMBULANCE PARK DIAG: state=%s station=%.2f target=%.2f speed=%.2f treating=%s" % [str(van.state), float(van.s), float(lying.station), float(van.get("drive_speed", 0.0)), str(van.get("treating", ""))])
 	check(parked and absf(van.s - lying.station) < 3.0, "the ambulance parks beside the casualty")
 	check(not game.injuries.down and game.injuries.limp > 55.0, "after treatment the player stands up and limps")
 	check(game.injuries.local_avatar == null and game.walker.distance_to(lying.pos) < 1.0, "the player gets up where they lay")
@@ -91,6 +93,9 @@ func run() -> void:
 		game.injuries.update(1.0 / 30.0)
 		if ambulance(game).is_empty():
 			break
+	if not ambulance(game).is_empty():
+		var emergency = ambulance(game)
+		print("AMBULANCE EXIT DIAG: state=%s station=%.2f speed=%.2f target=%.2f red_flag=%s" % [str(emergency.state), float(emergency.s), float(emergency.get("drive_speed", 0.0)), float(emergency.get("target_s", -1.0)), str(game.course.red_flag)])
 	check(ambulance(game).is_empty() and not game.course.red_flag, "the ambulance leaves the stage and the red flag is lifted")
 	game.injuries.update(61.0)
 	game.injuries.update(0.1)
