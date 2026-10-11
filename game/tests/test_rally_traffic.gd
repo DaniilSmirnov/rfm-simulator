@@ -135,6 +135,45 @@ func run() -> void:
 	game.recover_racer(drifting)
 	check(drifting.slide == 0 and drifting.slide_speed == 0 and drifting.drift_yaw == 0 and drifting.yaw_rate == 0 and drifting.motion.velocity == Vector3.ZERO, "towing resets lateral inertia and accident rotation")
 	clear_cars(game)
+	# Red flags stop already-started competitors and zero cars in either direction.
+	game.stage.trees.clear()
+	game.stage.rocks.clear()
+	for pass_index in [1, 2]:
+		game.course.pass_index = pass_index
+		for role in ["racer", "zero"]:
+			clear_cars(game)
+			game.spawn_racer("pass")
+			var waiting = game.racers[0]
+			waiting.role = role
+			waiting.s = 150.0
+			waiting.node.position = game.race_at(waiting.s)
+			waiting.drive_speed = 20.0
+			waiting.slide = 0.0
+			waiting.slide_speed = 0.0
+			game.course.red_flag = true
+			game._update_racers(1.0 / 60.0)
+			check(waiting.drive_speed > 0.0 and waiting.drive_speed < 20.0 and waiting.s > 150.0, "red flag brakes progressively instead of freezing immediately")
+			game._update_racers(2.0)
+			check(waiting.drive_speed == 0.0 and waiting.state == "racing", "competitors and zeros stop without becoming stranded")
+			var held: Vector3 = waiting.node.position
+			waiting.age = 25.0
+			game._update_racers(1.0)
+			check(game.racers.has(waiting) and Vector2(waiting.node.position.x - held.x, waiting.node.position.z - held.z).length() < 0.001, "red-flag wait neither creeps nor despawns")
+			game.course.red_flag = false
+			game._update_racers(0.5)
+			check(waiting.drive_speed > 0.0 and waiting.node.position.distance_to(held) > 0.1, "crews resume when the red flag clears")
+	clear_cars(game)
+	game.spawn_racer("pass")
+	var ambulance = game.racers[0]
+	ambulance.role = "ambulance"
+	ambulance.s = 150.0
+	ambulance.node.position = game.race_at(150.0)
+	game.course.red_flag = true
+	game._update_racers(0.5)
+	check(ambulance.s > 150.0 and ambulance.drive_speed > 0.0, "ambulance continues while the red flag is active")
+	check(game.course.phase_caption().contains("КРАСНЫЙ ФЛАГ"), "red-flag status is visible")
+	game.course.red_flag = false
+	clear_cars(game)
 	await game._shutdown_audio()
 	game.queue_free()
 	await process_frame

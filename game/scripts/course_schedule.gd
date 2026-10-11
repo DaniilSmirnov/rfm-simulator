@@ -7,7 +7,7 @@ var phase = "countdown"
 var remaining = OPENING_SECONDS
 var zero_index = 0
 var active_id = -1
-# An ambulance is on the stage (injuries.gd): no crew starts meanwhile.
+# An ambulance is on the stage: starts pause and crews brake until it leaves.
 var red_flag = false
 
 func update(game, delta: float) -> void:
@@ -83,6 +83,8 @@ func caption() -> String:
 	return "ПРОХОД %d/2 · %s · %s" % [pass_index, "ОБРАТНО" if pass_index == 2 else "ПРЯМО", phase_caption()]
 
 func phase_caption() -> String:
+	if red_flag:
+		return "КРАСНЫЙ ФЛАГ · СКОРАЯ НА СУ"
 	match phase:
 		"countdown":
 			var seconds = ceili(remaining)
@@ -92,7 +94,7 @@ func phase_caption() -> String:
 			return "ДО ОБРАТНОГО ПРОХОДА %02d:%02d" % [seconds / 60, seconds % 60]
 		"opening_police": return "ОТКРЫТИЕ СУ · ПОЛИЦИЯ"
 		"zero": return "НУЛЕВОЙ ЭКИПАЖ %d/3 · № 0" % zero_index
-		"racing": return "КРАСНЫЙ ФЛАГ · СКОРАЯ НА СУ" if red_flag else "СУ ОТКРЫТ · ГОНЩИКИ"
+		"racing": return "СУ ОТКРЫТ · ГОНЩИКИ"
 		"closing_police": return "ЗАКРЫТИЕ СУ · ПОЛИЦИЯ"
 		_: return "СУ ЗАКРЫТ"
 

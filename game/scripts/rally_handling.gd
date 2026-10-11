@@ -27,7 +27,7 @@ static func departure(racer: Dictionary, velocity: Vector3, side: Vector3, bend:
 	racer.exit_side = outward
 	racer.yaw_rate = -outward * (0.65 if racer.kind == "crash" else 0.35)
 
-static func free_step(racer: Dictionary, stage, dt: float) -> void:
+static func free_step(racer: Dictionary, stage, dt: float, brake_hold: bool = false) -> void:
 	var node: Node3D = racer.node
 	var motion = racer.motion
 	var grip: float = stage.grip(node.position)
@@ -44,6 +44,10 @@ static func free_step(racer: Dictionary, stage, dt: float) -> void:
 		var x_slope: float = (stage.ground(node.position + Vector3.RIGHT) - stage.ground(node.position - Vector3.RIGHT)) * 0.5
 		var z_slope: float = (stage.ground(node.position + Vector3.BACK) - stage.ground(node.position - Vector3.BACK)) * 0.5
 		motion.velocity += Vector3(-x_slope, 0, -z_slope) * 9.8 * dt
+		# Brake after slope forces so a grounded car can hold on an incline.
+		# Airborne cars retain momentum and land before braking.
+		if brake_hold:
+			motion.velocity = motion.velocity.move_toward(Vector3.ZERO, 18.0 * dt)
 	var turn = float(racer.get("yaw_rate", 0.0)) * clampf(motion.velocity.length() / 12.0, 0.0, 1.0)
 	racer.yaw_rate = float(racer.get("yaw_rate", 0.0)) * exp(-dt * (0.45 if motion.grounded else 0.05))
 	node.position += motion.velocity * dt
