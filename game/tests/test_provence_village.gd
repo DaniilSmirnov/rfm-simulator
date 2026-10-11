@@ -144,6 +144,23 @@ func run() -> void:
 	stage.update_life(0.1, knocked_position)
 	check(walker.node.position.distance_to(knocked_position) < 0.001, "normal village walking does not move a knocked-down resident")
 	check(not game.injuries.vehicle_sweep(parked + Vector3(0, 0, 3), parked - Vector3(0, 0, 3), Vector3(0, 0, -12), game.injuries.CREW_SPEED), "a knocked-down resident cannot be hit repeatedly")
+	var village_casualty: Dictionary = game.injuries.records[villager_key]
+	village_casualty.body.global_position = parked + Vector3.UP * 0.85
+	game.injuries._land(village_casualty)
+	racer.state = "parked"
+	racer.node.position = Vector3(10000, 0, 10000)
+	var village_ambulance: Dictionary = {}
+	for crew in game.racers:
+		if crew.get("role", "") == "ambulance":
+			village_ambulance = crew
+	var treated_villager = false
+	for i in range(4500):
+		game._update_racers(1.0 / 30.0)
+		game.injuries.update(1.0 / 30.0)
+		if not game.injuries.records.has(villager_key):
+			treated_villager = true
+			break
+	check(treated_villager and not village_ambulance.is_empty(), "the ambulance reaches and treats a resident in the village")
 	var swing_before = life.laundry[0].node.rotation
 	stage.update_life(0.3, life.laundry[0].node.position)
 	check(life.laundry[0].node.rotation != swing_before, "laundry moves in the breeze")
