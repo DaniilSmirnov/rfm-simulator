@@ -26,6 +26,8 @@ const MAX_LAUNCH = 13.0
 const TREAT_SECONDS = 3.0
 const Medics = preload("res://scripts/ambulance_medics.gd")
 const CharacterRig = preload("res://scripts/character_rig.gd")
+const Navigation = preload("res://scripts/crowd_navigation.gd")
+const Budget = preload("res://scripts/navigation_budget.gd")
 const LIMP_SECONDS = 60.0
 const LIMP_FACTOR = 0.55
 # Terrain collision under a flight: PATCH × PATCH vertices, one metre apart.
@@ -44,6 +46,9 @@ var medics = Medics.new()
 # Host: key -> {"phase": "flying"|"lying"|"limp", "pos", "rot", "time", "body",
 # "patch", "station", "ambulance", "treat", "limp", "home"}.
 var records: Dictionary = {}
+# Healed NPCs remain under our control until they walk back to their post.
+var returning: Dictionary = {}
+var return_budget = Budget.new()
 # Guest: key -> last snapshot entry.
 var targets: Dictionary = {}
 # The local player is flying or lying, and limps for this many more seconds.
@@ -62,7 +67,7 @@ func authority() -> bool:
 # The person is flying or lying (not limping): cars pass, helpers skip them.
 func is_down(key: String) -> bool:
 	var entry = records.get(key, targets.get(key))
-	return entry != null and str(entry.phase) != "limp"
+	return entry != null and str(entry.phase) in ["flying", "lying"]
 
 # This avatar's pose is driven from here this frame.
 func holds(avatar: Node) -> bool:
@@ -158,7 +163,12 @@ func knock(key: String, feet: Vector3, velocity: Vector3, car: Vector3) -> bool:
 	record.station = game.race_station(feet)
 	var avatar = avatar_of(key)
 	if avatar != null:
-		record.home = avatar.position
+		record.home = _home(key, avatar.position)
+		record.home_yaw = avatar.rotation.y
+		if returning.has(key):
+			record.home = returning[key].goal
+			record.home_yaw = returning[key].home_yaw
+			returning.erase(key)
 		if avatar.has_meta("solid_record"):
 			# Officials are rocks for cars and walkers; a casualty is not.
 			avatar.get_meta("solid_record").pos.y = -1000.0
@@ -306,6 +316,7 @@ func update(delta: float) -> void:
 	_held.clear()
 	if authority():
 		_update_host(delta)
+		_update_returning(delta)
 	else:
 		_update_guest(delta)
 	medics.update(delta)
@@ -404,13 +415,9 @@ func _stand(key: String, r: Dictionary) -> void:
 	var spot: Vector3 = r.pos
 	spot.y = game.stage.ground(spot)
 	var avatar = avatar_of(key)
-	if key.begins_with("judge:") and r.has("home"):
-		spot = r.home
 	_pose(key, spot, Vector3(0, float(r.rot.y), 0), 1.0)
 	if avatar != null and avatar.has_meta("solid_record"):
 		avatar.get_meta("solid_record").pos = avatar.position
-	if key.begins_with("villager:"):
-		_set_villager_knocked(key, false)
 	if key.begins_with("player:"):
 		r.phase = "limp"
 		r.limp = LIMP_SECONDS
@@ -419,7 +426,48 @@ func _stand(key: String, r: Dictionary) -> void:
 		if key == local_key():
 			_stand_local(spot)
 	else:
+		if avatar != null:
+			returning[key] = {"avatar": avatar, "navigation_budget": return_budget, "goal": r.get("home", _home(key, spot)), "home_yaw": r.get("home_yaw", avatar.rotation.y), "clock": 0.0, "moving": false}
 		records.erase(key)
+
+func _home(key: String, fallback: Vector3) -> Vector3:
+	if key.begins_with("npc:"):
+		for person in game.spectators.people:
+			if key == "npc:%d" % person.id:
+				return person.home
+	if key.begins_with("marshal:"):
+		for person in game.stage.officials.people:
+			if key == "marshal:%d" % person.id:
+				return person.home
+	return fallback
+
+func _update_returning(delta: float) -> void:
+	return_budget.advance(delta)
+	for key in returning.keys():
+		var person: Dictionary = returning[key]
+		var avatar: Node3D = person.avatar
+		var before = avatar.position
+		# A casualty may have landed on either side of the road: allow crossing
+		# back, while retaining the shared obstacle and vehicle avoidance.
+		Navigation.move(game, person, person.goal, delta, false)
+		var motion = avatar.position - before
+		person.moving = Navigation.flat(motion).length() > 0.001
+		person.clock += delta
+		if person.moving:
+			avatar.rotation.y = atan2(-motion.x, -motion.z)
+		_pose_returning(key, person)
+		if Navigation.flat(avatar.position).distance_to(Navigation.flat(person.goal)) < 0.2:
+			avatar.rotation.y = person.home_yaw
+			if key.begins_with("villager:"):
+				_set_villager_knocked(key, false)
+			returning.erase(key)
+
+func _pose_returning(key: String, person: Dictionary) -> void:
+	var avatar: Node3D = person.avatar
+	_held[avatar.get_instance_id()] = true
+	CharacterRig.pose(avatar, {"gait": 1 if person.moving else 0, "time": person.clock, "arms": "clipboard" if key.begins_with("judge:") else ""})
+	if avatar.has_meta("solid_record"):
+		avatar.get_meta("solid_record").pos = avatar.position
 
 # ---------------------------------------------------------------- guests
 
@@ -429,6 +477,10 @@ func _update_guest(delta: float) -> void:
 		if str(entry.phase) == "limp":
 			continue
 		_pose(key, Vector3(entry.pos[0], entry.pos[1], entry.pos[2]), Vector3(entry.rot[0], entry.rot[1], entry.rot[2]), 1.0 - exp(-delta * 12.0))
+		if str(entry.phase) == "returning":
+			var avatar = avatar_of(key)
+			if avatar != null:
+				_pose_returning(key, {"avatar": avatar, "moving": entry.get("moving", false), "clock": entry.get("clock", 0.0)})
 
 func snapshot() -> Array:
 	var result: Array = []
@@ -444,6 +496,10 @@ func snapshot() -> Array:
 			if float(r.treat) > 0.0:
 				entry.treat = true
 		result.append(entry)
+	for key in returning:
+		var person: Dictionary = returning[key]
+		var pos: Vector3 = person.avatar.position
+		result.append({"key": key, "phase": "returning", "pos": [pos.x, pos.y, pos.z], "rot": [0, person.avatar.rotation.y, 0], "moving": person.moving, "clock": person.clock, "goal": [person.goal.x, person.goal.y, person.goal.z], "home_yaw": person.home_yaw})
 	return result
 
 func apply_snapshot(entries: Array) -> void:
@@ -454,6 +510,10 @@ func apply_snapshot(entries: Array) -> void:
 			continue
 		seen[str(entry.key)] = true
 		targets[str(entry.key)] = entry
+		if str(entry.get("phase", "")) == "returning":
+			var avatar = avatar_of(str(entry.key))
+			if avatar != null:
+				avatar.rotation = Vector3(0, float(entry.rot[1]), 0)
 	for key in targets.keys():
 		if not seen.has(key):
 			targets.erase(key)
@@ -462,6 +522,10 @@ func apply_snapshot(entries: Array) -> void:
 			var avatar = avatar_of(str(key))
 			if avatar != null:
 				avatar.rotation = Vector3(0, avatar.rotation.y, 0)
+				var previous: Dictionary = previous_targets[key]
+				if previous.get("phase", "") == "returning" and previous.get("goal") is Array:
+					avatar.position = Vector3(previous.goal[0], previous.goal[1], previous.goal[2])
+					avatar.rotation.y = float(previous.get("home_yaw", avatar.rotation.y))
 				avatar.position.y = game.stage.ground(avatar.position)
 		if str(key).begins_with("villager:") and not seen.has(key):
 			_set_villager_knocked(str(key), false)

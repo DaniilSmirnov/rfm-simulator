@@ -104,6 +104,62 @@ func run() -> void:
 	check(not guest.injuries.is_down(actual_key) and absf(avatar.rotation.z) < 0.01, "a healed guest NPC stands upright when its injury disappears")
 	guest.injuries.medics.apply_snapshot([])
 	check(guest.injuries.medics.active.is_empty(), "boarding removes the medic on guests")
+	# Real marshal casualty, including its official collision record.
+	game.injuries.records.clear()
+	game.injuries.returning.clear()
+	for id in game.injuries.medics.active.keys():
+		game.injuries.medics._remove(id)
+	var marshal: Dictionary = game.stage.officials.people[1]
+	var marshal_key = "marshal:%d" % marshal.id
+	var post: Vector3 = marshal.avatar.position
+	check(game.injuries.knock(marshal_key, post, Vector3(8, 0, 0), post - Vector3.RIGHT), "marshal is knocked down through the real injury lifecycle")
+	var injury: Dictionary = game.injuries.records[marshal_key]
+	game.injuries._land(injury)
+	van.s = game.race_station(injury.pos) - 4.0
+	van.node.position = game.race_at(van.s)
+	van.node.position.y = game.stage.ground(van.node.position)
+	van.node.rotation.y = atan2(-game.race_direction(van.s).x, -game.race_direction(van.s).z)
+	van.drive_speed = 0.0
+	injury.ambulance = van.id
+	van.target_key = marshal_key
+	van.target_s = injury.station
+	check(wait_state(game, van, "treating"), "doctor reaches the fallen marshal")
+	var marshal_medic: Dictionary = game.injuries.medics.active[int(van.id)]
+	check(marshal_medic.avatar.position.distance_to(injury.pos) > game.injuries.medics.REACH, "kneeling on the marshal slope moves the visual root outside treatment reach")
+	advance(game, 2.9)
+	check(game.injuries.is_down(marshal_key) and injury.treat > 2.8, "kneeling does not interrupt the marshal's three-second treatment")
+	advance(game, 0.1)
+	check(not game.injuries.is_down(marshal_key), "doctor heals the marshal after three seconds")
+	# Recovery owns the NPC until it has walked to its original off-road post.
+	game.injuries.returning.clear()
+	game.injuries.records.clear()
+	var person: Dictionary = game.spectators.people[0]
+	var home: Vector3 = game.race_at(420.0) + game.race_side(420.0) * 9.0
+	home.y = game.stage.ground(home)
+	person.home = home
+	var start: Vector3 = game.race_at(420.0)
+	start.y = game.stage.ground(start)
+	var recovery = patient(game, actual_key, start, van)
+	game.injuries._stand(actual_key, recovery)
+	check(person.avatar.position.distance_to(start) < 0.01, "healing stands the NPC at the casualty location without teleporting home")
+	check(game.injuries.returning.has(actual_key) and not game.injuries.is_down(actual_key), "healed NPC walks home but is no longer a casualty")
+	game.injuries.update(0.1)
+	var after: Vector3 = person.avatar.position
+	check(after.distance_to(start) > 0.01 and after.distance_to(start) <= 0.28, "returning NPC advances at walking speed")
+	game.spectators.update(game.elapsed, 0.1, false)
+	check(person.avatar.position == after, "ordinary spectator activity cannot override the return walk")
+	guest.injuries.apply_snapshot(game.injuries.snapshot())
+	guest.injuries.update(0.1)
+	check(not guest.injuries.is_down(actual_key) and guest.injuries.holds(avatar), "guest sees recovery movement without treating the NPC as injured")
+	advance(game, 6.0)
+	check(not game.injuries.returning.has(actual_key) and person.avatar.position.distance_to(home) < 0.21, "NPC finishes walking at its original place beyond the road")
+	guest.injuries.apply_snapshot(game.injuries.snapshot())
+	check(avatar.position.distance_to(home) < 0.01, "guest finishes at the home position even when the last walking update was skipped")
+	# A second collision must retain the original post, not the road position.
+	var again = patient(game, actual_key, start, van)
+	game.injuries._stand(actual_key, again)
+	check(game.injuries.knock(actual_key, start, Vector3(6, 0, 0), start - Vector3.RIGHT), "a healed returning NPC can be hit again")
+	check(not game.injuries.returning.has(actual_key) and game.injuries.records[actual_key].home == home, "another impact cancels walking and preserves the original home")
 	for g in [game, guest]:
 		await g._shutdown_audio()
 		g.queue_free()
