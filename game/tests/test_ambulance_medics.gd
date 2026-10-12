@@ -104,6 +104,32 @@ func run() -> void:
 	check(not guest.injuries.is_down(actual_key) and absf(avatar.rotation.z) < 0.01, "a healed guest NPC stands upright when its injury disappears")
 	guest.injuries.medics.apply_snapshot([])
 	check(guest.injuries.medics.active.is_empty(), "boarding removes the medic on guests")
+	# Real marshal casualty, including its official collision record.
+	game.injuries.records.clear()
+	game.injuries.returning.clear()
+	for id in game.injuries.medics.active.keys():
+		game.injuries.medics._remove(id)
+	var marshal: Dictionary = game.stage.officials.people[1]
+	var marshal_key = "marshal:%d" % marshal.id
+	var post: Vector3 = marshal.avatar.position
+	check(game.injuries.knock(marshal_key, post, Vector3(8, 0, 0), post - Vector3.RIGHT), "marshal is knocked down through the real injury lifecycle")
+	var injury: Dictionary = game.injuries.records[marshal_key]
+	game.injuries._land(injury)
+	van.s = game.race_station(injury.pos) - 4.0
+	van.node.position = game.race_at(van.s)
+	van.node.position.y = game.stage.ground(van.node.position)
+	van.node.rotation.y = atan2(-game.race_direction(van.s).x, -game.race_direction(van.s).z)
+	van.drive_speed = 0.0
+	injury.ambulance = van.id
+	van.target_key = marshal_key
+	van.target_s = injury.station
+	check(wait_state(game, van, "treating"), "doctor reaches the fallen marshal")
+	var marshal_medic: Dictionary = game.injuries.medics.active[int(van.id)]
+	check(marshal_medic.avatar.position.distance_to(injury.pos) > game.injuries.medics.REACH, "kneeling on the marshal slope moves the visual root outside treatment reach")
+	advance(game, 2.9)
+	check(game.injuries.is_down(marshal_key) and injury.treat > 2.8, "kneeling does not interrupt the marshal's three-second treatment")
+	advance(game, 0.1)
+	check(not game.injuries.is_down(marshal_key), "doctor heals the marshal after three seconds")
 	# Recovery owns the NPC until it has walked to its original off-road post.
 	game.injuries.returning.clear()
 	game.injuries.records.clear()

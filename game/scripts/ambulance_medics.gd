@@ -115,12 +115,12 @@ func _step(medic: Dictionary, van: Dictionary, delta: float) -> void:
 		"walking":
 			Navigation.move(injuries.game, medic, medic.goal, delta, false)
 			_face(medic, record.pos)
-			if Navigation.flat(medic.avatar.position).distance_to(Navigation.flat(medic.goal)) < 0.2 and medic.avatar.position.distance_to(record.pos) <= REACH:
+			if Navigation.flat(medic.avatar.position).distance_to(Navigation.flat(medic.goal)) < 0.2 and _patient_distance(medic, record.pos) <= REACH:
 				medic.state = "treating"
 				medic.time = 0.0
 				record.treat = 0.0
 		"treating":
-			if medic.avatar.position.distance_to(record.pos) > REACH:
+			if _patient_distance(medic, record.pos) > REACH:
 				record.treat = 0.0
 				_return(medic, van)
 				return
@@ -142,6 +142,11 @@ func _step(medic: Dictionary, van: Dictionary, delta: float) -> void:
 				_remove(int(van.id))
 				van.treating = ""
 				injuries._retarget(van)
+
+# Kneeling lowers the visual root. Treatment reach must use the grounded
+# navigation position, otherwise a slope can cancel treatment on the next tick.
+func _patient_distance(medic: Dictionary, patient: Vector3) -> float:
+	return _ground(medic.avatar.position).distance_to(patient)
 
 func _next(medic: Dictionary, van: Dictionary, origin: Vector3) -> void:
 	medic.key = ""
