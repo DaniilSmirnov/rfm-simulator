@@ -120,9 +120,16 @@ func _off_road(pos: Vector3, index: int) -> float:
 func vertex(pos: Vector3, height: float) -> float:
 	return level(pos, height)
 
-func vehicle(pos: Vector3, tyre_height: float, ground_height: float) -> float:
+# Tyres: on the paddock its level surface; around it the biome's tyre height,
+# lifted with the land, so on the road tyres and ground() still agree. The
+# biome's tyre query is costly, and inside the park it is not needed.
+func vehicle(pos: Vector3, biome) -> float:
+	var land: float = biome.ground(pos)
+	var surface = level(pos, land)
 	var w = weight(pos)
-	return tyre_height if w <= 0.0 else lerpf(tyre_height, ground_height, w)
+	if w >= 1.0:
+		return surface
+	return lerpf(biome.vehicle_ground(pos) + surface - land, surface, w)
 
 # The lane and the aisle continue the road surface; the rest of the paddock is
 # gravel, a little darker in the bays.

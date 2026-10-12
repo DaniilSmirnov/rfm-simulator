@@ -176,7 +176,7 @@ func walk_floor(pos: Vector3, ground_height: float) -> float:
 	return biome.walk_floor(pos, ground_height)
 
 func vehicle_ground(pos: Vector3) -> float:
-	return parks.vehicle(pos, biome.vehicle_ground(pos), ground(pos))
+	return parks.vehicle(pos, biome)
 
 # Top surface: the land, dug snow floors and snowbanks.
 func ground(pos: Vector3) -> float:

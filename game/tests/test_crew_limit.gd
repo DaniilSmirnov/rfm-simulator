@@ -50,7 +50,10 @@ func run() -> void:
 	game.cargo.return_item(game.walker)
 	game.in_car = true
 	game._check_finish()
-	check(game.finished, "two passes, packed equipment and returning to car finish the outing")
+	check(not game.finished, "back in the car on the stage still has to drive to a service park")
+	game.car.position = game.park_traffic.parks().world(1, 0.0, 30.0)
+	game._check_finish()
+	check(game.finished, "two passes, packed equipment and driving into a service park finish the outing")
 	await game._shutdown_audio()
 	game.queue_free()
 	await process_frame
