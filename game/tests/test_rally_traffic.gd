@@ -134,6 +134,17 @@ func run() -> void:
 	check(drifting.motion.velocity.distance_to(carried) < 0.001, "departure carries actual trajectory velocity, including lane changes")
 	game.recover_racer(drifting)
 	check(drifting.slide == 0 and drifting.slide_speed == 0 and drifting.drift_yaw == 0 and drifting.yaw_rate == 0 and drifting.motion.velocity == Vector3.ZERO, "towing resets lateral inertia and accident rotation")
+	check(drifting.drive_speed == 0.0, "a towed crew restarts from a standstill")
+	var launch = float(drifting.launch)
+	game._update_racers(1.0 / 60.0)
+	var early_gain: float = drifting.drive_speed * 60.0
+	check(early_gain > 0.0 and early_gain < launch * 0.5, "a towed crew pulls away gently instead of at full launch")
+	game._update_racers(game.crews.RECOVERY_RAMP)
+	check(not drifting.has("recovery_time"), "the gentle restart ends after the ramp")
+	var before_speed: float = drifting.drive_speed
+	game._update_racers(1.0 / 60.0)
+	var late_gain: float = (drifting.drive_speed - before_speed) * 60.0
+	check(late_gain <= 0.0 or late_gain > early_gain, "full launch returns after the ramp")
 	clear_cars(game)
 	# Red flags stop already-started competitors and zero cars in either direction.
 	game.stage.trees.clear()
