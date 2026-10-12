@@ -3,13 +3,21 @@ extends RefCounted
 const Tracks = preload("res://scripts/rally_tracks.gd")
 const ServiceTraffic = preload("res://scripts/service_traffic.gd")
 const Injuries = preload("res://scripts/injuries.gd")
+const CarRegistry = preload("res://scripts/car_registry.gd")
 const CLEARANCE = 2.85
 const MAX_LINE = 3.05
 const BRAKE = 18.0
-const MAX_COMPETITION_SPEED = 140.0 / 3.6
+# Every car shares the top speed; bends keep the speeds tuned for 140 km/h.
+const MAX_COMPETITION_SPEED = CarRegistry.TOP_SPEED
+const CORNER_SPEED = 140.0 / 3.6
 const MIN_CORNER_TARGET = 16.0
 const CORNER_FULL_EFFECT = 0.35
 const SPEED_LOOKAHEAD = [0.0, 16.0, 32.0, 48.0]
+# Straights above CORNER_SPEED need a braking zone before the next bend:
+# bends this far ahead (m) limit the speed through PLAN_BRAKE (m/s²).
+const BRAKE_LOOKAHEAD = 150.0
+const BRAKE_STEP = 10.0
+const PLAN_BRAKE = 12.0
 # Lateral allowance (m) when skipping far objects before projecting them.
 const FAR_MARGIN = 40.0
 # Travel (m) over which obstacle probes along a passing line are reused.
@@ -29,18 +37,43 @@ static func nominal(racer: Dictionary, s: float) -> float:
 static func competition_target(stage: Node3D, progress: float, pace: float = 1.0, reverse: bool = false) -> float:
 	var station = stage.LENGTH - progress if reverse else progress
 	var travel_sign = -1.0 if reverse else 1.0
+	# Braking envelope: arrive at every bend ahead no faster than its speed.
+	var target = INF
+	var ahead = 0.0
+	while ahead <= BRAKE_LOOKAHEAD:
+		var bend = _bend_target(stage, clampf(station + travel_sign * ahead, 0.0, stage.LENGTH - 0.01), travel_sign)
+		target = minf(target, sqrt(bend * bend + 2.0 * PLAN_BRAKE * ahead))
+		ahead += BRAKE_STEP
+	return clampf(target * pace, 0.0, MAX_COMPETITION_SPEED)
+
+# Speed (m/s) through the station itself, from the tightest bend of the next
+# 48 m; a straight gets the top speed. Cached per metre on the stage.
+static func _bend_target(stage: Node3D, station: float, travel_sign: float) -> float:
+	var key = "bend_targets_rev" if travel_sign < 0 else "bend_targets"
+	if not stage.has_meta(key):
+		var empty: Array = []
+		empty.resize(int(stage.LENGTH) + 1)
+		empty.fill(-1.0)
+		stage.set_meta(key, empty)
+	# An Array is shared by reference, so filling it in place updates the cache.
+	var table: Array = stage.get_meta(key)
+	var index = clampi(int(station), 0, table.size() - 1)
+	if float(table[index]) >= 0.0:
+		return float(table[index])
 	var worst_corner = 0.0
-	for ahead in SPEED_LOOKAHEAD:
-		var center = clampf(station + travel_sign * ahead, 0.0, stage.LENGTH - 0.01)
+	for lookahead in SPEED_LOOKAHEAD:
+		var center = clampf(index + travel_sign * lookahead, 0.0, stage.LENGTH - 0.01)
 		var before = stage.direction(maxf(0.0, center - 6.0))
 		var after = stage.direction(minf(stage.LENGTH - 0.01, center + 6.0))
-		var angle = acos(clampf(before.dot(after), -1.0, 1.0))
-		worst_corner = maxf(worst_corner, angle)
+		worst_corner = maxf(worst_corner, acos(clampf(before.dot(after), -1.0, 1.0)))
 	var corner_factor = clampf(worst_corner / CORNER_FULL_EFFECT, 0.0, 1.0)
-	var geometry_target = lerpf(MAX_COMPETITION_SPEED, MIN_CORNER_TARGET, pow(corner_factor, 0.75))
+	var geometry_target = lerpf(CORNER_SPEED, MIN_CORNER_TARGET, pow(corner_factor, 0.75))
 	# Tight village junctions need a lower entry speed than flowing bends.
 	geometry_target = minf(geometry_target, lerpf(MIN_CORNER_TARGET, 7.0, smoothstep(0.7, 1.3, worst_corner))) if worst_corner > 0.7 else geometry_target
-	return clampf(geometry_target * pace, 0.0, MAX_COMPETITION_SPEED)
+	# Only a (nearly) straight road opens up to the shared top speed.
+	geometry_target += (MAX_COMPETITION_SPEED - CORNER_SPEED) * pow(1.0 - clampf(corner_factor / 0.25, 0.0, 1.0), 2.0)
+	table[index] = geometry_target
+	return geometry_target
 
 static func speed_limit(game: Node3D, racer: Dictionary, s: float) -> float:
 	var role = str(racer.get("role", "racer"))

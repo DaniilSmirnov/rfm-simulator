@@ -3,6 +3,7 @@ extends RefCounted
 # rejoining, being towed back; gravel thrown by their tyres. The host (or a
 # solo player) simulates them; guests see them through the room snapshot.
 # State lives on game (racers, stones, tow) where the room and HUD read it.
+const CarRegistry = preload("res://scripts/car_registry.gd")
 const Motion = preload("res://scripts/vehicle_motion.gd")
 const Props = preload("res://scripts/props.gd")
 const RallyHandling = preload("res://scripts/rally_handling.gd")
@@ -65,7 +66,7 @@ func add_course_vehicle(node: Node3D, id: int, kind: String, variant: int, role:
 	node.rotation.y = atan2(-direction.x, -direction.z)
 	node.set_meta("room_id", id)
 	var driver = Traffic.profile(id)
-	var racer = {"bias": driver.bias, "phase": driver.phase, "pace": driver.pace, "line": 0.0, "drive_speed": race_speed(s) * driver.pace, "avoiding": false, "avoid_line": 0.0, "role": role, "zero_index": zero_index, "id": id, "node": node, "s": s, "focus": focus, "kind": kind, "state": "racing", "offset": 0.0, "age": 0.0, "counted": false, "start": Vector3.ZERO, "target": Vector3.ZERO, "variant": variant, "motion": Motion.new(), "previous": node.position, "slide": 0.0, "slide_speed": 0.0}
+	var racer = {"bias": driver.bias, "phase": driver.phase, "pace": driver.pace, "line": 0.0, "drive_speed": race_speed(s) * driver.pace, "avoiding": false, "avoid_line": 0.0, "role": role, "zero_index": zero_index, "id": id, "node": node, "s": s, "focus": focus, "kind": kind, "state": "racing", "offset": 0.0, "age": 0.0, "counted": false, "start": Vector3.ZERO, "target": Vector3.ZERO, "variant": variant, "launch": CarRegistry.launch(float(node.get_meta("zero_to_100", 2.0))), "motion": Motion.new(), "previous": node.position, "slide": 0.0, "slide_speed": 0.0}
 	racer.track_parts = RallyTracks.choose(game.stage, game.rng, role)
 	game.racers.append(racer)
 	return racer
@@ -120,7 +121,10 @@ func update_racers_step(delta: float) -> void:
 				traffic.can_pass = false
 			racer.avoiding = traffic.avoiding
 			racer.avoid_line = traffic.line
-			var actual_speed = move_toward(float(racer.get("drive_speed", race_speed(racer.s))), float(traffic.speed), delta * (Traffic.BRAKE if traffic.speed < racer.get("drive_speed", 0) else 8.0))
+			# Speed up along the car's launch curve (2 s to 100 km/h for crews).
+			var current_speed = float(racer.get("drive_speed", race_speed(racer.s)))
+			var gain = Traffic.BRAKE if traffic.speed < current_speed else CarRegistry.pull(float(racer.get("launch", CarRegistry.launch(2.0))), current_speed)
+			var actual_speed = move_toward(current_speed, float(traffic.speed), delta * gain)
 			actual_speed = minf(actual_speed, float(traffic.get("advance", INF)) / maxf(delta, 0.001))
 			racer.drive_speed = actual_speed
 			# Keep the racing state: no towing/despawn or timetable transition while

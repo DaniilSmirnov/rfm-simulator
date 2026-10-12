@@ -1,5 +1,6 @@
 extends RefCounted
 const Motion = preload("res://scripts/vehicle_motion.gd")
+const CarRegistry = preload("res://scripts/car_registry.gd")
 # Commands sent per sync. The backlog itself is bounded by simulated time so
 # merged commands keep about four seconds of input during a network stall.
 const LIMIT = 96
@@ -91,7 +92,7 @@ func step(c: Dictionary, stage, model: int) -> void:
 		var previous = node.position
 		var old_yaw = yaw
 		var offroad = stage.road_distance(previous) > 4.1
-		yaw = motion.handling.advance(motion, yaw, c.throttle, c.steer, c.brake, stage.grip(previous), 7.0 if offroad else 19.0, model, dt)
+		yaw = motion.handling.advance(motion, yaw, c.throttle, c.steer, c.brake, stage.grip(previous), CarRegistry.OFFROAD_SPEED if offroad else CarRegistry.TOP_SPEED, model, dt)
 		var forward = Vector3(-sin(yaw), 0, -cos(yaw))
 		var next = previous + motion.velocity * dt
 		next.x = clampf(next.x, -185, 185)
