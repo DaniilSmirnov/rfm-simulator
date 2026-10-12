@@ -36,6 +36,19 @@ func layout(variant: int) -> void:
 				if not parks.contains(point.p, 0.6) or not stage.solids.hit(point.p, point.p, 1.0, false).is_empty():
 					bad_path += 1
 		check(bad_path == 0, "%s park %d: every car's way in and out stays clear (%d bad points)" % [name, index, bad_path])
+		# The players' row (where everyone's car starts the day) is clear of
+		# the scenery and of every car's way in and out.
+		var crowded = 0
+		for slot in range(Parks.VISITOR_X.size()):
+			var spot: Vector3 = parks.visitor_pose(index, slot).origin
+			var nose: Vector3 = -end.forward
+			if not parks.contains(spot) or not stage.solids.hit(spot - nose * 2.2, spot + nose * 2.2, 1.0, false).is_empty():
+				crowded += 1
+			for key in Parks.KEYS:
+				for point in parks.leave_path(index, key) + parks.arrive_path(index, key, end.origin, end.forward):
+					if point.p.distance_to(spot) < 3.0:
+						crowded += 1
+		check(crowded == 0, "%s park %d: the players' row is clear (%d clashes)" % [name, index, crowded])
 		var limits: Vector2 = parks.z_limits
 		check(parks.world(index, 0, 45).z > limits.x and parks.world(index, 0, 45).z < limits.y, "%s park %d: people and cars may go there" % [name, index])
 	stage.queue_free()

@@ -28,10 +28,8 @@ func run() -> void:
 	check(traffic.parked[0].size() == Parks.KEYS.size() and traffic.parked[1].is_empty(), "the whole convoy waits in the park at the start")
 	var police: Node3D = traffic.parked[0]["police_open"]
 	check(parks.park_at(police.position) == 0 and absf(police.position.y - game.stage.ground(police.position) - 0.06) < 0.05, "a parked car stands on the paddock")
+	check(parks.park_at(game.car.position) == 0 and game.stage.road_distance(game.car.position) > 8.0, "the player's car starts the day in the park, off the road")
 	# The first car pulls up under the arch shortly before the stage opens.
-	game.walker = game.stage.clearings[0]
-	game.car.position = game.stage.at(60.0)
-	game.in_car = false
 	game.course.remaining = 30.0
 	step(game, 3.0)
 	check(mover(game, "police_open").is_empty(), "nobody leaves the park long before the start")
@@ -49,6 +47,11 @@ func run() -> void:
 		if racer.get("role", "") == "opening_police" and racer.state == "racing":
 			racing = racer
 	check(not racing.is_empty() and racing.node == police and game.course.phase == "opening_police", "the timetable starts the waiting car")
+	var swerve = 0.0
+	while racing.s < 30.0 and racing.state == "racing":
+		step(game, 0.1)
+		swerve = maxf(swerve, absf(racing.line) + (1.0 if racing.avoiding else 0.0))
+	check(swerve < 0.5, "it drives off the line straight, with nothing to dodge (%.2f m)" % swerve)
 	check(mover(game, "zero1").get("state", "") in ["to_start", "at_start"], "the next car pulls up behind it")
 	# At the finish it carries on into the other park and backs into its bay.
 	racing.s = Stage.LENGTH - 25.0
