@@ -105,6 +105,7 @@ static func clean_state(s):
 		"beers": clampi(int(s.beers), 0, 100000) if _number(s.get("beers")) else 0,
 		"trees": _requests(s.get("trees"), 20000), "lamps": _requests(s.get("lamps"), 512),
 		"seated": seated, "running": s.get("running") == true and not in_car and not seated, "airborne": s.get("airborne") == true and not in_car and not seated,
+		"relief": s.get("relief") == true and not in_car and not seated,
 		"food_species": s.food_species if str(s.get("food_species", "")) in ["edible", "fly_agaric", "toadstool"] else "edible",
 		"food_kind": s.food_kind if str(s.get("food_kind", "")) in ["meat", "mushroom", "berries", "plov"] else "meat",
 		"eat": clampf(float(s.eat), -1, duration("eat")) if _number(s.get("eat")) else -1.0,

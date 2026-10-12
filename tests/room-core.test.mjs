@@ -276,6 +276,16 @@ test('Sport sedan model 9 survives joins and restored rooms while out-of-range m
   assert.equal(late.car_model, late.slot);
 });
 
+test('relief pose survives sync only for a pedestrian on foot', () => {
+  const { r, h } = setup();
+  let reply = r.sync({ token: h.token, state: { ...state(), relief: true } }, 1100);
+  assert.equal(reply.players[0].state.relief, true);
+  reply = r.sync({ token: h.token, state: { ...state(), relief: true, in_car: true } }, 1200);
+  assert.equal(reply.players[0].state.relief, false);
+  reply = r.sync({ token: h.token, state: { ...state(), relief: 'yes' } }, 1300);
+  assert.equal(reply.players[0].state.relief, false);
+});
+
 test('running and airborne pedestrian poses survive sync but cannot apply to seated drivers', () => {
   const { r, h } = setup();
   let reply = r.sync({ token: h.token, state: { ...state(), running: true, airborne: true } }, 1100);

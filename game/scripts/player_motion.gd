@@ -7,7 +7,11 @@ const DeepSnowRules = preload("res://scripts/deep_snow.gd")
 const Motion = preload("res://scripts/vehicle_motion.gd")
 const Stage = preload("res://scripts/stage.gd")
 
-var game
+var game:
+	set(value):
+		game = value
+		relief.game = value
+var relief = preload("res://scripts/tree_relief.gd").new()
 
 func drive(delta: float) -> void:
 	if game.room.connected and game.room.predict_drive(delta):
@@ -126,6 +130,8 @@ func contact_blocked(start: Vector3, end: Vector3, driving: bool) -> bool:
 	return false
 
 func walk(delta: float) -> void:
+	if relief.update(delta):
+		return
 	var remaining = maxf(delta, 0.0)
 	while remaining > 0.000001:
 		var step = minf(remaining, 1.0 / 60.0)
@@ -192,7 +198,7 @@ func running() -> bool:
 	return not game.in_car and not game.seated and game.beers < 30 and game.injuries.limp <= 0.0 and not game.injuries.down and not game.paused and not game.dead and not game.finished and game.drink_time < 0 and game.eat_time < 0 and Input.is_action_pressed("sprint") and (absf(Input.get_axis("left", "right")) + absf(Input.get_axis("forward", "back"))) > 0.01
 
 func jump() -> bool:
-	if not game.playing or game.in_car or game.seated or game.beers >= 30 or game.injuries.down or game.injuries.limp > 0.0 or game.paused or game.dead or game.finished or game.drink_time >= 0 or game.eat_time >= 0 or game.jump_height > 0.01 or game.jump_velocity > 0:
+	if not game.playing or relief.active or game.in_car or game.seated or game.beers >= 30 or game.injuries.down or game.injuries.limp > 0.0 or game.paused or game.dead or game.finished or game.drink_time >= 0 or game.eat_time >= 0 or game.jump_height > 0.01 or game.jump_velocity > 0:
 		return false
 	if game.stage.water != null and game.stage.water.depth(game.walker) > 0.6:
 		return false # No push-off while wading deep or swimming.
@@ -260,7 +266,7 @@ func toggle_car() -> void:
 		game.toast("Подойди к своей машине, чтобы сесть.")
 
 func walking_intent() -> Vector3:
-	if game.in_car or game.seated or game.jump_height > 0.01 or game.paused or game.dead or game.finished or game.beers >= 30 or game.drink_time >= 0 or game.eat_time >= 0:
+	if relief.active or game.in_car or game.seated or game.jump_height > 0.01 or game.paused or game.dead or game.finished or game.beers >= 30 or game.drink_time >= 0 or game.eat_time >= 0:
 		return Vector3.ZERO
 	var input = Vector2(Input.get_axis("left", "right"), Input.get_axis("forward", "back")).limit_length(1)
 	return Vector3(input.x, 0, input.y).rotated(Vector3.UP, game.view_yaw)
