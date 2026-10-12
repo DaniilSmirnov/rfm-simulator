@@ -6,7 +6,7 @@ export const groups = Object.freeze({
   "test_character_asset.gd", "test_player_handling.gd", "test_rolling_wheels.gd",
   "test_vehicle_contract.gd", "test_cargo_selection_order.gd", "test_trunk.gd",
   "test_niva_integration.gd", "test_packing.gd", "test_demo.gd", "test_mobile.gd",
-  "test_stage_safety_gate.gd", "test_how_to_play.gd", "test_party.gd", "test_selection.gd",
+  "test_stage_safety_gate.gd", "test_how_to_play.gd", "test_pointer_capture.gd", "test_party.gd", "test_selection.gd",
   "test_vk_access.gd", "test_vk_catalog_matrix.gd", "test_vk_invite_ui.gd",
   "test_lobby_ui.gd", "test_room_origin.gd", "test_minimap.gd",
   "test_resource_cache.gd", "test_draw_distance.gd", "test_world_loading.gd",
