@@ -264,13 +264,15 @@ func build_menu_actions(parent: Control) -> void:
 	var column = UiKit.vbox(settings, 10)
 	game.draw_distance_controls = UiKit.vbox(column, 8)
 	game.draw_distance_controls.name = "DrawDistanceSettings"
-	UiKit.label(game.draw_distance_controls, "ДАЛЬНОСТЬ ПРОРИСОВКИ", "caption")
+	UiKit.label(game.draw_distance_controls, "ГРАФИКА", "caption")
 	var distance_row = UiKit.hbox(game.draw_distance_controls, 8)
-	for index in range(game.draw_distance.LABELS.size()):
+	# Listed cheapest first; draw_distance_buttons stays indexed by mode.
+	game.draw_distance_buttons.resize(game.draw_distance.LABELS.size())
+	for index in game.draw_distance.ORDER:
 		var button = UiKit.expand(UiKit.button(distance_row, game.draw_distance.LABELS[index], "toggle", 42))
 		button.set_pressed_no_signal(index == game.draw_distance.mode)
 		button.pressed.connect(set_draw_distance.bind(index))
-		game.draw_distance_buttons.append(button)
+		game.draw_distance_buttons[index] = button
 	game.lobby_ui.build_audio(column)
 	settings.hide()
 	game.draw_distance_controls.hide()
@@ -328,6 +330,13 @@ func fit_modal(modal: Control) -> void:
 	dialog.scale = Vector2.ONE * minf(1.0, minf(maxf(dialog_area.size.x - 24, 1) / extent.x, maxf(dialog_area.size.y - 24, 1) / extent.y))
 
 func update_fps_counter(delta: float) -> void:
+	# Auto quality: a slow machine steps the graphics down while driving.
+	if game.playing and not game.paused and game.stage != null:
+		var message: String = game.draw_distance.watch(delta)
+		if message != "":
+			game.draw_distance.apply(game.stage)
+			update_draw_distance_buttons()
+			toast(message)
 	game.fps_clock += delta
 	if game.fps_clock < 0.5 or game.fps_label == null:
 		return
@@ -636,11 +645,11 @@ func update_invite_button() -> void:
 		game.invite_status.visible = game.invite_button.visible and not game.invite_status.text.is_empty()
 
 func set_draw_distance(index: int) -> void:
-	game.draw_distance.mode = clampi(index, game.draw_distance.NEAR, game.draw_distance.FAR)
+	game.draw_distance.mode = clampi(index, game.draw_distance.NEAR, game.draw_distance.LOW)
 	game.draw_distance.apply(game.stage)
 	update_draw_distance_buttons()
 	if game.draw_distance.save_settings() != OK:
-		push_warning("Не удалось сохранить дальность прорисовки")
+		push_warning("Не удалось сохранить настройку графики")
 
 func update_draw_distance_buttons() -> void:
 	for index in range(game.draw_distance_buttons.size()):

@@ -45,6 +45,48 @@ func run() -> void:
 	check(restored.mode == Distance.FAR, "invalid saved preset falls back to desktop default")
 	restored.load_settings(true)
 	check(restored.mode == Distance.MEDIUM, "invalid saved preset falls back to mobile default")
+	# Minimum: shortest ranges, no sun shadows, a reduced 3D resolution.
+	var sun = DirectionalLight3D.new()
+	sun.shadow_enabled = true
+	root.add_child(sun)
+	setting.mode = Distance.LOW
+	setting.apply_shadows(sun)
+	setting.apply(world)
+	check(is_equal_approx(tile.visibility_range_end, 72) and not sun.shadow_enabled, "minimum preset shortens ranges and drops shadows")
+	setting.mode = Distance.MEDIUM
+	setting.apply_shadows(sun)
+	check(sun.shadow_enabled, "richer presets restore shadows")
+	sun.free()
+	check(Distance.ORDER[0] == Distance.LOW and setting.cheaper(Distance.FAR) == Distance.MEDIUM and setting.cheaper(Distance.NEAR) == Distance.LOW and setting.cheaper(Distance.LOW) == -1, "presets step down from far to minimum")
+	setting.mode = Distance.LOW
+	setting.save_settings()
+	restored.load_settings(false)
+	check(restored.mode == Distance.LOW, "minimum preset is saved and restored")
+	# Auto quality: a slow machine steps down unless the player chose a preset.
+	DirAccess.remove_absolute(setting.settings_path)
+	var auto = Distance.new()
+	auto.settings_path = setting.settings_path
+	auto.load_settings(false)
+	var message = ""
+	for i in range(80):
+		message = auto.watch(0.1)
+		if message != "":
+			break
+	check(auto.mode == Distance.MEDIUM and message.contains("Средне"), "10 FPS on desktop lowers far to medium")
+	for i in range(80):
+		auto.watch(1.0 / 60.0)
+	check(auto.mode == Distance.MEDIUM, "a smooth frame rate keeps the preset")
+	auto.has_saved_choice = true
+	message = ""
+	for i in range(80):
+		message = auto.watch(0.1)
+		if message != "":
+			break
+	check(auto.mode == Distance.MEDIUM and message.contains("Минимум"), "a chosen preset is kept, with a hint about minimum")
+	auto.software = true
+	auto.has_saved_choice = false
+	auto.apply_device_default(false)
+	check(auto.mode == Distance.LOW, "software WebGL starts on the minimum preset")
 	DirAccess.remove_absolute(setting.settings_path)
 	world.free()
 	var game = load("res://main.tscn").instantiate()

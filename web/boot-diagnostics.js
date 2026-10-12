@@ -64,6 +64,7 @@ globalThis.RallyBoot = (() => {
         if (percent >= 100) setStage('Запуск движка и загрузка сцены');
       }
     },
+    note(message) { record('info', message); },
     print(...args) { record('engine', args.join(' ')); },
     printError(...args) { record('error', args.join(' ')); },
     ready() { if (!failed) { record('stage', 'Игра запущена'); node('status')?.remove(); } },
