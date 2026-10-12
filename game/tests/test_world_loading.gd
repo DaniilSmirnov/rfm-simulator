@@ -73,7 +73,7 @@ func run() -> void:
 	while guest.loading_world:
 		await process_frame
 	check(guest.playing and guest.world_ready and guest.stage.provence, "guest finishes world preparation before handshake enters play")
-	check(guest.car.position == guest.stage.at(30) and guest.avatar_variant == 3, "handshake applies assigned lane after preparation")
+	check(guest.car.position.distance_to(guest.stage.parks.visitor_pose(0, 3).origin) < 0.01 and guest.avatar_variant == 3, "handshake applies assigned lane after preparation")
 	check(int(guest.stage.village.counts.get("vines", 0)) > 0 and int(guest.stage.village.counts.get("houses", 0)) > 0 and guest.stage.solids.lamps.size() > 0, "cooperative village creates landscape and physics")
 	var urban_sync = guest.Stage.new(2)
 	root.add_child(urban_sync)

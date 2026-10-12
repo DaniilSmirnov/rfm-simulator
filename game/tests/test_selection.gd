@@ -127,6 +127,8 @@ func run() -> void:
 	host.room.connected = false
 	host.room._update_peers([])
 	host.stage.fallen.clear()
+	# On the open road, with room to back away (the day starts in the park).
+	host.car.position = host.stage.at(12)
 	var start = host.car.position
 	host.stage.trees.clear()
 	host.stage.trees.append(start + Vector3(0, 0, -0.5))

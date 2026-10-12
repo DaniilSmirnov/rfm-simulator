@@ -29,6 +29,10 @@ const SLOT_Z0 = 17.0
 const SLOT_PITCH = 3.3
 # Departure order of a pass; a key's index also picks its bay.
 const KEYS = ["police_open", "zero1", "zero2", "zero3", "crew0", "crew1", "crew2", "crew3", "crew4", "crew5", "crew6", "crew7", "crew8", "crew9", "police_close"]
+# The players' row: across the front of the paddock, clear of the bays, the
+# tents and the cars' way in and out; a slot per room member.
+const VISITOR_X = [11.0, -11.0, 13.4, -13.4, 15.8, -15.8, 18.2, -18.2]
+const VISITOR_Z = 15.0
 const CRUISE = 5.0
 const REVERSE = 1.8
 
@@ -175,6 +179,22 @@ func slot_pose(index: int, key: String) -> Transform3D:
 	var p = slot_local(key)
 	var nose: Vector3 = -end.right * slot_side(key)
 	return Transform3D(Basis(Vector3.UP, atan2(-nose.x, -nose.z)), world(index, p.x, p.y))
+
+# A player's car at the start of the day: in the players' row, nose towards
+# the lane, so the stage road past the start line stays clear for the convoy.
+func visitor_pose(index: int, slot: int) -> Transform3D:
+	var end: Dictionary = ends[index]
+	var nose: Vector3 = -end.forward
+	var x: float = VISITOR_X[posmod(slot, VISITOR_X.size())]
+	return Transform3D(Basis(Vector3.UP, atan2(-nose.x, -nose.z)), world(index, x, VISITOR_Z))
+
+# The day begins with a player's car in the park at the start (pass 1): puts
+# it in its slot and returns its heading.
+func park_visitor(car: Node3D, slot: int) -> float:
+	var pose = visitor_pose(0, slot)
+	car.position = pose.origin
+	car.rotation = Vector3(0, pose.basis.get_euler().y, 0)
+	return car.rotation.y
 
 # The start line of a pass leaving this park: the end of the road, facing it.
 func line_pose(index: int) -> Transform3D:

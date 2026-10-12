@@ -87,14 +87,17 @@ static func tyres(root: Node3D, spot: Vector2, count: int) -> void:
 # The park sign beside the lane and two feather flags at the gate.
 static func _entrance(stage: Node3D, root: Node3D) -> void:
 	var sign = Vector2(7.6, 8.0)
-	for dx in [-1.3, 1.3]:
-		P.box(root, at(sign.x + dx, sign.y, 1.2), Vector3(0.1, 2.4, 0.1), STEEL)
+	# Posts flank the board instead of crossing its faces, so they never cut
+	# the lettering on either side.
+	for dx in [-1.56, 1.56]:
+		P.box(root, at(sign.x + dx, sign.y, 1.3), Vector3(0.12, 2.6, 0.12), STEEL)
 	P.box(root, at(sign.x, sign.y, 2.2), Vector3(3.0, 0.9, 0.06), Color("f2f0e8"))
 	P.box(root, at(sign.x, sign.y, 2.58), Vector3(3.0, 0.14, 0.07), Color("ce4830"))
-	# Readable from the road and from inside the park.
+	# Readable from the road and from inside the park; the block lettering
+	# (2.5 m wide) stays within the 3 m board.
 	for face in [-1.0, 1.0]:
-		P.label_3d(root, at(sign.x, sign.y - face * 0.035, 2.15), "ПАРК СЕРВИСА", 96, 0.0055, Color("23272b"), 0.0 if face > 0 else PI)
-	stage.solids.solid(root, at(sign.x, sign.y, 1.2), Vector3(2.8, 2.4, 0.3), "service")
+		P.label_3d(root, at(sign.x, sign.y - face * 0.035, 2.15), "ПАРК СЕРВИСА", 96, 0.0037, Color("23272b"), 0.0 if face > 0 else PI)
+	stage.solids.solid(root, at(sign.x, sign.y, 1.3), Vector3(3.24, 2.6, 0.3), "service")
 	for side in [-1.0, 1.0]:
 		var x = side * 9.0
 		P.cylinder(root, at(x, 12.5, 1.9), 0.025, 0.025, 3.8, STEEL, 6)

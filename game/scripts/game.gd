@@ -302,9 +302,7 @@ func _ready() -> void:
 	print("[RFM] Зрители и машина готовы к созданию")
 	car = Node3D.new() if defer_world else Props.player_car(0)
 	add_child(car)
-	car.position = stage.at(12)
-	heading = atan2(-stage.direction(12).x, -stage.direction(12).z)
-	car.rotation.y = heading
+	heading = stage.parks.park_visitor(car, 0)
 	camera = Camera3D.new()
 	add_child(camera)
 	camera.fov = 68
@@ -859,9 +857,7 @@ func select_stage(variant: int, hosted_guest: bool = false) -> void:
 	world_environment.free()
 	sunlight.free()
 	_build_environment()
-	car.position = stage.at(12)
-	heading = atan2(-stage.direction(12).x, -stage.direction(12).z)
-	car.rotation = Vector3(0, heading, 0)
+	heading = stage.parks.park_visitor(car, 0)
 	vehicle_motion = Motion.new()
 	speed = 0
 	camera.position = stage.at(45) + Vector3(22, 15, 12)

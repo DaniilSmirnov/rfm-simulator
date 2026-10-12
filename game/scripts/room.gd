@@ -170,7 +170,7 @@ func _joined(data: Dictionary) -> void:
 		# watching the stage keeps their current parking and camp position.
 		var lane = int(data.get("slot", 0))
 		game.avatar_variant = posmod(lane, Props.SPECTATOR_MODELS.size())
-		game.car.position = game.stage.at(12 + lane * 6)
+		game.heading = game.stage.parks.park_visitor(game.car, lane)
 	game.toast("Комната %s · %s. Передай ID друзьям!" % [room_id, game.car.get_meta("model")])
 	if game.invite_after_room_create:
 		game.invite_after_room_create = false
@@ -414,7 +414,8 @@ func _update_peer(p: Dictionary) -> void:
 func _simulate_guest_drive(p: Dictionary) -> void:
 	if not host_drives.has(p.id):
 		var solver = Prediction.new()
-		solver.reset(game.stage.at(12 + int(p.get("slot", 1)) * 6), atan2(-game.stage.direction(12).x, -game.stage.direction(12).z))
+		var pose: Transform3D = game.stage.parks.visitor_pose(0, int(p.get("slot", 1)))
+		solver.reset(pose.origin, pose.basis.get_euler().y)
 		drive_budgets[p.id] = {"time": Time.get_ticks_usec(), "ticks": 30.0}
 		host_drives[p.id] = solver
 	var solver = host_drives[p.id]

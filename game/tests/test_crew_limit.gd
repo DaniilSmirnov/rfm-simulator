@@ -48,6 +48,7 @@ func run() -> void:
 	game.cargo.opened[game.chair_owner()] = true
 	game.walker = game.cargo.point(game.cargo.poses()[game.chair_owner()])
 	game.cargo.return_item(game.walker)
+	game.car.position = game.stage.at(300.0)
 	game.in_car = true
 	game._check_finish()
 	check(not game.finished, "back in the car on the stage still has to drive to a service park")
