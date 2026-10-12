@@ -1,5 +1,6 @@
 extends "res://tests/harness.gd"
 const Tracks = preload("res://scripts/rally_tracks.gd")
+const CarRegistry = preload("res://scripts/car_registry.gd")
 const Stage = preload("res://scripts/stage.gd")
 class Harness:
 	extends "res://scripts/game.gd"
@@ -74,7 +75,7 @@ func run() -> void:
 			var parts = PackedInt32Array([run,run,run,run])
 			for station in range(841):
 				var row = Tracks.sample(parts,station,reverse)
-				valid = valid and is_finite(row.line) and is_finite(row.speed) and is_finite(row.yaw) and row.metric >= 0.2 and row.speed > 0 and row.speed <= 140.0/3.6+0.001
+				valid = valid and is_finite(row.line) and is_finite(row.speed) and is_finite(row.yaw) and row.metric >= 0.2 and row.speed > 0 and row.speed <= CarRegistry.TOP_SPEED+0.001
 				min_speed = minf(min_speed,row.speed)
 				max_speed = maxf(max_speed,row.speed)
 				max_slip = maxf(max_slip,absf(row.yaw))
