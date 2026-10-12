@@ -160,9 +160,9 @@ func station(s: float, sign: float, title: String) -> void:
 	add_child(desk)
 	desk.position = grounded(car.position - forward * 4.6)
 	desk.rotation.y = car.rotation.y
-	Props.table(desk)
-	Props.box(desk, Vector3(0, 0.91, 0), Vector3(0.35, 0.035, 0.25), Color("ece9d7"))
-	Props.box(desk, Vector3(0.4, 0.96, 0), Vector3(0.17, 0.10, 0.11), Color("293339"))
+	Props.table(desk, 0, "desk")
+	# The timing clock: a dark box with a lit display facing the judges.
+	Props.box(desk, Vector3(0.4, 0.94, 0), Vector3(0.17, 0.10, 0.11), Color("293339"))
 
 func update(game, delta: float, guest: bool) -> void:
 	for person in people:

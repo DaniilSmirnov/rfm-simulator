@@ -55,7 +55,7 @@ func _add_group(center: Vector3, s: float, id: int, count: int) -> void:
 	car.rotation.y = yaw
 	var table = Node3D.new()
 	add_child(table)
-	Props.table(table)
+	Props.table(table, id)
 	table.position = center
 	table.rotation.y = yaw
 	var grill = Props.grill(self)
