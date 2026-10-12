@@ -95,6 +95,14 @@ func spawn_racer(forced: String = "") -> void:
 	racer.drive_speed = 0.0 if waiting != null else Traffic.speed_limit(game, racer, 0.0)
 	game.toast("Приближается %s, номер %d!" % [node.get_meta("model"), node.get_meta("number")])
 
+# Every client rolls the wheels of the crews, course cars and park convoy it
+# sees, whoever moves them: the host's simulation or a guest's snapshots.
+func animate_wheels() -> void:
+	for racer in game.racers:
+		Props.animate_wheels(racer.node)
+	for entry in game.park_traffic.movers:
+		Props.animate_wheels(entry.node)
+
 func update_racers(delta: float) -> void:
 	var remaining = maxf(delta, 0)
 	while remaining > 0.000001:

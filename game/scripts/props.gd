@@ -179,41 +179,9 @@ static func player_avatar(variant: int = 0) -> Node3D:
 	return root
 
 
-# Roll wheel and hub meshes according to signed longitudinal travel.
-# Cache references once per car; skip teleports to prevent large visual jumps.
+# Wheel rolling lives with the wheels (car_parts.gd).
 static func animate_wheels(car_root: Node3D) -> void:
-	if car_root == null:
-		return
-	var current_position = car_root.global_position
-	if not car_root.has_meta("wheel_previous_position"):
-		car_root.set_meta("wheel_previous_position", current_position)
-		return
-	var previous: Vector3 = car_root.get_meta("wheel_previous_position")
-	car_root.set_meta("wheel_previous_position", current_position)
-	var travelled = current_position - previous
-	if travelled.length_squared() < 0.000001 or travelled.length_squared() > 64.0:
-		return
-	var signed_distance = travelled.dot(-car_root.global_basis.z.normalized())
-	if absf(signed_distance) < 0.0001:
-		return
-	if not car_root.has_meta("wheel_parts"):
-		var wheels: Array = []
-		var pending: Array[Node] = [car_root]
-		while not pending.is_empty():
-			var current: Node = pending.pop_back()
-			for child in current.get_children():
-				pending.append(child)
-				if child is Node3D and child.has_meta("rolling_wheel_radius"):
-					wheels.append(child)
-		car_root.set_meta("wheel_parts", wheels)
-	var parts: Array = car_root.get_meta("wheel_parts")
-	for wheel in parts:
-		if not is_instance_valid(wheel):
-			continue
-		var radius = wheel.get_meta("rolling_wheel_radius")
-		if radius is String:
-			radius = 0.4
-		wheel.rotate_object_local(wheel.get_meta("rolling_wheel_axis", Vector3.UP), signed_distance / maxf(float(radius), 0.1))
+	CarParts.animate_wheels(car_root)
 
 # Player fleet, one record per car in res://data/cars.json (car_registry.gd).
 const CarRegistry = preload("res://scripts/car_registry.gd")

@@ -1,6 +1,6 @@
 extends RefCounted
 # Wheels shared by every car. A wheel is one pivot (rolling metadata for
-# RallyProps.animate_wheels) with one merged, vertex-coloured mesh: tyre, rim
+# animate_wheels) with one merged, vertex-coloured mesh: tyre, rim
 # and a radial pattern - spokes, holes or slots. A plain disc on a smooth tyre
 # looks still while it turns, so every style has features that visibly travel.
 # The pivot's own axle is +X; LEFT is the rolling axis for forward travel.
@@ -11,6 +11,11 @@ extends RefCounted
 # detail (holes, gaps), tyre, rim (rim radius as a share of the tyre radius).
 const STYLES = ["steel", "dish", "spokes", "hubcap"]
 const CACHE_LIMIT = 96
+# Largest wheel turn drawn in one frame. A crew at 27 m/s turns its wheels
+# ~74 degrees a frame at 60 fps, close to a whole spoke period, so the
+# pattern strobes and looks frozen (or rolls backward). Below half the period
+# of an eight-spoke rim, a fast wheel always reads as spinning forward.
+const MAX_WHEEL_STEP = 0.35
 static var _meshes: Dictionary = {}
 static var _material: StandardMaterial3D
 
@@ -118,3 +123,40 @@ static func _commit(parts: Dictionary) -> ArrayMesh:
 	var mesh = ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 	return mesh
+
+# Roll wheel and hub meshes according to signed longitudinal travel.
+# Cache references once per car; skip teleports to prevent large visual jumps.
+static func animate_wheels(car_root: Node3D) -> void:
+	if car_root == null:
+		return
+	var current_position = car_root.global_position
+	if not car_root.has_meta("wheel_previous_position"):
+		car_root.set_meta("wheel_previous_position", current_position)
+		return
+	var previous: Vector3 = car_root.get_meta("wheel_previous_position")
+	car_root.set_meta("wheel_previous_position", current_position)
+	var travelled = current_position - previous
+	if travelled.length_squared() < 0.000001 or travelled.length_squared() > 64.0:
+		return
+	var signed_distance = travelled.dot(-car_root.global_basis.z.normalized())
+	if absf(signed_distance) < 0.0001:
+		return
+	if not car_root.has_meta("wheel_parts"):
+		var wheels: Array = []
+		var pending: Array[Node] = [car_root]
+		while not pending.is_empty():
+			var current: Node = pending.pop_back()
+			for child in current.get_children():
+				pending.append(child)
+				if child is Node3D and child.has_meta("rolling_wheel_radius"):
+					wheels.append(child)
+		car_root.set_meta("wheel_parts", wheels)
+	var parts: Array = car_root.get_meta("wheel_parts")
+	for wheel in parts:
+		if not is_instance_valid(wheel):
+			continue
+		var radius = wheel.get_meta("rolling_wheel_radius")
+		if radius is String:
+			radius = 0.4
+		var angle = clampf(signed_distance / maxf(float(radius), 0.1), -MAX_WHEEL_STEP, MAX_WHEEL_STEP)
+		wheel.rotate_object_local(wheel.get_meta("rolling_wheel_axis", Vector3.UP), angle)

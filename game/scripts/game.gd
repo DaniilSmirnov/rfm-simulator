@@ -717,8 +717,6 @@ func _process(delta: float) -> void:
 	foraging.update_visuals()
 	if room.is_authority():
 		_update_racers(delta)
-		for racer in racers:
-			Props.animate_wheels(racer.node)
 		_update_stones(delta)
 		_update_cooking(delta)
 		if room.connected:
@@ -726,6 +724,7 @@ func _process(delta: float) -> void:
 			room.check_remote_collisions()
 		else:
 			_update_tow(delta)
+	crews.animate_wheels()
 	if beer_timer > 0:
 		beer_timer = maxf(0, beer_timer - delta)
 	toast_time = maxf(0, toast_time - delta)
