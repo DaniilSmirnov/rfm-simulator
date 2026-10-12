@@ -4,6 +4,13 @@ extends RefCounted
 const Motion = preload("res://scripts/vehicle_motion.gd")
 const PERSON_CLEARANCE = 2.2
 const CAR_CLEARANCE = 3.1
+# Right of way: an ambulance held this long (s) by anything drives on in
+# priority mode for PRIORITY_DISTANCE metres: it keeps away from people, goes
+# round cars where the verge allows and otherwise passes through cars, rocks
+# and street furniture at walking pace. Nothing but people can stop it.
+const PRIORITY_AFTER = 2.5
+const PRIORITY_DISTANCE = 30.0
+const PRIORITY_SPEED = 5.0
 
 static func applies(racer: Dictionary) -> bool:
 	return racer.get("role", "racer") in ["ambulance", "opening_police", "closing_police"]
@@ -44,6 +51,8 @@ static func blocked(game, racer: Dictionary, start: Vector3, end: Vector3) -> bo
 	for person in people(game):
 		if approaching_hit(start, end, person.pos, PERSON_CLEARANCE):
 			return true
+	if priority(racer):
+		return false
 	for car in cars(game, racer):
 		if approaching_hit(start, end, car, CAR_CLEARANCE):
 			return true
@@ -65,7 +74,25 @@ static func guard(game, racer: Dictionary, before: Dictionary) -> bool:
 	racer.erase("lane_choice")
 	return true
 
+static func priority(racer: Dictionary) -> bool:
+	return float(racer.get("priority_until", -1.0)) > float(racer.s)
+
+# Seconds since the ambulance last moved; once held long enough it takes
+# priority until it is PRIORITY_DISTANCE further on.
+static func _update_hold(racer: Dictionary) -> void:
+	if racer.get("role", "") != "ambulance":
+		return
+	if float(racer.get("drive_speed", 0.0)) >= 0.3 or not racer.has("moving_age"):
+		racer.moving_age = racer.age
+	if not priority(racer) and racer.age - float(racer.moving_age) >= PRIORITY_AFTER:
+		racer.priority_until = float(racer.s) + PRIORITY_DISTANCE
+		racer.erase("path_probes")
+		racer.erase("lane_choice")
+
 static func pedestrian_plan(game, racer: Dictionary, plan: Dictionary) -> Dictionary:
+	_update_hold(racer)
+	if priority(racer):
+		return priority_plan(game, racer, plan)
 	var current: float = racer.line + racer.slide
 	for person in people(game):
 		if racer.node.position.distance_squared_to(person.pos) > 10000.0: continue
@@ -189,3 +216,77 @@ static func _pedestrian_detour(game, racer: Dictionary, plan: Dictionary, gap: f
 				best = cost
 				chosen = candidate
 	return chosen
+
+# ---------------------------------------------------------------- priority
+
+# Line for an ambulance with right of way: the nearest line to the planned one
+# that keeps clear of people and water, preferring lines that also clear the
+# cars. Only people can hold it; without a person-safe line it waits.
+static func priority_plan(game, racer: Dictionary, plan: Dictionary) -> Dictionary:
+	var current = float(racer.get("line", 0.0)) + float(racer.get("slide", 0.0))
+	var station: float = game.race_station(racer.node.position)
+	var road = game.stage.LENGTH - station if game.course.pass_index == 2 else station
+	var limit: float = game.stage.road_width(road) * 0.5 + game.stage.shoulder(road) + 1.0
+	var candidates: Array[float] = [float(plan.line), current, 0.0]
+	var step = -limit
+	while step <= limit:
+		candidates.append(step)
+		step += 0.5
+	var speed = minf(PRIORITY_SPEED, minf(maxf(game.race_speed(racer.s), 1.0), game.injuries.ambulance_speed(racer, racer.s)))
+	for avoid_cars in [true, false]:
+		var chosen = INF
+		var best = INF
+		for candidate in candidates:
+			var cost = absf(candidate - float(plan.line)) * 0.5 + absf(candidate - current) * 0.25
+			if cost < best and _priority_clear(game, racer, candidate, 24.0, avoid_cars):
+				best = cost
+				chosen = candidate
+		if chosen != INF:
+			var turning = absf(chosen - current) > 1.0
+			return {"line": chosen, "speed": minf(speed, 3.0) if turning else speed, "avoiding": true, "advance": INF, "can_pass": true, "lateral_rate": 1.5}
+	# No line forward keeps clear of people: stop and edge sideways to the
+	# widest gap between them, so a line opens as soon as there is room.
+	return {"line": _widest_gap(game, racer, candidates), "speed": 0.0, "avoiding": true, "advance": 0.0, "can_pass": true, "lateral_rate": 1.0}
+
+static func _widest_gap(game, racer: Dictionary, candidates: Array[float]) -> float:
+	var current = float(racer.get("line", 0.0)) + float(racer.get("slide", 0.0))
+	var lines: Array[float] = []
+	for person in people(game):
+		var station: float = game.race_station(person.pos)
+		if str(person.get("key", "")) == str(racer.get("target_key", "")) or station - float(racer.s) < -3.0 or station - float(racer.s) > 14.0:
+			continue
+		lines.append((person.pos - game.race_at(station)).dot(game.race_side(station)))
+	var chosen = current
+	var widest = -INF
+	for candidate in candidates:
+		var room = INF
+		for line in lines:
+			room = minf(room, absf(candidate - line))
+		if room > widest + 0.01 or (is_equal_approx(room, widest) and absf(candidate - current) < absf(chosen - current)):
+			widest = room
+			chosen = candidate
+	return chosen
+
+static func _priority_clear(game, racer: Dictionary, target_line: float, distance: float, avoid_cars: bool) -> bool:
+	var previous: Vector3 = racer.node.position
+	var current = float(racer.get("line", 0.0)) + float(racer.get("slide", 0.0))
+	var target_key = str(racer.get("target_key", ""))
+	var lift = Vector3(0, 0.7, 0)
+	var blocking_cars = cars(game, racer) if avoid_cars else []
+	var standing = people(game).filter(func(person): return str(person.get("key", "")) != target_key and person.pos.distance_squared_to(previous) < 3600.0)
+	for i in range(1, 7):
+		var ahead = distance * i / 6.0
+		var progress: float = minf(game.stage.LENGTH - 0.01, racer.s + ahead)
+		var line = lerpf(current, target_line, smoothstep(0.0, distance * 0.6, ahead))
+		var point: Vector3 = game.race_at(progress) + game.race_side(progress) * line
+		point.y = game.stage.ground(point)
+		if game.stage.water != null and game.stage.water.depth(point) > 0.2:
+			return false
+		for person in standing:
+			if approaching_hit(previous + lift, point + lift, person.pos + lift, PERSON_CLEARANCE + 0.5):
+				return false
+		for car in blocking_cars:
+			if approaching_hit(previous + lift, point + lift, car + lift, CAR_CLEARANCE):
+				return false
+		previous = point
+	return true

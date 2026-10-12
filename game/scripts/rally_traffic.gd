@@ -14,6 +14,9 @@ const SPEED_LOOKAHEAD = [0.0, 16.0, 32.0, 48.0]
 const FAR_MARGIN = 40.0
 # Travel (m) over which obstacle probes along a passing line are reused.
 const PROBE_REFRESH = 2.0
+# Seconds a probe is kept even without travel: a car waiting behind a
+# momentary obstruction must see the road clear again.
+const PROBE_MAX_AGE = 0.5
 # Seconds a chosen passing line is kept before candidates are re-scored.
 const LANE_INTERVAL = 0.12
 
@@ -67,7 +70,8 @@ static func corner_line(game, racer: Dictionary, base: float) -> float:
 	if racer.get("role", "racer") == "zero": cut *= 0.65
 	# Cache obstacle probes: static shoulder checks need not run each physics step.
 	if absf(cut) <= absf(base): return base
-	if absf(racer.s - float(racer.get("cut_station", -100.0))) > 2.0:
+	if absf(racer.s - float(racer.get("cut_station", -100.0))) > 2.0 or racer.age - float(racer.get("cut_age", -INF)) > PROBE_MAX_AGE:
+		racer.cut_age = racer.age
 		racer.cut_station = racer.s
 		racer.cut_line = cut if _clear_path(game, racer, cut, 24.0) else base
 	return float(racer.get("cut_line", base))
@@ -179,8 +183,8 @@ static func plan(game: Node3D, racer: Dictionary) -> Dictionary:
 # probe results are reused over that distance, like the corner-cut probe.
 static func _clear_path_cached(game, racer: Dictionary, target: float, distance: float) -> bool:
 	var probes: Dictionary = racer.get("path_probes", {})
-	if absf(racer.s - float(probes.get("s", -100.0))) > PROBE_REFRESH or absf(float(racer.line) - float(probes.get("line", INF))) > 0.2:
-		probes = {"s": racer.s, "line": racer.line}
+	if absf(racer.s - float(probes.get("s", -100.0))) > PROBE_REFRESH or absf(float(racer.line) - float(probes.get("line", INF))) > 0.2 or racer.age - float(probes.get("age", -INF)) > PROBE_MAX_AGE:
+		probes = {"s": racer.s, "line": racer.line, "age": racer.age}
 		racer.path_probes = probes
 	var key = snappedf(target, 0.01)
 	var cached = probes.get(key)
