@@ -5,6 +5,7 @@ extends RefCounted
 # berries, mushrooms) stays in stage.gd and is identical for every client.
 const WIND_SHADER = preload("res://shaders/forest_wind.gdshader")
 const Props = preload("res://scripts/props.gd")
+const MeshMerge = preload("res://scripts/mesh_merge.gd")
 const ANT_COUNT = 144
 const ANTS_PER_HILL = 12
 const ANT_RANGE = 32.0
@@ -211,6 +212,7 @@ func _duck_model(drake: bool) -> Node3D:
 	Props.faceted(duck, Vector3(0, 0.25, -0.18), Vector3(0.13, 0.13, 0.14), Color("2f6b45") if drake else Color("6f5d47"), 6, 3)
 	Props.box(duck, Vector3(0, 0.23, -0.28), Vector3(0.05, 0.03, 0.09), Color("d99a2b"))
 	Props.faceted(duck, Vector3(0, 0.14, 0.2), Vector3(0.12, 0.08, 0.1), Color("4c4237"), 5, 2)
+	MeshMerge.bake(duck, "duck:drake" if drake else "duck:hen")
 	return duck
 
 func _build_birds() -> void:
@@ -243,6 +245,7 @@ func _build_dragonflies() -> void:
 		Props.box(fly, Vector3.ZERO, Vector3(0.025, 0.025, 0.2), Color("2c6fa3"))
 		for z in [-0.03, 0.03]:
 			Props.box(fly, Vector3(0, 0.01, z), Vector3(0.26, 0.004, 0.035), Color("cfe3ea"))
+		MeshMerge.bake(fly, "dragonfly")
 		root.add_child(fly)
 		fly.position = home + Vector3(0, 0.8, 0)
 		flies.append({"node": fly, "home": home, "target": fly.position, "wait": 0.0})
@@ -276,6 +279,7 @@ func _build_fish() -> void:
 	fish.name = "JumpingFish"
 	Props.faceted(fish, Vector3.ZERO, Vector3(0.09, 0.12, 0.42), Color("8c9aa1"), 6, 3)
 	Props.box(fish, Vector3(0, 0, 0.24), Vector3(0.02, 0.14, 0.1), Color("6f7d84"))
+	MeshMerge.bake(fish, "jumping-fish")
 	fish.visible = false
 	root.add_child(fish)
 
@@ -291,10 +295,15 @@ func update(delta: float, focus: Vector3) -> void:
 	_update_fish(dt, focus)
 
 func _update_ducks(dt: float, focus: Vector3) -> void:
+	var t = stage.water.now()
 	for duck in ducks:
 		var node: Node3D = duck.node
 		var offset = node.position - focus
 		offset.y = 0.0
+		# Far ducks are specks on the lake: skip their lake-depth lookups (the
+		# priciest part of the living forest) until someone comes near.
+		if offset.length() > LIFE_RANGE:
+			continue
 		var afraid = offset.length() < 9.0
 		duck.wait = float(duck.wait) - dt
 		if afraid:
@@ -313,14 +322,14 @@ func _update_ducks(dt: float, focus: Vector3) -> void:
 		if to_target.length() > 0.05:
 			duck.heading = lerp_angle(float(duck.heading), atan2(-to_target.x, -to_target.z), 1.0 - exp(-dt * 2.5))
 		var forward = Vector3(-sin(duck.heading), 0, -cos(duck.heading))
-		var next = node.position + forward * float(duck.speed) * dt
-		if stage.water.depth(next) > 0.45:
-			node.position = next
-		var t = stage.water.now()
+		if float(duck.speed) > 0.0:
+			var next = node.position + forward * float(duck.speed) * dt
+			if stage.water.depth(next) > 0.45:
+				node.position = next
 		node.position.y = float(duck.level) - 0.2 + stage.water.wave(node.position.x, node.position.z, t)
 		node.rotation.y = float(duck.heading)
 		duck.ripple = float(duck.ripple) + dt * float(duck.speed)
-		if duck.ripple > 0.9 and node.position.distance_to(focus) < LIFE_RANGE:
+		if duck.ripple > 0.9:
 			duck.ripple = 0.0
 			stage.water.ripple(node.position, 0.35)
 
