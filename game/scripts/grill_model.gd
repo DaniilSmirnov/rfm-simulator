@@ -1,6 +1,9 @@
 extends RefCounted
-# The camp grill: a static body, ten meat skewers drawn as one mesh that shows
-# the remaining servings, and mushroom skewers with their own textured caps.
+# The camp grill: a folding steel mangal on four angle-iron legs, open at the
+# top, with notched rims the skewers rest on, air holes along the sides, side
+# handles and a shelf below with a sack of charcoal. Ten meat skewers are drawn
+# as one mesh that shows the remaining servings; mushroom skewers keep their own
+# textured caps.
 # The firebox holds its own coals and flames (GrillFire): a fresh grill is cold,
 # burns with flames while it is lit and then glows as coals ready for skewers.
 const P = preload("res://scripts/props.gd")
@@ -15,14 +18,7 @@ static func build(parent: Node3D) -> Node3D:
 	root.set_meta("servings", P.FOOD_PORTIONS)
 	parent.add_child(root)
 	_fire(root)
-	P.box(root, Vector3(0, 0.65, 0), Vector3(1.05, 0.32, 0.55), Color("393d37"))
-	for x in [-0.43, 0.43]:
-		for z in [-0.2, 0.2]:
-			P.box(root, Vector3(x, 0.3, z), Vector3(0.05, 0.6, 0.05), Color("555c52"))
-	# The bed the coals lie in: dark until the grill is lit (GrillFire).
-	P.box(root, Vector3(0, 0.83, 0), Vector3(0.9, 0.03, 0.4), Color("21201e"))
-	for i in range(5):
-		P.box(root, Vector3(-0.36 + i * 0.18, 0.87, 0), Vector3(0.02, 0.02, 0.8), Color("d9cdb4"))
+	_body(root)
 	# All meat skewers are one mesh: MeatServings shows the first `servings`
 	# of them (grill_meat_mesh). Mushroom skewers keep their own textured caps.
 	var meat = MeshInstance3D.new()
@@ -47,6 +43,60 @@ static func build(parent: Node3D) -> Node3D:
 		mushroom_group.hide()
 	MeshMerge.bake(root, "grill")
 	return root
+
+const STEEL = Color("34383a")
+const STEEL_EDGE = Color("4c5154")
+const SOOT = Color("1b1a19")
+const ASH = Color("2a2725")
+const RIM = 0.9
+const HALF_LENGTH = 0.5
+const HALF_WIDTH = 0.25
+
+static func _body(root: Node3D) -> void:
+	# Firebox: thin walls and a floor; the bed of ash the coals lie on is dark
+	# until the grill is lit (GrillFire draws the glowing coals over it).
+	var floor_y = 0.6
+	var wall = RIM - floor_y
+	for z in [-HALF_WIDTH, HALF_WIDTH]:
+		P.box(root, Vector3(0, floor_y + wall * 0.5, z), Vector3(HALF_LENGTH * 2, wall, 0.014), STEEL)
+		# A rolled edge along the rim stiffens the long sides.
+		P.box(root, Vector3(0, RIM + 0.004, z), Vector3(HALF_LENGTH * 2 + 0.01, 0.012, 0.024), STEEL_EDGE)
+		# Notches: the skewers drop between these teeth.
+		for i in range(P.FOOD_PORTIONS + 1):
+			var x = clampf(_skewer_x(0) + (i - 0.5) * (0.84 / (P.FOOD_PORTIONS - 1)), -HALF_LENGTH + 0.01, HALF_LENGTH - 0.01)
+			P.box(root, Vector3(x, RIM + 0.022, z), Vector3(0.03, 0.026, 0.016), STEEL_EDGE)
+		# Air holes in a row low on each side, scorched around.
+		for i in range(9):
+			var hole_x = -0.4 + i * 0.1
+			var outward = signf(z) * 0.0085
+			P.box(root, Vector3(hole_x, floor_y + 0.07, z + outward), Vector3(0.05, 0.04, 0.004), SOOT)
+	for x in [-HALF_LENGTH, HALF_LENGTH]:
+		P.box(root, Vector3(x, floor_y + wall * 0.5, 0), Vector3(0.014, wall, HALF_WIDTH * 2), STEEL)
+		P.box(root, Vector3(x, RIM + 0.004, 0), Vector3(0.024, 0.012, HALF_WIDTH * 2 + 0.01), STEEL_EDGE)
+		# Bent rod handle on each end.
+		var out = signf(x)
+		for z in [-0.1, 0.1]:
+			P.box(root, Vector3(x + out * 0.04, 0.82, z), Vector3(0.08, 0.014, 0.014), STEEL_EDGE)
+		P.box(root, Vector3(x + out * 0.08, 0.82, 0), Vector3(0.014, 0.014, 0.214), STEEL_EDGE)
+	P.box(root, Vector3(0, floor_y, 0), Vector3(HALF_LENGTH * 2, 0.014, HALF_WIDTH * 2), STEEL)
+	P.box(root, Vector3(0, 0.83, 0), Vector3(HALF_LENGTH * 2 - 0.03, 0.02, HALF_WIDTH * 2 - 0.03), ASH)
+	# Angle-iron legs with small feet, and a shelf between them.
+	for x in [-HALF_LENGTH + 0.03, HALF_LENGTH - 0.03]:
+		for z in [-HALF_WIDTH + 0.03, HALF_WIDTH - 0.03]:
+			P.box(root, Vector3(x, floor_y * 0.5, z - signf(z) * 0.012), Vector3(0.04, floor_y, 0.006), STEEL)
+			P.box(root, Vector3(x - signf(x) * 0.012, floor_y * 0.5, z), Vector3(0.006, floor_y, 0.04), STEEL)
+			P.box(root, Vector3(x, 0.006, z), Vector3(0.06, 0.012, 0.06), SOOT)
+	var shelf_y = 0.2
+	P.box(root, Vector3(0, shelf_y, 0), Vector3(HALF_LENGTH * 2 - 0.08, 0.012, HALF_WIDTH * 2 - 0.06), STEEL)
+	# A paper sack of charcoal, folded over at the top, and a poker beside it.
+	P.box(root, Vector3(-0.2, shelf_y + 0.13, 0.02), Vector3(0.34, 0.25, 0.2), Color("8a6740"))
+	P.box(root, Vector3(-0.2, shelf_y + 0.27, 0.02), Vector3(0.345, 0.04, 0.205), Color("745532"))
+	P.box(root, Vector3(-0.2, shelf_y + 0.14, 0.1205), Vector3(0.2, 0.09, 0.002), Color("23262a"))
+	P.box(root, Vector3(-0.2, shelf_y + 0.14, 0.1215), Vector3(0.12, 0.022, 0.002), Color("d8572d"))
+	for i in range(4):
+		P.faceted(root, Vector3(0.12 + i * 0.07, shelf_y + 0.03, -0.08 + (i % 2) * 0.1), Vector3(0.06, 0.04, 0.05), SOOT, 6, 3)
+	var poker = P.box(root, Vector3(0.22, shelf_y + 0.012, 0.1), Vector3(0.5, 0.012, 0.012), Color("5d5f5c"))
+	poker.rotation.y = 0.15
 
 # Coals on the grate and the flames above them, kept out of the baked mesh so
 # they can glow and move on their own. Both start hidden: the grill is cold.
@@ -104,9 +154,14 @@ static func grill_meat_mesh(count: int) -> Mesh:
 			var holder = Node3D.new()
 			for i in range(servings):
 				_skewer_stick(holder, _skewer_x(i))
-				for z in [-0.22, 0, 0.22]:
-					var piece = P.box(holder, Vector3(_skewer_x(i), 0.99, z), Vector3(0.048, 0.055, 0.075), Color("99502e").lightened(float(i % 3) * 0.035))
-					piece.rotation.y = float(i % 2) * 0.25
+				# Browned chunks with onion between, charred along the top.
+				for k in range(5):
+					var z = -0.2 + k * 0.1
+					var piece = P.box(holder, Vector3(_skewer_x(i), 0.985, z), Vector3(0.05, 0.05, 0.07), Color("8c4527").lightened(float((i + k) % 3) * 0.05))
+					piece.rotation = Vector3(float(k % 2) * 0.2, float(i % 2) * 0.25, float((i + k) % 3 - 1) * 0.15)
+					P.box(holder, Vector3(_skewer_x(i), 1.011, z), Vector3(0.044, 0.006, 0.06), Color("3a2116"))
+					if k < 4:
+						P.box(holder, Vector3(_skewer_x(i), 0.98, z + 0.05), Vector3(0.042, 0.042, 0.016), Color("e4dcc4"))
 			var baked = MeshMerge.bake(holder)
 			_grill_meat.append(baked.mesh if baked != null else null)
 			holder.free()
@@ -123,9 +178,13 @@ static func slot_zone(grill_node: Node3D, from_index: int, count: int) -> Dictio
 static func _skewer_x(index: int) -> float:
 	return -0.42 + index * (0.84 / (P.FOOD_PORTIONS - 1))
 
+# A flat steel skewer lying across both rims, with a twisted shank and a ring.
 static func _skewer_stick(parent: Node3D, x: float) -> void:
-	P.box(parent, Vector3(x, 0.93, 0), Vector3(0.012, 0.018, 0.72), Color("b9b3a3"))
-	P.box(parent, Vector3(x, 0.95, -0.39), Vector3(0.018, 0.022, 0.16), Color("a57949"))
+	P.box(parent, Vector3(x, 0.935, 0.02), Vector3(0.01, 0.016, 0.66), Color("c4c2bb"))
+	var shank = P.box(parent, Vector3(x, 0.94, -0.36), Vector3(0.012, 0.012, 0.1), Color("a9a7a0"))
+	shank.rotation.z = 0.7
+	var ring = P.cylinder(parent, Vector3(x, 0.945, -0.43), 0.026, 0.026, 0.006, Color("a9a7a0"), 8)
+	ring.rotation.z = PI / 2
 
 static func set_servings(grill_node: Node3D, servings: int) -> void:
 	if grill_node == null:

@@ -727,13 +727,9 @@ static func tree(parent: Node3D, pos: Vector3, height: float, shade: float) -> v
 	for i in range(3):
 		cylinder(tree_root, Vector3(0, height * (0.47 + i * 0.18), 0), height * (0.28 - i * 0.055), 0, height * 0.49, Color(0.17 + shade, 0.28 + shade, 0.21 + shade), 6)
 
-static func table(parent: Node3D) -> void:
-	box(parent, Vector3(0, 0.82, 0), Vector3(2.1, 0.12, 1.05), Color("c9ac78"))
-	for x in [-0.85, 0.85]:
-		for z in [-0.35, 0.35]:
-			box(parent, Vector3(x, 0.4, z), Vector3(0.07, 0.8, 0.07), Color("ded9c9"))
-	box(parent, Vector3(0.4, 0.94, 0), Vector3(0.45, 0.1, 0.3), Color("ede7d5"))
-	cylinder(parent, Vector3(-0.6, 1.02, 0.15), 0.1, 0.1, 0.28, Color("ae6936"))
+# The folding camp table with whatever the fans left on it (table_model.gd).
+static func table(parent: Node3D, variant: int = 0, style: String = "camp") -> void:
+	load("res://scripts/table_model.gd").build(parent, variant, style)
 
 # A low camping chair: the seat height fits the characters' short legs, so a
 # seated person keeps both feet on the ground (CharacterRig seat pose).
