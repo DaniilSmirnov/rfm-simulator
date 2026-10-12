@@ -238,6 +238,14 @@ func ground(pos: Vector3) -> float:
 			height = lerpf(height, float(flat.height), w)
 	return height
 
+# Inside the village, pavements, kerbs and paved squares are drawn at ground()
+# level: tyres keep that height there. Out in the fields the land mesh rule
+# of StageBiome applies (it lies a quarter metre lower beyond the road).
+func vehicle_ground(pos: Vector3) -> float:
+	if in_village(stage.road_s(pos)) and stage.road_distance(pos) < 30.0:
+		return stage.ground(pos)
+	return super(pos)
+
 func tile_step(p: Vector3) -> float:
 	var nearest: Dictionary = stage.route_nearest(p)
 	var edge = road_width(nearest.s) * 0.5 + (Layout.PAVEMENT if pavement(nearest.s) else 0.0)

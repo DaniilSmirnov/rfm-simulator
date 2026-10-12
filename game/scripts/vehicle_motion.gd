@@ -16,10 +16,12 @@ func suspension(node: Node3D, stage, delta: float, yaw: float, lateral_accel: fl
 	var forward = Vector3(-sin(yaw), 0, -cos(yaw))
 	var right = forward.cross(Vector3.UP)
 	var snowy = "has_snow" in stage and stage.has_snow
-	var front: float = stage.vehicle_ground(node.position + forward * 1.15) if snowy else stage.ground(node.position + forward * 1.15)
-	var rear: float = stage.vehicle_ground(node.position - forward * 1.15) if snowy else stage.ground(node.position - forward * 1.15)
-	var left: float = stage.vehicle_ground(node.position - right * 0.7) if snowy else stage.ground(node.position - right * 0.7)
-	var opposite: float = stage.vehicle_ground(node.position + right * 0.7) if snowy else stage.ground(node.position + right * 0.7)
+	# Simple test surfaces only offer ground(); stages add the drawn off-road land.
+	var surface: Callable = stage.vehicle_ground if stage.has_method("vehicle_ground") else stage.ground
+	var front: float = surface.call(node.position + forward * 1.15)
+	var rear: float = surface.call(node.position - forward * 1.15)
+	var left: float = surface.call(node.position - right * 0.7)
+	var opposite: float = surface.call(node.position + right * 0.7)
 	var floor_height: float = (front + rear + left + opposite) * 0.25 + 0.06
 	if snowy:
 		floor_height = maxf(floor_height, stage.Snowbanks.surface_height(stage, node.position) + 0.06)

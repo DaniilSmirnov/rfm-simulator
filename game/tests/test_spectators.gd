@@ -20,7 +20,7 @@ func run() -> void:
 		var grounded = true
 		for group in crowd.groups:
 			clear_road = clear_road and game.stage.road_distance(group.car.position) > 4.6
-			grounded = grounded and absf(group.car.position.y - game.stage.ground(group.car.position)) < 0.01
+			grounded = grounded and absf(group.car.position.y - game.stage.vehicle_ground(group.car.position)) < 0.01
 		check(clear_road and grounded, "parked NPC cars leave the road open and rest on terrain")
 		var actions = {}
 		var props_match = true

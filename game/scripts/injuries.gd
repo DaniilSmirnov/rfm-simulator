@@ -32,6 +32,8 @@ const LIMP_FACTOR = 0.55
 const PATCH = 33
 const BODY_LAYER = 1 << 9
 const GROUND_LAYER = 1 << 10
+# StageSolids boxes keep Godot's default layer.
+const SOLID_LAYER = 1
 # Avatar origin (feet) from the centre of the flying capsule.
 const BODY_OFFSET = Vector3(0, -0.85, 0)
 # Ambulance ids, clear of crews (1..), service cars (101..) and pass 2 (201..).
@@ -150,6 +152,7 @@ func knock(key: String, feet: Vector3, velocity: Vector3, car: Vector3) -> bool:
 	launch = launch.limit_length(MAX_LAUNCH)
 	launch.y = 3.0 + launch.length() * 0.25
 	var record = {"phase": "flying", "time": 0.0, "pos": feet, "rot": Vector3.ZERO, "treat": 0.0, "limp": 0.0, "ambulance": -1}
+	record.start = feet
 	record.body = _launch(feet, launch, key.hash())
 	record.patch = _ground_patch(feet)
 	record.station = game.race_station(feet)
@@ -175,7 +178,10 @@ func _launch(feet: Vector3, launch: Vector3, seed: int) -> RigidBody3D:
 	body.linear_damp = 0.2
 	body.angular_damp = 1.2
 	body.collision_layer = BODY_LAYER
-	body.collision_mask = GROUND_LAYER
+	# Terrain patch plus the stage's solid boxes (houses, walls, lamp posts):
+	# a body thrown at a house bounces off its wall instead of entering it.
+	body.collision_mask = GROUND_LAYER | SOLID_LAYER
+	body.continuous_cd = true
 	var material = PhysicsMaterial.new()
 	material.friction = 0.9
 	material.bounce = 0.15
@@ -374,7 +380,7 @@ func _land(r: Dictionary) -> void:
 	var forward: Vector3 = -body.global_basis.y
 	forward.y = 0
 	var yaw = atan2(-forward.x, -forward.z) if forward.length() > 0.1 else body.rotation.y
-	var spot = body.global_position
+	var spot = _clear_spot(body.global_position, r.get("start", body.global_position))
 	spot.y = game.stage.ground(spot)
 	body.queue_free()
 	r.patch.queue_free()
@@ -384,6 +390,15 @@ func _land(r: Dictionary) -> void:
 	r.pos = spot + Vector3(0, 0.25, 0)
 	r.rot = Vector3(0, yaw, PI / 2)
 	r.station = game.race_station(spot)
+
+# Never lie inside a building: walk back towards the impact until clear.
+func _clear_spot(spot: Vector3, start: Vector3) -> Vector3:
+	for i in range(21):
+		var candidate = spot.lerp(start, i / 20.0)
+		candidate.y = game.stage.ground(candidate) + 0.3
+		if game.stage.solids.clear(candidate, 0.35):
+			return candidate
+	return start
 
 func _stand(key: String, r: Dictionary) -> void:
 	var spot: Vector3 = r.pos

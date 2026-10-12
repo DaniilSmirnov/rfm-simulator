@@ -137,6 +137,7 @@ func station(s: float, sign: float, title: String) -> void:
 	var car = Props.judges_car()
 	add_child(car)
 	car.position = spot.pos
+	car.position.y = stage.vehicle_ground(spot.pos)
 	var forward = stage.direction(spot.s)
 	car.rotation.y = atan2(-forward.x, -forward.z)
 	car.set_meta("station", title)

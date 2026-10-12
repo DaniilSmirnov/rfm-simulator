@@ -67,8 +67,16 @@ func land_relief(_pos: Vector3, _distance: float) -> float:
 func ground(pos: Vector3) -> float:
 	return stage.base_ground(pos)
 
+# Tyres rest on what is drawn: the road ribbon follows ground() across the
+# carriageway, but beyond its edge the land mesh lies about 0.25 m lower
+# (terrain vertices are cut below ground(), see Stage.terrain_surface_height).
+# Blend over half a metre past the edge so a wheel rolls off the road.
 func vehicle_ground(pos: Vector3) -> float:
-	return stage.ground(pos)
+	var height = stage.ground(pos)
+	var past_edge = stage.road_distance(pos) - stage.road_width(stage.road_s(pos)) * 0.5
+	if past_edge <= 0.0:
+		return height
+	return lerpf(height, minf(height, stage.terrain_surface_height(pos)), smoothstep(0.0, 0.5, past_edge))
 
 func walking_ground(pos: Vector3) -> float:
 	return stage.ground(pos)

@@ -49,7 +49,8 @@ func _add_group(center: Vector3, s: float, id: int, count: int) -> void:
 	var yaw = atan2(-forward.x, -forward.z)
 	var car = Props.player_car((id * 3 + game.stage.variant) % Props.PLAYER_MODELS.size())
 	add_child(car)
-	car.position = grounded(center + forward * 3.2)
+	car.position = center + forward * 3.2
+	car.position.y = game.stage.vehicle_ground(car.position)
 	car.rotation.y = yaw
 	var table = Node3D.new()
 	add_child(table)

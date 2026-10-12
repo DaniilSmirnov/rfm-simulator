@@ -123,7 +123,12 @@ func run() -> void:
 	racer.node.position = racer.start
 	racer.motion.velocity = Vector3(16, 0, 0)
 	racer.yaw_rate = 0.0
-	game._update_racers(0.5)
+	# Checked right after the impact: off the road the car rolls on the drawn
+	# land and the rebound fades quickly, so a fixed 0.5 s could already stop it.
+	for i in range(30):
+		game._update_racers(1.0 / 60.0)
+		if racer.state != "offroad":
+			break
 	check(racer.state == "rock_bounce" and racer.node.position.x < origin.x and racer.motion.velocity.x < 0, "rally car physically rebounds from a roadside rock")
 	var snapshot = game.room.world_state()
 	check(snapshot.racers[0].state == "rock_bounce" and snapshot.racers[0].has("tilt"), "room shares rally rock rebound and suspension pose")

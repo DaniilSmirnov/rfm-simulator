@@ -51,6 +51,7 @@ func _init(owner) -> void:
 func build(cooperative: bool = false) -> void:
 	_register_meshes()
 	_pavements()
+	Interiors.reserve_church(self)
 	await village.pause(cooperative)
 	await _house_rows(cooperative)
 	await village.pause(cooperative)
@@ -689,12 +690,8 @@ func _memorial(parent: Node3D, p: Vector3) -> void:
 # ---------------------------------------------------------------- landmarks
 
 func _church() -> void:
-	var p = grounded(village.anchor(Layout.CHURCH.s, Layout.CHURCH.lateral))
-	var facing = -village.side(Layout.CHURCH.s)
-	# Settle the nave to the street level in front of the tower door, so the
-	# forecourt meets the pavement without a step; the floor stays above ground.
-	p.y = minf(p.y, stage.ground(p + facing * 16.0))
-	var root = node("VillageChurch", p, atan2(-facing.x, -facing.z))
+	var pose = Interiors.church_pose(self)
+	var root = node("VillageChurch", pose.origin, pose.basis.get_euler().y)
 	Interiors.church(self, root)
 	# Forecourt between the tower door and the street.
 	var forecourt = Node3D.new()
@@ -702,7 +699,6 @@ func _church() -> void:
 	root.add_child(forecourt)
 	forecourt.position = Vector3(0, 0.0, -17.0)
 	_paving(forecourt, Vector2(4.5, 3.0), Color("cbbb9b"))
-	reserve(root.transform * Vector3(0, 0, -2.0), root.rotation.y, Vector2(6.0, 13.0))
 	finish(root)
 
 func _mairie() -> void:
