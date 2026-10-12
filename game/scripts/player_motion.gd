@@ -219,7 +219,7 @@ func update_camera(delta: float) -> void:
 		game.camera.position = game.camera.position.lerp(desired, 1 - exp(-delta * 7))
 		game.camera.look_at(game.car.position + Vector3(0, 1.1, 0) - behind * 1.5)
 	else:
-		game.camera.position = game.walker + Vector3(0, lerpf(1.12 if game.seated else 1.72, 0.36, collapse) + sin(game.elapsed * 12) * 0.015, 0)
+		game.camera.position = game.walker + Vector3(0, lerpf(1.45 if game.seated else 1.72, 0.36, collapse) + sin(game.elapsed * 12) * 0.015, 0)
 		var sip = sin(clampf((game.drink_time - 1.3) / 1.2, 0, 1) * PI) if game.drink_time >= 0 else 0.0
 		game.camera.rotation = Vector3(game.view_pitch + sip * 0.035, game.view_yaw, 0.0)
 		game.camera.fov = 68 - sip * 2.0

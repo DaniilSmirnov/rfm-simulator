@@ -6,6 +6,7 @@ var targets: Dictionary = {}
 const MeshMerge = preload("res://scripts/mesh_merge.gd")
 const Props = preload("res://scripts/props.gd")
 const Records = preload("res://scripts/stage_records.gd")
+const CharacterRig = preload("res://scripts/character_rig.gd")
 var stage: Node3D
 var arches: Array[Node3D] = []
 var cars: Array[Node3D] = []
@@ -83,9 +84,9 @@ func build() -> void:
 static func red_flag(marshal: Node3D) -> void:
 	var flag = Node3D.new()
 	flag.name = "RedFlag"
-	marshal.get_node("RightArm").add_child(flag)
-	Props.box(flag, Vector3(0, -0.95, -0.05), Vector3(0.025, 0.9, 0.025), Color("d8d2c0"))
-	Props.box(flag, Vector3(0, -1.22, -0.29), Vector3(0.015, 0.34, 0.46), Color("d6262b"))
+	CharacterRig.hand(marshal).add_child(flag)
+	Props.box(flag, Vector3(0, -0.73, -0.05), Vector3(0.025, 0.9, 0.025), Color("d8d2c0"))
+	Props.box(flag, Vector3(0, -1.00, -0.29), Vector3(0.015, 0.34, 0.46), Color("d6262b"))
 	flag.hide()
 
 func arch(s: float, caption: String, finish: bool) -> void:
@@ -165,7 +166,7 @@ func station(s: float, sign: float, title: String) -> void:
 func update(game, delta: float, guest: bool) -> void:
 	for person in people:
 		var avatar: Node3D = person.avatar
-		var flag: Node3D = avatar.get_node("RightArm/RedFlag")
+		var flag: Node3D = CharacterRig.hand(avatar).get_node("RedFlag")
 		if game.injuries.holds(avatar):
 			flag.hide() # A knocked-down marshal drops the flag.
 			continue
@@ -204,16 +205,10 @@ func update(game, delta: float, guest: bool) -> void:
 			if direction.length() > 0.05:
 				avatar.rotation.y = lerp_angle(avatar.rotation.y, atan2(-direction.x, -direction.z), 1 - exp(-delta * 8))
 		var moving = avatar.position.distance_to(previous) > 0.001
-		for side in ["Left", "Right"]:
-			avatar.get_node(side + "Arm").rotation.x = PI / 2 if person.action == "push" else 0.08
-			avatar.get_node(side + "Leg").rotation.x = sin(game.elapsed * 8 + person.id) * 0.4 * (-1 if side == "Left" else 1) if moving else 0.0
 		# Red flag on the stage: the flag is raised high and waved side to side.
-		var right: Node3D = avatar.get_node("RightArm")
 		flag.visible = person.action == "flag"
-		right.rotation.z = 0.0
-		if flag.visible:
-			right.rotation.x = 2.7
-			right.rotation.z = sin(game.elapsed * 6.0 + person.id) * 0.35
+		var arms = {"flag": "flag", "push": "push"}.get(person.action, "")
+		CharacterRig.pose(avatar, {"gait": 1 if moving else 0, "time": game.elapsed, "seed": float(person.id), "arms": arms, "wave": game.elapsed + person.id})
 		# Keep manual swept collisions and the real static shape with the moving actor.
 		var record: Dictionary = avatar.get_meta("solid_record")
 		record.pos = avatar.position

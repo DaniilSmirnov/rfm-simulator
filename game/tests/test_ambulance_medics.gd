@@ -95,7 +95,7 @@ func run() -> void:
 	guest.injuries.update(0.3)
 	check(guest.injuries.medics.active.size() == 1, "late guest creates the medic from the room snapshot")
 	var guest_medic: Dictionary = guest.injuries.medics.active[int(van.id)]
-	check(guest_medic.avatar.get_node("MedicalTorso").rotation.x < -0.9, "guest sees the doctor bend over the patient")
+	check(guest_medic.avatar.get_node("MedicalTorso").rotation.x < -0.3 and guest_medic.avatar.get_node("RightLeg/RightShin").rotation.x < -1.2, "guest sees the doctor kneel over the patient")
 	guest.injuries.update(4.0)
 	check(guest.injuries.is_down(actual_key), "guest cannot heal independently of the host")
 	advance(game, 3.0)

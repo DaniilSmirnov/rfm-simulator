@@ -7,6 +7,7 @@ extends RefCounted
 # All of it is local scenery; villager injury poses are synchronized by the
 # host's injury stream. Only the part near the camera is animated.
 const Props = preload("res://scripts/props.gd")
+const CharacterRig = preload("res://scripts/character_rig.gd")
 const Layout = preload("res://scripts/village_layout.gd")
 const LIFE_RANGE = 130.0
 const BEE_COUNT = 48
@@ -63,8 +64,8 @@ func person(variant: int, accessory: String = "") -> Node3D:
 	var avatar = Props.player_avatar(variant)
 	avatar.name = "Villager"
 	root.add_child(avatar)
-	avatar.get_node("RightArm/BeerCan").hide()
-	avatar.get_node("RightArm/Skewer").hide()
+	CharacterRig.hand(avatar).get_node("BeerCan").hide()
+	CharacterRig.hand(avatar).get_node("Skewer").hide()
 	var head = avatar.get_node("Head")
 	match accessory:
 		"beret":
@@ -73,18 +74,17 @@ func person(variant: int, accessory: String = "") -> Node3D:
 			Props.cylinder(head, Vector3(0, 0.15, 0), 0.24, 0.24, 0.02, Color("d8c27a"), 10)
 			Props.cylinder(head, Vector3(0, 0.2, 0), 0.12, 0.11, 0.1, Color("d8c27a"), 10)
 		"baguette":
-			var bread = Props.cylinder(avatar.get_node("LeftArm"), Vector3(0, -0.3, -0.1), 0.04, 0.035, 0.7, Color("d39a4f"), 6)
+			var bread = Props.cylinder(avatar.get_node("LeftArm"), Vector3(0, -0.16, -0.1), 0.04, 0.035, 0.7, Color("d39a4f"), 6)
 			bread.rotation.x = 0.9
 		"basket":
-			var arm = avatar.get_node("RightArm")
-			Props.cylinder(arm, Vector3(0, -0.6, 0), 0.16, 0.2, 0.18, Color("a07a44"), 8)
-			Props.box(arm, Vector3(0, -0.47, 0), Vector3(0.24, 0.1, 0.12), Color("d9482f"))
+			var arm = CharacterRig.hand(avatar)
+			Props.cylinder(arm, Vector3(0, -0.38, 0), 0.16, 0.2, 0.18, Color("a07a44"), 8)
+			Props.box(arm, Vector3(0, -0.25, 0), Vector3(0.24, 0.1, 0.12), Color("d9482f"))
 	return avatar
 
-func _legs(avatar: Node3D, swing: float) -> void:
-	avatar.get_node("LeftLeg").rotation.x = swing
-	avatar.get_node("RightLeg").rotation.x = -swing
-	avatar.get_node("LeftArm").rotation.x = -swing * 0.6
+# Walking (gait 1) or standing (gait 0), see CharacterRig.
+func _stroll(avatar: Node3D, gait: int, seed: float, arms: String = "", wave: float = 0.0) -> void:
+	CharacterRig.pose(avatar, {"gait": gait, "time": clock, "seed": seed, "arms": arms, "wave": wave})
 
 # Ping-pong strolls along the village pavements.
 func _walkers() -> void:
@@ -123,8 +123,7 @@ func set_walker_knocked(id: int, knocked: bool) -> void:
 				closest = distance
 				walker.t = float(i)
 		walker.pause = 2.0
-		_legs(node, 0.0)
-		node.get_node("RightArm").rotation = Vector3.ZERO
+		_stroll(node, 0, 0.0)
 		return
 
 func _cafe_regulars() -> void:
@@ -134,20 +133,23 @@ func _cafe_regulars() -> void:
 			continue # leave a few chairs free
 		var seat: Dictionary = seats[i]
 		var avatar = person(i + 2, "beret" if i % 3 == 0 else "")
-		sitters.append({"node": avatar, "pos": seat.pos, "yaw": float(seat.yaw), "phase": rng.randf() * TAU, "cup": i % 2 == 0})
-		_sit(avatar, seat.pos, float(seat.yaw))
+		sitters.append({"node": avatar, "pos": seat.pos, "yaw": float(seat.yaw), "phase": rng.randf() * TAU, "cup": i % 2 == 0, "seat": CAFE_SEAT})
+		_sit(avatar, seat.pos, float(seat.yaw), CAFE_SEAT)
 	for bench in anchors("benches").slice(0, 1):
 		for k in range(2):
 			var avatar = person(5 + k, "beret")
 			var pos: Vector3 = bench.pos + Basis(Vector3.UP, float(bench.yaw)) * Vector3(-0.45 + k * 0.9, 0, 0.05)
-			sitters.append({"node": avatar, "pos": pos, "yaw": float(bench.yaw), "phase": rng.randf() * TAU, "cup": false})
-			_sit(avatar, pos, float(bench.yaw))
+			sitters.append({"node": avatar, "pos": pos, "yaw": float(bench.yaw), "phase": rng.randf() * TAU, "cup": false, "seat": BENCH_SEAT})
+			_sit(avatar, pos, float(bench.yaw), BENCH_SEAT)
 
-func _sit(avatar: Node3D, pos: Vector3, yaw: float) -> void:
-	avatar.position = pos + Vector3(0, -0.36, 0)
+# Seat tops of the café chairs and square benches (village_architecture.gd).
+const CAFE_SEAT = 0.47
+const BENCH_SEAT = 0.485
+
+func _sit(avatar: Node3D, pos: Vector3, yaw: float, seat: float, arms: String = "lap", lift: float = 0.0, look: float = 0.0) -> void:
+	avatar.position = pos
 	avatar.rotation.y = yaw
-	avatar.get_node("LeftLeg").rotation.x = PI * 0.5
-	avatar.get_node("RightLeg").rotation.x = PI * 0.5
+	CharacterRig.pose(avatar, {"seat": seat, "ground": pos.y, "arms": arms, "lift": lift, "look": look})
 
 func _petanque() -> void:
 	if not village.anchors.has("petanque"):
@@ -445,14 +447,11 @@ func _update_walkers(dt: float, focus: Vector3) -> void:
 		if car != Vector3.INF:
 			var look = car - node.position
 			node.rotation.y = lerp_angle(node.rotation.y, atan2(-look.x, -look.z), 1.0 - exp(-dt * 6.0))
-			_legs(node, 0.0)
-			var wave = sin(clock * 9.0 + float(walker.speed) * 7.0) * 0.3
-			node.get_node("RightArm").rotation = Vector3(2.6, 0, -0.4 + wave)
+			_stroll(node, 0, 0.0, "wave", clock * 1.5 + float(walker.speed) * 7.0)
 			continue
-		node.get_node("RightArm").rotation = Vector3.ZERO
 		if walker.pause > 0.0:
 			walker.pause -= dt
-			_legs(node, 0.0)
+			_stroll(node, 0, 0.0)
 			continue
 		var step = float(walker.speed) * dt / 2.0
 		walker.t = float(walker.t) + step * float(walker.direction)
@@ -466,46 +465,51 @@ func _update_walkers(dt: float, focus: Vector3) -> void:
 		var d = ahead - p
 		if d.length_squared() > 0.0001:
 			node.rotation.y = atan2(-d.x, -d.z)
-		_legs(node, sin(clock * 7.0 + float(walker.speed) * 10.0) * 0.45)
+		_stroll(node, 1, float(walker.speed) * 10.0)
 
 func _update_sitters(focus: Vector3) -> void:
 	for sitter in sitters:
 		var node: Node3D = sitter.node
 		if not near(node.position, focus, 80.0):
 			continue
-		var arm = node.get_node("RightArm")
 		var sip = smoothstep(0.75, 0.95, sin(clock * 0.5 + float(sitter.phase)))
-		arm.rotation.x = lerpf(0.5, 1.9, sip) if sitter.cup else 0.4 + sin(clock * 0.8 + float(sitter.phase)) * 0.25
-		node.get_node("Head").rotation.y = sin(clock * 0.3 + float(sitter.phase)) * 0.35
+		_sit(node, sitter.pos, float(sitter.yaw), float(sitter.seat), "drink" if sitter.cup else "lap", sip, sin(clock * 0.3 + float(sitter.phase)) * 0.35)
 
 func _update_petanque(dt: float, focus: Vector3) -> void:
 	if boule.is_empty() or not near(boule.court, focus, 90.0):
 		return
 	var ball: Node3D = boule.node
 	var thrower: Dictionary = players[int(boule.thrower)]
-	var arm = thrower.node.get_node("RightArm")
+	# Swing back while lining up, underarm throw forward, then relax.
+	var arms = ""
+	var lift = 0.0
 	if float(boule.age) < 0.0:
 		boule.wait = float(boule.wait) - dt
-		arm.rotation.x = -0.5 * smoothstep(1.0, 0.0, float(boule.wait)) if float(boule.wait) < 1.0 else 0.0
+		if float(boule.wait) < 1.0:
+			arms = "throw"
+			lift = 0.35 * maxf(0.0, float(boule.wait))
 		if float(boule.wait) <= 0.0:
 			boule.age = 0.0
 			boule.from = thrower.node.position + Vector3(0, 0.6, 0) + boule.basis * Vector3(0, 0, -0.3)
 			boule.to = boule.court + boule.basis * Vector3(rng.randf_range(-0.8, 0.8), 0.05, -3.6 + rng.randf_range(-0.5, 0.5))
 			ball.show()
-		return
-	boule.age = float(boule.age) + dt
-	var t = clampf(float(boule.age) / 1.4, 0.0, 1.0)
-	arm.rotation.x = lerpf(1.6, 0.0, smoothstep(0.0, 0.3, t))
-	var p: Vector3 = boule.from.lerp(boule.to, t)
-	p.y += sin(t * PI) * 1.6 * (1.0 - t * 0.4)
-	ball.position = p
-	if float(boule.age) > 3.5:
-		ball.hide()
-		boule.age = -1.0
-		boule.wait = rng.randf_range(3.0, 6.0)
-		boule.thrower = (int(boule.thrower) + 1) % players.size()
+	else:
+		boule.age = float(boule.age) + dt
+		var t = clampf(float(boule.age) / 1.4, 0.0, 1.0)
+		if float(boule.age) < 1.2:
+			arms = "throw"
+			lift = smoothstep(0.0, 0.3, t)
+		var p: Vector3 = boule.from.lerp(boule.to, t)
+		p.y += sin(t * PI) * 1.6 * (1.0 - t * 0.4)
+		ball.position = p
+		if float(boule.age) > 3.5:
+			ball.hide()
+			boule.age = -1.0
+			boule.wait = rng.randf_range(3.0, 6.0)
+			boule.thrower = (int(boule.thrower) + 1) % players.size()
 	for player in players:
-		player.node.get_node("Head").rotation.y = sin(clock * 0.4 + float(player.home.x)) * 0.2
+		var throwing = player == thrower
+		CharacterRig.pose(player.node, {"arms": arms if throwing else "", "lift": lift, "look": sin(clock * 0.4 + float(player.home.x)) * 0.2})
 
 func _update_pickers(focus: Vector3) -> void:
 	for picker in pickers:
@@ -515,9 +519,7 @@ func _update_pickers(focus: Vector3) -> void:
 		# Bend to the bunches, straighten, reach again.
 		var bend = (sin(clock * 0.9 + float(picker.phase)) + 1.0) * 0.5
 		node.rotation.x = 0.0
-		node.get_node("Head").rotation.x = bend * 0.5
-		node.get_node("RightArm").rotation.x = lerpf(0.3, 1.4, bend)
-		node.get_node("LeftArm").rotation.x = lerpf(0.2, 1.1, 1.0 - bend)
+		CharacterRig.pose(node, {"arms": "pick", "lift": bend})
 
 func _update_tractor(dt: float, focus: Vector3) -> void:
 	if tractor.is_empty() or not near(tractor.node.position, focus, 160.0):

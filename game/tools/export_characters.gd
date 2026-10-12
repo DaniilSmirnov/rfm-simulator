@@ -1,7 +1,7 @@
 extends SceneTree
 const Source = preload("res://tools/character_source.gd")
 
-# Bake geometry once; keep the five pivots used by gameplay animations.
+# Bake geometry once; keep the nine pivots used by gameplay animations.
 func bake(node: Node3D) -> void:
 	var groups = {}
 	for child in node.get_children():
@@ -9,7 +9,7 @@ func bake(node: Node3D) -> void:
 			node.remove_child(child)
 			child.free()
 			continue
-		if child.name in ["LeftArm", "RightArm", "LeftLeg", "RightLeg", "Head"]:
+		if child.name in ["LeftArm", "RightArm", "LeftLeg", "RightLeg", "Head", "LeftForearm", "RightForearm", "LeftShin", "RightShin"]:
 			bake(child)
 			continue
 		collect(child, child.transform, groups)

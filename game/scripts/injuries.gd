@@ -25,6 +25,7 @@ const MAX_FLIGHT = 5.0
 const MAX_LAUNCH = 13.0
 const TREAT_SECONDS = 3.0
 const Medics = preload("res://scripts/ambulance_medics.gd")
+const CharacterRig = preload("res://scripts/character_rig.gd")
 const LIMP_SECONDS = 60.0
 const LIMP_FACTOR = 0.55
 # Terrain collision under a flight: PATCH × PATCH vertices, one metre apart.
@@ -536,6 +537,10 @@ func _pose(key: String, pos: Vector3, rot: Vector3, weight: float) -> void:
 	if avatar == null:
 		return
 	_held[avatar.get_instance_id()] = true
+	# A casualty lies with arms and legs relaxed, whatever they were doing;
+	# standing up again starts from a neutral pose (judges keep the clipboard).
+	var lying = absf(rot.x) + absf(rot.z) > 0.1
+	CharacterRig.pose(avatar, {"arms": "limp" if lying else ("clipboard" if key.begins_with("judge:") else "")})
 	var goal = Basis.from_euler(rot)
 	avatar.position = avatar.position.lerp(pos, weight)
 	avatar.quaternion = avatar.quaternion.slerp(goal.get_rotation_quaternion(), weight)

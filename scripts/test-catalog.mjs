@@ -3,7 +3,7 @@
 // Keep file ownership/categories explicit so CI failures identify their subsystem.
 export const groups = Object.freeze({
  core: [
-  "test_character_asset.gd", "test_player_handling.gd", "test_rolling_wheels.gd",
+  "test_character_asset.gd", "test_character_rig.gd", "test_player_handling.gd", "test_rolling_wheels.gd",
   "test_vehicle_contract.gd", "test_cargo_selection_order.gd", "test_trunk.gd",
   "test_niva_integration.gd", "test_packing.gd", "test_demo.gd", "test_mobile.gd",
   "test_stage_safety_gate.gd", "test_how_to_play.gd", "test_pointer_capture.gd", "test_party.gd", "test_selection.gd",
