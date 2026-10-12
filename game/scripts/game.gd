@@ -9,6 +9,7 @@ var interaction = preload("res://scripts/interaction.gd").new()
 var crews = preload("res://scripts/rally_crews.gd").new()
 var player = preload("res://scripts/player_motion.gd").new()
 var camp_actions = preload("res://scripts/camp_actions.gd").new()
+var camp_grill = preload("res://scripts/camp_grill.gd").new()
 var hud = preload("res://scripts/game_hud.gd").new()
 var injuries = preload("res://scripts/injuries.gd").new()
 var seated = false
@@ -112,8 +113,6 @@ var placement_material: StandardMaterial3D
 var acting = null
 
 var cooking = false
-var cook_time = 0.0
-var grill_servings = Props.FOOD_PORTIONS
 var eat_source_group = -2
 var eat_kind = "meat"
 var food_species = "edible"
@@ -205,7 +204,7 @@ var hud_target_frame = -1
 var minimap_redraw_at = 0
 
 func _init() -> void:
-	for system in [crews, player, camp_actions, hud, injuries]:
+	for system in [crews, player, camp_actions, camp_grill, hud, injuries]:
 		system.game = self
 
 func actor_pos() -> Vector3:
@@ -680,6 +679,7 @@ func _process(delta: float) -> void:
 	if soundscape != null:
 		soundscape.update(delta)
 	camp_cooking.animate_flames(Time.get_ticks_msec() / 1000.0)
+	camp_grill.animate(Time.get_ticks_msec() / 1000.0)
 	if not playing or paused or dead or finished or (room.is_guest() and room.world_paused):
 		return
 	if room.is_authority():

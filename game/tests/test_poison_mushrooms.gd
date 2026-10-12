@@ -20,9 +20,9 @@ func run() -> void:
 	guest.room.is_host = false
 	host.grill = Props.grill(host)
 	host.grill.position = host.stage.clearings[0]
-	host.grill_servings = 0
 	host.cooking = true
-	host.cook_time = 35
+	host.camp_grill.lit = true
+	host.camp_grill.fire_time = host.camp_grill.COALS_SECONDS
 	for species in ["fly_agaric", "toadstool"]:
 		var id = -1
 		for i in range(host.stage.collectibles.size()):

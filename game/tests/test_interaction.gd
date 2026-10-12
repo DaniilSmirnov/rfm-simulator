@@ -45,7 +45,10 @@ func run() -> void:
 	game.camp.position = center + Vector3(5, 0, 0)
 	game.grill = preload("res://scripts/props.gd").grill(game)
 	game.grill.position = center
-	game.cook_time = 35
+	game.camp_grill.lit = true
+	game.camp_grill.fire_time = game.camp_grill.COALS_SECONDS
+	game.camp_grill.servings = 10
+	game.camp_grill.meat_time = game.camp_grill.MEAT_SECONDS
 	game.walker = center + Vector3(0, 0, 2)
 	game.walker.y = game.stage.ground(game.walker)
 	aim(game, center + Vector3(0, 0.9, 0))
@@ -55,16 +58,20 @@ func run() -> void:
 	game._update_hud()
 	check(game.hud_revision == target_revision, "stationary gaze target leaves HUD unchanged")
 	check(game.interaction.current().get("action") == "meat", "looking at cooked grill offers meat")
-	var count = game.grill_servings
+	var count = game.camp_grill.servings
 	press(game)
 	game._update_hud()
 	check(game.hud_target.is_empty() and game.info_label.text == "ЕДИМ ШАШЛЫК", "eating immediately invalidates contextual HUD")
 	check(game.eat_time == 0 and game.eat_source_group == -1, "F starts eating from selected grill")
 	game._update_eating(2.7)
-	check(game.grill_servings == count - 1, "selected serving commits after bite")
+	check(game.camp_grill.servings == count - 1, "selected serving commits after bite")
 	game._cancel_eat()
 	game.foraging.stock().mushrooms = 1
+	# The gaze picks what it rests on: the meat on the rails, or the free slot
+	# at the end of the grate.
 	aim(game, center + Vector3(0, 0.9, 0))
+	check(game.interaction.current().get("action") == "meat", "looking at the skewers still offers the meat")
+	aim(game, center + Vector3(0.42, 0.99, 0))
 	check(game.interaction.current().get("action") == "mount", "free skewer and inventory offer mounting")
 	press(game)
 	check(game.foraging.stock().mushrooms == 0, "F mounts one mushroom")

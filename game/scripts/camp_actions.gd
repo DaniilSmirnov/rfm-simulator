@@ -130,8 +130,8 @@ func nearby_drink_source() -> bool:
 	return near_camp() or (game.spectators != null and game.spectators.nearby_table(game.player_position()) >= 0)
 
 func food_source_group() -> int:
-	if not game.actor_in_car() and near_camp() and game.grill != null:
-		return -1 if game.cook_time >= 35 and game.grill_servings > 0 else -2
+	if not game.actor_in_car() and game.grill != null and (near_camp() or game.camp_grill.near()):
+		return -1 if game.camp_grill.ready() else -2
 	if not game.actor_in_car() and game.spectators != null:
 		return game.spectators.nearby_grill(game.actor_position())
 	return -2
@@ -219,7 +219,7 @@ func start_grill(spot: Vector3 = Vector3.INF, yaw: float = 0.0, replicated: bool
 		return true
 	game.grill = Props.grill(game)
 	game.grill.set_meta("gear_owner", game.cargo.actor())
-	game.grill_servings = Props.FOOD_PORTIONS
+	game.camp_grill.reset()
 	game.grill.position = spot
 	game.grill.position.y = game.stage.ground(spot)
 	game.grill.rotation.y = yaw
@@ -248,15 +248,13 @@ func start_grill(spot: Vector3 = Vector3.INF, yaw: float = 0.0, replicated: bool
 	mesh.material = mat
 	game.smoke.draw_pass_1 = mesh
 	game.fire_audio.position = game.grill.global_position
+	game.camp_grill.animate(0.0)
 	# Fire crackle is scheduled sparsely by Soundscape instead of looping continuously.
-	game.toast("Угли разгорелись. Шашлык готовится 35 секунд. Следи за таймером СУ.")
+	game.toast("Мангал установлен. Разожги его: F рядом с мангалом.")
 	return true
 
 func update_cooking(delta: float) -> void:
-	if game.cooking and game.cook_time < 35:
-		game.cook_time = minf(35, game.cook_time + delta)
-		if game.cook_time >= 35:
-			game.toast("Шашлык готов! Подойди к мангалу и нажми F.")
+	game.camp_grill.update(delta)
 
 func drink_beer() -> bool:
 	if game.beers >= 30 or game.injuries.down:
@@ -404,14 +402,14 @@ func commit_meat(source_group: int = -2) -> bool:
 	if source == -2:
 		source = game.eat_source_group if game.eat_source_group != -2 else food_source_group()
 	if source == -1:
-		if game.grill == null or (not near_camp() and game.actor_position().distance_to(game.grill.position) > 4) or game.cook_time < 35 or game.grill_servings <= 0:
+		if not near_camp() and not game.camp_grill.near():
 			return false
-		game.grill_servings -= 1
-		Props.set_grill_servings(game.grill, game.grill_servings)
+		if not game.camp_grill.take_serving():
+			return false
 	elif game.spectators == null or source < 0 or source >= game.spectators.groups.size() or game.actor_position().distance_to(game.spectators.groups[source].grill.position) > 4 or not game.spectators.consume_serving(source):
 		return false
 	game.eaten = true
-	game.toast("Шашлык удался. Осталось %d шампуров." % game.grill_servings if source == -1 else "У NPC нашлась порция шашлыка. Приятного аппетита!")
+	game.toast("Шашлык удался. Осталось %d шампуров." % game.camp_grill.servings if source == -1 else "У NPC нашлась порция шашлыка. Приятного аппетита!")
 	game.eat_source_group = -2
 	return true
 

@@ -30,7 +30,10 @@ func run() -> void:
 		game.place_table()
 		game.place_chairs()
 		game.start_grill()
-		game.cook_time = 35
+		game.camp_grill.lit = true
+		game.camp_grill.fire_time = game.camp_grill.COALS_SECONDS
+		game.camp_grill.servings = 10
+		game.camp_grill.meat_time = game.camp_grill.MEAT_SECONDS
 	host.room.player_id = "host"
 	guest.room.player_id = "guest"
 	host.room.connected = true
@@ -63,7 +66,7 @@ func run() -> void:
 	var host_hand = host.meat_prop
 	host.room._apply_command({"id": "guest:1", "action": "eat", "state": guest.room.local_state()})
 	check(host.eaten and host.meat_prop == host_hand and host.eat_time < 0, "guest meal commits without animating host's hands")
-	check(host.grill_servings == 9 and int(host.grill.get_meta("servings")) == 9, "one of ten grill skewers disappears after a shared meal")
+	check(host.camp_grill.servings == 9 and int(host.grill.get_meta("servings")) == 9, "one of ten grill skewers disappears after a shared meal")
 	guest.room.apply_world(host.room.world_state())
 	check(guest.eaten, "shared meal completion reaches guest")
 	guest._update_eating(1)
@@ -71,7 +74,7 @@ func run() -> void:
 	guest.camp.queue_free()
 	guest.camp = null
 	guest.grill = null
-	guest.cook_time = 0
+	guest.camp_grill.reset()
 	var npc_group = 0
 	guest.walker = guest.spectators.groups[npc_group].table.position
 	check(guest.nearby_drink_source() and guest.can_eat_meat(), "player can access an NPC table, beer and cooked skewers")
