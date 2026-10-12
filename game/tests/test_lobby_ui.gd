@@ -32,9 +32,15 @@ func run() -> void:
 	game.platform_service.profile = {"platform": "vk"}
 	check(game.lobby_ui.help_button != null and game.lobby_ui.help_dialog != null, "help action has a support dialog")
 	game.lobby_ui._open_help()
-	check(game.lobby_ui.help_dialog.visible and game.lobby_ui.help_dialog.get_node("Content/Message").text.contains(game.lobby_ui.SUPPORT_EMAIL), "VK help displays support email without relying on mailto")
-	game.lobby_ui.help_dialog.get_node("Content/Actions/Close").pressed.emit()
+	check(game.lobby_ui.help_dialog.visible and game.lobby_ui.help_dialog.get_node("Center/Panel/Content/Message").text.contains(game.lobby_ui.SUPPORT_EMAIL), "VK help displays support email without relying on mailto")
+	game.lobby_ui.help_dialog.get_node("Center/Panel/Content/Actions/Close").pressed.emit()
 	check(not game.lobby_ui.help_dialog.visible, "support dialog closes through its button")
+	check(game.hud.brand.is_visible_in_tree() and game.title_label.text == "Rally Fans Simulator" and game.hud.brand.get_node("Names/Byline").text == "от Rally Fans Map" and game.hud.brand.get_node("Logo").texture != null, "main menu shows the logo, title and Rally Fans Map credit")
+	check(game.lobby_ui.about_button.is_visible_in_tree() and game.lobby_ui.help_button.is_visible_in_tree() and game.lobby_ui.about_button.get_parent() == game.lobby_ui.help_button.get_parent(), "about and help sit together in the menu header")
+	game.lobby_ui._open_about()
+	check(game.lobby_ui.about_dialog.visible and game.lobby_ui.about_dialog.get_node("Center/Panel/Content/Message").text.contains("https://rallyfansmap.ru/"), "VK about offers the site address instead of relying on a popup")
+	game.lobby_ui.about_dialog.get_node("Center/Panel/Content/Actions/Close").pressed.emit()
+	check(not game.lobby_ui.about_dialog.visible, "about dialog closes through its button")
 
 	game.platform_service.catalog[1].purchase_enabled = true
 	game.platform_service.catalog[1].price = 20
@@ -86,6 +92,13 @@ func run() -> void:
 	game.lobby_ui._process(0)
 	check(not game.lobby_ui.background.visible and game.lobby_ui.background.texture == null, "gameplay releases menu background texture")
 	check(game.lobby_ui.return_button.visible and not game.lobby_ui.host_pause.visible, "own pause offers return to main menu")
+	game.menu.show()
+	game.hud.update_menu()
+	check(game.hud.menu_dim.visible and game.hud.links.visible and game.hud.settings.visible and not game.hud.brand.visible, "pause dims the stage and keeps settings and links")
+	game.dead = true
+	game.hud.update_menu()
+	check(not game.hud.links.visible and not game.hud.settings.visible and game.menu_title.visible, "result window shows only its title, text and actions")
+	game.dead = false
 	game.paused = false
 	game.room.world_paused = false
 	game.lobby_ui._process(0)

@@ -1,13 +1,27 @@
 extends RefCounted
-# The in-game interface: menu panels, HUD lines, toasts, result screen, FPS,
-# mobile safe area, draw distance and invite buttons. The nodes stay on game
-# (menu, toast_label, ...) where other scripts and tests use them.
+# The in-game interface: HUD cards, toasts, the menu window (main menu, pause,
+# result), mobile safe area, draw distance and invite buttons. Every control is
+# styled by ui_kit.gd. The nodes stay on game (menu, toast_label, ...) where
+# other scripts and tests use them.
 const MiniMap = preload("res://scripts/minimap.gd")
 const Props = preload("res://scripts/props.gd")
 const Stage = preload("res://scripts/stage.gd")
 const StageRegistry = preload("res://scripts/stage_registry.gd")
+const UiKit = preload("res://scripts/ui_kit.gd")
 
 var game
+# Menu window parts that change with the screen (main menu / pause / result).
+var dialog_layer: Control
+var dialog_area: Control
+var menu_dim: ColorRect
+var header: HBoxContainer
+var brand: HBoxContainer
+var links: HBoxContainer
+var entry_slot: VBoxContainer
+var settings: PanelContainer
+var footer: Label
+var top_box: VBoxContainer
+var plan_title: Label
 
 func request_game_mouse_capture() -> void:
 	if game.mobile_mode or "--smoke-test" in OS.get_cmdline_user_args():
@@ -16,31 +30,39 @@ func request_game_mouse_capture() -> void:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 func panel(color: Color) -> StyleBoxFlat:
-	var p = StyleBoxFlat.new()
-	p.bg_color = color
-	p.set_corner_radius_all(12)
-	p.content_margin_left = 20
-	p.content_margin_right = 20
-	p.content_margin_top = 14
-	p.content_margin_bottom = 14
-	return p
+	return UiKit.panel_style(color)
 
-func label(parent: Node, text: String, font_size: int, color: Color = Color("f2e8d0")) -> Label:
-	var l = Label.new()
-	l.text = text
+func label(parent: Node, text: String, font_size: int, color: Color = UiKit.TEXT) -> Label:
+	var l = UiKit.label(parent, text)
 	l.add_theme_font_size_override("font_size", font_size)
 	l.add_theme_color_override("font_color", color)
-	parent.add_child(l)
 	return l
 
 func build_ui() -> void:
 	var canvas = CanvasLayer.new()
 	game.add_child(canvas)
 	var ui = Control.new()
+	ui.name = "Hud"
+	ui.theme = UiKit.theme()
 	game.mobile_ui = ui
 	canvas.add_child(ui)
 	ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	build_crosshair(ui)
+	build_top(ui)
+	build_sidebar(ui)
+	build_bottom(ui)
+	build_notices(ui)
+	build_menu(canvas)
+
+func hud_card(parent: Control) -> PanelContainer:
+	var card = PanelContainer.new()
+	card.add_theme_stylebox_override("panel", UiKit.panel_style(UiKit.HUD, Vector2(18, 12)))
+	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(card)
+	return card
+
+func build_crosshair(ui: Control) -> void:
 	game.crosshair = label(ui, "·", 24, Color("fff0cb"))
 	game.crosshair.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	game.crosshair.offset_left = -16
@@ -50,200 +72,230 @@ func build_ui() -> void:
 	game.crosshair.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	game.crosshair.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	game.crosshair.hide()
-	var top = PanelContainer.new()
+
+# Top left: stage, phase of the stage and (in a room) the room line.
+func build_top(ui: Control) -> void:
+	var top = hud_card(ui)
+	top.name = "StageCard"
 	game.mobile_top = top
-	ui.add_child(top)
-	top.position = Vector2(28, 24)
-	top.add_theme_stylebox_override("panel", panel(Color("25352be8")))
-	var vb = VBoxContainer.new()
-	top.add_child(vb)
-	game.title_label = label(vb, "Rally Fans Simulator", 22)
-	game.stage_caption = label(vb, Stage.STAGES[game.selected_stage], 12, Color("b2bea1"))
-	game.fps_label = label(vb, "v%s · — FPS" % ProjectSettings.get_setting("application/config/version"), 12, Color("b2bea1"))
-	game.fps_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	game.course_label = label(vb, "", 16, Color("ffe4a5"))
+	top.position = Vector2(24, 24)
+	top_box = UiKit.vbox(top, 4)
+	game.stage_caption = UiKit.label(top_box, Stage.STAGES[game.selected_stage].to_upper(), "caption")
+	game.course_label = UiKit.label(top_box, "", "hud")
 	game.course_label.hide()
-	var sidebar = PanelContainer.new()
+	game.fps_label = UiKit.label(top_box, "v%s · — FPS" % ProjectSettings.get_setting("application/config/version"), "muted")
+	game.fps_label.add_theme_font_size_override("font_size", 12)
+	game.fps_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+# Top right: the plan for the trip, minimap and counters.
+func build_sidebar(ui: Control) -> void:
+	var sidebar = hud_card(ui)
+	sidebar.name = "PlanCard"
 	game.mobile_sidebar = sidebar
-	ui.add_child(sidebar)
 	sidebar.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-	sidebar.offset_left = -332
-	sidebar.offset_right = -28
+	sidebar.offset_left = -320
+	sidebar.offset_right = -24
 	sidebar.offset_top = 24
-	sidebar.offset_bottom = 390
+	sidebar.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	sidebar.hide()
 	game.hud_panels.append(sidebar)
-	sidebar.add_theme_stylebox_override("panel", panel(Color("25352be8")))
-	var sv = VBoxContainer.new()
-	sv.add_theme_constant_override("separation", 12)
-	sidebar.add_child(sv)
-	label(sv, "ПЛАН НА ВЫЕЗД", 15, Color("e4b56b"))
-	game.quest_label = label(sv, "", 16)
+	var sv = UiKit.vbox(sidebar, 10)
+	plan_title = UiKit.label(sv, "ПЛАН НА ВЫЕЗД", "caption")
+	game.quest_label = UiKit.label(sv, "", "body")
+	game.quest_label.add_theme_font_size_override("font_size", 15)
 	game.minimap = MiniMap.new()
 	game.minimap.game = game
-	game.minimap.custom_minimum_size = Vector2(264, 205)
+	game.minimap.custom_minimum_size = Vector2(264, 200)
 	sv.add_child(game.minimap)
-	game.status_label = label(sv, "", 13, Color("b2bea1"))
-	var bottom = PanelContainer.new()
+	game.status_label = UiKit.label(sv, "", "muted")
+
+# Bottom: what the player is doing now and the controls for it.
+func build_bottom(ui: Control) -> void:
+	var bottom = hud_card(ui)
+	bottom.name = "ActionCard"
 	game.mobile_bottom = bottom
-	ui.add_child(bottom)
 	bottom.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-	bottom.offset_left = 28
-	bottom.offset_right = -28
-	bottom.offset_top = -136
+	bottom.offset_left = 24
+	bottom.offset_right = -24
+	bottom.offset_top = -112
 	bottom.offset_bottom = -24
+	bottom.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	bottom.hide()
 	game.hud_panels.append(bottom)
-	bottom.add_theme_stylebox_override("panel", panel(Color("25352bf2")))
-	var bv = VBoxContainer.new()
-	bottom.add_child(bv)
-	game.info_label = label(bv, "", 24, Color("e4b56b"))
-	game.hint_label = label(bv, "", 15)
-	game.hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	game.toast_label = label(ui, "", 21, Color("fff0cb"))
+	var bv = UiKit.vbox(bottom, 4)
+	game.info_label = UiKit.label(bv, "", "hud")
+	game.info_label.add_theme_font_size_override("font_size", 21)
+	game.hint_label = UiKit.wrap(UiKit.label(bv, "", "muted"))
+	game.hint_label.add_theme_font_size_override("font_size", 14)
+
+# Toast, recovery timer and the health warning float over the scene.
+func build_notices(ui: Control) -> void:
+	game.toast_label = UiKit.label(ui, "", "body")
+	game.toast_label.name = "Toast"
+	game.toast_label.add_theme_font_size_override("font_size", 19)
+	game.toast_label.add_theme_stylebox_override("normal", UiKit.box(UiKit.SHADOW.lerp(Color.TRANSPARENT, 0.15), Color.TRANSPARENT, 20, Vector2(20, 8)))
 	game.toast_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
-	game.toast_label.offset_left = -530
-	game.toast_label.offset_right = 530
-	game.toast_label.offset_top = -204
-	game.toast_label.offset_bottom = -150
+	game.toast_label.offset_top = -168
+	game.toast_label.offset_bottom = -128
+	game.toast_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	game.toast_label.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	game.toast_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	game.toast_label.add_theme_color_override("font_shadow_color", Color("182820"))
-	game.toast_label.add_theme_constant_override("shadow_offset_x", 2)
-	game.toast_label.add_theme_constant_override("shadow_offset_y", 2)
-	game.sobriety_panel = PanelContainer.new()
-	ui.add_child(game.sobriety_panel)
+	game.toast_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	game.toast_label.hide()
+	game.sobriety_panel = hud_card(ui)
 	game.sobriety_panel.anchor_left = 0.25
 	game.sobriety_panel.anchor_right = 0.75
 	game.sobriety_panel.offset_top = 150
 	game.sobriety_panel.offset_bottom = 245
-	game.sobriety_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	game.sobriety_panel.add_theme_stylebox_override("panel", panel(Color("25352bf2")))
-	var recovery_box = VBoxContainer.new()
+	var recovery_box = UiKit.vbox(game.sobriety_panel, 10)
 	recovery_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	game.sobriety_panel.add_child(recovery_box)
-	game.sobriety_label = label(recovery_box, "", 22, Color("fff0cb"))
+	game.sobriety_label = UiKit.wrap(UiKit.label(recovery_box, "", "hud"))
 	game.sobriety_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	game.sobriety_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	game.sobriety_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	game.sobriety_bar = ProgressBar.new()
 	game.sobriety_bar.max_value = game.SOBER_SECONDS
-	game.sobriety_bar.custom_minimum_size.y = 24
+	game.sobriety_bar.custom_minimum_size.y = 20
+	game.sobriety_bar.show_percentage = false
 	game.sobriety_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var recovery_fill = StyleBoxFlat.new()
-	recovery_fill.bg_color = Color("ee531b")
-	game.sobriety_bar.add_theme_stylebox_override("fill", recovery_fill)
 	recovery_box.add_child(game.sobriety_bar)
 	game.sobriety_panel.hide()
-	game.consumption_warning = PanelContainer.new()
+	game.consumption_warning = hud_card(ui)
 	game.consumption_warning.name = "ConsumptionWarning"
-	ui.add_child(game.consumption_warning)
-	game.consumption_warning.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-	game.consumption_warning.offset_left = 24
-	game.consumption_warning.offset_right = -24
-	game.consumption_warning.offset_top = -120
-	game.consumption_warning.offset_bottom = -12
-	game.consumption_warning.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	game.consumption_warning.add_theme_stylebox_override("panel", panel(Color("23342b")))
-	game.consumption_warning_text = label(game.consumption_warning, "", 18, Color("ffe4a5"))
-	game.consumption_warning_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	game.consumption_warning.add_theme_stylebox_override("panel", UiKit.panel_style(Color("2b2a1e"), Vector2(18, 12)))
+	game.consumption_warning.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+	game.consumption_warning.offset_left = -330
+	game.consumption_warning.offset_right = 330
+	game.consumption_warning.offset_top = 24
+	game.consumption_warning_text = UiKit.wrap(UiKit.label(game.consumption_warning, "", "body"))
+	game.consumption_warning_text.add_theme_color_override("font_color", UiKit.HIGHLIGHT)
 	game.consumption_warning_text.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	game.consumption_warning_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	game.consumption_warning.hide()
+
+# One window for the main menu, pause and result. Its parts are shown per
+# screen in update_menu(): header, text, selection, entry, actions, settings.
+func build_menu(canvas: CanvasLayer) -> void:
+	dialog_layer = Control.new()
+	dialog_layer.name = "Dialogs"
+	dialog_layer.theme = UiKit.theme()
+	dialog_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	canvas.add_child(dialog_layer)
+	dialog_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	menu_dim = ColorRect.new()
+	menu_dim.name = "MenuDim"
+	menu_dim.color = UiKit.DIM
+	dialog_layer.add_child(menu_dim)
+	menu_dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	menu_dim.hide()
+	dialog_area = Control.new()
+	dialog_area.name = "SafeArea"
+	dialog_area.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	dialog_layer.add_child(dialog_area)
+	dialog_area.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	game.menu = PanelContainer.new()
-	ui.add_child(game.menu)
+	game.menu.name = "Menu"
+	dialog_area.add_child(game.menu)
 	game.menu.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-	game.menu.offset_left = -350
-	game.menu.offset_right = 350
-	game.menu.offset_top = -270
-	game.menu.offset_bottom = 270
-	game.menu.add_theme_stylebox_override("panel", panel(Color("23342bf5")))
-	var mv = VBoxContainer.new()
-	game.menu_content = mv
-	mv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	mv.add_theme_constant_override("separation", 12)
-	game.menu.add_child(mv)
-	label(mv, "ПЕРЕВАЛ. РАЛЛИ. ШАШЛЫК.", 14, Color("dfb270"))
-	game.menu_title = label(mv, "", 34)
-	game.menu_text = label(mv, "", 17)
-	game.menu_title.hide()
-	game.menu_text.hide()
-	game.draw_distance_controls = VBoxContainer.new()
-	game.draw_distance_controls.name = "DrawDistanceSettings"
-	mv.add_child(game.draw_distance_controls)
-	label(game.draw_distance_controls, "Дальность прорисовки", 17, Color("dfb270"))
-	var distance_row = HBoxContainer.new()
-	distance_row.add_theme_constant_override("separation", 8)
-	game.draw_distance_controls.add_child(distance_row)
-	for index in range(game.draw_distance.LABELS.size()):
-		var button = Button.new()
-		button.text = game.draw_distance.LABELS[index]
-		button.toggle_mode = true
-		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		button.custom_minimum_size.y = 44
-		button.add_theme_font_size_override("font_size", 17)
-		button.set_pressed_no_signal(index == game.draw_distance.mode)
-		button.pressed.connect(set_draw_distance.bind(index))
-		distance_row.add_child(button)
-		game.draw_distance_buttons.append(button)
-	game.draw_distance_controls.hide()
-	game.selection_controls = VBoxContainer.new()
-	game.selection_controls.add_theme_constant_override("separation", 8)
-	mv.add_child(game.selection_controls)
+	game.menu_content = UiKit.vbox(game.menu, 16)
+	game.menu_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	game.lobby_ui = preload("res://scripts/lobby_ui.gd").new()
 	game.lobby_ui.game = game
 	game.add_child(game.lobby_ui)
-	var cards = HBoxContainer.new()
-	cards.add_theme_constant_override("separation", 16)
-	game.selection_controls.add_child(cards)
-	for kind in ["МАШИНА", "СПЕЦУЧАСТОК"]:
-		var card = VBoxContainer.new()
-		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		cards.add_child(card)
-		label(card, kind, 14, Color("dfb270"))
-		game.lobby_ui.add_preview(card, kind)
-		var row = HBoxContainer.new()
-		card.add_child(row)
-		var choice = preload("res://scripts/menu_choice.gd").new()
-		choice.custom_minimum_size.y = 40
-		choice.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		choice.add_theme_font_size_override("font_size", 18)
-		row.add_child(choice)
-		if kind == "МАШИНА":
-			game.car_choice = choice
-			for model in Props.PLAYER_MODELS:
-				choice.add_item(model.name)
-			choice.item_selected.connect(game.select_player_car)
-		else:
-			game.stage_choice = choice
-			for title in Stage.STAGES:
-				choice.add_item(title.get_slice("·", 0).strip_edges())
-			choice.item_selected.connect(game.select_stage)
-	game.stage_choice.tooltip_text = "В комнате СУ выбирает создатель. Все участники играют на одной трассе."
-	game.start_button = Button.new()
-	game.start_button.text = "ПОЕХАЛИ"
-	game.start_button.custom_minimum_size.y = 54
-	game.start_button.add_theme_font_size_override("font_size", 20)
-	game.start_button.add_theme_color_override("font_color", Color("25352b"))
-	game.start_button.add_theme_stylebox_override("normal", panel(Color("e3b16b")))
-	game.start_button.add_theme_stylebox_override("hover", panel(Color("f1c687")))
-	game.start_button.add_theme_stylebox_override("pressed", panel(Color("c78f4a")))
+	build_menu_header(game.menu_content)
+	game.menu_text = UiKit.wrap(UiKit.label(game.menu_content, "", "body"))
+	game.menu_text.hide()
+	game.selection_controls = UiKit.vbox(game.menu_content, 10)
+	game.selection_controls.name = "Selection"
+	game.lobby_ui.build_selection(game.selection_controls)
+	entry_slot = UiKit.vbox(game.menu_content, 0)
+	entry_slot.name = "Entry"
+	build_menu_actions(game.menu_content)
+	footer = UiKit.label(game.menu_content, "Версия %s" % ProjectSettings.get_setting("application/config/version"), "muted")
+	footer.add_theme_font_size_override("font_size", 12)
+	game.lobby_ui.finish(game.menu_content)
+
+# Brand (main menu) or the window title (pause, result) on the left; site and
+# support links on the right.
+func build_menu_header(parent: Control) -> void:
+	header = UiKit.hbox(parent, 16)
+	header.name = "Header"
+	brand = UiKit.brand(header)
+	game.title_label = brand.get_node("Names/Title")
+	game.menu_title = UiKit.wrap(UiKit.label(header, "", "title"))
+	game.menu_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	game.menu_title.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	game.menu_title.hide()
+	var spacer = Control.new()
+	spacer.name = "Spacer"
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(spacer)
+	links = UiKit.hbox(header, 8)
+	links.name = "Links"
+	links.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	game.lobby_ui.build_links(links)
+
+func build_menu_actions(parent: Control) -> void:
+	game.start_button = UiKit.button(parent, "ПОЕХАЛИ", "primary", 54)
+	game.start_button.name = "StartButton"
+	game.start_button.add_theme_font_size_override("font_size", 19)
 	game.start_button.pressed.connect(game._menu_action)
-	mv.add_child(game.start_button)
 	game.start_button.hide()
-	game.invite_button = Button.new()
-	game.invite_button.text = "ПРИГЛАСИТЬ ДРУЗЕЙ"
+	game.invite_button = UiKit.button(parent, "ПРИГЛАСИТЬ ДРУЗЕЙ")
 	game.invite_button.name = "VKInviteFriends"
-	game.invite_button.custom_minimum_size.y = 48
-	game.invite_button.add_theme_font_size_override("font_size", 19)
-	game.invite_button.add_theme_stylebox_override("normal", panel(Color("38516a")))
-	game.invite_button.add_theme_stylebox_override("hover", panel(Color("4c6888")))
 	game.invite_button.pressed.connect(game._invite_friends)
-	mv.add_child(game.invite_button)
 	game.invite_button.hide()
-	game.invite_status = label(mv, "", 14, Color("dce7ee"))
-	game.invite_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	game.invite_status = UiKit.wrap(UiKit.label(parent, "", "muted"))
 	game.invite_status.hide()
-	game.lobby_ui.finish(mv)
+	settings = UiKit.card(parent, UiKit.SURFACE_SUNKEN, Vector2(16, 14))
+	settings.name = "Settings"
+	var column = UiKit.vbox(settings, 10)
+	game.draw_distance_controls = UiKit.vbox(column, 8)
+	game.draw_distance_controls.name = "DrawDistanceSettings"
+	UiKit.label(game.draw_distance_controls, "ДАЛЬНОСТЬ ПРОРИСОВКИ", "caption")
+	var distance_row = UiKit.hbox(game.draw_distance_controls, 8)
+	for index in range(game.draw_distance.LABELS.size()):
+		var button = UiKit.expand(UiKit.button(distance_row, game.draw_distance.LABELS[index], "toggle", 42))
+		button.set_pressed_no_signal(index == game.draw_distance.mode)
+		button.pressed.connect(set_draw_distance.bind(index))
+		game.draw_distance_buttons.append(button)
+	game.lobby_ui.build_audio(column)
+	settings.hide()
+	game.draw_distance_controls.hide()
+
+# Which parts of the menu window this screen shows.
+func update_menu() -> void:
+	var main = not game.playing
+	var result = game.dead or game.finished
+	var pause = game.playing and game.paused and not result
+	brand.visible = main and not result
+	game.menu_title.visible = not brand.visible
+	game.menu_text.visible = game.menu_title.visible and not game.menu_text.text.is_empty()
+	links.visible = main or pause
+	settings.visible = pause
+	game.draw_distance_controls.visible = pause
+	footer.visible = main and not game.mobile_mode
+	if game.room != null:
+		game.room.ui.caption.visible = not game.mobile_mode
+	menu_dim.visible = game.menu.visible and game.playing
+	game.lobby_ui.help_button.visible = links.visible
+
+func layout_menu() -> void:
+	if dialog_area == null:
+		return
+	update_menu()
+	var area = dialog_area.size
+	var main = not game.playing
+	var width = (900.0 if main else 560.0) if not game.mobile_mode else (860.0 if main else 600.0)
+	game.menu.custom_minimum_size.x = width
+	var extent = game.menu.get_combined_minimum_size()
+	var factor = minf(1.0, minf(maxf(area.x - 24, 1) / extent.x, maxf(area.y - 24, 1) / extent.y))
+	game.menu.set_anchors_preset(Control.PRESET_CENTER)
+	game.menu.offset_left = -extent.x / 2
+	game.menu.offset_right = extent.x / 2
+	game.menu.offset_top = -extent.y / 2
+	game.menu.offset_bottom = extent.y / 2
+	game.menu.pivot_offset = extent / 2
+	game.menu.scale = Vector2.ONE * factor
 
 func update_fps_counter(delta: float) -> void:
 	game.fps_clock += delta
@@ -395,6 +447,16 @@ func tow_text() -> String:
 		return "ТЯНЕМ %s%s   ·   УДЕРЖИВАЙ T" % [whose, helpers]
 	return "ВЫТАСКИВАЕМ ЭКИПАЖ · ДО ДОРОГИ %d М%s   ·   УДЕРЖИВАЙ T" % [ceili(game.tow_distance), helpers]
 
+func set_paused(value: bool) -> void:
+	game.paused = value
+	game.menu.visible = value
+	game.menu_title.text = "Пауза"
+	game.menu_text.text = "Ралли, мангал и таймеры остановлены. Продолжи выезд или вернись в главное меню." if game.room.is_authority() else "Пауза только у тебя: остальные фанаты продолжают выезд."
+	game.start_button.text = "ПРОДОЛЖИТЬ"
+	update_invite_button()
+	layout_menu()
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if value or game.mobile_mode else Input.MOUSE_MODE_CAPTURED
+
 func show_result(title: String, body: String) -> void:
 	game.mushroom_effect.clear()
 	game.sobriety_panel.hide()
@@ -406,6 +468,7 @@ func show_result(title: String, body: String) -> void:
 	game.menu_title.text = title
 	game.menu_text.text = body
 	game.start_button.text = "НОВЫЙ ВЫЕЗД"
+	layout_menu()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	game.engine_audio.stop()
 	game.rally_audio.stop()
@@ -427,47 +490,7 @@ func enable_mobile() -> void:
 	print("[RFM] Мобильный интерфейс: масштаб окна готов")
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	game.title_label.text = "Rally Fans Simulator"
-	game.title_label.hide()
-	# These HUD labels start empty. Let wrapping calculate their lines on draw
-	# rather than recalculating visible lines before the Web text server shapes them.
-	game.course_label.add_theme_font_size_override("font_size", 14)
-	game.course_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	game.mobile_top.get_child(0).get_child(1).hide()
-	game.mobile_top.position = Vector2(24, 20)
-	game.mobile_top.size = Vector2(360, 0)
-	game.mobile_bottom.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-	game.mobile_bottom.offset_left = 200
-	game.mobile_bottom.offset_right = -224
-	game.mobile_bottom.offset_top = -148
-	game.mobile_bottom.offset_bottom = -24
-	game.info_label.add_theme_font_size_override("font_size", 16)
-	game.info_label.max_lines_visible = 4
-	game.info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	game.hint_label.hide()
-	game.quest_label.hide()
-	game.mobile_sidebar.get_child(0).get_child(0).hide()
-	game.mobile_sidebar.offset_left = -280
-	game.mobile_sidebar.offset_right = -36
-	game.mobile_sidebar.offset_top = 96
-	game.mobile_sidebar.offset_bottom = 282
-	game.minimap.custom_minimum_size = Vector2(204, 110)
-	game.toast_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-	game.toast_label.offset_left = 36
-	game.toast_label.offset_right = -36
-	game.toast_label.offset_top = -330
-	game.toast_label.offset_bottom = -265
-	game.toast_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	game.menu.offset_left = -310
-	game.menu.offset_right = 310
-	game.menu.offset_top = -195
-	game.menu.offset_bottom = 195
-	game.menu_content.add_theme_constant_override("separation", 6)
-	game.menu_content.get_child(0).hide()
-	game.menu_title.add_theme_font_size_override("font_size", 26)
-	game.menu_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	game.menu_text.add_theme_font_size_override("font_size", 18)
-	game.menu_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	game.menu_text.text = "Доедь до поляны, разложи лагерь и посмотри ралли. Жарь шашлык, помогай экипажам и береги себя."
+	compact_hud()
 	print("[RFM] Мобильный интерфейс: панели готовы")
 	var layer = CanvasLayer.new()
 	layer.layer = 10
@@ -477,35 +500,63 @@ func enable_mobile() -> void:
 	layer.add_child(game.mobile_controls)
 	print("[RFM] Мобильный интерфейс: контроллы готовы")
 
+# Phone layout: sticks own the bottom corners and the action buttons sit above
+# the right stick (mobile_controls.gd), so cards stay small and out of the way.
+# These labels start empty; wrapping is calculated on draw rather than before
+# the Web text server shapes them.
+func compact_hud() -> void:
+	game.fps_label.hide()
+	game.stage_caption.hide()
+	game.course_label.add_theme_font_size_override("font_size", 15)
+	game.course_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	top_box.custom_minimum_size.x = 280
+	game.mobile_top.add_theme_stylebox_override("panel", UiKit.panel_style(UiKit.HUD, Vector2(14, 8)))
+	game.mobile_top.position = Vector2(24, 24)
+	game.mobile_bottom.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	game.mobile_bottom.offset_left = 180
+	game.mobile_bottom.offset_right = -180
+	game.mobile_bottom.offset_top = -76
+	game.mobile_bottom.offset_bottom = -20
+	game.mobile_bottom.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	game.mobile_bottom.add_theme_stylebox_override("panel", UiKit.panel_style(UiKit.HUD, Vector2(14, 8)))
+	game.info_label.add_theme_font_size_override("font_size", 15)
+	game.info_label.max_lines_visible = 3
+	game.info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	game.info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	game.hint_label.hide()
+	game.quest_label.hide()
+	plan_title.hide()
+	game.mobile_sidebar.offset_left = -268
+	game.mobile_sidebar.offset_right = -24
+	game.mobile_sidebar.offset_top = 96
+	game.minimap.custom_minimum_size = Vector2(212, 120)
+	game.consumption_warning.offset_left = -270
+	game.consumption_warning.offset_right = 270
+	game.consumption_warning.offset_top = 96
+	game.sobriety_panel.anchor_left = 0.2
+	game.sobriety_panel.anchor_right = 0.8
+	game.sobriety_panel.offset_top = 96
+	game.sobriety_panel.offset_bottom = 180
+	game.menu_content.add_theme_constant_override("separation", 10)
+	brand.get_node("Logo").custom_minimum_size = Vector2.ONE * 44
+
 func apply_mobile_safe_rect(rect: Rect2) -> void:
 	if rect == game.mobile_safe_rect:
 		return
 	game.mobile_safe_rect = rect
 	game.mobile_controls.reset_input()
 	# Insets move anchors; they must never shrink gameplay buttons or text.
-	for control in [game.mobile_ui, game.mobile_controls]:
+	for control in [game.mobile_ui, game.mobile_controls, dialog_area]:
 		control.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
 		control.position = rect.position
 		control.scale = Vector2.ONE
 		control.size = rect.size
 	# The world still fills the canvas and aiming stays at the camera centre.
 	game.crosshair.position = game.get_viewport().get_visible_rect().size / 2 - rect.position - game.crosshair.size / 2
-	fit_mobile_dialogs()
+	layout_menu()
 
 func fit_mobile_dialogs() -> void:
-	if not game.mobile_mode or not game.mobile_safe_rect.has_area():
-		return
-	for dialog in [game.menu]:
-		var minimum = dialog.get_combined_minimum_size()
-		var extent = Vector2(maxf(620, minimum.x), maxf(390, minimum.y))
-		var factor = minf(1.0, minf((game.mobile_ui.size.x - 24) / extent.x, (game.mobile_ui.size.y - 24) / extent.y))
-		dialog.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-		dialog.offset_left = -extent.x / 2
-		dialog.offset_right = extent.x / 2
-		dialog.offset_top = -extent.y / 2
-		dialog.offset_bottom = extent.y / 2
-		dialog.pivot_offset = extent / 2
-		dialog.scale = Vector2.ONE * factor
+	layout_menu()
 
 func update_mobile_safe_area(delta: float) -> void:
 	if not OS.has_feature("web"):

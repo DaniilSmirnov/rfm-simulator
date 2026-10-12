@@ -23,13 +23,13 @@ const RallyDevice = {
     style.textContent = `
       #rally-rotate { display:none; position:fixed; inset:0; z-index:10000;
         box-sizing:border-box; padding:max(24px, env(safe-area-inset-top)) 24px;
-        background:#17242b; color:#f6ead1; font:18px system-ui,sans-serif;
+        background:#131d17; color:#f2e8d0; font:18px system-ui,sans-serif;
         align-items:center; justify-content:center; flex-direction:column;
         text-align:center; gap:20px; touch-action:none; }
-      #rally-rotate .rotate-icon { font-size:64px; color:#dfb270; }
+      #rally-rotate .rotate-icon { font-size:64px; color:#e3b16b; }
       #rally-rotate p { max-width:340px; margin:0; line-height:1.5; }
-      #rally-rotate button { padding:16px 24px; border:2px solid #dfb270;
-        border-radius:14px; background:#25352b; color:inherit; font:inherit; }
+      #rally-rotate button { padding:16px 24px; border:2px solid #e3b16b;
+        border-radius:14px; background:#2a3c31; color:inherit; font:inherit; }
       @media (orientation:portrait) { #rally-rotate { display:flex; } }
     `;
     document.head.appendChild(style);

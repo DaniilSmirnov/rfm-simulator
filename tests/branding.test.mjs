@@ -38,14 +38,46 @@ test('loading progress is real, bounded, supports unknown sizes and waits for st
 test('game title is Rally Fans Simulator everywhere it is presented', async () => {
   const project = await readFile(new URL('../game/project.godot', import.meta.url), 'utf8');
   const shell = await readFile(new URL('../game/branding/web-shell.html', import.meta.url), 'utf8');
-  // The HUD (game_hud.gd) shows the title; game.gd assembles the scene.
+  // ui_kit.gd owns the brand block (logo, title, byline); the HUD and
+  // game.gd use it.
   const game = (await readFile(new URL('../game/scripts/game.gd', import.meta.url), 'utf8'))
-    + await readFile(new URL('../game/scripts/game_hud.gd', import.meta.url), 'utf8');
+    + await readFile(new URL('../game/scripts/game_hud.gd', import.meta.url), 'utf8')
+    + await readFile(new URL('../game/scripts/ui_kit.gd', import.meta.url), 'utf8');
   assert.match(project, /config\/name="Rally Fans Simulator"/);
   assert.match(shell, /id="status-brand">Rally Fans Simulator<\/h1>/);
   assert.ok((game.match(/Rally Fans Simulator/g) ?? []).length >= 2);
   assert.equal(/СИМУЛЯТОР РАЛЛИЙНОГО ОВОЩА|РАЛЛИЙНЫЙ ОВОЩ/.test(game), false);
 });
+test('main menu credits Rally Fans Map and links to its site', async () => {
+  const kit = await readFile(new URL('../game/scripts/ui_kit.gd', import.meta.url), 'utf8');
+  const lobby = await readFile(new URL('../game/scripts/lobby_ui.gd', import.meta.url), 'utf8');
+  const hud = await readFile(new URL('../game/scripts/game_hud.gd', import.meta.url), 'utf8');
+  assert.match(kit, /BRAND_URL = "https:\/\/rallyfansmap\.ru\/"/);
+  assert.match(kit, /"от " \+ BRAND_NAME/);
+  assert.match(kit, /LOGO = "res:\/\/branding\/rfm-icon\.svg"/);
+  assert.match(lobby, /"О НАС"/);
+  assert.doesNotMatch(hud + lobby, /ПЕРЕВАЛ\. РАЛЛИ\. ШАШЛЫК/i);
+});
+
+test('players are fans, not vegetables, in every player-facing text', async () => {
+  async function visit(directory, found) {
+    for (const entry of await readdir(directory,{withFileTypes:true})) {
+      if (entry.name.startsWith('.') || entry.name === 'node_modules' || entry.name === 'dist') continue;
+      const path = join(directory,entry.name);
+      if (entry.isDirectory()) await visit(path, found);
+      else if (/\.(gd|js|mjs|md|html|json|cfg|tscn)$/.test(path) && path !== new URL(import.meta.url).pathname
+        && /овощ/i.test(await readFile(path,'utf8'))) found.push(path);
+    }
+    return found;
+  }
+  const found = [];
+  for (const folder of ['game','server','web','scripts','docs']) await visit(new URL('../'+folder,import.meta.url).pathname, found);
+  for (const file of ['README.md','package.json']) if (/овощ/i.test(await readFile(new URL('../'+file,import.meta.url),'utf8'))) found.push(file);
+  assert.deepEqual(found, []);
+  const room = await readFile(new URL('../server/room-core.mjs', import.meta.url), 'utf8');
+  assert.match(room, /'Фанат'/);
+});
+
 test('all project brand references use Rally Fans Map spelling', async () => {
   async function visit(directory) {
     for (const entry of await readdir(directory,{withFileTypes:true})) {
@@ -78,5 +110,5 @@ test('authored game content has no third-party vehicle brands or named crews', a
   assert.match(props, /name = "SportGrille"/);
   assert.match(props, /"FANS MAP"/);
   const room = await readFile(new URL('../game/scripts/room_lobby.gd', import.meta.url), 'utf8');
-  assert.match(room, /placeholder_text = "Твой ник"/);
+  assert.match(room, /"Твой ник"/);
 });

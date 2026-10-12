@@ -2,6 +2,8 @@ extends CanvasLayer
 ## Full-screen stage-entry gate based on the safety memo from rfm-pwa.
 ## Deliberately native Godot UI so desktop, mobile web and VK share one flow.
 
+const UiKit = preload("res://scripts/ui_kit.gd")
+
 signal accepted
 
 var panel: Control
@@ -41,9 +43,10 @@ func _ready() -> void:
 	panel = Control.new()
 	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	panel.theme = UiKit.theme()
 	add_child(panel)
 	var background = ColorRect.new()
-	background.color = Color("#14212a")
+	background.color = Color("131d17")
 	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	background.mouse_filter = Control.MOUSE_FILTER_STOP
 	panel.add_child(background)
@@ -75,20 +78,22 @@ func _ready() -> void:
 	text_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	text_column.add_theme_constant_override("separation", 16)
 	content_margins.add_child(text_column)
-	_add_text(text_column, "ЗРИТЕЛЬ — ЧАСТЬ РАЛЛИ", 15, Color("#ff8b52"))
-	_add_text(text_column, "БЕЗОПАСНОСТЬ НА СУ", 32, Color.WHITE)
+	_add_text(text_column, "ЗРИТЕЛЬ — ЧАСТЬ РАЛЛИ", 15, UiKit.ACCENT)
+	_add_text(text_column, "БЕЗОПАСНОСТЬ НА СУ", 32, UiKit.TEXT)
 	_add_text(text_column, "Выбирай безопасное место, не мешай проведению гонки и выполняй указания маршалов.", 19)
-	_add_text(text_column, "ГДЕ СТОЯТЬ", 26, Color("#ffaf6c"))
+	_add_text(text_column, "ГДЕ СТОЯТЬ", 26, UiKit.HIGHLIGHT)
 	for rule in WHERE_TO_STAND:
 		_add_text(text_column, "• " + rule, 19)
-	_add_text(text_column, "ЧТО МОЖНО ДЕЛАТЬ", 26, Color("#ffaf6c"))
+	_add_text(text_column, "ЧТО МОЖНО ДЕЛАТЬ", 26, UiKit.HIGHLIGHT)
 	for rule in ALLOWED:
 		_add_text(text_column, "• " + rule, 19)
-	_add_text(text_column, "ЧТО НЕЛЬЗЯ ДЕЛАТЬ", 26, Color("#ffaf6c"))
+	_add_text(text_column, "ЧТО НЕЛЬЗЯ ДЕЛАТЬ", 26, UiKit.HIGHLIGHT)
 	for rule in FORBIDDEN:
 		_add_text(text_column, "• " + rule, 19)
-	_add_text(text_column, "БУДЬ ЗРИТЕЛЕМ, А НЕ УЧАСТНИКОМ АВАРИИ.", 19, Color("#ffad8b"))
+	_add_text(text_column, "БУДЬ ЗРИТЕЛЕМ, А НЕ УЧАСТНИКОМ АВАРИИ.", 19, UiKit.WARNING)
 	accept_button = Button.new()
+	accept_button.theme_type_variation = "PrimaryButton"
+	accept_button.add_theme_font_size_override("font_size", 19)
 	accept_button.text = "ПРОКРУТИ ПАМЯТКУ ДО КОНЦА"
 	accept_button.disabled = true
 	accept_button.custom_minimum_size.y = 64
@@ -128,7 +133,7 @@ func _update_layout() -> void:
 	outer.add_theme_constant_override("margin_bottom", roundi(insets.w + 12))
 	_update_accept()
 
-func _add_text(parent: VBoxContainer, value: String, font_size: int, color: Color = Color("#f6ead1")) -> void:
+func _add_text(parent: VBoxContainer, value: String, font_size: int, color: Color = UiKit.TEXT) -> void:
 	var label = Label.new()
 	label.text = value
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

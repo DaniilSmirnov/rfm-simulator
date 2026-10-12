@@ -2,7 +2,7 @@
   "name": "rfm-simulator",
   "version": "0.10.29",
   "private": true,
-  "description": "Симулятор раллийного овоща — Godot mini web demo",
+  "description": "Rally Fans Simulator — симулятор раллийного фаната, Godot mini web demo",
   "type": "module",
   "engines": {
     "node": ">=22"
