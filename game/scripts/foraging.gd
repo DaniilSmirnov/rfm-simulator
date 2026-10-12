@@ -69,10 +69,13 @@ func nearby_source() -> int:
 	return found
 
 func meat_count(source: int) -> int:
-	return game.grill_servings if source == -1 else int(game.spectators.groups[source].servings)
+	return game.camp_grill.servings if source == -1 else int(game.spectators.groups[source].servings)
 
 func free_skewers(source: int) -> int:
 	if grill_node(source) == null:
+		return 0
+	# Mushrooms need live coals; the player's own grill may still be cold.
+	if source == -1 and not game.camp_grill.coals():
 		return 0
 	return maxi(0, Props.FOOD_PORTIONS - meat_count(source) - skewers.get(str(source), []).size())
 

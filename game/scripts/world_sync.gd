@@ -50,7 +50,7 @@ func rebuild() -> void:
 	if game.stage != null and game.stage.has_method("sync_providers"):
 		for p in game.stage.sync_providers(game):
 			providers.append(p)
-	providers.append(provider("camp", "camp", ["camp", "table_yaw", "chairs", "chair_poses", "flag_poses", "cooking", "grill_pose", "grill_servings", "npc_servings", "eaten"], _camp_snapshot, _camp_apply))
+	providers.append(provider("camp", "camp", ["camp", "table_yaw", "chairs", "chair_poses", "flag_poses", "cooking", "grill_pose", "grill_fire", "grill_servings", "npc_servings", "eaten"], _camp_snapshot, _camp_apply))
 	providers.append(provider("drive", "", ["drive_protocol", "driving"], _drive_snapshot, func(_f, _t): pass))
 	providers.append(provider("stones", "", ["stones", "impacts"], func(): return {"stones": room.stone_state(), "impacts": game.impact_serials}, _stones_apply))
 	providers.append(provider("status", "", ["paused", "notice", "notice_time", "cook_time"], _status_snapshot, _status_apply))
@@ -233,14 +233,14 @@ func _drive_snapshot() -> Dictionary:
 func _status_snapshot() -> Dictionary:
 	# The toast text only travels while it is on screen.
 	var showing: bool = game.toast_time > 0
-	return {"paused": game.paused, "notice": game.toast_label.text if showing else "", "notice_time": snappedf(game.toast_time, 0.1) if showing else 0.0, "cook_time": snappedf(game.cook_time, 0.01)}
+	return {"paused": game.paused, "notice": game.toast_label.text if showing else "", "notice_time": snappedf(game.toast_time, 0.1) if showing else 0.0, "cook_time": snappedf(game.camp_grill.meat_time, 0.01)}
 
 func _status_apply(w: Dictionary, _t: float) -> void:
 	room.world_paused = bool(w.get("paused", false))
 	if w.get("notice_time", 0) > 0 and w.get("notice", "") != last_notice:
 		last_notice = w.notice
 		game.toast(last_notice)
-	game.cook_time = float(w.get("cook_time", game.cook_time))
+	game.camp_grill.meat_time = float(w.get("cook_time", game.camp_grill.meat_time))
 
 func _progress_snapshot() -> Dictionary:
 	return {"racing": game.racing, "passed": game.passed, "helped": game.helped, "elapsed": game.elapsed}
@@ -280,7 +280,7 @@ func _camp_snapshot() -> Dictionary:
 		flag_poses[owner] = []
 		for flag in game.personal_flags[owner]:
 			flag_poses[owner].append({"pos": room.a(flag.position), "yaw": flag.rotation.y})
-	return {"camp": room.a(game.camp.position) if game.camp != null else null, "table_yaw": game.camp.rotation.y if game.camp != null else 0.0, "chairs": game.has_chairs, "chair_poses": chair_poses, "flag_poses": flag_poses, "cooking": game.cooking, "grill_pose": {"pos": room.a(game.grill.position), "yaw": game.grill.rotation.y} if game.grill != null else null, "grill_servings": game.grill_servings, "npc_servings": game.spectators.snapshot(), "eaten": game.eaten}
+	return {"camp": room.a(game.camp.position) if game.camp != null else null, "table_yaw": game.camp.rotation.y if game.camp != null else 0.0, "chairs": game.has_chairs, "chair_poses": chair_poses, "flag_poses": flag_poses, "cooking": game.cooking, "grill_pose": {"pos": room.a(game.grill.position), "yaw": game.grill.rotation.y} if game.grill != null else null, "grill_fire": game.camp_grill.snapshot(), "grill_servings": game.camp_grill.servings, "npc_servings": game.spectators.snapshot(), "eaten": game.eaten}
 
 func _camp_apply(f: Dictionary, _t: float) -> void:
 	var camp_position = f.get("camp")
@@ -335,9 +335,10 @@ func _camp_apply(f: Dictionary, _t: float) -> void:
 		var spot = room.v(grill_pose.pos) if grill_pose != null else game.camp.position + Vector3(0.3, 0, -2.4)
 		var yaw = float(grill_pose.yaw) if grill_pose != null else 0.0
 		game.start_grill(spot, yaw, true)
-	game.grill_servings = int(f.get("grill_servings", Props.FOOD_PORTIONS))
+	game.camp_grill.apply_snapshot(f.get("grill_fire", {}))
+	game.camp_grill.servings = int(f.get("grill_servings", 0))
 	if game.grill != null:
-		Props.set_grill_servings(game.grill, game.grill_servings)
+		Props.set_grill_servings(game.grill, game.camp_grill.servings)
 	game.spectators.apply_snapshot(f.get("npc_servings", []))
 	game.eaten = bool(f.get("eaten", false))
 

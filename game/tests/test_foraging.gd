@@ -68,7 +68,10 @@ func run() -> void:
 	host.add_child(host.camp)
 	host.camp.position = host.grill.position + Vector3(2, 0, 0)
 	host.cooking = true
-	host.cook_time = 35
+	host.camp_grill.lit = true
+	host.camp_grill.fire_time = host.camp_grill.COALS_SECONDS
+	host.camp_grill.servings = Props.FOOD_PORTIONS
+	host.camp_grill.meat_time = host.camp_grill.MEAT_SECONDS
 	host.walker = host.grill.position
 	check(not host.foraging.can_mount() and not host.foraging.mount(), "full ten-skewer grill refuses mushrooms")
 	check(host.commit_meat(-1), "eating meat releases a skewer")

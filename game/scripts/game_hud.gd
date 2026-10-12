@@ -377,8 +377,8 @@ func update_hud() -> void:
 		game.course.phase, game.course.pass_index, game.course.zero_index,
 		ceili(game.course.remaining) if game.course.phase in ["countdown", "intermission"] else 0,
 		int(game.elapsed) if not game.mobile_mode else 0, game.camp != null, game.has_chairs, game.eaten, game.passed, game.helped, game.beers,
-		game.cook_time >= 35, int(game.cook_time / 35 * 100) if game.cooking and game.cook_time < 35 else 0,
-		game.cooking, game.grill_servings, game.drink_time >= 0, game.drink_time >= 1.25, game.eat_time >= 0, game.eat_kind,
+		game.camp_grill.phase(), int(game.camp_grill.progress() * 100),
+		game.cooking, game.camp_grill.servings, game.drink_time >= 0, game.drink_time >= 1.25, game.eat_time >= 0, game.eat_kind,
 		game.tow_target != null, ceili(game.tow_distance), game.recovery_helpers, near_tow, game.crews.car_towed, injury,
 		remaining_items, game.seated, game.stage.variant, bag.get("mushrooms", 0), bag.get("berries", 0),
 		game.foraging.can_eat("berries"), pot, game.camp_cooking.phase if pot else "",
@@ -410,8 +410,7 @@ func update_hud() -> void:
 		info_text = "%02d КМ/Ч    ·    ЛЕГКОВУШКА %d%%    ·    %s" % [int(absf(game.speed) * 3.6), int(game.condition), "ОБОЧИНА" if game.stage.road_distance(game.car.position) > 4 else "ГРАВИЙ / КОЛЕЯ"]
 		hint_text = "WASD / стрелки — газ и руль   ·   Space — тормоз   ·   F — выйти   ·   Home — вернуть на СУ"
 	else:
-		var cook_status = "ШАШЛЫК ГОТОВ" if game.cook_time >= 35 else ("ШАШЛЫК %d%%" % int(game.cook_time / 35 * 100) if game.cooking else "МАНГАЛ НЕ РАЗОЖЖЁН")
-		info_text = "ЗРИТЕЛЬ    ·    %s · ШАМПУРЫ %d/10    ·    %s" % [cook_status, game.grill_servings, game.course.caption()]
+		info_text = "ЗРИТЕЛЬ    ·    %s · ШАМПУРЫ %d/10    ·    %s" % [game.camp_grill.status(false), game.camp_grill.servings, game.course.caption()]
 		hint_text = "WASD — идти   ·   Shift — бег   ·   Space — прыжок   ·   мышь — смотреть   ·   F — действие   ·   Z — стол   ·   C — стулья   ·   G — мангал   ·   R — статус СУ"
 		if game.drink_time >= 0:
 			info_text = "ОТКРЫВАЕМ БАНКУ" if game.drink_time < 1.25 else "ЗА ХОРОШИЙ ВЫЕЗД!"
@@ -451,8 +450,7 @@ func update_hud() -> void:
 			if game.packing.active():
 				info_text = "ВЕРНУТЬ ВЕЩИ В БАГАЖНИК · ОСТАЛОСЬ %d" % remaining_items
 			else:
-				var cook_status = "ГОТОВ" if game.cook_time >= 35 else ("%d%%" % int(game.cook_time / 35 * 100) if game.cooking else "НЕТ ОГНЯ")
-				info_text = "ШАШЛЫК %s · %d/10" % [cook_status, game.grill_servings]
+				info_text = "%s · %d/10" % [game.camp_grill.status(true), game.camp_grill.servings]
 				if game.camp_cooking.pot != null:
 					info_text += " · ПЛОВ %d/10" % game.camp_cooking.servings if game.camp_cooking.phase == "ready" else (" · ПЛОВ %d%%" % int(game.camp_cooking.cook_time / 45 * 100) if game.camp_cooking.phase == "cooking" else " · КАЗАН ПУСТ")
 		else:

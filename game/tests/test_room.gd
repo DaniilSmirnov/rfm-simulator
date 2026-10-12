@@ -35,9 +35,10 @@ func run() -> void:
 	cmd.placement.pos = host.room.a(host.camp.position + Vector3(0.3, 0, -2.4))
 	host.cargo.held["guest"] = {"kind": "grill", "owner": "guest", "returning": false}
 	host.room._apply_command(cmd)
-	host.cook_time = 19
+	host.camp_grill.lit = true
+	host.camp_grill.fire_time = 19
 	guest.room.apply_world(host.room.world_state())
-	check(guest.has_chairs and guest.cooking and guest.cook_time == 19, "late world snapshot builds chairs and grill")
+	check(guest.has_chairs and guest.cooking and guest.camp_grill.fire_time == 19, "late world snapshot builds chairs and grill")
 	var parts = host.room.world_sync.split_world(host.room.world_state())
 	check(not parts.hot.has("camp") and not parts.hot.has("snow") and parts.hot.has("racers") and parts.hot.cold_revs.size() == host.room.world_sync.cold_sections().size(), "hot snapshot leaves out slowly changing sections")
 	check(host.room.world_sync.split_world(host.room.world_state()).hot.cold_revs == parts.hot.cold_revs, "unchanged cold sections keep their revision")
@@ -66,7 +67,8 @@ func run() -> void:
 	for entry in host.room.world_state().npc_people:
 		check(not entry.has("time") and str(entry.get("yaw", 0.0)).length() <= 6, "spectator entries carry no timer and short angles")
 		break
-	host.cook_time = 19
+	host.camp_grill.lit = true
+	host.camp_grill.fire_time = 19
 	host.in_car = false
 	host.course.phase = "racing"
 	host.spawn_racer("stuck")

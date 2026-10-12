@@ -39,6 +39,8 @@ static func run(game: Node, context, action: String, placement: Dictionary) -> v
 		"flag":
 			if not game.packing.active():
 				game.place_flag(spot, yaw, context.owner)
+		"light_grill": game.camp_grill.light()
+		"load_meat": game.camp_grill.load_meat()
 		"plov_cook": game.camp_cooking.start()
 		"eat_plov": game.camp_cooking.consume()
 		"eat": game.commit_meat(int(placement.get("source", -2)))

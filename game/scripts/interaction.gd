@@ -1,5 +1,7 @@
 extends RefCounted
 # One gaze-selected world object; proximity alone never chooses an action.
+const Props = preload("res://scripts/props.gd")
+const GrillModel = preload("res://scripts/grill_model.gd")
 var game: Node3D
 
 func offer(items: Array, point: Vector3, radius: float, reach: float, action: String, label: String, value: Variant = null) -> void:
@@ -64,25 +66,64 @@ func current() -> Dictionary:
 	for source in sources:
 		var grill = game.foraging.grill_node(source)
 		if grill != null:
-			var action = ""
-			var label = ""
-			if game.foraging.ready_index(source) >= 0:
-				action = "mushroom"
-				var species = game.foraging.ready_species(source)
-				label = "Съесть мухомор" if species == "fly_agaric" else ("Съесть поганку" if species == "toadstool" else "Съесть гриб")
-			elif game.foraging.stock().mushrooms > 0 and game.foraging.free_skewers(source) > 0:
-				action = "mount"
-				label = "Насадить гриб"
-			elif game.foraging.meat_count(source) > 0 and (source >= 0 or game.cook_time >= 35):
-				action = "meat"
-				label = "Съесть шашлык"
-			# Even an unavailable grill occludes another interactable behind it.
-			offer(items, grill.position + Vector3(0, 0.9, 0), 0.65, 3, action, label, source)
+			grill_offers(items, source, grill)
 		var table = game.camp if source == -1 else game.spectators.groups[source].table
 		if table != null:
 			offer(items, table.position + Vector3(0, 0.75, 0), 0.85, 3, "beer" if game.beer_timer <= 0 else "", "Выпить пиво" if game.beer_timer <= 0 else "")
 	game.player.relief.offers(items, self)
 	return select_target(items)
+
+# A grill offers what the fan is looking at: the skewer rails carry the food
+# (eat a serving, or put a mushroom on a free slot), the firebox below carries
+# the fire (light it, lay out the meat once the coals are ready). The closest
+# of those to the gaze is offered; a grill with nothing to give still occludes
+# whatever stands behind it.
+func grill_offers(items: Array, source: int, grill: Node3D) -> void:
+	var meat = game.foraging.meat_count(source)
+	var mushrooms = int(grill.get_meta("mushrooms", 0))
+	var own = source == -1
+	var candidates: Array = []
+	if meat > 0 and (not own or game.camp_grill.ready()):
+		candidates.append(_rails(grill, 0, meat, "meat", "Съесть шашлык", source))
+	if mushrooms > 0 and game.foraging.ready_index(source) >= 0:
+		var species = game.foraging.ready_species(source)
+		var label = "Съесть мухомор" if species == "fly_agaric" else ("Съесть поганку" if species == "toadstool" else "Съесть гриб")
+		candidates.append(_rails(grill, meat, mushrooms, "mushroom", label, source))
+	if game.foraging.free_skewers(source) > 0 and game.foraging.stock().mushrooms > 0:
+		candidates.append(_rails(grill, meat + mushrooms, Props.FOOD_PORTIONS - meat - mushrooms, "mount", "Насадить гриб", source))
+	if own and game.camp_grill.can_light():
+		candidates.append(_firebox(grill, "light_grill", "Разжечь мангал"))
+	elif own and game.camp_grill.can_load():
+		candidates.append(_firebox(grill, "load_meat", "Выложить шампуры с мясом"))
+	var best: Dictionary = {}
+	var best_error = INF
+	for candidate in candidates:
+		var error = aim_error(candidate.point, candidate.radius)
+		if error < best_error:
+			best_error = error
+			best = candidate
+	if best.is_empty():
+		offer(items, grill.position + Vector3(0, 0.9, 0), 0.65, 3, "", "", source)
+		return
+	offer(items, best.point, best.radius, 3, best.action, best.label, best.value)
+
+func _rails(grill: Node3D, from_index: int, count: int, action: String, label: String, source: int) -> Dictionary:
+	var zone = GrillModel.slot_zone(grill, from_index, count)
+	return {"point": zone.point, "radius": zone.radius, "action": action, "label": label, "value": source}
+
+func _firebox(grill: Node3D, action: String, label: String) -> Dictionary:
+	return {"point": grill.global_transform * Vector3(0, 0.8, 0), "radius": 0.2, "action": action, "label": label, "value": -1}
+
+# How far off the gaze a point is, as a fraction of its distance; INF when the
+# point is behind the camera or outside its own radius.
+func aim_error(point: Vector3, radius: float) -> float:
+	var offset = point - game.camera.global_position
+	var forward = -game.camera.global_basis.z
+	var depth = offset.dot(forward)
+	if depth <= 0:
+		return INF
+	var miss = offset.distance_to(forward * depth)
+	return miss / depth if miss <= radius else INF
 
 func select_target(items: Array) -> Dictionary:
 	if items.is_empty():
@@ -124,6 +165,8 @@ func activate() -> void:
 		"stand": game.stand_up()
 		"collect": game.foraging.collect(int(target.value))
 		"mount": game.foraging.mount(int(target.value))
+		"light_grill": game.camp_grill.light()
+		"load_meat": game.camp_grill.load_meat()
 		"mushroom": game.eat_foraged("mushroom", int(target.value))
 		"meat": game.eat_meat(int(target.value))
 		"beer": game.drink_beer()

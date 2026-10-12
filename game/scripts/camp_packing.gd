@@ -32,11 +32,10 @@ func remove(item: Dictionary) -> void:
 		"grill":
 			game.grill = null
 			game.cooking = false
-			game.cook_time = 0
-			game.grill_servings = 0
 			game.smoke = null
 			game.fire_audio.stop()
 			game.foraging.skewers.erase("-1")
+			game.camp_grill.reset()
 		"cauldron":
 			game.camp_cooking.remove_pot()
 			return

@@ -2,6 +2,7 @@ extends Node3D
 # Fixed camps and a shared timeline make NPCs identical for late-joining clients.
 const Navigation = preload("res://scripts/crowd_navigation.gd")
 const Props = preload("res://scripts/props.gd")
+const GrillModel = preload("res://scripts/grill_model.gd")
 const CharacterRig = preload("res://scripts/character_rig.gd")
 var game: Node3D
 var groups: Array[Dictionary] = []
@@ -60,6 +61,8 @@ func _add_group(center: Vector3, s: float, id: int, count: int) -> void:
 	var grill = Props.grill(self)
 	grill.position = grounded(center - forward * 2.4)
 	grill.rotation.y = yaw
+	# A camp of neighbours is always already roasting: bare glowing coals.
+	GrillModel.set_fire(grill, 1.0, 0.0)
 	groups.append({"car": car, "table": table, "grill": grill, "servings": Props.FOOD_PORTIONS, "last_eat_cycle": {}})
 	var group_index = groups.size() - 1
 	for j in range(count):
