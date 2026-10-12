@@ -98,6 +98,8 @@ func run() -> void:
 		host.room.update_tow(0.5)
 	check(host.helped == 1 and host.racers[0].state == "racing", "guest tow frees shared rally crew")
 	host.racers[0].node.rotation = Vector3(0.15, 0.2, -0.18)
+	# A towed crew restarts from a standstill; gravel needs it at speed.
+	host.racers[0].drive_speed = 20.0
 	host._update_stones(0.1)
 	host.stone_impact("guest")
 	guest.room.apply_world(host.room.world_state())
