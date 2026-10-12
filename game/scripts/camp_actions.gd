@@ -256,7 +256,7 @@ func update_cooking(delta: float) -> void:
 	if game.cooking and game.cook_time < 35:
 		game.cook_time = minf(35, game.cook_time + delta)
 		if game.cook_time >= 35:
-			game.toast("Шашлык готов! Подойди к лагерю и нажми X.")
+			game.toast("Шашлык готов! Подойди к мангалу и нажми F.")
 
 func drink_beer() -> bool:
 	if game.beers >= 30 or game.injuries.down:

@@ -21,6 +21,8 @@ var entry_slot: VBoxContainer
 var settings: PanelContainer
 var footer: Label
 var top_box: VBoxContainer
+var guide_button: Button
+var secondary_row: HBoxContainer
 var plan_title: Label
 
 func request_game_mouse_capture() -> void:
@@ -213,6 +215,10 @@ func build_menu(canvas: CanvasLayer) -> void:
 	footer = UiKit.label(game.menu_content, "Версия %s" % ProjectSettings.get_setting("application/config/version"), "muted")
 	footer.add_theme_font_size_override("font_size", 12)
 	game.lobby_ui.finish(game.menu_content)
+	game.how_to_play = preload("res://scripts/how_to_play.gd").new()
+	game.how_to_play.game = game
+	game.how_to_play.build(dialog_layer)
+	game.how_to_play.finished.connect(open_stage_safety_gate)
 
 # Brand (main menu) or the window title (pause, result) on the left; site and
 # support links on the right.
@@ -240,7 +246,14 @@ func build_menu_actions(parent: Control) -> void:
 	game.start_button.add_theme_font_size_override("font_size", 19)
 	game.start_button.pressed.connect(game._menu_action)
 	game.start_button.hide()
-	game.invite_button = UiKit.button(parent, "ПРИГЛАСИТЬ ДРУЗЕЙ")
+	# Pause: «Как играть» and the VK invitation share one row.
+	secondary_row = UiKit.hbox(parent, 10)
+	secondary_row.name = "SecondaryActions"
+	guide_button = UiKit.expand(UiKit.button(secondary_row, "КАК ИГРАТЬ"))
+	guide_button.name = "HowToPlayButton"
+	guide_button.pressed.connect(func(): game.how_to_play.open())
+	guide_button.hide()
+	game.invite_button = UiKit.expand(UiKit.button(secondary_row, "ПРИГЛАСИТЬ ДРУЗЕЙ"))
 	game.invite_button.name = "VKInviteFriends"
 	game.invite_button.pressed.connect(game._invite_friends)
 	game.invite_button.hide()
@@ -272,6 +285,8 @@ func update_menu() -> void:
 	game.menu_text.visible = game.menu_title.visible and not game.menu_text.text.is_empty()
 	links.visible = main or pause
 	settings.visible = pause
+	guide_button.visible = pause
+	secondary_row.visible = guide_button.visible or game.invite_button.visible
 	game.draw_distance_controls.visible = pause
 	footer.visible = main and not game.mobile_mode
 	if game.room != null:
@@ -296,6 +311,21 @@ func layout_menu() -> void:
 	game.menu.offset_bottom = extent.y / 2
 	game.menu.pivot_offset = extent / 2
 	game.menu.scale = Vector2.ONE * factor
+	for modal in dialog_layer.get_children():
+		if modal.has_node("Center/Panel") and modal.visible:
+			fit_modal(modal)
+
+# Small windows (help, about, how to play) are centred in the safe area and
+# scaled down only when they do not fit it.
+func fit_modal(modal: Control) -> void:
+	var center: Control = modal.get_node("Center")
+	var dialog: Control = center.get_node("Panel")
+	center.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	center.position = dialog_area.position
+	center.size = dialog_area.size
+	var extent = dialog.get_combined_minimum_size()
+	dialog.pivot_offset = extent / 2
+	dialog.scale = Vector2.ONE * minf(1.0, minf(maxf(dialog_area.size.x - 24, 1) / extent.x, maxf(dialog_area.size.y - 24, 1) / extent.y))
 
 func update_fps_counter(delta: float) -> void:
 	game.fps_clock += delta
@@ -587,7 +617,7 @@ func mobile_safe_response(result: int, code: int, _headers: PackedStringArray, b
 		var sequence = int(lifecycle.get("pause_sequence", 0))
 		if sequence > game.lifecycle_pause_sequence or lifecycle.get("hidden", false):
 			game.lifecycle_pause_sequence = sequence
-			if game.playing and not game.dead and not game.finished and game.safety_gate == null:
+			if game.playing and not game.dead and not game.finished and game.safety_gate == null and not game.how_to_play.is_open():
 				game._set_paused(true)
 	var extent = game.get_viewport().get_visible_rect().size
 	var ratio = extent / Vector2(maxf(float(data.width), 1.0), maxf(float(data.height), 1.0))
@@ -618,7 +648,21 @@ func update_draw_distance_buttons() -> void:
 	for index in range(game.draw_distance_buttons.size()):
 		game.draw_distance_buttons[index].set_pressed_no_signal(index == game.draw_distance.mode)
 
+# Stage entry. In VK the first entry opens «Как играть» first; the memo
+# follows when it is closed.
 func show_stage_safety_gate() -> void:
+	if game.safety_gate != null and is_instance_valid(game.safety_gate):
+		return
+	game.paused = true
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	if game.how_to_play.is_open():
+		return
+	if game.platform_service != null and game.platform_service.profile.get("platform", "") == "vk" and game.how_to_play.open_first_time():
+		layout_menu()
+		return
+	open_stage_safety_gate()
+
+func open_stage_safety_gate() -> void:
 	if game.safety_gate != null and is_instance_valid(game.safety_gate):
 		return
 	game.paused = true
