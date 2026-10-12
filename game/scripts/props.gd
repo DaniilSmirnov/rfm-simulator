@@ -175,6 +175,7 @@ static func player_avatar(variant: int = 0) -> Node3D:
 	# Imported body parts carry one surface per colour: one draw call each.
 	for part in root.find_children("Geometry*", "MeshInstance3D", true, false):
 		MeshMerge.flatten(part)
+		part.visibility_range_end = 110
 	return root
 
 

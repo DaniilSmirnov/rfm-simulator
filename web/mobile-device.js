@@ -46,8 +46,30 @@ const RallyDevice = {
     screen.orientation?.addEventListener?.('change', cancel);
     window.addEventListener('blur', cancel);
   },
+  // Which GPU the browser draws WebGL with. A blocklisted card or disabled
+  // hardware acceleration falls back to a software rasteriser (SwiftShader,
+  // llvmpipe…), where the forest runs at ~1 FPS; the game then starts on the
+  // cheapest graphics and tells the player.
+  probeGpu() {
+    try {
+      const canvas = document.createElement('canvas');
+      const fast = canvas.getContext('webgl2', { failIfMajorPerformanceCaveat: true });
+      const gl = fast || document.createElement('canvas').getContext('webgl2');
+      if (!gl) return { software: false, renderer: 'нет WebGL2' };
+      const info = gl.getExtension('WEBGL_debug_renderer_info');
+      const renderer = String(info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+      const software = !fast || /swiftshader|llvmpipe|softpipe|software|basic render|microsoft basic/i.test(renderer);
+      gl.getExtension('WEBGL_lose_context')?.loseContext();
+      return { software, renderer };
+    } catch (error) {
+      return { software: false, renderer: 'ошибка проверки: ' + error };
+    }
+  },
   configure(config) {
     config.args.push('--', '--room-server=' + location.origin);
+    const gpu = this.probeGpu();
+    globalThis.RallyBoot?.note?.(`Видеокарта: ${gpu.renderer}${gpu.software ? ' (программная отрисовка)' : ''}`);
+    if (gpu.software) config.args.push('--gpu-software');
     if (!this.isMobile()) return;
     config.args.push('--mobile-controls');
     document.documentElement.style.overscrollBehavior = 'none';
