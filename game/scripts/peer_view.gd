@@ -26,6 +26,9 @@ static func create(game: Node, p: Dictionary) -> Dictionary:
 static func remove(peer: Dictionary) -> void:
 	for node in [peer.car, peer.avatar, peer.label]:
 		node.queue_free()
+	for node in peer.get("relief", {}).values():
+		if node is Node:
+			node.queue_free()
 
 static func room_v(pos: Array) -> Vector3:
 	return Vector3(pos[0], pos[1], pos[2])
@@ -65,10 +68,13 @@ static func animate(game: Node, peer: Dictionary, delta: float, clock: float, fr
 		"arms": "limp" if collapsed else hands.arms, "lift": hands.lift}
 	if peer.held_box.visible and hands.arms == "":
 		pose.arms = Props.carry_arms(peer.held_kind)
+	if bool(state.get("relief", false)) and not collapsed:
+		pose.arms = "relief"
 	if sitting:
 		pose.seat = Props.CHAIR_SEAT
 		pose.ground = avatar_pose.position.y
 	CharacterRig.pose(peer.avatar, pose)
+	game.player.relief.draw_peer(peer, state)
 	peer.label.position = peer.car.position + Vector3(0, 2.8, 0) if state.in_car else peer.avatar.position + Vector3(0, 2.3, 0)
 
 # Eating and drinking run locally from the last reported start time so the

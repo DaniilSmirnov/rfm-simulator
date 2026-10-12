@@ -21,6 +21,8 @@ func current() -> Dictionary:
 		return {}
 	if game.seated:
 		return {"action": "stand", "label": "Встать со стула"}
+	if game.player.relief.active:
+		return {"action": "relief_stop", "label": "Закончить"}
 	var items: Array = []
 	game.cargo.offers(items, self)
 	if not game.cargo.at_open_trunk(game.chair_owner()):
@@ -79,6 +81,7 @@ func current() -> Dictionary:
 		var table = game.camp if source == -1 else game.spectators.groups[source].table
 		if table != null:
 			offer(items, table.position + Vector3(0, 0.75, 0), 0.85, 3, "beer" if game.beer_timer <= 0 else "", "Выпить пиво" if game.beer_timer <= 0 else "")
+	game.player.relief.offers(items, self)
 	return select_target(items)
 
 func select_target(items: Array) -> Dictionary:
@@ -124,4 +127,6 @@ func activate() -> void:
 		"mushroom": game.eat_foraged("mushroom", int(target.value))
 		"meat": game.eat_meat(int(target.value))
 		"beer": game.drink_beer()
+		"relief": game.player.relief.start()
+		"relief_stop": game.player.relief.stop()
 

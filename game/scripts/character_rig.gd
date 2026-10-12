@@ -17,7 +17,7 @@ extends RefCounted
 #   kneel     crouch low (medic)              ground      feet height; with seat/kneel
 #                                                          the rig lowers the body onto it
 #   arms      "", "eat", "drink", "carry", "shovel", "push", "cheer", "flag", "wave",
-#             "clipboard", "treat", "throw", "pick", "lap", "limp"
+#             "clipboard", "treat", "throw", "pick", "lap", "limp", "relief"
 #   lift      0..1 progress of eat/drink/throw/pick    look  head yaw (rad)
 const KNEE = 0.33
 const SHIN = 0.31
@@ -39,6 +39,7 @@ const FLAG_HAND = Vector3(0.40, 1.78, -0.08)
 const CLIPBOARD_HAND = Vector3(0.12, 1.02, -0.40)
 const TREAT_HAND = Vector3(0.20, 0.55, -0.50)
 const LAP_HAND = Vector3(0.24, 0.84, -0.36)
+const RELIEF_HAND = Vector3(0.10, 0.80, -0.27)
 # Elbow directions: out, down and back from the shoulder-hand line.
 const POLE_HANG = Vector3(0.45, 0.0, 1.0)
 const POLE_LIFT = Vector3(0.75, -1.0, 0.2)
@@ -176,6 +177,9 @@ static func _arms(j: Dictionary, p: Dictionary, gait: int, swing: float) -> void
 				pole = POLE_LIFT
 			"limp":
 				target = Vector3(0.52, 0.95, -0.12)
+				pole = POLE_OUT
+			"relief":
+				target = RELIEF_HAND
 				pole = POLE_OUT
 		# Targets are written for a shoulder at its usual place on an upright
 		# body; a shoulder mounted elsewhere (the medic's leaning torso) moves them along.
