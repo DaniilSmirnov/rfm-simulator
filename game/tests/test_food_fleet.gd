@@ -1,4 +1,5 @@
 extends "res://tests/harness.gd"
+const CharacterRig = preload("res://scripts/character_rig.gd")
 const Props = preload("res://scripts/props.gd")
 func _initialize() -> void:
 	call_deferred("run")
@@ -46,7 +47,7 @@ func run() -> void:
 	host.room._process(0.05)
 	var peer = host.room.peers.guest
 	check(peer.car.get_meta("model") == "Туристический кроссовер", "remote model comes from assigned room slot")
-	check(peer.skewer.visible and not peer.can.visible and peer.arm.rotation.x > 1, "friend sees lifted skewer and animated arm")
+	check(peer.skewer.visible and not peer.can.visible and CharacterRig.grip_position(peer.avatar).y > 1.2, "friend sees lifted skewer and the hand raised to the mouth")
 	check(not peer.skewer.get_node("Meat2").visible, "friend sees the same eaten pieces")
 	var peer_time = peer.eat_time
 	host.room._update_peers([{ "id": "guest", "name": "Друг", "slot": 7, "state": guest.room.local_state() }])

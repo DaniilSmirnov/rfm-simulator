@@ -148,6 +148,7 @@ static func faceted(parent: Node3D, pos: Vector3, size: Vector3, color: Color, s
 	part.position = pos
 	return part
 
+const CharacterRig = preload("res://scripts/character_rig.gd")
 const AVATAR_SCENES = [
 	preload("res://models/characters/spectator_0.glb"),
 	preload("res://models/characters/spectator_1.glb"),
@@ -161,14 +162,15 @@ static func player_avatar(variant: int = 0) -> Node3D:
 	root.name = "RallySpectator"
 	root.set_meta("model", spectator_profile(index).name)
 	root.set_meta("variant", index)
-	var arm = root.get_node("RightArm")
-	var can = cylinder(arm, Vector3(0, -0.52, -0.085), 0.075, 0.075, 0.23, Color("daa44f"), 8)
+	# Held items hang from the forearm, so they follow the hand.
+	var arm = root.get_node("RightArm/RightForearm")
+	var can = cylinder(arm, Vector3(0, -0.30, -0.085), 0.075, 0.075, 0.23, Color("daa44f"), 8)
 	can.name = "BeerCan"
 	cylinder(can, Vector3(0, 0.119, 0), 0.071, 0.071, 0.008, Color("c4cac5"), 8)
 	can.hide()
 	var food = skewer()
 	arm.add_child(food)
-	food.position = Vector3(0, -0.5, -0.09)
+	food.position = Vector3(0, -0.28, -0.09)
 	food.hide()
 	# Imported body parts carry one surface per colour: one draw call each.
 	for part in root.find_children("Geometry*", "MeshInstance3D", true, false):
@@ -733,12 +735,16 @@ static func table(parent: Node3D) -> void:
 	box(parent, Vector3(0.4, 0.94, 0), Vector3(0.45, 0.1, 0.3), Color("ede7d5"))
 	cylinder(parent, Vector3(-0.6, 1.02, 0.15), 0.1, 0.1, 0.28, Color("ae6936"))
 
+# A low camping chair: the seat height fits the characters' short legs, so a
+# seated person keeps both feet on the ground (CharacterRig seat pose).
+const CHAIR_SEAT = 0.30
+
 static func chair(parent: Node3D, pos: Vector3) -> void:
-	box(parent, pos + Vector3(0, 0.48, 0), Vector3(0.65, 0.09, 0.65), Color("cf703e"))
-	box(parent, pos + Vector3(0, 0.85, 0.3), Vector3(0.65, 0.65, 0.08), Color("cf703e"))
+	box(parent, pos + Vector3(0, CHAIR_SEAT - 0.045, 0), Vector3(0.65, 0.09, 0.65), Color("cf703e"))
+	box(parent, pos + Vector3(0, CHAIR_SEAT + 0.32, 0.3), Vector3(0.65, 0.65, 0.08), Color("cf703e"))
 	for x in [-0.27, 0.27]:
 		for z in [-0.27, 0.27]:
-			box(parent, pos + Vector3(x, 0.23, z), Vector3(0.06, 0.46, 0.06), Color("dcd7c7"))
+			box(parent, pos + Vector3(x, (CHAIR_SEAT - 0.09) / 2.0, z), Vector3(0.06, CHAIR_SEAT - 0.09, 0.06), Color("dcd7c7"))
 
 static func wood_bundle(parent: Node3D, point: Vector3 = Vector3.ZERO) -> Node3D:
 	var root = Node3D.new()
@@ -898,17 +904,15 @@ static func course_official(role: String, variant: int = 0) -> Node3D:
 			box(vest_root, Vector3(0, y, face * 0.278), Vector3(0.62, 0.045, 0.014), Color("e5ece8"))
 	label_3d(vest_root, Vector3(0, 1.27, 0.265), "MARSHAL" if role == "marshal" else "СУДЬЯ", 36, 0.0018, Color("222c31"))
 	MeshMerge.bake(vest_root, "vest:" + role)
-	for side in ["LeftArm", "RightArm"]:
-		var arm = avatar.get_node(side)
-		arm.rotation.x = 0.08
-	var right = avatar.get_node("RightArm")
+	var right = avatar.get_node("RightArm/RightForearm")
 	right.get_node("BeerCan").hide()
 	right.get_node("Skewer").hide()
 	if role == "judge":
-		var clipboard = box(right, Vector3(0, -0.47, -0.13), Vector3(0.19, 0.27, 0.025), Color("dadaca"))
+		var clipboard = box(right, Vector3(0, -0.25, -0.13), Vector3(0.19, 0.27, 0.025), Color("dadaca"))
 		clipboard.name = "TimingClipboard"
-		right.rotation.x = 0.65
+		CharacterRig.pose(avatar, {"arms": "clipboard"})
 	else:
+		CharacterRig.pose(avatar)
 		box(avatar, Vector3(-0.37, 1.28, 0.07), Vector3(0.11, 0.13, 0.06), Color("263336")).name = "Radio"
 	return avatar
 
@@ -1041,8 +1045,6 @@ static func gear_box(parent: Node3D, kind: String, point: Vector3 = Vector3.ZERO
 # sides of a box held against the belly.
 const CARRY_BOX_POSITION = Vector3(0, 0.93, -0.40)
 const CARRY_SHOVEL_POSITION = Vector3(0.20, 0.92, -0.42)
-const CARRY_ARM_LIFT = 0.80
-const CARRY_ARM_HUG = 0.08
 
 static func carried_gear(avatar: Node3D, kind: String) -> Node3D:
 	var node = gear_box(avatar, kind, CARRY_SHOVEL_POSITION if kind == "shovel" else CARRY_BOX_POSITION)
@@ -1055,19 +1057,9 @@ static func carried_gear(avatar: Node3D, kind: String) -> Node3D:
 		node.rotation.y = PI
 	return node
 
-static func pose_carry(avatar: Node3D, kind: String, carrying: bool) -> void:
-	var left = avatar.get_node("LeftArm")
-	var right = avatar.get_node("RightArm")
-	if not carrying:
-		left.rotation = Vector3.ZERO
-		return
-	if kind == "shovel":
-		right.rotation = Vector3(0.70, 0.0, 0.0)
-		left.rotation = Vector3(0.95, 0.0, -0.30)
-		return
-	# Forward (+X rotation swings a hanging arm towards -Z) and slightly inward.
-	left.rotation = Vector3(CARRY_ARM_LIFT, 0.0, CARRY_ARM_HUG)
-	right.rotation = Vector3(CARRY_ARM_LIFT, 0.0, -CARRY_ARM_HUG)
+# Arm pose for carried gear, see CharacterRig.
+static func carry_arms(kind: String) -> String:
+	return "shovel" if kind == "shovel" else "carry"
 
 static func add_player_trunk(root: Node3D, variant: int) -> Node3D:
 	var p = trunk_profile(variant)

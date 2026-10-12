@@ -1,4 +1,5 @@
 extends "res://tests/harness.gd"
+const CharacterRig = preload("res://scripts/character_rig.gd")
 func _initialize() -> void:
 	call_deferred("run")
 func run() -> void:
@@ -66,7 +67,7 @@ func run() -> void:
 		crowd.update(float(time), 0, false)
 		if person.action == "cheer":
 			cheering = true
-			check(person.arm.rotation.x > 2 and not person.can.visible and not person.food.visible, "cheer raises arms without food or beer")
+			check(CharacterRig.grip_position(person.avatar, "Left").y > 1.6 and CharacterRig.grip_position(person.avatar).y > 1.6 and not person.can.visible and not person.food.visible, "cheer raises both arms without food or beer")
 			break
 	check(cheering, "nearby moving crew triggers cheering")
 	racer.state = "stranded"

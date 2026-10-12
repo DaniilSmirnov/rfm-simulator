@@ -1,6 +1,9 @@
 extends RefCounted
 
 const FOOD_PORTIONS = 10
+# Joint pivots below the hip and the shoulder (m), see character_rig.gd.
+const KNEE = 0.33
+const ELBOW = 0.22
 const CARGO_KINDS = ["table", "chairs", "grill", "firewood", "cauldron"]
 
 static func material(color: Color) -> StandardMaterial3D:
@@ -134,22 +137,36 @@ static func player_avatar(variant: int = 0) -> Node3D:
 		root.add_child(leg)
 		leg.position = Vector3(side * 0.17, 0.65, 0)
 		cylinder(leg, Vector3(0, -0.055, 0), 0.105, 0.115, 0.22, pants, 6)
-		capsule(leg, Vector3(0, -0.32, 0), Vector3(0.18 if profile.long_pants else 0.15, 0.43, 0.19), pants if profile.long_pants else skin)
-		box(leg, Vector3(0, -0.59, -0.065), Vector3(0.20, 0.10, 0.32), Color("564933"))
-		box(leg, Vector3(0, -0.53, -0.12), Vector3(0.20, 0.065, 0.10), Color("737b75"))
-		box(leg, Vector3(0, -0.50, 0.055), Vector3(0.19, 0.11, 0.07), Color("737b75"))
+		# Thigh and shin meet at the knee pivot; the rounded ends overlap so
+		# the joint stays closed when the knee bends.
+		var leg_color = pants if profile.long_pants else skin
+		var leg_width = 0.18 if profile.long_pants else 0.15
+		capsule(leg, Vector3(0, -0.215, 0), Vector3(leg_width, 0.25, 0.19), leg_color)
+		var shin = Node3D.new()
+		shin.name = "LeftShin" if side < 0 else "RightShin"
+		leg.add_child(shin)
+		shin.position = Vector3(0, -KNEE, 0)
+		capsule(shin, Vector3(0, -0.10, 0), Vector3(leg_width * 0.96, 0.25, 0.18), leg_color)
+		box(shin, Vector3(0, -0.26, -0.065), Vector3(0.20, 0.10, 0.32), Color("564933"))
+		box(shin, Vector3(0, -0.20, -0.12), Vector3(0.20, 0.065, 0.10), Color("737b75"))
+		box(shin, Vector3(0, -0.17, 0.055), Vector3(0.19, 0.11, 0.07), Color("737b75"))
 		var arm = Node3D.new()
 		arm.name = "LeftArm" if side < 0 else "RightArm"
 		root.add_child(arm)
 		arm.position = Vector3(side * 0.34, 1.29, 0)
 		capsule(arm, Vector3(0, -0.09, 0), Vector3(0.19, 0.31, 0.20), shirt if profile.sleeves else skin)
-		capsule(arm, Vector3(0, -0.32, 0), Vector3(0.15, 0.32, 0.17), shirt if profile.hat == "beanie" else skin)
-		capsule(arm, Vector3(0, -0.49, -0.015), Vector3(0.15, 0.17, 0.12), skin)
+		# Forearm and hand turn at the elbow pivot.
+		var forearm = Node3D.new()
+		forearm.name = "LeftForearm" if side < 0 else "RightForearm"
+		arm.add_child(forearm)
+		forearm.position = Vector3(0, -ELBOW, 0)
+		capsule(forearm, Vector3(0, -0.10, 0), Vector3(0.15, 0.32, 0.17), shirt if profile.hat == "beanie" else skin)
+		capsule(forearm, Vector3(0, -0.27, -0.015), Vector3(0.15, 0.17, 0.12), skin)
 
-		# Three readable fingers and thumb, merged into the arm mesh on export.
+		# Three readable fingers and thumb, merged into the forearm mesh on export.
 		for finger in range(3):
-			capsule(arm, Vector3(-0.047 + finger * 0.047, -0.58, -0.015), Vector3(0.036, 0.10, 0.055), skin)
-		var thumb = capsule(arm, Vector3(-side * 0.086, -0.50, -0.005), Vector3(0.055, 0.11, 0.07), skin)
+			capsule(forearm, Vector3(-0.047 + finger * 0.047, -0.36, -0.015), Vector3(0.036, 0.10, 0.055), skin)
+		var thumb = capsule(forearm, Vector3(-side * 0.086, -0.28, -0.005), Vector3(0.055, 0.11, 0.07), skin)
 		thumb.rotation.z = side * 0.35
 
 	var head = Node3D.new()

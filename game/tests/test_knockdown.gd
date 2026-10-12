@@ -99,7 +99,7 @@ func run() -> void:
 	check(game.injuries.down and lying.treat == 0.0, "walking time does not count towards treatment")
 	for i in range(29):
 		game.injuries.update(0.1)
-	check(game.injuries.down and doctor.avatar.get_node("MedicalTorso").rotation.x < -0.9, "the doctor bends over the patient for the full three seconds")
+	check(game.injuries.down and doctor.avatar.get_node("MedicalTorso").rotation.x < -0.3 and doctor.avatar.get_node("RightLeg/RightShin").rotation.x < -1.2, "the doctor kneels over the patient for the full three seconds")
 	game.injuries.update(0.1)
 	check(not game.injuries.down and game.injuries.limp > 55.0, "after three seconds of treatment the player stands up and limps")
 	check(van.state == "parked" and doctor.state == "returning", "the ambulance waits for its doctor to return")
@@ -138,8 +138,8 @@ func run() -> void:
 	game.injuries.update(0.0)
 	game.stage.officials.update(game, 0.1, false)
 	var others = game.stage.officials.people.filter(func(p): return p.id != marshal.id)
-	check(not others.is_empty() and others.all(func(p): return p.action == "flag" and p.avatar.get_node("RightArm/RedFlag").visible), "standing marshals wave red flags")
-	check(not marshal.avatar.get_node("RightArm/RedFlag").visible, "the knocked-down marshal shows no flag")
+	check(not others.is_empty() and others.all(func(p): return p.action == "flag" and p.avatar.get_node("RightArm/RightForearm/RedFlag").visible), "standing marshals wave red flags")
+	check(not marshal.avatar.get_node("RightArm/RightForearm/RedFlag").visible, "the knocked-down marshal shows no flag")
 
 	# A crew ramming the player's car damages it; nobody dies.
 	game.injuries.records.clear()

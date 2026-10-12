@@ -19,7 +19,7 @@ func run() -> void:
 		for person in officials.judges + officials.marshals:
 			check(person.get_node_or_null("SafetyVest") != null, "official wears visible high-visibility vest")
 			check(stage.road_distance(person.position) > 5.3, "official stands clear of racing line")
-			check(person.get_node("RightArm/BeerCan").visible == false and person.get_node("RightArm/Skewer").visible == false, "officials carry no picnic food or beer")
+			check(person.get_node("RightArm/RightForearm/BeerCan").visible == false and person.get_node("RightArm/RightForearm/Skewer").visible == false, "officials carry no picnic food or beer")
 			check(absf(person.position.y - stage.ground(person.position)) < 0.01, "official stands on terrain")
 			if stage.provence:
 				check(stage.solids.hit(person.position, person.position, 0.35, false).is_empty(), "village official stands outside buildings")

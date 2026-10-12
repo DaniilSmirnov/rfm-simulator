@@ -1,4 +1,5 @@
 extends "res://tests/harness.gd"
+const CharacterRig = preload("res://scripts/character_rig.gd")
 # «Виноградники · провансальская деревня»: route, road sections, the village,
 # the countryside patchwork, village life and collectible grapes and figs.
 const Stage = preload("res://scripts/stage.gd")
@@ -133,7 +134,7 @@ func run() -> void:
 	walker.pause = 0.0
 	var parked = walker.node.position
 	stage.update_life(0.1, parked)
-	check(walker.node.position.distance_to(parked) < 0.001 and walker.node.get_node("RightArm").rotation.x > 2.0, "villagers stop and wave as a rally car passes")
+	check(walker.node.position.distance_to(parked) < 0.001 and CharacterRig.grip_position(walker.node).y > 1.6, "villagers stop and wave as a rally car passes")
 	racer.node.position = Vector3(1000, 0, 1000)
 	var villager_key = "villager:%d" % walker.id
 	check(game.injuries.vehicle_sweep(parked + Vector3(0, 0, 3), parked - Vector3(0, 0, 3), Vector3(0, 0, -12), game.injuries.CREW_SPEED), "a rally car can knock down a village resident")

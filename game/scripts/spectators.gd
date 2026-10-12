@@ -2,6 +2,7 @@ extends Node3D
 # Fixed camps and a shared timeline make NPCs identical for late-joining clients.
 const Navigation = preload("res://scripts/crowd_navigation.gd")
 const Props = preload("res://scripts/props.gd")
+const CharacterRig = preload("res://scripts/character_rig.gd")
 var game: Node3D
 var groups: Array[Dictionary] = []
 var people: Array[Dictionary] = []
@@ -73,7 +74,7 @@ func _add_group(center: Vector3, s: float, id: int, count: int) -> void:
 		Props.chair(chair, Vector3.ZERO)
 		chair.position = grounded(avatar.position + forward * 0.85)
 		chair.rotation.y = avatar.rotation.y
-		var arm = avatar.get_node("RightArm")
+		var arm = CharacterRig.hand(avatar)
 		people.append({"id": id * 2 + j, "group": group_index, "avatar": avatar, "arm": arm, "can": arm.get_node("BeerCan"), "food": arm.get_node("Skewer"), "action": "idle", "time": -1.0, "eat_cycle": -1, "home": avatar.position, "watch": watch_spot(s + j * 2.0, avatar.position), "helper": -1})
 
 func activity(id: int, time: float) -> Dictionary:
@@ -157,29 +158,17 @@ func update(world_time: float, delta: float, guest: bool) -> void:
 
 		person.can.visible = action == "beer"
 		person.food.visible = action == "eat"
-		person.arm.rotation = Vector3.ZERO
+		var lift = 0.0
 		if action == "eat":
-			var lift = Props.food_lift(pose.time)
-			person.arm.rotation.x = lerpf(0.25, 2.3, lift)
-			person.arm.rotation.z = -0.45 * lift
+			lift = Props.food_lift(pose.time)
 			person.food.rotation.x = -lift
 			Props.pose_skewer(person.food, pose.time)
 		elif action == "beer":
-			var lift = smoothstep(0.8, 1.25, pose.time) * (1.0 - smoothstep(2.5, 3.3, pose.time))
-			person.arm.rotation.x = lerpf(0.5, 1.6, lift)
+			lift = smoothstep(0.8, 1.25, pose.time) * (1.0 - smoothstep(2.5, 3.3, pose.time))
 			person.can.rotation.x = 0.35 * lift
 		var moving: bool = person.avatar.position.distance_to(previous_position) > 0.001
-		for leg_name in ["LeftLeg", "RightLeg"]:
-			person.avatar.get_node(leg_name).rotation.x = sin(clock * 8 + person.id) * 0.4 * (-1 if leg_name == "LeftLeg" else 1) if moving else 0.0
-		var left_arm = person.avatar.get_node("LeftArm")
-		left_arm.rotation = Vector3.ZERO
-		if action == "cheer":
-			person.arm.rotation = Vector3(2.5, 0, -0.5 + sin(clock * 8 + person.id) * 0.28)
-			left_arm.rotation = Vector3(2.5, 0, 0.5 + sin(clock * 8 + person.id + 1) * 0.28)
-		elif action == "push":
-			person.arm.rotation.x = PI / 2
-			left_arm.rotation.x = PI / 2
-		person.avatar.get_node("Head").rotation.y = sin(clock * 0.35 + person.id) * 0.08
+		var arms = {"eat": "eat", "beer": "drink", "cheer": "cheer", "push": "push"}.get(action, "")
+		CharacterRig.pose(person.avatar, {"gait": 1 if moving else 0, "time": clock, "seed": float(person.id), "arms": arms, "lift": lift, "wave": clock + person.id, "look": sin(clock * 0.35 + person.id) * 0.08})
 
 
 func nearby_table(spot: Vector3, max_distance: float = 4.5) -> int:

@@ -26,10 +26,10 @@ func run() -> void:
 		avatar.rotation.y = PI
 		if i == 1:
 			avatar.get_node("RightArm").rotation.x = 1.2
-			avatar.get_node("RightArm/BeerCan").show()
+			avatar.get_node("RightArm/RightForearm/BeerCan").show()
 		if i == 2:
 			avatar.get_node("RightArm").rotation.x = 1.0
-			avatar.get_node("RightArm/Skewer").show()
+			avatar.get_node("RightArm/RightForearm/Skewer").show()
 	var camera = Camera3D.new()
 	world.add_child(camera)
 	camera.position = Vector3(0.3, 2.3, 8)
