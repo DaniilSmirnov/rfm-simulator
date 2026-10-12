@@ -1,6 +1,6 @@
 {
-  "comment": "Rally fleet in variant order: the index is the racer `variant` sent in room snapshots, so new cars are appended, never inserted. Each record is a car_body.gd profile (proportions and details, field list there) plus a livery read by rally_car_model.gd: body/accent colours, number, sponsor, livery (stripes | band | split | sash | hoops), taxi, number_color. All cars are original, unbranded silhouettes; club liveries are fictional. spawn_order is the order crews start in; zero_cars are the three safety cars ahead of the field. course.police is the course police car body.",
-  "defaults": {
+  "comment": "Rally fleet in variant order: the index is the racer `variant` sent in room snapshots, so new cars are appended, never inserted. Each record is a car_body.gd profile (proportions and details, field list there) plus a livery read by rally_car_model.gd: body/accent colours, number, sponsor, livery (stripes | band | split | sash | hoops), taxi, number_color. All cars are original, unbranded silhouettes; club liveries are fictional. spawn_order is the order crews start in; zero_cars are the three safety cars ahead of the field. course.police is the course police car body. zero_to_100 (s) is the launch of a car (rally crews and zero cars 2 s); the top speed is shared with every car (CarRegistry.TOP_SPEED).",
+  "defaults": {"zero_to_100": 2.0, 
     "length": 4.12, "width": 1.68, "height": 1.42, "bonnet_rise": 0.30, "deck_rise": 0.0, "suv": false,
     "shape": [-0.75, -0.55, 0.62, 0.95, 0.68, 0.70], "pillar": 0.05, "doors": 4,
     "lights": "square", "lamp_tilt": 0.0, "tail": "block", "grille": 0.9, "grille_style": "mesh", "lower_grille": 0.0,
@@ -50,10 +50,10 @@
      "wheel": {"style": "spokes", "count": 7, "color": "e9e9e2", "detail": "1d2125", "rim": 0.72}}
   ],
   "course": {
-    "ambulance": {"color": "f4f4ee", "length": 5.1, "width": 1.92, "height": 2.25, "bonnet_rise": 0.36, "shape": [-1.7, -1.32, 2.3, 2.45, 0.85, 0.95],
+    "ambulance": {"zero_to_100": 9.0, "color": "f4f4ee", "length": 5.1, "width": 1.92, "height": 2.25, "bonnet_rise": 0.36, "shape": [-1.7, -1.32, 2.3, 2.45, 0.85, 0.95],
       "pillar": -0.55, "doors": 2, "lights": "square", "grille": 0.8, "grille_style": "mesh", "trim": "c9ccc6", "tail": "block", "wheel_radius": 0.38,
       "wheel": {"style": "steel", "count": 6, "color": "d6d9d4", "detail": "30383b"}},
-    "police": {"color": "f0f2ee", "length": 4.14, "width": 1.68, "height": 1.45, "shape": [-0.76, -0.55, 0.64, 0.98, 0.68, 0.70], "lights": "square",
+    "police": {"zero_to_100": 6.0, "color": "f0f2ee", "length": 4.14, "width": 1.68, "height": 1.45, "shape": [-0.76, -0.55, 0.64, 0.98, 0.68, 0.70], "lights": "square",
       "grille": 0.9, "grille_style": "mesh", "trim": "383a35", "wheel": {"style": "hubcap", "count": 8, "color": "ddd7c3", "detail": "596266"}}
   }
 }

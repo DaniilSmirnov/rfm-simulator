@@ -6,7 +6,10 @@ const Tracks = preload("res://scripts/rally_tracks.gd")
 const Bank = preload("res://scripts/rally_track_bank.gd")
 const DT = 1.0 / 120.0
 const SAMPLE_COUNT = 841
-const TOP_SPEED = 140.0 / 3.6
+const CarRegistry = preload("res://scripts/car_registry.gd")
+# Crews share the top speed of every car and reach 100 km/h in 2 s.
+const TOP_SPEED = CarRegistry.TOP_SPEED
+const LAUNCH_SECONDS = 2.0
 # Pace, corner-cutting, response distance, lateral inertia, road-line bias.
 const PROFILES = [Vector4(0.94, 0.5, 7.0, 0.55), Vector4(1.0, 0.9, 10.0, 0.85), Vector4(0.97, 1.1, 17.0, 0.95), Vector4(0.96, 1.5, 13.0, 0.8), Vector4(0.98, 0.7, 11.0, 1.2)]
 
@@ -58,7 +61,8 @@ func generate(frames: Array[Dictionary], profile: int) -> PackedFloat32Array:
 		line = clampf(line, -margin, margin)
 		var target_slip = clampf(atan2(lateral_speed, maxf(speed, 2.0)) + demand * 0.012 * spec.w / frame.grip, -0.38, 0.38)
 		slip = lerpf(slip, target_slip, 1.0 - exp(-DT * 4.0))
-		speed = move_toward(speed, limits[mini(int(progress), SAMPLE_COUNT-1)] * clampf(1.0-absf(slip)*0.2, 0.8, 1.0), DT * (16.0 if speed > limits[mini(int(progress), SAMPLE_COUNT-1)] else 7.0))
+		var limit: float = limits[mini(int(progress), SAMPLE_COUNT-1)]
+		speed = move_toward(speed, limit * clampf(1.0-absf(slip)*0.2, 0.8, 1.0), DT * (16.0 if speed > limit else CarRegistry.pull(CarRegistry.launch(LAUNCH_SECONDS), speed)))
 		progress += speed * DT / maxf(frame.metric, 0.2)
 		var value = Vector4(line, speed, slip, frame.metric)
 		while next_sample <= progress and next_sample < SAMPLE_COUNT:

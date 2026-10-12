@@ -5,6 +5,7 @@ extends RefCounted
 # subsystems and tests read it.
 const DeepSnowRules = preload("res://scripts/deep_snow.gd")
 const Motion = preload("res://scripts/vehicle_motion.gd")
+const CarRegistry = preload("res://scripts/car_registry.gd")
 const Stage = preload("res://scripts/stage.gd")
 
 var game:
@@ -30,7 +31,7 @@ func drive(delta: float) -> void:
 		var throttle = Input.get_axis("back", "forward")
 		var steer = Input.get_axis("left", "right")
 		var offroad = game.stage.road_distance(game.car.position) > 4.1
-		var max_speed = 7.0 if offroad else 19.0
+		var max_speed = CarRegistry.OFFROAD_SPEED if offroad else CarRegistry.TOP_SPEED
 		var braking = Input.is_action_pressed("brake")
 		var previous_heading = game.heading
 		game.heading = game.vehicle_motion.handling.advance(game.vehicle_motion, game.heading, throttle, steer, braking, game.stage.grip(game.car.position), max_speed, game.selected_car, dt)

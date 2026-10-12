@@ -43,6 +43,7 @@ static func build(variant: int, number_override: int = -1, sponsor_override: Str
 	root.set_meta("model", p.name)
 	root.set_meta("variant", variant)
 	root.set_meta("number", p.number)
+	root.set_meta("zero_to_100", float(p.zero_to_100))
 	var f = CarBody.build(root, p)
 	for side in [-1.0, 1.0]:
 		_doors(root, p, f, side)
@@ -57,6 +58,7 @@ static func ambulance() -> Node3D:
 	var p: Dictionary = spec.get("course", {}).get("ambulance", models[0])
 	var root = Node3D.new()
 	root.name = "Ambulance"
+	root.set_meta("zero_to_100", float(p.get("zero_to_100", 9.0)))
 	var f = CarBody.build(root, p)
 	var white = Color(p.color)
 	var red = Color("cf2a2a")
@@ -92,6 +94,7 @@ static func police() -> Node3D:
 	var p: Dictionary = spec.get("course", {}).get("police", models[0])
 	var root = Node3D.new()
 	root.name = "Police"
+	root.set_meta("zero_to_100", float(p.get("zero_to_100", 6.0)))
 	var f = CarBody.build(root, p)
 	var stripe_y: float = (f.base + f.bonnet) * 0.5
 	for side in [-1.0, 1.0]:

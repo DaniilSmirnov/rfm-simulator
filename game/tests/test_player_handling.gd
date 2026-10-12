@@ -1,6 +1,7 @@
 extends "res://tests/harness.gd"
 const Motion = preload("res://scripts/vehicle_motion.gd")
 const Handling = preload("res://scripts/player_handling.gd")
+const CarRegistry = preload("res://scripts/car_registry.gd")
 func _initialize() -> void:
 	call_deferred("run")
 func stopping(grip: float) -> float:
@@ -30,7 +31,7 @@ func run() -> void:
 	check(caught.slip < snow.slip, "countersteering reduces slide compared with releasing the wheel")
 	var motion = Motion.new()
 	var yaw = 0.0
-	for step in range(120):
+	for step in range(240):
 		yaw = motion.handling.advance(motion, yaw, 1, 0, false, 1, 19, 0, Handling.STEP)
 	check(motion.velocity.z < -3 and absf(yaw) < 0.001, "straight acceleration does not create spontaneous yaw")
 	for step in range(240):
@@ -53,6 +54,35 @@ func run() -> void:
 			yaw = motion.handling.advance(motion, yaw, throttle, steer, step > 1800, 0.22, 19, variant, Handling.STEP)
 			stable = stable and motion.velocity.is_finite() and is_finite(yaw) and motion.velocity.length() < 25
 	check(stable, "all ten profiles remain finite and bounded through slippery acceleration, slalom and braking")
+	# One speed range for all cars; each reaches 100 km/h in its own time.
+	var launch_ok = true
+	var top_ok = true
+	var report = []
+	for variant in range(CarRegistry.count()):
+		motion = Motion.new()
+		var hundred = INF
+		var top = 0.0
+		for step in range(int(90.0 / Handling.STEP)):
+			motion.handling.advance(motion, 0, 1, 0, false, 1.0, CarRegistry.TOP_SPEED, variant, Handling.STEP)
+			top = maxf(top, motion.velocity.length())
+			if hundred == INF and motion.velocity.length() >= 100.0 / 3.6:
+				hundred = (step + 1) * Handling.STEP
+		var spec = float(CarRegistry.car(variant).handling.zero_to_100)
+		report.append("%s %.1f/%.1f s, %d km/h" % [CarRegistry.car(variant).name, hundred, spec, int(top * 3.6)])
+		launch_ok = launch_ok and absf(hundred - spec) <= spec * 0.1
+		top_ok = top_ok and top * 3.6 > 200.0 and top <= CarRegistry.TOP_SPEED + 0.01
+	print("\n".join(report))
+	check(launch_ok, "every player car reaches 100 km/h in its own zero_to_100 time")
+	check(top_ok, "every player car tops out at the shared 220 km/h")
+	motion = Motion.new()
+	motion.velocity = Vector3(0, 0, -40)
+	for step in range(240):
+		motion.handling.advance(motion, 0, 1, 0, false, 1.0, CarRegistry.OFFROAD_SPEED, 0, Handling.STEP)
+	check(motion.velocity.length() < 25, "full throttle off the road still rolls down to the off-road limit")
+	motion = Motion.new()
+	for step in range(1200):
+		motion.handling.advance(motion, 0, -1, 0, false, 1.0, CarRegistry.TOP_SPEED, 9, Handling.STEP)
+	check(motion.velocity.length() <= CarRegistry.REVERSE_SPEED + 1.0, "reverse stays slow")
 	var game = load("res://main.tscn").instantiate()
 	root.add_child(game)
 	await process_frame
