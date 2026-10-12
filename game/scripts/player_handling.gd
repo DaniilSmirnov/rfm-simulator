@@ -14,7 +14,7 @@ const CarRegistry = preload("res://scripts/car_registry.gd")
 # values live with each car in res://data/cars.json.
 static func profile(variant: int) -> Dictionary:
 	var handling: Dictionary = CarRegistry.car(variant).handling
-	return {"rear_bias": CarRegistry.rear_bias(variant), "wheelbase": float(handling.wheelbase), "acceleration": float(handling.acceleration), "inertia": float(handling.inertia)}
+	return {"rear_bias": CarRegistry.rear_bias(variant), "wheelbase": float(handling.wheelbase), "launch": CarRegistry.launch(float(handling.zero_to_100)), "inertia": float(handling.inertia)}
 
 func advance(motion, heading: float, throttle: float, steer: float, brake: bool, grip: float, max_speed: float, variant: int, dt: float) -> float:
 	var spec = profile(variant)
@@ -23,17 +23,29 @@ func advance(motion, heading: float, throttle: float, steer: float, brake: bool,
 	var longitudinal: float = motion.velocity.dot(forward)
 	var lateral: float = motion.velocity.dot(right)
 	var magnitude = absf(longitudinal)
-	var target_steering = clampf(steer, -1, 1) * lerpf(0.48, 0.22, clampf(magnitude / 20, 0, 1))
+	# Steering lock narrows with speed; above 72 km/h it keeps narrowing so a
+	# car near the 220 km/h top speed stays drivable on a keyboard.
+	var target_steering = clampf(steer, -1, 1) * lerpf(0.48, 0.22, clampf(magnitude / 20, 0, 1)) * lerpf(1.0, 0.5, clampf((magnitude - 20) / 40, 0, 1))
 	steering = move_toward(steering, target_steering, dt * 1.8)
 	var adhesion = maxf(0.05, grip) * 12.0 if motion.grounded else 0.0
-	var drive: float = throttle * float(spec.acceleration)
+	# Forward throttle follows the car's launch curve, which already includes
+	# drag and levels off at the shared top speed; partial throttle settles
+	# lower. Coasting, reversing and running over a limit (off road) roll out.
+	var launch: float = spec.launch
+	var drive: float = throttle * launch
+	var pulling = throttle > 0 and longitudinal > -0.2
+	if pulling:
+		drive = launch * throttle - (launch - CarRegistry.pull(launch, magnitude))
 	# Opposite pedal brakes first; reverse engages only after slowing down.
 	if throttle * longitudinal < -0.2:
 		drive = throttle * 10.0
-	var limit = max_speed if throttle >= 0 else max_speed * 0.4
-	if throttle * longitudinal > 0 and magnitude > limit:
+	var limit = minf(max_speed, CarRegistry.TOP_SPEED) if throttle >= 0 else minf(max_speed, CarRegistry.REVERSE_SPEED)
+	var over = throttle * longitudinal > 0 and magnitude > limit
+	if over:
 		drive *= clampf((limit + 1.0 - magnitude), 0, 1)
-	var resistance = (0.65 + magnitude * magnitude * 0.008) * signf(longitudinal)
+	# Over a limit (off the road at speed) the rough ground scrubs speed fast.
+	var drag = 0.008 if magnitude > max_speed else 0.002
+	var resistance = 0.0 if pulling and not over else (0.65 + magnitude * magnitude * drag) * signf(longitudinal)
 	if brake:
 		drive = -signf(longitudinal) * 16.0
 	var transfer = clampf(-longitudinal_accel * 0.014, -0.12, 0.16)

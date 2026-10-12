@@ -4,6 +4,17 @@ extends RefCounted
 # of a car in the list is its content id (`variant`) in saves, rooms and the
 # store catalog, so new cars are appended, never inserted.
 const PATH = "res://data/cars.json"
+# One speed range for every car in the game (player cars, rally crews, zero
+# cars): the top speed is shared, cars differ only in how fast they reach it.
+# A car's `zero_to_100` (s) sets its launch: full throttle accelerates at
+# launch * (1 - (v / TOP_SPEED)^3), so it pulls hard at first and levels off
+# at the top speed.
+const TOP_SPEED = 220.0 / 3.6
+const OFFROAD_SPEED = 7.0
+const REVERSE_SPEED = 7.6
+# ∫ dv / (1 - (v / TOP_SPEED)^3) from 0 to 100 km/h: seconds to 100 km/h at a
+# launch of 1 m/s².
+const LAUNCH_INTEGRAL = 28.4675
 static var spec: Dictionary = _load()
 static var cars: Array = _merge()
 
@@ -31,6 +42,15 @@ static func merge_records(defaults: Dictionary, records: Array) -> Array:
 				merged[key] = car[key]
 		result.append(merged)
 	return result
+
+# Launch acceleration (m/s²) of a car that reaches 100 km/h in `seconds`.
+static func launch(seconds: float) -> float:
+	return LAUNCH_INTEGRAL / maxf(seconds, 0.5)
+
+# Full-throttle acceleration (m/s²) at `speed` (m/s), zero at the top speed.
+static func pull(launch_accel: float, speed: float) -> float:
+	var ratio = clampf(absf(speed) / TOP_SPEED, 0.0, 1.0)
+	return launch_accel * (1.0 - ratio * ratio * ratio)
 
 static func count() -> int:
 	return cars.size()
