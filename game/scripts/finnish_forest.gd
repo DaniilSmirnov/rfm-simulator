@@ -442,7 +442,9 @@ func _build_sauna() -> void:
 	for sign in [-1.0, 1.0]:
 		var slab = Props.box(hut, Vector3(sign * 1.1, 2.95, 0), Vector3(2.5, 0.14, 4.0), Color("3f3a36"))
 		slab.rotation.z = -sign * 0.42
-	Props.box(hut, Vector3(0, 1.2, 1.72), Vector3(0.8, 1.7, 0.06), Color("4a3524"))
+	# The door sits proud of the log ends (they reach 1.75 m), so the two
+	# faces never share a plane and flicker.
+	Props.box(hut, Vector3(0, 1.2, 1.80), Vector3(0.8, 1.7, 0.06), Color("4a3524"))
 	Props.cylinder(hut, Vector3(1.0, 3.5, -0.8), 0.14, 0.14, 1.3, Color("2f2f2f"), 6)
 	stage.rocks.append(Records.rock(sauna, 2.5, 3.2, Records.BUILDING))
 	# Jetty: deck planks on posts standing in the lake.

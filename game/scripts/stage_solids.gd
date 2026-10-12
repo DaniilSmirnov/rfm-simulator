@@ -193,6 +193,7 @@ func knock_lamp(index_value: int, direction: Vector3) -> bool:
 		return false
 	lamps[index_value].fallen = true
 	var body: RigidBody3D = lamps[index_value].body
+	_ground_under(lamps[index_value], body.position)
 	body.freeze = false
 	body.sleeping = false
 	var dir = Vector3(direction.x, 0, direction.z).normalized()
@@ -200,6 +201,33 @@ func knock_lamp(index_value: int, direction: Vector3) -> bool:
 		dir = Vector3.RIGHT
 	body.apply_impulse(dir * 160 + Vector3(0, 25, 0), Vector3(0, 1.6, 0))
 	return true
+
+# The stage has no physical terrain: a knocked post gets a patch of ground
+# around it to fall onto and lie on (as knocked-down people do).
+const GROUND_PATCH = 13
+
+func _ground_under(lamp_state: Dictionary, at: Vector3) -> void:
+	if lamp_state.has("ground"):
+		return
+	var origin = Vector3(roundf(at.x), 0, roundf(at.z))
+	var half = (GROUND_PATCH - 1) / 2
+	var heights = PackedFloat32Array()
+	for z in range(GROUND_PATCH):
+		for x in range(GROUND_PATCH):
+			var point = origin + Vector3(x - half, 0, z - half)
+			heights.append(walking_floor(point, stage.ground(point) + 0.3) if not walk_surfaces.is_empty() else stage.ground(point))
+	var shape = HeightMapShape3D.new()
+	shape.map_width = GROUND_PATCH
+	shape.map_depth = GROUND_PATCH
+	shape.map_data = heights
+	var patch = StaticBody3D.new()
+	patch.name = "FallenLampGround"
+	var collider = CollisionShape3D.new()
+	collider.shape = shape
+	patch.add_child(collider)
+	stage.add_child(patch)
+	patch.global_position = origin
+	lamp_state.ground = patch
 
 func _physics_process(delta: float) -> void:
 	if lamps.is_empty():

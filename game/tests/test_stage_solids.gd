@@ -74,6 +74,10 @@ func run() -> void:
 	for i in range(30):
 		await physics_frame
 	check(lamp.body.position.distance_to(before) > 0.1 and lamp.body.rotation.length() > 0.01, "struck lamp moves and tips under real physics")
+	for i in range(240):
+		await physics_frame
+	var lying: Vector3 = lamp.body.global_position
+	check(lying.y > stage.ground(lying) - 0.5 and lying.y < stage.ground(lying) + 1.0 and absf(lamp.body.global_basis.y.y) < 0.5, "the knocked post falls onto the ground and lies there (%.2f m over the ground)" % (lying.y - stage.ground(lying)))
 	game.paused = true
 	await physics_frame
 	await physics_frame

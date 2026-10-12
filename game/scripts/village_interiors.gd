@@ -50,6 +50,21 @@ static func door_wall(arch, root: Node3D, z: float, width: float, height: float,
 	for sign_value in [-1.0, 1.0]:
 		block(arch, root, Vector3(sign_value * 1.35, 1.4, z - 0.6), Vector3(0.12, 2.8, 1.2), WOOD)
 
+# The church faces the street; its nave settles to the street level in front
+# of the tower door, so the forecourt meets the pavement without a step.
+static func church_pose(arch) -> Transform3D:
+	var village = arch.village
+	var side: Vector3 = village.side(arch.Layout.CHURCH.s)
+	var p: Vector3 = arch.grounded(village.anchor(arch.Layout.CHURCH.s, arch.Layout.CHURCH.lateral))
+	p.y = minf(p.y, arch.stage.ground(p - side * 16.0))
+	return Transform3D(Basis(Vector3.UP, atan2(side.x, side.z)), p)
+
+# Claimed before the house rows: no house inside the nave, tower or forecourt.
+static func reserve_church(arch) -> void:
+	var pose = church_pose(arch)
+	arch.reserve(pose * Vector3(0, 0, -1.0), pose.basis.get_euler().y, Vector2(6.4, 13.4))
+	arch.reserve(pose * Vector3(0, 0, -17.0), pose.basis.get_euler().y, Vector2(5.0, 3.5))
+
 static func church(arch, root: Node3D) -> void:
 	root.set_meta("accessible", true)
 	var footprint = root.transform * Transform3D(Basis.IDENTITY, Vector3(0, 0, -2))
