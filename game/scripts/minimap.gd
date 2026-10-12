@@ -19,6 +19,13 @@ func _draw() -> void:
 		draw_texture(water, Vector2.ZERO)
 	for i in range(game.stage.points.size() - 1):
 		draw_line(project(game.stage.points[i]), project(game.stage.points[i + 1]), Color("c4b48d"), 3, true)
+	var parks = game.stage.parks
+	for index in range(parks.ends.size()):
+		var corners = PackedVector2Array()
+		for corner in [Vector2(-parks.HALF_WIDTH, parks.LANE), Vector2(parks.HALF_WIDTH, parks.LANE), Vector2(parks.HALF_WIDTH, parks.LANE + parks.DEPTH), Vector2(-parks.HALF_WIDTH, parks.LANE + parks.DEPTH)]:
+			corners.append(project(parks.world(index, corner.x, corner.y)))
+		draw_colored_polygon(corners, Color("c4b48d"))
+		draw_line(project(parks.world(index, 0, 0)), project(parks.world(index, 0, parks.LANE)), Color("c4b48d"), 3, true)
 	if game.camp != null:
 		draw_circle(project(game.camp.position), 5, Color("efc66b"))
 	for racer in game.racers:
@@ -42,10 +49,15 @@ func player_marker_position() -> Vector2:
 func player_direction() -> Vector2:
 	var yaw = game.heading if game.in_car else game.view_yaw
 	# Godot forward is -Z; map Y increases with world Z. Respect both map scales.
-	return Vector2(-sin(yaw) * 0.6, -cos(yaw) * (size.y - 26) / RallyStage.LENGTH).normalized()
+	return Vector2(-sin(yaw) * 0.6, -cos(yaw) * (size.y - 26) / _span()).normalized()
+
+# The stage and its two service parks fill the map from top to bottom.
+func _span() -> float:
+	var limits: Vector2 = game.stage.parks.z_limits
+	return maxf(1.0, limits.y - limits.x)
 
 func project(p: Vector3) -> Vector2:
-	return Vector2(size.x * 0.5 + p.x * 0.6, size.y - 12 + p.z / RallyStage.LENGTH * (size.y - 26))
+	return Vector2(size.x * 0.5 + p.x * 0.6, size.y - 12 - (game.stage.parks.z_limits.y - p.z) / _span() * (size.y - 26))
 
 func _water_texture() -> ImageTexture:
 	var water = game.stage.water

@@ -42,7 +42,14 @@ static func competition_target(stage: Node3D, progress: float, pace: float = 1.0
 	geometry_target = minf(geometry_target, lerpf(MIN_CORNER_TARGET, 7.0, smoothstep(0.7, 1.3, worst_corner))) if worst_corner > 0.7 else geometry_target
 	return clampf(geometry_target * pace, 0.0, MAX_COMPETITION_SPEED)
 
+# After the flying finish crews slow down to roll into the service park.
+const PARK_ENTRY_SPEED = 8.0
+const PARK_BRAKE = 5.0
+
 static func speed_limit(game: Node3D, racer: Dictionary, s: float) -> float:
+	return minf(_speed_limit(game, racer, s), sqrt(PARK_ENTRY_SPEED * PARK_ENTRY_SPEED + 2.0 * PARK_BRAKE * maxf(0.0, game.stage.LENGTH - s)))
+
+static func _speed_limit(game: Node3D, racer: Dictionary, s: float) -> float:
 	var role = str(racer.get("role", "racer"))
 	if role in ["racer", "zero"]:
 		var reference = Tracks.sample(racer.get("track_parts", PackedInt32Array()), s, game.course.pass_index == 2, role == "zero")

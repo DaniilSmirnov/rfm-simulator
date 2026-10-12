@@ -60,8 +60,9 @@ func solid(parent: Node3D, local: Vector3, radius: float, height: float) -> void
 
 func build() -> void:
 	name = "CourseOfficials"
-	arch(4.0, "Rally Fans Map", false)
-	arch(stage.LENGTH - 8.0, "Rally Fans Map", true)
+	# Crews wait under the arch before their start, right at the end of the road.
+	arch(1.0, "Rally Fans Map", false)
+	arch(stage.LENGTH - 1.0, "Rally Fans Map", true)
 	station(24.0, 1.0, "Старт")
 	station(stage.LENGTH - 30.0, -1.0, "Финиш")
 	var positions: Array = stage.biome.marshal_stations()

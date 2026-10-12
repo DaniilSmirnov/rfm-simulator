@@ -39,7 +39,8 @@ func drive(fps: int, reverse: bool = false) -> Dictionary:
 		var speed: float = r.drive_speed
 		game._update_racers(1.0 / fps)
 		if r.state != "racing":
-			print("DEPARTURE s=", r.s, " slide=", r.slide)
+			if r.state != "to_park":
+				print("DEPARTURE s=", r.s, " slide=", r.slide)
 			break
 		smooth = smooth and absf(wrapf(r.node.rotation.y - yaw, -PI, PI)) <= 2.5 / fps + 0.001 and absf(r.drive_speed - speed) <= 18.0 / fps + 0.001
 		var movement: Vector3 = r.node.position - before
@@ -51,7 +52,8 @@ func drive(fps: int, reverse: bool = false) -> Dictionary:
 		slide = maxf(slide, maxf(absf(r.slide), absf(float(r.get("track_reference", {}).get("yaw", 0.0)))))
 	check(smooth, "heading and acceleration are bounded at %d FPS" % fps)
 	check(measured, "world-space speed matches intended speed at %d FPS" % fps)
-	check(r.state == "racing" and r.s > 400, "crew negotiates village junctions at %d FPS" % fps)
+	# A crew that gets to the end drives on into the service park.
+	check(r.state in ["racing", "to_park"] and r.s > 400, "crew negotiates village junctions at %d FPS" % fps)
 	check(slide > 0.02, "lateral slide remains active at %d FPS" % fps)
 	var result = {"pos": r.node.position, "s": r.s}
 	game.stage.free()

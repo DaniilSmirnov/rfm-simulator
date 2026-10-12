@@ -17,12 +17,12 @@ func run() -> void:
 				continue
 			if stage.terrain_tile_step(x, z - 4) == 4.0 or stage.terrain_tile_step(x, z + 4) == 4.0:
 				var edge_z: float = z if stage.terrain_tile_step(x, z - 4) == 4.0 else z + 4.0
-				var expected = (stage.ground(Vector3(x, 0, edge_z)) + stage.ground(Vector3(x + 4, 0, edge_z))) * 0.5 - 0.25
+				var expected = (stage.terrain_vertex_height(x, edge_z) + stage.terrain_vertex_height(x + 4, edge_z)) * 0.5
 				check(absf(stage.terrain_vertex_height(x + 2, edge_z) - expected) < 0.0001, "fine/coarse X-edge midpoint matches coarse triangle")
 				mixed_boundaries += 1
 			if stage.terrain_tile_step(x - 4, z) == 4.0 or stage.terrain_tile_step(x + 4, z) == 4.0:
 				var edge_x: float = x if stage.terrain_tile_step(x - 4, z) == 4.0 else x + 4.0
-				var expected = (stage.ground(Vector3(edge_x, 0, z)) + stage.ground(Vector3(edge_x, 0, z + 4))) * 0.5 - 0.25
+				var expected = (stage.terrain_vertex_height(edge_x, z) + stage.terrain_vertex_height(edge_x, z + 4)) * 0.5
 				check(absf(stage.terrain_vertex_height(edge_x, z + 2) - expected) < 0.0001, "fine/coarse Z-edge midpoint matches coarse triangle")
 				mixed_boundaries += 1
 			if samples < 25:

@@ -322,6 +322,7 @@ func _render_guest_world(delta: float) -> void:
 			racer.node.position = pose.position
 			racer.node.rotation = pose.rotation
 	game.crews.draw_recovery_ropes()
+	game.park_traffic.render_guest(server_clock(), world_paused or game.dead or game.finished)
 	if nearest != null:
 		game.rally_audio.position = nearest.position
 		game.rally_audio.pitch_scale = 1.8

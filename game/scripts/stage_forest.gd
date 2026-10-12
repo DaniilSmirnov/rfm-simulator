@@ -31,7 +31,7 @@ func plant_forest(cooperative: bool = false) -> void:
 		if cooperative and i % 400 == 0:
 			await stage.get_tree().process_frame
 		var p = Vector3(stage.rng.randf_range(-150, 150), 0, stage.rng.randf_range(-stage.LENGTH - 65, 50))
-		if stage.road_distance(p) < 9:
+		if stage.road_distance(p) < 9 or stage.parks.contains(p, 4.0):
 			continue
 		if stage.biome.tree_blocked(p):
 			continue
@@ -135,7 +135,7 @@ func _build_forest(forest: Array[Dictionary]) -> void:
 		stage.forest_layers.append(chunks)
 
 func woodland_spot(pos: Vector3, padding: float = 0.0) -> bool:
-	if stage.road_distance(pos) < 9.0 + padding or stage.trail_distance(pos) < 3.2 + padding:
+	if stage.road_distance(pos) < 9.0 + padding or stage.trail_distance(pos) < 3.2 + padding or stage.parks.contains(pos, 3.0 + padding):
 		return false
 	if stage.biome.woodland_blocked(pos, padding):
 		return false
@@ -440,3 +440,18 @@ func tree_layers(name: String, trees: Array, layers: Array) -> void:
 			colors.append(Color(layer.color).lightened(float(tree.shade)))
 		var detail = DetailLayer.tiled(260.0).tree(name, bases, heights) if index == 0 else DetailLayer.tiled(260.0).tree(name)
 		detail_batch("%s%d" % [name, index], layer.mesh, poses, colors, detail)
+
+# Signposts at the spectator clearings ("ПОЛЯНА N").
+func clearing_signs() -> void:
+	for i in range(stage.clearings.size()):
+		var c: Vector3 = stage.clearings[i]
+		RallyProps.cylinder(stage, c + Vector3(0, 1.2, 0), 0.07, 0.07, 2.4, Color("d5bc8e"), 5)
+		var sign = RallyProps.box(stage, c + Vector3(0, 2.15, 0), Vector3(2, 0.65, 0.12), Color("e5d9b9"))
+		var label = Label3D.new()
+		sign.add_child(label)
+		label.position = Vector3(0, 0, 0.075)
+		label.text = "ПОЛЯНА %d" % (i + 1)
+		label.font_size = 42
+		label.pixel_size = 0.005
+		label.modulate = Color("344537")
+		label.outline_size = 0

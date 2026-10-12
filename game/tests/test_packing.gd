@@ -15,7 +15,8 @@ func run() -> void:
 		game.walker = game.stage.clearings[0]
 		game.stage.trees.clear()
 		game.stage.rocks.clear()
-		game.car.position = Vector3(190, 30, 30)
+		# Parked in the service park: the outing ends there once all is packed.
+		game.car.position = game.stage.parks.world(0, 12.0, 26.0)
 	host.camp = Node3D.new()
 	host.add_child(host.camp)
 	host.camp.position = host.walker

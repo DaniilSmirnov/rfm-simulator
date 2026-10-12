@@ -2,7 +2,7 @@ extends RefCounted
 # Packed geometry stays spatially partitioned. Only mutable MultiMeshes are
 # uploaded once per scene; immutable meshes and materials retain shared resources.
 const SCHEMA = 4
-const SOURCES = ["stage", "stage_solids", "primitive_batcher", "village_stage", "village_layout", "village_architecture", "village_landscape", "village_farmland", "props", "village_interiors", "church_bell"]
+const SOURCES = ["stage", "service_parks", "stage_solids", "primitive_batcher", "village_stage", "village_layout", "village_architecture", "village_landscape", "village_farmland", "props", "village_interiors", "church_bell"]
 const STAGE_FIELDS = ["woodland_details", "collectibles", "collectible_parts", "rocks", "trees", "forest_data", "detail_tree_groups", "detail_tree_visuals", "forest_layers", "forest_chunk_slots", "forest_chunk_centers"]
 
 static func fingerprint() -> String:
@@ -100,6 +100,12 @@ static func save(stage: Node3D, path: String) -> Error:
 	stage.rocks = stage.rocks.filter(func(rock): return not rock.get("official", false))
 	stage.officials.free()
 	stage.officials = null
+	# The service parks are rebuilt at runtime as well, with their solids.
+	for index in range(2):
+		var park = stage.get_node_or_null("ServicePark_%d" % index)
+		if park != null:
+			park.free()
+	stage.solids.obstacles.assign(stage.solids.obstacles.filter(func(o): return o.kind != "service"))
 	# Village life is local animation, rebuilt from the baked anchors on load.
 	if stage.life != null:
 		stage.life.root.free()

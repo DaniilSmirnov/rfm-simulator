@@ -81,7 +81,7 @@ func _parcel_free(center: Vector3, half: Vector2) -> bool:
 	for u in range(5):
 		for v in range(5):
 			var p = center + _basis() * Vector3(lerpf(-half.x, half.x, u / 4.0), 0, lerpf(-half.y, half.y, v / 4.0))
-			if not BOUNDS.has_point(Vector2(p.x, p.z)):
+			if not BOUNDS.has_point(Vector2(p.x, p.z)) or stage.parks.contains(p, 6.0):
 				return false
 			var nearest: Dictionary = stage.route_nearest(p)
 			if nearest.distance < village.road_width(nearest.s) * 0.5 + ROAD_CLEARANCE:
