@@ -8,7 +8,7 @@ const P = preload("res://scripts/props.gd")
 const MeshMerge = preload("res://scripts/mesh_merge.gd")
 const TEAMS = [
 	{"name": "RFM RACING", "roof": Color("c9302c"), "trim": Color("f2f0e8")},
-	{"name": "LADA SPORT", "roof": Color("2c5aa0"), "trim": Color("f1c232")},
+	{"name": "VETRA SPORT", "roof": Color("2c5aa0"), "trim": Color("f1c232")},
 	{"name": "TAIGA TEAM", "roof": Color("3a7a46"), "trim": Color("f2f0e8")},
 	{"name": "NIGHT GRAVEL", "roof": Color("26292c"), "trim": Color("e2762b")},
 ]
