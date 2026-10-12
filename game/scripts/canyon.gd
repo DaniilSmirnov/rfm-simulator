@@ -86,7 +86,7 @@ func base_ground(pos: Vector3) -> float:
 # ---------------------------------------------------------------- stage hooks
 
 func terrain_vertex_height(x: float, z: float) -> float:
-	return smooth_ground(Vector3(x, 0, z)) - 0.25
+	return stage.parks.vertex(Vector3(x, 0, z), smooth_ground(Vector3(x, 0, z)) - 0.25)
 
 func terrain_color(v: Vector3) -> Color:
 	var s = stage.road_s(v)

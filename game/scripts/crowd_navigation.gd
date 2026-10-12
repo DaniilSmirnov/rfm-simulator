@@ -49,7 +49,7 @@ static func context(game, person: Dictionary, start: Vector3, goal: Vector3, roa
 	return {"solids": solids, "roadside": roadside, "low": low, "high": high}
 
 static func clear(game, a: Vector3, b: Vector3, ctx: Dictionary) -> bool:
-	if b.x < -185 or b.x > 185 or b.z < -game.stage.LENGTH + 5 or b.z > 10:
+	if b.x < -185 or b.x > 185 or b.z < game.stage.parks.z_limits.x or b.z > game.stage.parks.z_limits.y:
 		return false
 	if ctx.roadside:
 		var samples = maxi(1, ceili(flat(a).distance_to(flat(b)) / 0.75))

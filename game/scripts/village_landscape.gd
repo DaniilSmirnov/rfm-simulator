@@ -55,7 +55,7 @@ func build(cooperative: bool = false) -> void:
 # ---------------------------------------------------------------- helpers
 
 func free_spot(p: Vector3, padding: float, road_clearance: float = 7.0) -> bool:
-	if absf(p.x) > 196.0 or p.z > 76.0 or p.z < -916.0:
+	if absf(p.x) > 196.0 or p.z > 76.0 or p.z < -916.0 or stage.parks.contains(p, padding + 2.0):
 		return false
 	var nearest: Dictionary = stage.route_nearest(p)
 	if nearest.distance < village.road_width(nearest.s) * 0.5 + road_clearance:

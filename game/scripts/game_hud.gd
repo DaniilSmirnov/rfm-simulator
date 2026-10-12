@@ -448,7 +448,7 @@ func update_hud() -> void:
 	if game.camp_cooking.pot != null:
 		status_text += "\nПЛОВ %s · %d/10" % [("ГОТОВ" if game.camp_cooking.phase == "ready" else ("ГОТОВИМ %d%%" % int(game.camp_cooking.cook_time / game.camp_cooking.COOK_SECONDS * 100) if game.camp_cooking.phase == "cooking" else "КАЗАН ПУСТ")), game.camp_cooking.servings]
 	if game.packing.active() and remaining_items == 0:
-		hint_text = "Лагерь собран. Садитесь в свои машины через F; ждём всех друзей." if game.in_car else "Лагерь собран. Подойди к своей машине и нажми F."
+		hint_text = "Лагерь собран. Езжай в парк сервиса на старте или финише СУ; ждём всех друзей." if game.in_car else "Лагерь собран. Садись в машину (F) и езжай в парк сервиса."
 	if game.mobile_mode:
 		course_text = game.course.caption().replace("ПРОХОД ", "СУ ").replace(" · ПРЯМО", "").replace(" · ОБРАТНО", "").replace("ДО ОТКРЫТИЯ СУ", "СТАРТ ЧЕРЕЗ")
 		if injury != "" or game.crews.car_towed or game.tow_target != null:

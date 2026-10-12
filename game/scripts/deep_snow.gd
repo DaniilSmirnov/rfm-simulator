@@ -18,7 +18,8 @@ static func natural_depth(stage, point: Vector3) -> float:
 	var result = smoothstep(0.0, 3.0, outside) * (0.78 + sin(point.x * 0.041 + point.z * 0.029) * 0.10)
 	for clearing in stage.clearings:
 		result *= smoothstep(7.0, 13.0, Vector2(point.x - clearing.x, point.z - clearing.z).length())
-	return result
+	# The service parks are ploughed.
+	return result * (1.0 - stage.parks.weight(point))
 
 static func camp_mask(stage, point: Vector3) -> float:
 	var mask = 1.0

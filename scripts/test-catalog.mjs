@@ -13,7 +13,7 @@ export const groups = Object.freeze({
   "test_furniture.gd", "test_interaction.gd", "test_soundscape.gd",
  ],
  simulation: [
-  "test_camp_cooking.gd", "test_course_schedule.gd", "test_rally_handling.gd",
+  "test_camp_cooking.gd", "test_course_schedule.gd", "test_service_parks.gd", "test_rally_handling.gd",
   "test_rally_rejoin.gd", "test_rally_smoothness.gd", "test_rally_tracks.gd", "test_rally_traffic.gd", "test_room.gd", "test_direct_link.gd",
   "test_physics.gd", "test_food_fleet.gd", "test_foraging.gd", "test_grill_fire.gd", "test_camp_models.gd",
   "test_poison_mushrooms.gd", "test_network_motion.gd", "test_tow_recovery.gd",
@@ -25,7 +25,7 @@ export const groups = Object.freeze({
   "test_stage_solids.gd", "test_provence_village.gd",
   "test_village_terrain_performance.gd", "test_village_viewpoints.gd",
   "test_spectators.gd", "test_rocks.gd", "test_woodland.gd",
-  "test_shovel.gd", "test_deep_snow.gd", "test_snowbanks.gd", "test_terrain_seams.gd", "test_road_surface.gd", "test_offroad_contact.gd",
+  "test_shovel.gd", "test_deep_snow.gd", "test_snowbanks.gd", "test_terrain_seams.gd", "test_road_surface.gd", "test_offroad_contact.gd", "test_service_park_layout.gd",
   "test_gravel_relief.gd", "test_canyon.gd", "test_finnish_forest.gd", "test_alpine_winter.gd",
  ],
 });
@@ -52,7 +52,7 @@ export const slowTests = new Set([
  "test_village_terrain_performance.gd", "test_canyon.gd", "test_finnish_forest.gd",
  "test_course_schedule.gd", "test_course_officials.gd", "test_spectators.gd", "test_alpine_winter.gd",
  "test_selection.gd", "test_world_loading.gd", "test_baked_village.gd",
- "test_provence_village.gd", "test_stage_solids.gd",
+ "test_provence_village.gd", "test_stage_solids.gd", "test_service_parks.gd", "test_service_park_layout.gd",
 ]);
 export function verifyRegistry(files) {
  const seen = new Map();

@@ -46,7 +46,8 @@ func full_run(parts: PackedInt32Array, reverse: bool, fps: int, role: String = "
 		var movement: Vector3 = racer.node.position-position
 		max_speed_error = maxf(max_speed_error, Vector2(movement.x,movement.z).length()*fps-racer.drive_speed)
 		frames += 1
-	check(racer.s >= 839.0 and racer.state == "racing", "mixed run reaches finish: reverse=%s fps=%d role=%s (s=%.1f state=%s)" % [reverse, fps, role, racer.s, racer.state])
+	# Past the finish line the crew drives on into the service park.
+	check(racer.s >= 839.0 and racer.state in ["racing", "to_park"], "mixed run reaches finish: reverse=%s fps=%d role=%s (s=%.1f state=%s)" % [reverse, fps, role, racer.s, racer.state])
 	check(max_yaw_rate <= 2.501 and max_acceleration <= 18.01 and max_speed_error < 2.0, "mixed playback bounds yaw/acceleration/world speed (%.3f/%.3f/%.3f)" % [max_yaw_rate,max_acceleration,max_speed_error])
 	var result = {"time":frames / float(fps), "cost_ms":(Time.get_ticks_usec()-start)/1000.0 / maxf(frames,1)}
 	game.stage.free()

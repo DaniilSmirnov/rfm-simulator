@@ -10,6 +10,7 @@ var crews = preload("res://scripts/rally_crews.gd").new()
 var player = preload("res://scripts/player_motion.gd").new()
 var camp_actions = preload("res://scripts/camp_actions.gd").new()
 var camp_grill = preload("res://scripts/camp_grill.gd").new()
+var park_traffic = preload("res://scripts/park_traffic.gd").new()
 var hud = preload("res://scripts/game_hud.gd").new()
 var injuries = preload("res://scripts/injuries.gd").new()
 var seated = false
@@ -204,7 +205,7 @@ var hud_target_frame = -1
 var minimap_redraw_at = 0
 
 func _init() -> void:
-	for system in [crews, player, camp_actions, camp_grill, hud, injuries]:
+	for system in [crews, player, camp_actions, camp_grill, park_traffic, hud, injuries]:
 		system.game = self
 
 func actor_pos() -> Vector3:
@@ -485,6 +486,7 @@ func start_game() -> void:
 	_update_invite_button()
 	soundscape.repair()
 	course.apply_snapshot({})
+	park_traffic.reset()
 	racing = false
 	selection_controls.hide()
 	room.ui.panel.hide()
@@ -946,14 +948,10 @@ func _update_hud() -> void:
 
 func _check_finish() -> void:
 	cargo.release_departed()
-	if dead or finished or not packing.active() or packing.remaining() > 0 or not in_car or eat_time >= 0 or drink_time >= 0:
+	if dead or finished or not packing.active() or packing.remaining() > 0 or eat_time >= 0 or drink_time >= 0 or not park_traffic.everyone_home():
 		return
-	# In a room, wait for every connected spectator to get back in their car.
-	for peer in room.peers.values():
-		if peer.state == null or not peer.state.in_car:
-			return
 	finished = true
-	_show_result("Раллийный выезд завершён", "Оба прохода посмотрены. Лагерь собран. Все вернулись в машины.\n\nЭкипажи: %d  ·  Помощь: %d\nМашина: %d%%\n\nДо следующего ралли!" % [RALLY_CREW_LIMIT + passed, helped, condition])
+	_show_result("Раллийный выезд завершён", "Оба прохода посмотрены. Лагерь собран. Все доехали до парка сервиса.\n\nЭкипажи: %d  ·  Помощь: %d\nМашина: %d%%\n\nДо следующего ралли!" % [RALLY_CREW_LIMIT + passed, helped, condition])
 
 func die(reason: String) -> void:
 	hud.die(reason)

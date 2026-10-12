@@ -75,7 +75,14 @@ static func _bend_target(stage: Node3D, station: float, travel_sign: float) -> f
 	table[index] = geometry_target
 	return geometry_target
 
+# After the flying finish crews slow down to roll into the service park.
+const PARK_ENTRY_SPEED = 8.0
+const PARK_BRAKE = 5.0
+
 static func speed_limit(game: Node3D, racer: Dictionary, s: float) -> float:
+	return minf(_speed_limit(game, racer, s), sqrt(PARK_ENTRY_SPEED * PARK_ENTRY_SPEED + 2.0 * PARK_BRAKE * maxf(0.0, game.stage.LENGTH - s)))
+
+static func _speed_limit(game: Node3D, racer: Dictionary, s: float) -> float:
 	var role = str(racer.get("role", "racer"))
 	if role in ["racer", "zero"]:
 		var reference = Tracks.sample(racer.get("track_parts", PackedInt32Array()), s, game.course.pass_index == 2, role == "zero")

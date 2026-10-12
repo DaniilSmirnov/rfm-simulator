@@ -13,6 +13,7 @@ var red_flag = false
 func update(game, delta: float) -> void:
 	if not game.playing or game.paused or game.dead or game.finished or (game.room.is_guest()):
 		return
+	game.park_traffic.update(delta)
 	match phase:
 		"countdown", "intermission":
 			remaining = maxf(0.0, remaining - delta)
@@ -22,9 +23,8 @@ func update(game, delta: float) -> void:
 					game.rally_spawn_count = 0
 					game.passed = 0
 					game._cancel_tow()
-					for old in game.racers:
-						old.node.queue_free()
-					game.racers.clear()
+					# Crews left on the stage are recovered to the park at its end.
+					game.park_traffic.settle()
 				phase = "opening_police"
 				active_id = service_id(101)
 				game.racing = true
@@ -74,7 +74,7 @@ func vehicle_finished(game, id: int) -> void:
 			else:
 				phase = "complete"
 				game.cancel_placement()
-				game.toast("Оба прохода завершены. Соберите лагерь через F и садитесь в свои машины.")
+				game.toast("Оба прохода завершены. Соберите лагерь и езжайте в парк сервиса — на старте или на финише СУ.")
 
 func service_id(base: int) -> int:
 	return base + (pass_index - 1) * 200

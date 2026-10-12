@@ -32,10 +32,12 @@ func car_ram_damage(impact_speed: float) -> float:
 func spawn_course_car(role: String, id: int, zero_index: int = 0) -> void:
 	if game.dead or game.finished or (game.room.is_guest()):
 		return
-	var node = Props.course_car(role, zero_index)
+	# The car waiting at the start line, when the service park sent one.
+	var waiting = game.park_traffic.take(game.park_traffic.key_of({"role": role, "zero_index": zero_index, "id": id}))
+	var node = waiting if waiting != null else Props.course_car(role, zero_index)
 	var racer = add_course_vehicle(node, id, "pass", 0, role, zero_index)
 	racer.pace = 1.0 if role == "zero" else 0.72
-	racer.drive_speed = Traffic.speed_limit(game, racer, 0.0)
+	racer.drive_speed = 0.0 if waiting != null else Traffic.speed_limit(game, racer, 0.0)
 	racer.bias = 0.0
 	racer.phase = 0.0
 	game.toast(game.course.caption())
@@ -59,7 +61,8 @@ func race_speed(progress: float) -> float:
 
 func add_course_vehicle(node: Node3D, id: int, kind: String, variant: int, role: String = "racer", zero_index: int = 0) -> Dictionary:
 	var focus = clampf(race_station(game.player_position()), 45, Stage.LENGTH - 80)
-	game.add_child(node)
+	if node.get_parent() == null:
+		game.add_child(node)
 	var s = 0.0
 	node.position = race_at(s)
 	var direction = race_direction(s)
@@ -84,10 +87,12 @@ func spawn_racer(forced: String = "") -> void:
 		if existing.state == "stranded" and kind in ["stuck", "crash"]:
 			kind = "pass"
 	var variant = Props.RallyCarModel.spawn_variant(game.rally_spawn_count)
+	var waiting = game.park_traffic.take("crew%d" % game.rally_spawn_count)
 	game.rally_spawn_count += 1
-	var node = Props.rally_car(variant)
+	var node = waiting if waiting != null else Props.rally_car(variant)
 	var racer = add_course_vehicle(node, game.rally_spawn_count + (game.course.pass_index - 1) * 200, kind, variant)
-	racer.drive_speed = Traffic.speed_limit(game, racer, 0.0)
+	# A standing start from the line; a car placed straight on the road flies.
+	racer.drive_speed = 0.0 if waiting != null else Traffic.speed_limit(game, racer, 0.0)
 	game.toast("Приближается %s, номер %d!" % [node.get_meta("model"), node.get_meta("number")])
 
 func update_racers(delta: float) -> void:
@@ -99,6 +104,8 @@ func update_racers(delta: float) -> void:
 
 func update_racers_step(delta: float) -> void:
 	var to_remove: Array[Dictionary] = []
+	var finished_course: Array[int] = []
+	var parked: Array[Dictionary] = []
 	var nearest: Node3D = null
 	var nearest_d = 9999.0
 	for racer in game.racers:
@@ -195,6 +202,14 @@ func update_racers_step(delta: float) -> void:
 			elif s > racer.focus + 45 and not racer.counted:
 				count_racer(racer)
 			if s >= Stage.LENGTH - 1 and not red_hold:
+				# On into the service park at the finish, or off the map.
+				var finished_id: int = racer.id
+				var course_car = racer.get("role", "racer") != "racer"
+				if game.park_traffic.arrive(racer):
+					if course_car:
+						finished_course.append(finished_id)
+					parked.append(racer)
+					continue
 				to_remove.append(racer)
 		elif racer.state in ["offroad", "rock_bounce"]:
 			var steps = maxi(1, int(ceil(delta / RallyHandling.STEP)))
@@ -268,28 +283,7 @@ func update_racers_step(delta: float) -> void:
 			if not ServiceTraffic.applies(racer):
 				game.injuries.vehicle_sweep(racer.previous, node.position, (node.position - racer.previous) / maxf(delta, 0.001), game.injuries.CREW_SPEED)
 		if racer.state in ["racing", "offroad", "rock_bounce"] and not ServiceTraffic.applies(racer):
-			var blockers = [game.car.position]
-			for peer in game.room.peers.values():
-				if peer.state != null:
-					blockers.append(game.room.v(peer.state.car))
-			for other in game.racers:
-				if other.id < racer.id or other.state in ["stopped", "stranded", "parked"]:
-					blockers.append(other.node.position)
-			for blocker in blockers:
-				if Motion.swept_hit(racer.previous + Vector3(0, 0.65, 0), node.position + Vector3(0, 0.65, 0), blocker + Vector3(0, 0.65, 0), 2.5):
-					var collision_speed = racer.motion.velocity.length() if racer.state in ["offroad", "rock_bounce"] else racer.previous.distance_to(node.position) / maxf(delta, 0.001)
-					node.position = racer.previous
-					racer.state = "stranded" if racer.kind in ["stuck", "crash"] else "stopped"
-					racer.age = 0
-					game.toast("Столкновение машин! Экипаж остановился.")
-					if blocker == game.car.position:
-						# The crew rams the local player's car: it takes the damage.
-						var damage = car_ram_damage(collision_speed)
-						if damage > 0.0:
-							game.condition = maxf(0.0, game.condition - damage)
-							game.impact_shake = clampf(damage / CAR_RAM_MAX_DAMAGE, 0.1, 1.0)
-							game.toast("Раллийная машина врезалась в твою легковушку!")
-					break
+			car_contact(racer, delta)
 		if racer.state in ["stranded", "stopped"]:
 			count_racer(racer)
 		var d = node.position.distance_to(game.player_position())
@@ -301,6 +295,10 @@ func update_racers_step(delta: float) -> void:
 		game.racers.erase(racer)
 		if racer.get("role", "racer") != "racer":
 			game.course.vehicle_finished(game, racer.id)
+	for racer in parked:
+		game.racers.erase(racer)
+	for id in finished_course:
+		game.course.vehicle_finished(game, id)
 	if nearest != null:
 		game.rally_audio.position = nearest.position
 		game.rally_audio.pitch_scale = 1.8
@@ -308,6 +306,31 @@ func update_racers_step(delta: float) -> void:
 			game._play_audio(game.rally_audio)
 	else:
 		game.rally_audio.stop()
+
+# A crew running into a car stops; the local player's car takes the damage.
+func car_contact(racer: Dictionary, delta: float) -> void:
+	var node: Node3D = racer.node
+	var blockers = [game.car.position]
+	for peer in game.room.peers.values():
+		if peer.state != null:
+			blockers.append(game.room.v(peer.state.car))
+	for other in game.racers:
+		if other.id < racer.id or other.state in ["stopped", "stranded", "parked"]:
+			blockers.append(other.node.position)
+	for blocker in blockers:
+		if Motion.swept_hit(racer.previous + Vector3(0, 0.65, 0), node.position + Vector3(0, 0.65, 0), blocker + Vector3(0, 0.65, 0), 2.5):
+			var collision_speed = racer.motion.velocity.length() if racer.state in ["offroad", "rock_bounce"] else racer.previous.distance_to(node.position) / maxf(delta, 0.001)
+			node.position = racer.previous
+			racer.state = "stranded" if racer.kind in ["stuck", "crash"] else "stopped"
+			racer.age = 0
+			game.toast("Столкновение машин! Экипаж остановился.")
+			if blocker == game.car.position:
+				var damage = car_ram_damage(collision_speed)
+				if damage > 0.0:
+					game.condition = maxf(0.0, game.condition - damage)
+					game.impact_shake = clampf(damage / CAR_RAM_MAX_DAMAGE, 0.1, 1.0)
+					game.toast("Раллийная машина врезалась в твою легковушку!")
+			return
 
 func stone_impact(id: String) -> void:
 	game.impact_serials[id] = int(game.impact_serials.get(id, 0)) + 1

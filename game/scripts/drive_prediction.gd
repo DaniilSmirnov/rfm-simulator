@@ -96,7 +96,7 @@ func step(c: Dictionary, stage, model: int) -> void:
 		var forward = Vector3(-sin(yaw), 0, -cos(yaw))
 		var next = previous + motion.velocity * dt
 		next.x = clampf(next.x, -185, 185)
-		next.z = clampf(next.z, -stage.LENGTH + 5, 10)
+		next.z = clampf(next.z, stage.parks.z_limits.x, stage.parks.z_limits.y)
 		impact_timer = maxf(0, impact_timer - dt)
 		var rock = stage.rock_hit(previous, next, 0.85)
 		if not rock.is_empty():

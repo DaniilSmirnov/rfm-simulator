@@ -152,7 +152,10 @@ func run() -> void:
 			scene.cargo.return_item(scene.walker)
 	scene.in_car = true
 	scene._check_finish()
-	check(scene.finished, "two passes and packed camp complete the outing")
+	check(not scene.finished, "sitting in the car away from a service park is not the end yet")
+	scene.car.position = scene.stage.parks.world(1, 0.0, 30.0)
+	scene._check_finish()
+	check(scene.finished, "two passes, a packed camp and a drive into a service park complete the outing")
 	print("RESULT: %d checks, %d failures" % [checks, failures])
 	await scene._shutdown_audio()
 	scene.queue_free()

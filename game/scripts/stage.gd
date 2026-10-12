@@ -58,6 +58,7 @@ var lakeland: bool:
 	get: return stage_id == "lakes"
 # Static and destructible scenery (houses, walls, lamps); empty on most stages.
 var solids: Node3D
+var parks = preload("res://scripts/service_parks.gd").new()
 var life: RefCounted
 const BakedVillage = preload("res://scripts/baked_village.gd")
 var baked_scene_path = "res://generated/village.scn"
@@ -141,6 +142,7 @@ func _init(selected: int = 0) -> void:
 			samples.append(biome.route(float(i)))
 		route_index.build(samples, 1.0)
 	biome.configure()
+	parks.configure(self)
 
 func at(s: float) -> Vector3:
 	s = clampf(s, 0, LENGTH - 0.001)
@@ -174,11 +176,11 @@ func walk_floor(pos: Vector3, ground_height: float) -> float:
 	return biome.walk_floor(pos, ground_height)
 
 func vehicle_ground(pos: Vector3) -> float:
-	return biome.vehicle_ground(pos)
+	return parks.vehicle(pos, biome)
 
 # Top surface: the land, dug snow floors and snowbanks.
 func ground(pos: Vector3) -> float:
-	return biome.ground(pos)
+	return parks.level(pos, biome.ground(pos))
 
 # Feet break through loose snow; tyre tracks and excavations hold the walker up.
 func walking_ground(pos: Vector3) -> float:
@@ -189,7 +191,7 @@ func snow_sink(pos: Vector3) -> float:
 
 # Analytic land height, before snow.
 func base_ground(pos: Vector3) -> float:
-	return biome.base_ground(pos)
+	return parks.level(pos, biome.base_ground(pos))
 
 # Spectator clearings are level: blend the land towards each one.
 func blend_clearings(pos: Vector3, height: float, inner: float, outer: float) -> float:
@@ -241,7 +243,7 @@ func _terrain_tile_step(cell_x: float, cell_z: float) -> float:
 
 func terrain_base_vertex_height(x: float, z: float) -> float:
 	var p = Vector3(x, 0, z)
-	return base_ground(p) - 0.25
+	return parks.vertex(p, biome.base_ground(p) - 0.25)
 
 func terrain_vertex_height(x: float, z: float) -> float:
 	if terrain_cache_enabled:
@@ -383,19 +385,9 @@ func _build_details(cooperative: bool = false) -> void:
 
 func _build_finish() -> void:
 	if biome.clearing_signs():
-		for i in range(clearings.size()):
-			var c = clearings[i]
-			RallyProps.cylinder(self, c + Vector3(0, 1.2, 0), 0.07, 0.07, 2.4, Color("d5bc8e"), 5)
-			var sign = RallyProps.box(self, c + Vector3(0, 2.15, 0), Vector3(2, 0.65, 0.12), Color("e5d9b9"))
-			var label = Label3D.new()
-			sign.add_child(label)
-			label.position = Vector3(0, 0, 0.075)
-			label.text = "ПОЛЯНА %d" % (i + 1)
-			label.font_size = 42
-			label.pixel_size = 0.005
-			label.modulate = Color("344537")
-			label.outline_size = 0
+		woodland.clearing_signs()
 	biome.build_horizon()
+	parks.build(self)
 
 	officials = Officials.new()
 	officials.stage = self
@@ -435,7 +427,7 @@ func _build_terrain(cooperative: bool = false) -> void:
 						v.y = terrain_vertex_height(v.x, v.z)
 						var key = Vector2(v.x, v.z)
 						if not colors.has(key):
-							colors[key] = biome.terrain_color(v)
+							colors[key] = parks.paint(v, biome.terrain_color(v))
 						var color: Color = colors[key]
 						st.set_color(color.lightened(rng.randf_range(-0.07, 0.07)))
 						st.add_vertex(v)

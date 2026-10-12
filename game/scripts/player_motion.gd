@@ -41,7 +41,7 @@ func drive(delta: float) -> void:
 		var previous = game.car.position
 		var next = previous + game.vehicle_motion.velocity * dt
 		next.x = clampf(next.x, -185, 185)
-		next.z = clampf(next.z, -Stage.LENGTH + 5, 10)
+		next.z = clampf(next.z, game.stage.parks.z_limits.x, game.stage.parks.z_limits.y)
 		# Fast enough, the car throws people in its way instead of stopping.
 		game.injuries.vehicle_sweep(previous, next, game.vehicle_motion.velocity, game.injuries.PLAYER_CAR_SPEED)
 		var rock_hit = game.stage.rock_hit(previous, next, 0.85)
@@ -113,6 +113,7 @@ func contact_blocked(start: Vector3, end: Vector3, driving: bool) -> bool:
 			(people if driving else cars).append(person.avatar.position)
 	for racer in game.racers:
 		cars.append(racer.node.position)
+	cars.append_array(game.park_traffic.car_positions())
 	for peer in game.room.peers.values():
 		if peer.state == null:
 			continue
@@ -150,7 +151,7 @@ func walk_step(delta: float) -> void:
 	var wading = snow_wading()
 	var next = game.walker + dir * delta * water_factor * game.injuries.walk_factor() * game.mushroom_effect.movement_multiplier() * lerpf(1.0, game.SNOW_WADE_SPEED, wading) * (1.4 if game.drink_time >= 0 or game.eat_time >= 0 else (game.RUN_SPEED if running() else game.WALK_SPEED))
 	next.x = clampf(next.x, -185, 185)
-	next.z = clampf(next.z, -Stage.LENGTH + 5, 10)
+	next.z = clampf(next.z, game.stage.parks.z_limits.x, game.stage.parks.z_limits.y)
 	var old_floor = game.walker.y - game.jump_height
 	var floor_height = game.stage.solids.walking_floor(next, game.walker.y)
 	floor_height = game.stage.walk_floor(next, floor_height)

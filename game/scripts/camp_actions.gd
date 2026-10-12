@@ -12,7 +12,7 @@ func valid_furniture_spot(spot: Vector3, kind: String, ignored_owner: String = "
 		return false
 	if game.spectators != null and game.spectators.occupied(spot):
 		return false
-	if game.stage.road_distance(spot) < 6.0:
+	if game.stage.road_distance(spot) < 6.0 or game.stage.parks.contains(spot, 1.0):
 		return false
 	if not game.stage.solids.hit(spot, spot, 0.8, false).is_empty():
 		return false
