@@ -15,6 +15,8 @@ const NATURE_MUSHROOM_CAP = preload("res://models/nature/mushroom_cap.tres")
 const NATURE_MUSHROOM_STEM = preload("res://models/nature/mushroom_stem.tres")
 const NATURE_STONE = preload("res://models/nature/stone.tres")
 const Records = preload("res://scripts/stage_records.gd")
+# Metres a forest chunk (64 m cell of shared trees) stays drawn at MEDIUM.
+const FOREST_RANGE = 320.0
 
 var stage
 
@@ -131,6 +133,9 @@ func _build_forest(forest: Array[Dictionary]) -> void:
 			instance.name = "ForestLayer%d_Chunk%d" % [layer, chunk]
 			instance.position = stage.forest_chunk_centers[chunk]
 			instance.multimesh = mm
+			# Authored reach; draw_distance.gd scales it (FAR removes it).
+			instance.visibility_range_end = FOREST_RANGE
+			instance.visibility_range_end_margin = 30
 			stage.add_child(instance)
 		stage.forest_layers.append(chunks)
 
