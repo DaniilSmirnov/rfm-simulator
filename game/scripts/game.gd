@@ -52,6 +52,7 @@ var loading_world = false
 var loading_screen: Node
 
 var lobby_ui: Node
+var how_to_play: RefCounted
 var selection_controls: VBoxContainer
 var car_choice: HBoxContainer
 var stage_choice: HBoxContainer
@@ -578,6 +579,10 @@ func return_to_main_menu() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if safety_gate != null and is_instance_valid(safety_gate):
+		return
+	if how_to_play.is_open():
+		if event.is_action_pressed("pause_demo") and not how_to_play.first_time:
+			how_to_play.close()
 		return
 	if placement_kind != "":
 		if event.is_action_pressed("pause_demo") or event.is_action_pressed("placement_cancel"):

@@ -4,7 +4,7 @@ extends SceneTree
 #   xvfb-run godot --path game --rendering-driver opengl3 --resolution 844x390 \
 #     --script res://tools/export_ui_screenshots.gd -- --state=pause --vk --mobile-controls --out=/tmp/pause.png
 # States: menu, hud, drawer, car, pause, guest_pause, result, safety, help,
-# about, loading.
+# about, guide (first VK entry, --page=N), guide_pause, loading.
 
 func _initialize() -> void:
 	call_deferred("run")
@@ -30,7 +30,7 @@ func run() -> void:
 	if state == "menu":
 		game.select_stage(stage)
 		game.stage_choice.select(stage)
-	if state in ["hud", "drawer", "car", "pause", "guest_pause", "result", "safety"]:
+	if state in ["hud", "drawer", "car", "pause", "guest_pause", "result", "safety", "guide", "guide_pause"]:
 		await game.start_game()
 		game._prepare_capture()
 		game.camera.position = game.camp.position + Vector3(10, 5, 12)
@@ -52,6 +52,15 @@ func run() -> void:
 			game.die("Тебя задела машина экипажа.")
 		elif state == "safety":
 			game._show_stage_safety_gate()
+		elif state == "guide":
+			game.how_to_play.settings_path = "user://screenshot_how_to_play.cfg"
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(game.how_to_play.settings_path))
+			game._show_stage_safety_gate()
+			game.how_to_play.show_page(int(arg("page", "0")))
+		elif state == "guide_pause":
+			game._set_paused(true)
+			game.how_to_play.open()
+			game.how_to_play.show_page(int(arg("page", "0")))
 	elif state == "help":
 		game.lobby_ui.help_dialog.show()
 	elif state == "about":
