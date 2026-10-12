@@ -30,3 +30,14 @@ test('a click can retry pointer capture after a browser denial', () => {
   assert.match(input, /event is InputEventMouseButton and event\.pressed and not mobile_mode and Input\.mouse_mode != Input\.MOUSE_MODE_CAPTURED/);
   assert.match(input, /Input\.mouse_mode = Input\.MOUSE_MODE_CAPTURED/);
 });
+
+test('mouse look turns the camera only while the pointer is locked', () => {
+  const input = source.slice(source.indexOf('func _unhandled_input('));
+  assert.match(input, /event is InputEventMouseMotion and not mobile_mode and pointer\.captured\(\)/);
+});
+
+test('a pointer lock lost during play pauses the game', () => {
+  const pointer = readFileSync(new URL('../game/scripts/pointer_capture.gd', import.meta.url), 'utf8');
+  assert.match(pointer, /if was_captured and not is_captured and wanted\(\):\n\t\tgame\._set_paused\(true\)/);
+  assert.match(source, /func _process\(delta: float\) -> void:\n\tpointer\.update\(\)/);
+});

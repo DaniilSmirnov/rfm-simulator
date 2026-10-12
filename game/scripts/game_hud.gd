@@ -26,10 +26,7 @@ var secondary_row: HBoxContainer
 var plan_title: Label
 
 func request_game_mouse_capture() -> void:
-	if game.mobile_mode or "--smoke-test" in OS.get_cmdline_user_args():
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	else:
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	game.pointer.request()
 
 func panel(color: Color) -> StyleBoxFlat:
 	return UiKit.panel_style(color)
@@ -55,6 +52,9 @@ func build_ui() -> void:
 	build_sidebar(ui)
 	build_bottom(ui)
 	build_notices(ui)
+	game.pointer = preload("res://scripts/pointer_capture.gd").new()
+	game.pointer.game = game
+	game.pointer.build(ui)
 	build_menu(canvas)
 
 func hud_card(parent: Control) -> PanelContainer:

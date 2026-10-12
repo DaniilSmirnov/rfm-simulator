@@ -53,6 +53,7 @@ var loading_screen: Node
 
 var lobby_ui: Node
 var how_to_play: RefCounted
+var pointer: RefCounted
 var selection_controls: VBoxContainer
 var car_choice: HBoxContainer
 var stage_choice: HBoxContainer
@@ -607,7 +608,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event is InputEventMouseButton and event.pressed and not mobile_mode and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-	if event is InputEventMouseMotion and not mobile_mode:
+	if event is InputEventMouseMotion and not mobile_mode and pointer.captured():
 		view_yaw -= event.relative.x * 0.0025
 		view_pitch = clampf(view_pitch - event.relative.y * 0.0025, -1.15, 1.1)
 	if drink_time >= 0 or eat_time >= 0 or (room.is_guest() and room.world_paused):
@@ -671,6 +672,7 @@ func show_consumption_warning(kind: String) -> void:
 	hud.show_consumption_warning(kind)
 
 func _process(delta: float) -> void:
+	pointer.update()
 	consumption_warning_time = maxf(0, consumption_warning_time - delta)
 	consumption_warning.visible = consumption_warning_time > 0 and playing and not paused and not dead and not finished
 	update_mobile_safe_area(delta)

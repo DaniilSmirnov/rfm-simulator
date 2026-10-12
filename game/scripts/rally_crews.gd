@@ -138,7 +138,7 @@ func update_racers_step(delta: float) -> void:
 			# manoeuvre; tying all steering motion to zero forward speed deadlocks it.
 			var lateral_rate = minf(2.8, actual_speed * 0.14)
 			if traffic.get("can_pass", false):
-				lateral_rate = maxf(lateral_rate, 0.6)
+				lateral_rate = maxf(lateral_rate, float(traffic.get("lateral_rate", 0.6)))
 			racer.line = move_toward(float(racer.get("line", 0.0)), float(traffic.line), delta * lateral_rate)
 
 			var s: float = racer.s
@@ -224,7 +224,7 @@ func update_racers_step(delta: float) -> void:
 			racer.motion.suspension(node, game.stage, delta, node.rotation.y)
 			if racer.state == "stopped" and not red_hold and not service and racer.age > 18 and racer.node != game.tow_target and not racer.get("towed", false) and int(racer.get("recovery_helpers", 0)) == 0:
 				to_remove.append(racer)
-		if was_racing:
+		if was_racing and not ServiceTraffic.priority(racer):
 			var contact = game.stage.rock_hit(racer.previous, node.position, 0.85)
 			if not contact.is_empty():
 				racer.motion.velocity = (node.position - racer.previous) / maxf(delta, 0.001)
@@ -237,7 +237,7 @@ func update_racers_step(delta: float) -> void:
 				racer.state = "rock_bounce"
 				racer.age = 0.0
 				count_racer(racer)
-		if was_racing:
+		if was_racing and not ServiceTraffic.priority(racer):
 			var city_hit = game.stage.solids.hit(racer.previous, node.position, 0.85)
 			if not city_hit.is_empty():
 				var velocity: Vector3 = (node.position - racer.previous) / maxf(delta, 0.001)
@@ -254,7 +254,7 @@ func update_racers_step(delta: float) -> void:
 				count_racer(racer)
 		if racer.state in ["racing", "offroad", "rock_bounce"]:
 			var tree_hit = game.stage.obstacle_hit(racer.previous, node.position, 0.95)
-			if tree_hit >= 0:
+			if tree_hit >= 0 and not ServiceTraffic.priority(racer):
 				if not game.stage.fallen.has(tree_hit):
 					game.knock_tree(tree_hit, node.position - racer.previous)
 				else:

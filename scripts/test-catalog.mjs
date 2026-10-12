@@ -6,7 +6,7 @@ export const groups = Object.freeze({
   "test_character_asset.gd", "test_player_handling.gd", "test_rolling_wheels.gd",
   "test_vehicle_contract.gd", "test_cargo_selection_order.gd", "test_trunk.gd",
   "test_niva_integration.gd", "test_packing.gd", "test_demo.gd", "test_mobile.gd",
-  "test_stage_safety_gate.gd", "test_how_to_play.gd", "test_party.gd", "test_selection.gd",
+  "test_stage_safety_gate.gd", "test_how_to_play.gd", "test_pointer_capture.gd", "test_party.gd", "test_selection.gd",
   "test_vk_access.gd", "test_vk_catalog_matrix.gd", "test_vk_invite_ui.gd",
   "test_lobby_ui.gd", "test_room_origin.gd", "test_minimap.gd",
   "test_resource_cache.gd", "test_draw_distance.gd", "test_world_loading.gd",
@@ -17,7 +17,7 @@ export const groups = Object.freeze({
   "test_rally_rejoin.gd", "test_rally_smoothness.gd", "test_rally_tracks.gd", "test_rally_traffic.gd", "test_room.gd", "test_direct_link.gd",
   "test_physics.gd", "test_food_fleet.gd", "test_foraging.gd",
   "test_poison_mushrooms.gd", "test_network_motion.gd", "test_tow_recovery.gd",
-  "test_crew_limit.gd", "test_drive_prediction.gd", "test_route_index.gd", "test_knockdown.gd", "test_ambulance_medics.gd",
+  "test_crew_limit.gd", "test_drive_prediction.gd", "test_route_index.gd", "test_knockdown.gd", "test_ambulance_medics.gd", "test_ambulance_right_of_way.gd",
  ],
  world: [
   "test_baked_village.gd", "test_village_landmarks.gd", "test_navigation_budget.gd",
