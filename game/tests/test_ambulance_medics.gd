@@ -104,6 +104,38 @@ func run() -> void:
 	check(not guest.injuries.is_down(actual_key) and absf(avatar.rotation.z) < 0.01, "a healed guest NPC stands upright when its injury disappears")
 	guest.injuries.medics.apply_snapshot([])
 	check(guest.injuries.medics.active.is_empty(), "boarding removes the medic on guests")
+	# A casualty knocked far from the road: the ambulance stops at the road and
+	# the doctor still walks the whole way, however long it is.
+	for distance in [30.0, 60.0, 120.0]:
+		game.injuries.records.clear()
+		for id in game.injuries.medics.active.keys():
+			game.injuries.medics._remove(id)
+		van.s = 400.0
+		van.node.position = game.race_at(400.0)
+		van.node.position.y = game.stage.ground(van.node.position)
+		van.node.rotation.y = atan2(-game.race_direction(400.0).x, -game.race_direction(400.0).z)
+		van.drive_speed = 0.0
+		van.state = "racing"
+		var remote_key = "npc:%d" % (8000 + int(distance))
+		var remote = patient(game, remote_key, game.race_at(404.0) + side * distance, van)
+		# The van has driven to its stop level with the casualty.
+		van.s = remote.station - 4.0 + (8.0 if distance > 100.0 else 0.0)
+		van.node.position = game.race_at(van.s)
+		van.node.position.y = game.stage.ground(van.node.position)
+		game.injuries._retarget(van)
+		var arrived = false
+		for i in range(60 * 30):
+			game.injuries.update(1.0 / 30.0)
+			game.injuries.ambulance_step(van)
+			if game.injuries.medics.active.has(int(van.id)) and game.injuries.medics.active[int(van.id)].state == "treating":
+				arrived = true
+				break
+			var m: Dictionary = game.injuries.medics.active.get(int(van.id), {})
+		check(arrived, "doctor reaches a casualty %.0f m from the road" % distance)
+		advance(game, 3.1)
+		check(not game.injuries.records.has(remote_key), "casualty %.0f m from the road is treated" % distance)
+		for id in game.injuries.medics.active.keys():
+			game.injuries.medics._remove(id)
 	# Real marshal casualty, including its official collision record.
 	game.injuries.records.clear()
 	game.injuries.returning.clear()

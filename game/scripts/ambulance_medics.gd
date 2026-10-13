@@ -5,6 +5,8 @@ const Navigation = preload("res://scripts/crowd_navigation.gd")
 const Model = preload("res://scripts/medic_model.gd")
 const Budget = preload("res://scripts/navigation_budget.gd")
 const WALK_RADIUS = 20.0
+# Road distance (m) within which a stopped van is level with a casualty.
+const STATION_TOLERANCE = 6.0
 const DOOR_SECONDS = 0.65
 const REACH = 1.3
 var _owner: WeakRef
