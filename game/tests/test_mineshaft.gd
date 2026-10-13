@@ -121,8 +121,11 @@ func run() -> void:
 	check(life.kangaroos.size() >= 18 and life.cockatoos.size() >= 15, "mobs of kangaroos and flocks of cockatoos")
 	var roo: Dictionary = life.kangaroos[0]
 	var start: Vector3 = roo.node.position
+	var bounded = false
 	for i in range(40):
 		life.update(0.05, start + Vector3(3, 0, 0))
+		bounded = bounded or roo.node.get_node("Bound").visible
+	check(bounded and not (roo.node.get_node("Bound").visible and roo.node.get_node("Stand").visible), "a fleeing kangaroo switches to its bounding pose")
 	check(roo.node.position.distance_to(start) > 4.0 and life.hops > 0, "kangaroos hop away from a person")
 	check(absf(roo.node.position.y - stage.ground(roo.node.position)) < 1.6, "kangaroos stay on the ground")
 	var rotor_angle = life.rotor.rotation.z
