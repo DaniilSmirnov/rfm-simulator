@@ -2,6 +2,7 @@ extends "res://tests/harness.gd"
 const Stage = preload("res://scripts/stage.gd")
 const StageRegistry = preload("res://scripts/stage_registry.gd")
 const CarRegistry = preload("res://scripts/car_registry.gd")
+const BlockText = preload("res://scripts/block_text.gd")
 func _initialize() -> void:
 	call_deferred("run")
 
@@ -107,9 +108,34 @@ func run() -> void:
 	for tree in stage.trees:
 		clear_road = clear_road and stage.road_distance(tree) > 9.0
 	check(clear_road, "no tree grows on the road")
-	for structure in ["MineHeadframe", "Homestead", "KangarooSigns", "MineshaftSign"]:
+	for structure in ["MineHeadframe", "Homestead", "KangarooSigns", "DriveLeftSigns", "MineshaftSign"]:
 		var node = stage.get_node_or_null(structure)
 		check(node != null and node.has_meta("baked_parts"), "%s is built as a merged mesh" % structure)
+	var drive_left = stage.get_node("DriveLeftSigns")
+	var posts = drive_left.get_children().filter(func(n): return not n is MeshInstance3D)
+	check(posts.size() == 2, "two Drive On Left signs")
+	check(drive_left.get_meta("baked_text", []).has("DRIVE") and drive_left.get_meta("baked_text", []).has("IN AUSTRALIA"), "Drive On Left signs carry their lettering")
+	var verge = true
+	for sign in posts:
+		verge = verge and stage.road_distance(sign.global_position) > stage.road_width(0.0) * 0.5 + 1.0
+	check(verge, "Drive On Left signs stand off the road")
+	# Every sign caption fits the plate it is printed on.
+	var plates = Node3D.new()
+	root.add_child(plates)
+	mine.scenery._kangaroo_sign(plates)
+	mine.scenery._drive_left_sign(plates)
+	var fits = true
+	var captions = 0
+	for label in plates.get_children():
+		if label is Label3D:
+			captions += 1
+			var extent = BlockText.cells(label.text) * BlockText.label_pixel(label)
+			var box: Vector2 = label.get_meta("fit_box")
+			fits = fits and extent.x <= box.x + 0.0001 and extent.y <= box.y + 0.0001
+	fits = fits and mine.scenery.KANGAROO_CAPTION.x < mine.scenery.KANGAROO_PLATE.x and mine.scenery.KANGAROO_CAPTION.y < mine.scenery.KANGAROO_PLATE.y
+	fits = fits and mine.scenery.DRIVE_LEFT_CAPTION.x < mine.scenery.DRIVE_LEFT_PLATE.x - 0.2
+	check(captions == 4 and fits, "sign lettering stays inside its plates")
+	plates.free()
 	check(stage.get_node_or_null("Homestead/WindmillRotor") != null, "the windmill rotor can turn")
 	check(stage.road_distance(mine.mine) > 15.0, "mine headframe stands clear of the jump")
 	check(stage.clearings.size() == mine.CLEARINGS.size(), "spectator areas at the bends and both banks of the jump")

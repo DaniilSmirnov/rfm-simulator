@@ -104,6 +104,19 @@ static func triangles(text: String, pixel: float) -> PackedVector3Array:
 				col = run
 	return vertices
 
+# Width and height of `text` in cells.
+static func cells(text: String) -> Vector2:
+	return Vector2(maxf(text.length() * 6 - 1, 0), ROWS)
+
+# Shrinks a caption until its block letters fit `box` (metres), so text of any
+# length stays on the plate it is printed on.
+static func fit(label: Label3D, box: Vector2) -> Label3D:
+	var size = cells(label.text)
+	var cell = minf(label_pixel(label), minf(box.x / maxf(size.x, 1.0), box.y / size.y))
+	label.pixel_size = cell * 10.0 / float(label.font_size)
+	label.set_meta("fit_box", box)
+	return label
+
 # Cell size that gives block letters the cap height of a Label3D.
 static func label_pixel(label: Label3D) -> float:
 	return float(label.font_size) * label.pixel_size / 10.0

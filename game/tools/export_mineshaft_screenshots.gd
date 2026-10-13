@@ -53,5 +53,12 @@ func run() -> void:
 	view.y = stage.ground(view) + 3.0
 	rig.aim(view, mine.mine + Vector3(0, 7.0, 0), 62.0)
 	await rig.capture("res://../docs/screenshots/mineshaft-headframe.webp", Vector2i(1920, 1080))
+	# Kangaroo warning sign and the Drive On Left reminder from the road.
+	for shot in [["KangarooSigns", 0, 2.0, "mineshaft-kangaroo-sign"], ["DriveLeftSigns", 0, 1.9, "mineshaft-drive-left"], ["DriveLeftSigns", 1, 1.9, "mineshaft-drive-left-after-jump"]]:
+		var posts = stage.get_node(shot[0]).get_children().filter(func(n): return not n is MeshInstance3D)
+		var post: Node3D = posts[shot[1]]
+		view = post.to_global(Vector3(0.9, shot[2] - 0.2, 3.6))
+		rig.aim(view, post.to_global(Vector3(0, shot[2] - 0.15, 0)), 50.0)
+		await rig.capture("res://../docs/screenshots/%s.webp" % shot[3], Vector2i(1280, 720))
 	await game._shutdown_audio()
 	quit()
