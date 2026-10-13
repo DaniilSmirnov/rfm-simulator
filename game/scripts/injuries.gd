@@ -249,7 +249,7 @@ func _knocked(key: String) -> void:
 # one leaves the start.
 func _assign(record: Dictionary, key: String) -> void:
 	for racer in game.racers:
-		if racer.get("role", "") == "ambulance" and (float(racer.s) < float(record.station) - 6.0 or racer.node.position.distance_to(record.pos) <= Medics.WALK_RADIUS):
+		if racer.get("role", "") == "ambulance" and (float(racer.s) < float(record.station) - 6.0 or _reachable(racer, record)):
 			record.ambulance = racer.id
 			_retarget(racer)
 			return
@@ -271,7 +271,7 @@ func _retarget(racer: Dictionary) -> void:
 	var target_key = ""
 	for key in records:
 		var r: Dictionary = records[key]
-		if int(r.ambulance) == racer.id and r.phase != "limp" and (float(r.station) >= float(racer.s) - 1.0 or racer.node.position.distance_to(r.pos) <= Medics.WALK_RADIUS) and float(r.station) < best:
+		if int(r.ambulance) == racer.id and r.phase != "limp" and (float(r.station) >= float(racer.s) - 1.0 or _reachable(racer, r)) and float(r.station) < best:
 			best = float(r.station)
 			target_key = key
 	racer.target_key = target_key
@@ -339,7 +339,7 @@ func _update_host(delta: float) -> void:
 				elif not medics.active.has(int(ambulance.id)):
 					# A landing can move the casualty behind the van. Dispatch a
 					# replacement if it is too far to reach on foot; never abandon it.
-					if float(r.station) < float(ambulance.s) - 1.0 and ambulance.node.position.distance_to(r.pos) > Medics.WALK_RADIUS:
+					if float(r.station) < float(ambulance.s) - 1.0 and not _reachable(ambulance, r):
 						r.ambulance = -1
 						_retarget(ambulance)
 						_assign(r, key)
@@ -356,15 +356,16 @@ func _update_host(delta: float) -> void:
 		_pose(key, r.pos, r.rot, 1.0)
 	game.course.red_flag = red_flag()
 
+# A casualty is reachable on foot from a van that is close or level with them
+# along the road, however far off the road they lie.
+func _reachable(ambulance: Dictionary, record: Dictionary) -> bool:
+	return ambulance.node.position.distance_to(record.pos) <= Medics.WALK_RADIUS or absf(float(ambulance.s) - float(record.station)) <= Medics.STATION_TOLERANCE
+
 func _ambulance_at_casualty(ambulance: Dictionary, record: Dictionary) -> bool:
 	# Route progress is only a dispatch hint. An impact can displace a casualty
 	# off the road, so station values can differ even when the ambulance is
-	# physically stopped beside them. A casualty far from the road is reached
-	# on foot from the road, so what counts is being level with them (same
-	# station), never the straight-line distance.
-	if float(ambulance.get("drive_speed", 0.0)) > 0.2:
-		return false
-	return ambulance.node.position.distance_to(record.pos) <= Medics.WALK_RADIUS or absf(float(ambulance.s) - float(record.station)) <= Medics.STATION_TOLERANCE
+	# physically stopped beside them; what counts is being stopped and reachable.
+	return float(ambulance.get("drive_speed", 0.0)) <= 0.2 and _reachable(ambulance, record)
 
 func _retarget_all() -> void:
 	for racer in game.racers:

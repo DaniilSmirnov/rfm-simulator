@@ -119,7 +119,7 @@ func run() -> void:
 		var remote_key = "npc:%d" % (8000 + int(distance))
 		var remote = patient(game, remote_key, game.race_at(404.0) + side * distance, van)
 		# The van has driven to its stop level with the casualty.
-		van.s = remote.station - 4.0
+		van.s = remote.station - 4.0 + (8.0 if distance > 100.0 else 0.0)
 		van.node.position = game.race_at(van.s)
 		van.node.position.y = game.stage.ground(van.node.position)
 		game.injuries._retarget(van)
