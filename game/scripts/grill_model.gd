@@ -42,7 +42,7 @@ static func build(parent: Node3D) -> Node3D:
 			P.faceted(mushroom_group, Vector3(x, 1.0, z), Vector3(0.055, 0.035, 0.07), Color("956337"), 12, 6).name = "MushroomCap_%s" % str(z)
 		mushroom_group.hide()
 	MeshMerge.bake(root, "grill")
-	return root
+	return load("res://scripts/perches.gd").mark(root, false)
 
 const STEEL = Color("34383a")
 const STEEL_EDGE = Color("4c5154")

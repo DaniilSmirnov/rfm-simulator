@@ -63,7 +63,7 @@ static func field(node: Node3D, frame: Transform3D) -> Dictionary:
 	var to_frame = frame.affine_inverse()
 	for child in node.find_children("*", "MeshInstance3D", true, false):
 		var mesh_node: MeshInstance3D = child
-		if mesh_node.mesh == null or not mesh_node.is_visible_in_tree():
+		if mesh_node.mesh == null or mesh_node.get_meta("perch_ignore", false) or not mesh_node.is_visible_in_tree():
 			continue
 		var pose = to_frame * mesh_node.global_transform
 		meshes.append([mesh_node.mesh, pose])
@@ -205,6 +205,7 @@ func gather(center: Vector3) -> void:
 		for id in solids.candidates(center, center, REACH):
 			var object: Dictionary = solids.obstacles[id]
 			if object.body is RigidBody3D:
+				_add_node(object.body, flat, true)
 				continue
 			nearby.append({"frame": object.collision_pose, "inverse": object.collision_inverse, "box": object.half, "solid": true})
 
