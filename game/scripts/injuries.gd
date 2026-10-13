@@ -97,6 +97,10 @@ func red_flag() -> bool:
 			return true
 	return false
 
+func nearby_person() -> bool:
+	play.injuries = self
+	return play.nearest(game.walker, local_key()) != ""
+
 func walk_factor() -> float:
 	return 0.0 if down else (LIMP_FACTOR if limp > 0.0 else 1.0)
 
