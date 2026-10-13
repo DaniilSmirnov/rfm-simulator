@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import {catalog,canUseContent,canUseStage,validateRoomSelection,vkEntitlements} from '../server/store.mjs';
 test('catalog has stable unique SKUs; VK has one free stage and three free cars',()=>{
  assert.equal(new Set(catalog.map(p=>p.sku)).size,catalog.length);
- assert.equal(catalog.length,15);
- for(let i=0;i<5;i++) assert.equal(canUseContent('stage',i),i===0);
+ assert.equal(catalog.length,16);
+ for(let i=0;i<6;i++) assert.equal(canUseContent('stage',i),i===0);
  for(let i=0;i<10;i++) assert.equal(canUseContent('car',i),i<3);
  assert.ok(catalog.every(p=>p.purchase_enabled === !p.free));
  for(const p of catalog.filter(p=>!p.free)) assert.equal(p.price,p.type==='car'?3:20);
@@ -55,4 +55,16 @@ test('Finnish Forest is a separate paid stage; guests can join a host who owns i
  assert.equal(validateRoomSelection({stage:4,car_model:0},false,unpaid),null);
  assert.equal(canUseContent('stage',4,{mode:'restricted',skus:['stage_04']}),false,'canyon ownership does not unlock the forest');
  assert.equal(canUseContent('stage',4,{mode:'restricted',skus:['stage_05']}),true);
+});
+
+test('Mineshaft is a separate paid stage; guests can join a host who owns it',()=>{
+ const mineshaft=catalog.find(p=>p.sku==='stage_06');
+ assert.deepEqual(
+  {type:mineshaft.type,content_id:mineshaft.content_id,title:mineshaft.title,free:mineshaft.free,price:mineshaft.price},
+  {type:'stage',content_id:5,title:'Майншафт',free:false,price:20});
+ const unpaid=vkEntitlements();
+ assert.equal(canUseStage(5,unpaid),false);
+ assert.equal(validateRoomSelection({stage:5,car_model:0},false,unpaid),null);
+ assert.equal(canUseContent('stage',5,{mode:'restricted',skus:['stage_05']}),false,'forest ownership does not unlock Mineshaft');
+ assert.equal(canUseContent('stage',5,{mode:'restricted',skus:['stage_06']}),true);
 });
