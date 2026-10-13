@@ -68,7 +68,7 @@ func run() -> void:
 		builders.append(func(): return props.player_car(i))
 	for i in range(props.RALLY_MODELS.size()):
 		builders.append(func(): return props.rally_car(i))
-	for role in ["police", "zero"]:
+	for role in ["police", "zero", "ambulance"]:
 		builders.append(func(): return props.course_car(role, 1))
 	for build in builders:
 		var vehicle: Node3D = build.call()
@@ -97,6 +97,15 @@ func run() -> void:
 		props.animate_wheels(vehicle)
 		var top_after = probe.global_transform * Vector3(0, 0.3, 0) + Vector3(0, 0, 0.1)
 		check(top_after.z < top_before.z - 0.01, "%s tread top rolls forward when driving forward" % label)
+		# A rally-speed frame (27 m/s at 60 fps) still reads as a forward turn
+		# instead of strobing through a whole spoke period.
+		var spin_before = probe.quaternion
+		top_before = probe.global_transform * Vector3(0, 0.3, 0)
+		vehicle.position.z -= 0.45
+		props.animate_wheels(vehicle)
+		top_after = probe.global_transform * Vector3(0, 0.3, 0) + Vector3(0, 0, 0.45)
+		check(top_after.z < top_before.z - 0.01, "%s fast wheels still roll forward" % label)
+		check(spin_before.angle_to(probe.quaternion) <= props.CarParts.MAX_WHEEL_STEP + 0.001, "%s fast wheels turn less than half a spoke period per frame" % label)
 		vehicle.free()
 
 	print("ROLLING WHEELS RESULT: %d failures" % failures)

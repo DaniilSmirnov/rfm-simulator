@@ -144,6 +144,7 @@ static func plan(game: Node3D, racer: Dictionary) -> Dictionary:
 		positions.append({"pos": other.node.position, "speed": other_speed})
 	var blockers: Array[Dictionary] = []
 	var closest = INF
+	var clearance = ServiceTraffic.CAR_CLEARANCE + 0.3 if ServiceTraffic.applies(racer) else CLEARANCE
 	# Projecting a point on the route is the costly step. The route is at least
 	# as long as any chord, so an object further away than the look-ahead plus
 	# a generous lateral allowance cannot pass the gap test below: skip it.
@@ -161,6 +162,11 @@ static func plan(game: Node3D, racer: Dictionary) -> Dictionary:
 			continue
 		var lateral: float = (object.pos - center).dot(game.race_side(station))
 		if absf(lateral) > line_limit(game, station) + CLEARANCE:
+			continue
+		# Clear of both the line the crew holds and the one it means to drive
+		# (a spectator's car on the verge, a car in the park beside the start):
+		# no reason to leave the racing line and look for a way round.
+		if lateral < minf(current, base) - clearance or lateral > maxf(current, base) + clearance:
 			continue
 		# A car pulling away does not require overtaking. Close cars remain
 		# blockers so a leader braking in this frame cannot be rear-ended.
@@ -191,7 +197,7 @@ static func plan(game: Node3D, racer: Dictionary) -> Dictionary:
 		for candidate in candidates:
 			var clear = true
 			for blocker in blockers:
-				if absf(candidate - blocker.line) < (ServiceTraffic.CAR_CLEARANCE + 0.3 if ServiceTraffic.applies(racer) else CLEARANCE):
+				if absf(candidate - blocker.line) < clearance:
 					clear = false
 					break
 			if not clear or not _clear_path_cached(game, racer, candidate, distance):
@@ -211,7 +217,7 @@ static func plan(game: Node3D, racer: Dictionary) -> Dictionary:
 	# Brake until the actual lateral position clears the obstruction. Retain
 	# "racing" while waiting, so towing the blocker lets the queue restart.
 	for blocker in blockers:
-		if blocker.gap >= 0 and (best == INF or absf(current - blocker.line) < (ServiceTraffic.CAR_CLEARANCE + 0.3 if ServiceTraffic.applies(racer) else CLEARANCE)):
+		if blocker.gap >= 0 and (best == INF or absf(current - blocker.line) < clearance):
 			var safe = sqrt(2 * BRAKE * maxf(0, blocker.gap - 8))
 			speed = minf(speed, safe)
 			advance = minf(advance, maxf(0, blocker.gap - 7))

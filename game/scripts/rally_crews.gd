@@ -25,6 +25,10 @@ const FLOOR_REUSE_HEIGHT = 0.8
 const CAR_RAM_MIN_SPEED = 3.0
 const CAR_RAM_FULL_SPEED = 20.0
 const CAR_RAM_MAX_DAMAGE = 30.0
+# Seconds after a tow until a crew drives at its full launch again, and the
+# share of that launch it starts with.
+const RECOVERY_RAMP = 6.0
+const RECOVERY_PULL = 0.2
 
 func car_ram_damage(impact_speed: float) -> float:
 	return CAR_RAM_MAX_DAMAGE * clampf((impact_speed - CAR_RAM_MIN_SPEED) / (CAR_RAM_FULL_SPEED - CAR_RAM_MIN_SPEED), 0.0, 1.0)
@@ -95,6 +99,14 @@ func spawn_racer(forced: String = "") -> void:
 	racer.drive_speed = 0.0 if waiting != null else Traffic.speed_limit(game, racer, 0.0)
 	game.toast("Приближается %s, номер %d!" % [node.get_meta("model"), node.get_meta("number")])
 
+# Every client rolls the wheels of the crews, course cars and park convoy it
+# sees, whoever moves them: the host's simulation or a guest's snapshots.
+func animate_wheels() -> void:
+	for racer in game.racers:
+		Props.animate_wheels(racer.node)
+	for entry in game.park_traffic.movers:
+		Props.animate_wheels(entry.node)
+
 func update_racers(delta: float) -> void:
 	var remaining = maxf(delta, 0)
 	while remaining > 0.000001:
@@ -130,7 +142,8 @@ func update_racers_step(delta: float) -> void:
 			racer.avoid_line = traffic.line
 			# Speed up along the car's launch curve (2 s to 100 km/h for crews).
 			var current_speed = float(racer.get("drive_speed", race_speed(racer.s)))
-			var gain = Traffic.BRAKE if traffic.speed < current_speed else CarRegistry.pull(float(racer.get("launch", CarRegistry.launch(2.0))), current_speed)
+			var throttle = recovery_pull(racer, delta)
+			var gain = Traffic.BRAKE if traffic.speed < current_speed else CarRegistry.pull(float(racer.get("launch", CarRegistry.launch(2.0))), current_speed) * throttle
 			var actual_speed = move_toward(current_speed, float(traffic.speed), delta * gain)
 			actual_speed = minf(actual_speed, float(traffic.get("advance", INF)) / maxf(delta, 0.001))
 			racer.drive_speed = actual_speed
@@ -475,7 +488,10 @@ func recover_racer(racer: Dictionary) -> void:
 	racer.line = lateral
 	racer.avoiding = false
 	racer.avoid_line = 0.0
-	racer.drive_speed = Traffic.speed_limit(game, racer, racer.s)
+	# Pulled out by hand: the crew starts from a standstill and builds up
+	# throttle gently (recovery_pull) instead of resuming at full pace.
+	racer.drive_speed = 0.0
+	racer.recovery_time = 0.0
 	racer.state = "racing"
 	racer.kind = "pass"
 	count_racer(racer)
@@ -483,6 +499,18 @@ func recover_racer(racer: Dictionary) -> void:
 	for key in ["towed", "recovery_helpers"]:
 		racer.erase(key)
 	game.helped += 1
+
+# Share of the launch a just-recovered crew uses; it eases up to 1 over
+# RECOVERY_RAMP seconds, then the mark is dropped.
+static func recovery_pull(racer: Dictionary, delta: float) -> float:
+	if not racer.has("recovery_time"):
+		return 1.0
+	var time = float(racer.recovery_time) + delta
+	if time >= RECOVERY_RAMP:
+		racer.erase("recovery_time")
+		return 1.0
+	racer.recovery_time = time
+	return lerpf(RECOVERY_PULL, 1.0, smoothstep(0.0, RECOVERY_RAMP, time))
 
 func count_racer(racer: Dictionary) -> void:
 	if racer.get("role", "racer") != "racer" or racer.get("counted", false):

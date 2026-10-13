@@ -53,6 +53,17 @@ func run() -> void:
 		swerve = maxf(swerve, absf(racing.line) + (1.0 if racing.avoiding else 0.0))
 	check(swerve < 0.5, "it drives off the line straight, with nothing to dodge (%.2f m)" % swerve)
 	check(mover(game, "zero1").get("state", "") in ["to_start", "at_start"], "the next car pulls up behind it")
+	# Spectators' cars parked on the verge past the start are not in the way:
+	# the car keeps its racing line instead of looking for a way round.
+	var verge = false
+	for group in game.spectators.groups:
+		var station: float = game.race_station(group.car.position)
+		verge = verge or (station > 30.0 and station < 120.0 and absf((group.car.position - game.race_at(station)).dot(game.race_side(station))) > 5.0)
+	var dodged = false
+	while racing.s < 120.0 and racing.state == "racing":
+		step(game, 0.1)
+		dodged = dodged or racing.avoiding
+	check(verge and not dodged, "a spectator's car on the verge past the start is no reason for a detour")
 	# At the finish it carries on into the other park and backs into its bay.
 	racing.s = Stage.LENGTH - 25.0
 	racing.node.position = game.race_at(racing.s)
