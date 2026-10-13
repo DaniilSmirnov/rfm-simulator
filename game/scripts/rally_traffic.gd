@@ -18,6 +18,9 @@ const SPEED_LOOKAHEAD = [0.0, 16.0, 32.0, 48.0]
 const BRAKE_LOOKAHEAD = 150.0
 const BRAKE_STEP = 10.0
 const PLAN_BRAKE = 12.0
+# A driver with no nerve for braking takes every bend up to this much faster
+# than the safe speed; a bold one often runs wide and leaves the road.
+const BEND_OVERSHOOT = 0.3
 # Lateral allowance (m) when skipping far objects before projecting them.
 const FAR_MARGIN = 40.0
 # Travel (m) over which obstacle probes along a passing line are reused.
@@ -31,8 +34,8 @@ const LANE_INTERVAL = 0.12
 static func profile(id: int) -> Dictionary:
 	return {"bias": sin(id * 1.91) * 0.55, "phase": fmod(id * 2.37, TAU), "pace": 0.96 + fmod(id * 0.618, 1.0) * 0.08}
 
-# How much of the braking for an abrupt drop a driver skips, 0..1, fixed per
-# driver: about 40% brake properly, 35% brake too little or too late, 25% do
+# How much of the braking for bends and abrupt drops a driver skips, 0..1,
+# fixed per driver: about 40% brake properly, 35% brake too little or too late, 25% do
 # not lift at all and meet the landing and the corner after it at speed.
 static func nerve(id: int) -> float:
 	var h = fposmod(sin(id * 78.233 + 12.9898) * 43758.5453, 1.0)
@@ -53,7 +56,8 @@ static func competition_target(stage: Node3D, progress: float, pace: float = 1.0
 	var ahead = 0.0
 	while ahead <= BRAKE_LOOKAHEAD:
 		var bend = _bend_target(stage, clampf(station + travel_sign * ahead, 0.0, stage.LENGTH - 0.01), travel_sign)
-		target = minf(target, sqrt(bend * bend + 2.0 * PLAN_BRAKE * ahead))
+		var taken = bend * (1.0 + BEND_OVERSHOOT * nerve_share)
+		target = minf(target, sqrt(taken * taken + 2.0 * PLAN_BRAKE * ahead))
 		ahead += BRAKE_STEP
 	# A driver short on braking carries speed through the drop zone.
 	if nerve_share > 0.0 and not reverse:

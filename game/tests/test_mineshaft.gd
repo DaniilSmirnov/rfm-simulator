@@ -102,9 +102,6 @@ func run() -> void:
 	var flat = Traffic.competition_target(stage, mine.LIP - 5.0, 1.0, false, 1.0)
 	check(lift < half and half < flat, "braking for the plunge shrinks with nerve (%.0f, %.0f, %.0f km/h)" % [lift * 3.6, half * 3.6, flat * 3.6])
 	check(flat > 100.0 / 3.6, "a driver who does not lift takes the lip above 100 km/h (%.0f km/h)" % (flat * 3.6))
-	check(Traffic.competition_target(stage, zone.x - 20.0, 1.0, false, 1.0) == Traffic.competition_target(stage, zone.x - 20.0), "no effect before the braking zone")
-	check(Traffic.competition_target(stage, mine.CLOSING_BEGIN, 1.0, false, 1.0) == Traffic.competition_target(stage, mine.CLOSING_BEGIN), "no effect after the corner")
-	check(Traffic.competition_target(stage, mine.LIP - 5.0, 1.0, true, 1.0) == Traffic.competition_target(stage, mine.LIP - 5.0, 1.0, true), "no effect on a reverse pass")
 
 	var inside = true
 	for s in range(0, int(Stage.LENGTH), 4):
