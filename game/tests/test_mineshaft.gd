@@ -13,6 +13,31 @@ func turning(stage, from: float, to: float) -> float:
 		total += absf(atan2(a.cross(b).y, a.dot(b)))
 	return total
 
+func drive_over(stage, mine, speed: float) -> Dictionary:
+	var car = Node3D.new()
+	root.add_child(car)
+	var motion = preload("res://scripts/vehicle_motion.gd").new()
+	var s = mine.LIP - 30.0
+	# The longest flight and where it ends.
+	var result = {"airborne": 0.0, "landed": INF}
+	var flight = 0.0
+	car.position = stage.at(s)
+	while s < mine.CORNER_BEGIN + 10.0:
+		s += speed / 60.0
+		var p = stage.at(s)
+		car.position = Vector3(p.x, car.position.y, p.z)
+		var direction = stage.direction(s)
+		motion.suspension(car, stage, 1.0 / 60.0, atan2(-direction.x, -direction.z))
+		if not motion.grounded:
+			flight += 1.0 / 60.0
+		elif flight > 0.0:
+			if flight > result.airborne:
+				result.airborne = flight
+				result.landed = s
+			flight = 0.0
+	car.free()
+	return result
+
 func run() -> void:
 	var index = -1
 	for i in range(Stage.STAGES.size()):
@@ -45,11 +70,11 @@ func run() -> void:
 			at_hundred = x
 	check(at_hundred < mine.LIP - 40.0, "the slowest car reaches 100 km/h %.0f m before the lip (%.0f km/h there)" % [mine.LIP - at_hundred, v * 3.6])
 	var drop = stage.at(mine.LIP).y - stage.at(mine.LIP + mine.DROP_LENGTH).y
-	check(drop > 12.0, "giant drop-off beyond the lip (%.1f m)" % drop)
+	check(drop > 12.0, "the road plunges %.1f m past the lip" % drop)
 	var steepest = 0.0
 	for s in range(int(mine.LIP), int(mine.LIP + mine.DROP_LENGTH)):
 		steepest = maxf(steepest, stage.at(s).y - stage.at(s + 1).y)
-	check(steepest > 1.8, "the cliff is nearly vertical (%.0f° at its steepest)" % rad_to_deg(atan(steepest)))
+	check(rad_to_deg(atan(steepest)) > 30.0, "the plunge is steep (%.0f° at its steepest)" % rad_to_deg(atan(steepest)))
 	check(stage.at(mine.LIP - 3.0).y > stage.at(mine.LIP - 12.0).y, "a kicker rises to the lip")
 	check(turning(stage, mine.CORNER_BEGIN - 4.0, mine.CORNER_END + 4.0) > 0.7, "a corner follows the landing")
 	check(turning(stage, mine.CLOSING_BEGIN, mine.CLOSING_END) > 3.0, "short section of linked bends before the finish")
@@ -59,35 +84,25 @@ func run() -> void:
 		inside = inside and absf(stage.at(s).x) < 120.0
 	check(inside, "route stays well inside the map")
 
-	# --- A car at 100 km/h flies off the lip and lands before the corner.
-	var car = Node3D.new()
-	root.add_child(car)
-	var motion = preload("res://scripts/vehicle_motion.gd").new()
-	var s = mine.LIP - 40.0
-	var speed = 100.0 / 3.6
-	var airborne = 0.0
-	var flight = 0.0
-	var landed = INF
-	car.position = stage.at(s)
-	for frame in range(240):
-		s += speed / 60.0
-		var p = stage.at(s)
-		car.position = Vector3(p.x, car.position.y, p.z)
-		var direction = stage.direction(s)
-		motion.suspension(car, stage, 1.0 / 60.0, atan2(-direction.x, -direction.z))
-		if not motion.grounded:
-			airborne += 1.0 / 60.0
-			flight = maxf(flight, car.position.y - stage.ground(car.position))
-		elif airborne > 0.0 and landed == INF:
-			landed = s
-	check(airborne > 1.0 and flight > 6.0, "the jump throws a car into a long flight (%.2f s, %.1f m above the ground)" % [airborne, flight])
-	check(landed < mine.CORNER_BEGIN, "a car at 100 km/h lands %.0f m past the lip, before the corner" % (landed - mine.LIP))
+	# --- At 100 km/h a car flies off the lip and lands on the slope before the
+	# corner; at walking pace it rolls down on its wheels.
+	var fast = drive_over(stage, mine, 100.0 / 3.6)
+	check(fast.airborne > 0.8 and fast.landed > mine.LIP + mine.DROP_LENGTH * 0.5 and fast.landed < mine.LIP + mine.DROP_LENGTH, "at 100 km/h a car flies %.2f s and lands on the slope %.0f m past the lip" % [fast.airborne, fast.landed - mine.LIP])
+	var slow = drive_over(stage, mine, 15.0 / 3.6)
+	check(slow.airborne < 0.1, "at 15 km/h a car rolls down the plunge on its wheels (%.2f s in the air)" % slow.airborne)
+	var middle = drive_over(stage, mine, 50.0 / 3.6)
+	print("INFO: at 50 km/h %.2f s in the air, lands %.0f m past the lip" % [middle.airborne, middle.landed - mine.LIP])
 
 	# --- Australian bush and landmarks.
 	var c = mine.scenery.counts
 	check(int(c.get("gums", 0)) > 150, "open eucalyptus woodland (%d gum trees)" % int(c.get("gums", 0)))
-	check(stage.trees.size() == int(c.get("gums", 0)), "gum trees stop cars like any tree")
+	check(stage.trees.size() > int(c.get("gums", 0)) + 300, "gum trees and the pine plantation stop cars (%d trees)" % stage.trees.size())
 	check(int(c.get("tussocks", 0)) > 2000 and int(c.get("boulders", 0)) > 40 and int(c.get("termite_mounds", 0)) > 60, "tussock grass, granite tors and termite mounds")
+	var pines_at_jump = true
+	for i in range(stage.trees.size() - int(c.get("gums", 0))):
+		pines_at_jump = pines_at_jump and mine.in_plantation(stage.trees[i])
+	check(pines_at_jump, "pines grow only in the plantation around the jump")
+	check(stage.get_node_or_null("MineshaftCreek") != null and stage.get_node_or_null("JumpScorecards") != null, "creek at the bottom and fans' scorecards at the jump")
 	var clear_road = true
 	for tree in stage.trees:
 		clear_road = clear_road and stage.road_distance(tree) > 9.0

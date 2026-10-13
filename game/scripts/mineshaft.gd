@@ -6,13 +6,15 @@ extends "res://scripts/stage_biome.gd"
 # the finish. Deterministic geometry shared by driving, walking, camp placement,
 # rendering and every multiplayer client.
 
-# Lip of the giant jump: a near-vertical cliff of DROP metres over DROP_LENGTH,
-# then a run-out falling RUNOUT metres more. Crews flying at 100+ km/h land
-# 35-45 m beyond the lip; the corner starts well after that.
+# The Mineshaft: past a sharp lip the road plunges DROP metres over
+# DROP_LENGTH (over 30° at its steepest) to a creek crossing at the bottom.
+# Taken slowly the car rolls down on its wheels; at speed it leaves the lip
+# and lands halfway to three-quarters of the way down, as on the real stage.
 const LIP = 620.0
-const DROP = 14.0
-const DROP_LENGTH = 8.0
-const RUNOUT = 2.0
+const DROP = 20.0
+const DROP_LENGTH = 46.0
+const CREEK = LIP + DROP_LENGTH + 6.0
+const CREEK_HALF_WIDTH = 4.0
 # Corner after the landing.
 const CORNER_BEGIN = LIP + 50.0
 const CORNER_END = LIP + 76.0
@@ -83,9 +85,15 @@ func elevation(s: float) -> float:
 	for crest in CRESTS:
 		var t = (s - crest[0]) / crest[2]
 		y += crest[1] * exp(-t * t)
-	# The drop-off: a near-vertical cliff, then a run-out to the landing.
-	y -= DROP * smoothstep(LIP, LIP + DROP_LENGTH, s) + RUNOUT * smoothstep(LIP + DROP_LENGTH, LIP + 60.0, s)
+	# The plunge, and a shallow dip where the road fords the creek.
+	y -= DROP * plunge(clampf((s - LIP) / DROP_LENGTH, 0.0, 1.0))
+	y -= 0.35 * exp(-pow((s - CREEK) / CREEK_HALF_WIDTH, 2.0))
 	return y + sin(s * 0.23) * 0.03
+
+# Fraction of the drop at fraction t of the plunge: a sharp lip, steepest a
+# third of the way down, then easing out onto the creek flat (slope ∝ t(1-t)²).
+static func plunge(t: float) -> float:
+	return t * t * (6.0 - 8.0 * t + 3.0 * t * t)
 
 func _keyed_elevation(s: float) -> float:
 	var last = KEYS.size() - 3
@@ -140,6 +148,21 @@ func roadside_rock_blocked(p: Vector3) -> bool:
 
 func woodland_blocked(pos: Vector3, padding: float) -> bool:
 	return reserved(pos, padding)
+
+# The jump lies in a pine plantation, as the real stage did on the edge of
+# Canberra; the shared conifer forest grows only inside it.
+func in_plantation(p: Vector3) -> bool:
+	var s: float = stage.road_s(p)
+	return s > LIP - 170.0 and s < LIP + 40.0 and absf(p.x - stage.at(s).x) < 120.0
+
+func forest_tree_count() -> int:
+	return 2600
+
+func forest_tree_max_height() -> float:
+	return 19.0
+
+func tree_blocked(p: Vector3) -> bool:
+	return not in_plantation(p) or reserved(p, 1.0) or stage.road_distance(p) < 11.0
 
 func build_details(_cooperative: bool) -> void:
 	scenery.build(stage, self)

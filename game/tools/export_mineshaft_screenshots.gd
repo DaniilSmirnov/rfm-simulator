@@ -19,12 +19,12 @@ func run() -> void:
 	# A rally car flying off the lip of the giant jump, seen from the landing bank.
 	var racer = game.Props.rally_car(1)
 	game.add_child(racer)
-	var station = mine.LIP + 14.0
-	racer.position = stage.at(mine.LIP) + stage.direction(mine.LIP) * 14.0 + Vector3(0, -1.6, 0)
-	racer.rotation = Vector3(0.1, atan2(-stage.direction(station).x, -stage.direction(station).z), 0)
-	var view = stage.at(mine.LIP + 40.0) + stage.side(mine.LIP + 40.0) * -16.0
+	var station = mine.LIP + 16.0
+	racer.position = stage.at(station) + Vector3(0, 3.2, 0)
+	racer.rotation = Vector3(0.18, atan2(-stage.direction(station).x, -stage.direction(station).z), 0)
+	var view = stage.at(mine.CREEK + 6.0) + stage.side(mine.CREEK) * -14.0
 	view.y = stage.ground(view) + 1.8
-	rig.aim(view, racer.position + Vector3(0, -1.5, 0), 64.0)
+	rig.aim(view, stage.at(mine.LIP + 10.0) + Vector3(0, 1.5, 0), 66.0)
 	await rig.capture("res://textures/previews/stage_5.webp", Vector2i(480, 240))
 	await rig.capture("res://../docs/screenshots/mineshaft-jump.webp", Vector2i(1920, 1080))
 

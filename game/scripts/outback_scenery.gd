@@ -34,7 +34,9 @@ func build(owner_stage, owner_biome) -> void:
 	_homestead()
 	_kangaroo_signs()
 	_jump_sign()
-	for node_name in ["MineHeadframe", "Homestead", "KangarooSigns", "MineshaftSign"]:
+	_scorecards()
+	_creek()
+	for node_name in ["MineHeadframe", "Homestead", "KangarooSigns", "MineshaftSign", "JumpScorecards"]:
 		var node = stage.get_node_or_null(node_name)
 		if node != null:
 			MeshMerge.bake(node)
@@ -76,7 +78,7 @@ func _eucalypts() -> void:
 			continue
 		for k in range(rng.randi_range(2, 8)):
 			var p = center + Vector3(rng.randf_range(-11, 11), 0, rng.randf_range(-11, 11))
-			if not open_ground(p, 9.5, 2.0):
+			if not open_ground(p, 9.5, 2.0) or biome.in_plantation(p):
 				continue
 			gums.append({"base": surface(p) - Vector3.UP * 0.05, "height": rng.randf_range(9.0, 17.0), "yaw": rng.randf() * TAU, "shade": rng.randf_range(-0.05, 0.06)})
 	stage.woodland.tree_layers("GumTree", gums, [
@@ -309,3 +311,59 @@ func _jump_sign() -> void:
 	Props.label_3d(sign, Vector3(0, 2.25, 0.07), "MINESHAFT", 96, 0.006, Color("f0dcae"))
 	Props.label_3d(sign, Vector3(0, 1.92, 0.07), "ТРАМПЛИН 120 м", 48, 0.005, Color("f0dcae"))
 	Props.label_3d(sign, Vector3(0, 2.25, -0.07), "MINESHAFT", 96, 0.006, Color("f0dcae"), PI)
+
+# Fans traditionally score every crew over the Mineshaft on big cards.
+func _scorecards() -> void:
+	var cards = Node3D.new()
+	cards.name = "JumpScorecards"
+	stage.add_child(cards)
+	var scores = ["6", "7.5", "8", "9.5", "10"]
+	for i in range(scores.size()):
+		var s: float = biome.LIP + 4.0 + i * 3.2
+		var p = stage.at(s) + stage.side(s) * -(stage.road_width(s) * 0.5 + 4.5 + (i % 2) * 0.8)
+		p.y = stage.ground(p)
+		var card = _anchor("Card%d" % i, p, stage.side(s))
+		card.reparent(cards)
+		Props.cylinder(card, Vector3(0, 0.75, 0), 0.03, 0.03, 1.5, TIMBER, 5)
+		Props.box(card, Vector3(0, 1.6, 0), Vector3(0.75, 0.55, 0.04), Color("f4f1e6"))
+		Props.label_3d(card, Vector3(0, 1.6, 0.025), scores[i], 96, 0.005, Color("b0322a"))
+
+# A shallow creek crosses the road at the bottom of the plunge: a strip of
+# water draped over the gully floor, edged with river stones.
+func _creek() -> void:
+	var st = SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var s: float = biome.CREEK
+	var along = stage.direction(s)
+	var across = stage.side(s)
+	var stones: Array = []
+	var stone_colors: Array = []
+	for i in range(-40, 40):
+		var quad: Array = []
+		for k in [i, i + 1]:
+			var meander = sin(k * 0.21) * 1.6
+			for edge in [-1.6, 1.6]:
+				var p = stage.at(s) + across * k * 2.0 + along * (meander + edge)
+				p.y = stage.terrain_surface_height(p) + (0.06 if stage.road_distance(p) > stage.road_width(s) * 0.5 else 0.08)
+				quad.append(p)
+		for v in [quad[0], quad[2], quad[1], quad[1], quad[2], quad[3]]:
+			st.set_color(Color(0.33, 0.47, 0.52, 0.78))
+			st.add_vertex(v)
+		if i % 3 == 0 and absf(i) > 3:
+			var stone = quad[0] + along * (2.2 if i % 2 == 0 else -2.2)
+			stones.append(stage.woodland.shared_stone_pose(surface(stone), rng.randf_range(0.2, 0.45), rng.randf() * TAU))
+			stone_colors.append(Color("8f8a80"))
+	st.generate_normals()
+	var node = MeshInstance3D.new()
+	node.name = "MineshaftCreek"
+	node.mesh = st.commit()
+	var mat = StandardMaterial3D.new()
+	mat.vertex_color_use_as_albedo = true
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.roughness = 0.12
+	mat.metallic_specular = 0.8
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	node.material_override = mat
+	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	stage.add_child(node)
+	stage.detail_batch("CreekStones", stage.NATURE_STONE, stones, stone_colors)
