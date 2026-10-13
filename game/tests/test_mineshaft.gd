@@ -80,6 +80,32 @@ func run() -> void:
 	check(turning(stage, mine.CORNER_BEGIN - 4.0, mine.CORNER_END + 4.0) > 0.7, "a corner follows the landing")
 	check(turning(stage, mine.CLOSING_BEGIN, mine.CLOSING_END) > 3.0, "short section of linked bends before the finish")
 	check(stage.rally_speed(mine.CORNER_BEGIN + 5.0) < stage.rally_speed(mine.LIP - 60.0), "crews brake for the corner after the jump")
+	# --- Drivers may misjudge the plunge: some brake properly, some too little,
+	# some not at all. Everything else about their pace is unchanged.
+	var Traffic = preload("res://scripts/rally_traffic.gd")
+	var clean = 0
+	var partial = 0
+	var bold = 0
+	for id in range(1, 201):
+		var n = Traffic.nerve(id)
+		check(n == Traffic.nerve(id), "a driver's nerve is repeatable")
+		if n == 0.0:
+			clean += 1
+		elif n < 1.0:
+			partial += 1
+		else:
+			bold += 1
+	check(clean > 50 and partial > 40 and bold > 25, "drivers differ: %d brake, %d brake short, %d do not lift" % [clean, partial, bold])
+	var zone: Vector2 = mine.jump_zone()
+	var lift = Traffic.competition_target(stage, mine.LIP - 5.0)
+	var half = Traffic.competition_target(stage, mine.LIP - 5.0, 1.0, false, 0.5)
+	var flat = Traffic.competition_target(stage, mine.LIP - 5.0, 1.0, false, 1.0)
+	check(lift < half and half < flat, "braking for the plunge shrinks with nerve (%.0f, %.0f, %.0f km/h)" % [lift * 3.6, half * 3.6, flat * 3.6])
+	check(flat > 100.0 / 3.6, "a driver who does not lift takes the lip above 100 km/h (%.0f km/h)" % (flat * 3.6))
+	check(Traffic.competition_target(stage, zone.x - 20.0, 1.0, false, 1.0) == Traffic.competition_target(stage, zone.x - 20.0), "no effect before the braking zone")
+	check(Traffic.competition_target(stage, mine.CLOSING_BEGIN, 1.0, false, 1.0) == Traffic.competition_target(stage, mine.CLOSING_BEGIN), "no effect after the corner")
+	check(Traffic.competition_target(stage, mine.LIP - 5.0, 1.0, true, 1.0) == Traffic.competition_target(stage, mine.LIP - 5.0, 1.0, true), "no effect on a reverse pass")
+
 	var inside = true
 	for s in range(0, int(Stage.LENGTH), 4):
 		inside = inside and absf(stage.at(s).x) < 120.0

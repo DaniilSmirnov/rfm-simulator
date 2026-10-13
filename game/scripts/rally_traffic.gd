@@ -31,10 +31,21 @@ const LANE_INTERVAL = 0.12
 static func profile(id: int) -> Dictionary:
 	return {"bias": sin(id * 1.91) * 0.55, "phase": fmod(id * 2.37, TAU), "pace": 0.96 + fmod(id * 0.618, 1.0) * 0.08}
 
+# How much of the braking for an abrupt drop a driver skips, 0..1, fixed per
+# driver: about 40% brake properly, 35% brake too little or too late, 25% do
+# not lift at all and meet the landing and the corner after it at speed.
+static func nerve(id: int) -> float:
+	var h = fposmod(sin(id * 78.233 + 12.9898) * 43758.5453, 1.0)
+	if h < 0.4:
+		return 0.0
+	if h < 0.75:
+		return lerpf(0.35, 0.75, (h - 0.4) / 0.35)
+	return 1.0
+
 static func nominal(racer: Dictionary, s: float) -> float:
 	return racer.get("bias", 0.0) + sin(s / 34.0 + racer.get("phase", 0.0)) * 0.24 + sin(s / 71.0 + racer.get("phase", 0.0) * 1.7) * 0.12
 
-static func competition_target(stage: Node3D, progress: float, pace: float = 1.0, reverse: bool = false) -> float:
+static func competition_target(stage: Node3D, progress: float, pace: float = 1.0, reverse: bool = false, nerve_share: float = 0.0) -> float:
 	var station = stage.LENGTH - progress if reverse else progress
 	var travel_sign = -1.0 if reverse else 1.0
 	# Braking envelope: arrive at every bend ahead no faster than its speed.
@@ -44,6 +55,11 @@ static func competition_target(stage: Node3D, progress: float, pace: float = 1.0
 		var bend = _bend_target(stage, clampf(station + travel_sign * ahead, 0.0, stage.LENGTH - 0.01), travel_sign)
 		target = minf(target, sqrt(bend * bend + 2.0 * PLAN_BRAKE * ahead))
 		ahead += BRAKE_STEP
+	# A driver short on braking carries speed through the drop zone.
+	if nerve_share > 0.0 and not reverse:
+		var zone: Vector2 = stage.biome.jump_zone()
+		if station >= zone.x and station <= zone.y:
+			target = lerpf(target, MAX_COMPETITION_SPEED, nerve_share)
 	return clampf(target * pace, 0.0, MAX_COMPETITION_SPEED)
 
 # Speed (m/s) through the station itself, from the tightest bend of the next
@@ -86,7 +102,7 @@ static func _speed_limit(game: Node3D, racer: Dictionary, s: float) -> float:
 	var role = str(racer.get("role", "racer"))
 	if role in ["racer", "zero"]:
 		var reference = Tracks.sample(racer.get("track_parts", PackedInt32Array()), s, game.course.pass_index == 2, role == "zero")
-		var target = minf(MAX_COMPETITION_SPEED, float(reference.speed) * racer.get("pace", 1.0)) if not reference.is_empty() else competition_target(game.stage, s, racer.get("pace", 1.0), game.course.pass_index == 2)
+		var target = minf(MAX_COMPETITION_SPEED, float(reference.speed) * racer.get("pace", 1.0)) if not reference.is_empty() else competition_target(game.stage, s, racer.get("pace", 1.0), game.course.pass_index == 2, float(racer.get("nerve", 0.0)))
 		return recovery_speed(target, racer) if role == "racer" else target
 	var cap = Injuries.ambulance_speed(racer, s) if role == "ambulance" else INF
 	return minf(maxf(0.0, game.race_speed(s) * racer.get("pace", 1.0)), cap)

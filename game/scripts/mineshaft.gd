@@ -117,6 +117,11 @@ func rally_speed(s: float) -> float:
 		return 13.0
 	return 17.0 if s < CLOSING_END + 4.0 else 24.0
 
+# Crews brake for the plunge as for a bend; the zone starts where that braking
+# begins and ends at the corner after the landing.
+func jump_zone() -> Vector2:
+	return Vector2(LIP - 200.0, LIP + DROP_LENGTH + 4.0)
+
 func roughness(s: float) -> float:
 	# Corrugations of a dry outback road.
 	return sin(s * 0.9) * 0.025 + sin(s * 2.3) * 0.012
