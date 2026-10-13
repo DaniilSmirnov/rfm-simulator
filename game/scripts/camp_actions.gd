@@ -79,6 +79,8 @@ func begin_placement(kind: String) -> void:
 		"firewood": Props.campfire(game.placement_preview)
 		"cauldron": Props.cauldron(game.placement_preview)
 		"flag": Props.rally_fans_map_flag(game.placement_preview, Vector3.ZERO, 0.0, game.flag_count())
+	# A ghost of the furniture, not yet something to stand on.
+	game.placement_preview.remove_from_group("perch")
 	game.placement_material = Props.material(Color("82c991"))
 	for child in game.placement_preview.find_children("*", "MeshInstance3D", true, false):
 		child.material_override = game.placement_material

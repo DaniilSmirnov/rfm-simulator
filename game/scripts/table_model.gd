@@ -10,6 +10,7 @@ extends RefCounted
 # Everything is baked into one mesh per (style, variant).
 const P = preload("res://scripts/props.gd")
 const MeshMerge = preload("res://scripts/mesh_merge.gd")
+const Perches = preload("res://scripts/perches.gd")
 const VARIANTS = 6
 const TOP = 0.885
 const HALF_X = 1.05
@@ -24,6 +25,7 @@ const RED_CUP = Color("c9302c")
 
 static func build(parent: Node3D, variant: int = 0, style: String = "camp") -> void:
 	var v = posmod(variant, VARIANTS)
+	Perches.mark(parent, false)
 	_frame(parent)
 	var rng = RandomNumberGenerator.new()
 	rng.seed = 7919 + v * 104729 + (1 if style == "desk" else 0)
