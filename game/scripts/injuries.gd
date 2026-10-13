@@ -359,8 +359,12 @@ func _update_host(delta: float) -> void:
 func _ambulance_at_casualty(ambulance: Dictionary, record: Dictionary) -> bool:
 	# Route progress is only a dispatch hint. An impact can displace a casualty
 	# off the road, so station values can differ even when the ambulance is
-	# physically stopped beside them.
-	return ambulance.node.position.distance_to(record.pos) <= Medics.WALK_RADIUS and float(ambulance.get("drive_speed", 0.0)) <= 0.2
+	# physically stopped beside them. A casualty far from the road is reached
+	# on foot from the road, so what counts is being level with them (same
+	# station), never the straight-line distance.
+	if float(ambulance.get("drive_speed", 0.0)) > 0.2:
+		return false
+	return ambulance.node.position.distance_to(record.pos) <= Medics.WALK_RADIUS or absf(float(ambulance.s) - float(record.station)) <= Medics.STATION_TOLERANCE
 
 func _retarget_all() -> void:
 	for racer in game.racers:
