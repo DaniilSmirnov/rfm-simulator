@@ -15,6 +15,10 @@ var game:
 var relief = preload("res://scripts/tree_relief.gd").new()
 
 func drive(delta: float) -> void:
+	game.rides.update()
+	if game.rides.riding():
+		game.rides.follow()
+		return
 	if game.room.connected and game.room.predict_drive(delta):
 		return
 	# Carry fractional ticks across render frames; cap long stalls at one second.
@@ -27,12 +31,14 @@ func drive(delta: float) -> void:
 	# Support explicit resets/recovery without discarding tangential momentum.
 	if absf(game.speed - initial_speed) > 3:
 		game.vehicle_motion.velocity += initial_forward * (game.speed - initial_speed)
+	# A broken car no longer drives: it only rolls to a stop or follows a tow rope.
+	var wrecked = game.condition <= 0
 	for step in range(steps):
-		var throttle = Input.get_axis("back", "forward")
-		var steer = Input.get_axis("left", "right")
+		var throttle = 0.0 if wrecked else Input.get_axis("back", "forward")
+		var steer = 0.0 if wrecked else Input.get_axis("left", "right")
 		var offroad = game.stage.road_distance(game.car.position) > 4.1
 		var max_speed = CarRegistry.OFFROAD_SPEED if offroad else CarRegistry.TOP_SPEED
-		var braking = Input.is_action_pressed("brake")
+		var braking = wrecked or Input.is_action_pressed("brake")
 		var previous_heading = game.heading
 		game.heading = game.vehicle_motion.handling.advance(game.vehicle_motion, game.heading, throttle, steer, braking, game.stage.grip(game.car.position), max_speed, game.selected_car, dt)
 		var forward = Vector3(-sin(game.heading), 0, -cos(game.heading))
@@ -88,7 +94,8 @@ func drive(delta: float) -> void:
 		game.condition = maxf(0, game.condition - delta * 6.0 * game.vehicle_motion.flood)
 		if game.vehicle_motion.flood > 0.3 and game.toast_time <= 0:
 			game.toast("Машина набирает воду! Выезжай на берег или выходи (F).")
-	if game.condition <= 0:
+	# Alone nobody can tow the car or give a lift; in a room car_rides.gd decides.
+	if game.condition <= 0 and not game.room.connected:
 		if flooded:
 			game.die("Легковушка утонула в финском озере.\nДальше только пешком.")
 			return
@@ -132,6 +139,7 @@ func contact_blocked(start: Vector3, end: Vector3, driving: bool) -> bool:
 	return false
 
 func walk(delta: float) -> void:
+	game.rides.update()
 	if relief.update(delta):
 		return
 	var remaining = maxf(delta, 0.0)
@@ -217,15 +225,16 @@ func update_camera(delta: float) -> void:
 	game.collapse_time = minf(0.8, game.collapse_time + delta) if game.beers >= 30 else 0.0
 	var collapse = smoothstep(0, 0.8, game.collapse_time)
 	if game.in_car:
-		var travel_yaw = game.heading + (PI if game.speed < -0.5 else 0.0)
+		var body: Node3D = game.rides.vehicle()
+		var travel_yaw = game.rides.heading() + (PI if game.rides.speed() < -0.5 else 0.0)
 		game.view_yaw = lerp_angle(game.view_yaw, travel_yaw, 1.0 - exp(-delta * 2.8))
 		var behind = Vector3(sin(game.view_yaw), 0, cos(game.view_yaw))
 		var elevation = clampf(atan2(4.4, 8.2) - (game.view_pitch + 0.12), 0.14, 1.25)
 		var distance = Vector2(8.2, 4.4).length()
-		var desired = game.car.position + behind * cos(elevation) * distance + Vector3.UP * sin(elevation) * distance
+		var desired = body.position + behind * cos(elevation) * distance + Vector3.UP * sin(elevation) * distance
 		desired.y = maxf(desired.y, game.stage.ground(desired) + 1.1)
 		game.camera.position = game.camera.position.lerp(desired, 1 - exp(-delta * 7))
-		game.camera.look_at(game.car.position + Vector3(0, 1.1, 0) - behind * 1.5)
+		game.camera.look_at(body.position + Vector3(0, 1.1, 0) - behind * 1.5)
 	else:
 		game.camera.position = game.walker + Vector3(0, lerpf(1.45 if game.seated else 1.72, 0.36, collapse) + sin(game.elapsed * 12) * 0.015, 0)
 		var sip = sin(clampf((game.drink_time - 1.3) / 1.2, 0, 1) * PI) if game.drink_time >= 0 else 0.0
@@ -237,17 +246,26 @@ func update_camera(delta: float) -> void:
 	game.camera.rotation.x += sin(game.drunk_phase * 2.0) * deg_to_rad(0.6) * game.drunk_strength
 	game.camera.position += Vector3(sin(game.elapsed * 91), cos(game.elapsed * 73), 0) * game.impact_shake * 0.12
 
-func toggle_car() -> void:
+# Getting into a car (own or a friend's) needs free hands and firm feet.
+func can_change_seat() -> bool:
 	if not game.in_car and game.cargo.held.has(game.chair_owner()):
 		game.toast("Сначала поставь предмет или верни коробку в багажник.")
-		return
+		return false
 	if game.jump_height > 0.01 or game.jump_velocity > 0:
-		return
+		return false
 	if game.beers >= 30 or game.injuries.down:
 		game.toast("Ты лежишь. Дождись восстановления — три минуты." if game.beers >= 30 else "Ты лежишь. Дождись скорую.")
-		return
+		return false
 	if game.drink_time >= 0 or game.eat_time >= 0:
 		game.toast("Сначала закончи есть или пить и освободи руки.")
+		return false
+	return true
+
+func toggle_car() -> void:
+	if game.rides.riding():
+		game.rides.leave()
+		return
+	if not can_change_seat():
 		return
 	if game.in_car:
 		if absf(game.speed) > 1:

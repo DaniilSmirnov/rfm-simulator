@@ -347,11 +347,11 @@ func car_contact(racer: Dictionary, delta: float) -> void:
 
 func stone_impact(id: String) -> void:
 	game.impact_serials[id] = int(game.impact_serials.get(id, 0)) + 1
-	if game.room.is_host and game.room.host_drives.has(id) and game.room.peers.has(id) and game.room.peers[id].state.in_car:
+	if game.room.is_host and game.room.host_drives.has(id) and game.room.peers.has(id) and game.rides.driving(game.room.peers[id].state):
 		game.room.host_drives[id].condition = maxf(0, game.room.host_drives[id].condition - 0.8)
 	if id == game.room.player_id or id == "local":
 		game.impact_shake = 0.8
-		if game.in_car:
+		if game.in_car and not game.rides.riding():
 			game.condition = maxf(0, game.condition - 0.8)
 		game.toast("Гравий из-под колёс! Отойди дальше от края СУ.")
 
@@ -535,7 +535,11 @@ func draw_recovery_ropes() -> void:
 		if towed == null:
 			continue
 		var origin = game.room.v(link.pos)
-		if link.player == game.room.player_id or (not game.room.connected and link.player == "local"):
+		var lead = Recovery.link_node(game, {"car": link.player}) if link.get("hitch", false) else null
+		if lead != null:
+			# A rope between two cars: from the tow car's rear to the towed car.
+			origin = lead.position + lead.basis.z.normalized() * 2.0 - Vector3(0, 0.5, 0)
+		elif link.player == game.room.player_id or (not game.room.connected and link.player == "local"):
 			origin = game.walker
 		elif game.room.peers.has(link.player) and game.room.peers[link.player].has("avatar"):
 			origin = game.room.peers[link.player].avatar.position

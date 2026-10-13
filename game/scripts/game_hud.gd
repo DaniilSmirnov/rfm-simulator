@@ -395,7 +395,7 @@ func update_hud() -> void:
 		int(game.camp_cooking.cook_time / game.camp_cooking.COOK_SECONDS * 100) if pot else 0,
 		int(game.camp_cooking.cook_time / 45 * 100) if pot and game.mobile_mode else 0,
 		target.get("label", ""), game.toast_label.text if game.mobile_mode and game.toast_time > 0 else "",
-		game.toast_time > 0 if game.mobile_mode else false, game.sober_remaining if game.beers >= 30 else 0]
+		game.toast_time > 0 if game.mobile_mode else false, game.sober_remaining if game.beers >= 30 else 0, game.rides.hud_state()]
 	if state == game.hud_state:
 		return
 	game.hud_state = state
@@ -413,11 +413,18 @@ func update_hud() -> void:
 	course_text = game.course.caption()
 	quest_text = "%s Выбрать место для лагеря\n%s Разложить стол\n%s Поставить стулья\n%s Пожарить и съесть шашлык\n%s Посмотреть %d экипажей" % ["[x]" if game.camp != null else "[ ]", "[x]" if game.camp != null else "[ ]", "[x]" if game.has_chairs else "[ ]", "[x]" if game.eaten else "[ ]", "[x]" if game.passed >= game.RALLY_CREW_LIMIT else "[ ]", game.RALLY_CREW_LIMIT]
 	if game.packing.active():
-		quest_text = "Оба прохода завершены\nВернуть вещи в багажники: осталось %d\nБагажник открывается при подходе\nF — взять предмет / вернуть коробку\nЗатем все возвращаются в свои машины" % remaining_items
+		quest_text = "Оба прохода завершены\nВернуть вещи в багажники: осталось %d\nБагажник открывается при подходе\nF — взять предмет / вернуть коробку\nЗатем все садятся в машины, свои или к друзьям" % remaining_items
 	status_text = "ПРОХОД %d/2 · ЭКИПАЖИ %d/%d · ПОМОЩЬ %d\nВЫЕЗД %02d:%02d" % [game.course.pass_index, game.passed, game.RALLY_CREW_LIMIT, game.helped, int(game.elapsed) / 60, int(game.elapsed) % 60]
-	if game.in_car:
+	if game.rides.riding():
+		info_text = "ПАССАЖИР    ·    МАШИНА: %s    ·    %02d КМ/Ч" % [game.rides.name_of(game.rides.ride).to_upper(), int(absf(game.rides.speed()) * 3.6)]
+		hint_text = "Мышь — смотреть   ·   F — выйти, когда машина стоит"
+	elif game.in_car:
 		info_text = "%02d КМ/Ч    ·    ЛЕГКОВУШКА %d%%    ·    %s" % [int(absf(game.speed) * 3.6), int(game.condition), "ОБОЧИНА" if game.stage.road_distance(game.car.position) > 4 else "ГРАВИЙ / КОЛЕЯ"]
 		hint_text = "WASD / стрелки — газ и руль   ·   Space — тормоз   ·   F — выйти   ·   Home — вернуть на СУ"
+		if game.rides.hitch_candidate() != "" and game.rides.hitch == "":
+			hint_text += "   ·   T — взять друга на трос"
+		if game.condition <= 0:
+			info_text = "МАШИНА СЛОМАНА    ·    САДИСЬ К ДРУГУ ИЛИ ЖДИ ТРОС"
 	else:
 		info_text = "ЗРИТЕЛЬ    ·    %s · ШАМПУРЫ %d/10    ·    %s" % [game.camp_grill.status(false), game.camp_grill.servings, game.course.caption()]
 		hint_text = "WASD — идти   ·   Shift — бег   ·   Space — прыжок   ·   мышь — смотреть   ·   F — действие   ·   Z — стол   ·   C — стулья   ·   G — мангал   ·   R — статус СУ"
@@ -448,13 +455,15 @@ func update_hud() -> void:
 	if game.camp_cooking.pot != null:
 		status_text += "\nПЛОВ %s · %d/10" % [("ГОТОВ" if game.camp_cooking.phase == "ready" else ("ГОТОВИМ %d%%" % int(game.camp_cooking.cook_time / game.camp_cooking.COOK_SECONDS * 100) if game.camp_cooking.phase == "cooking" else "КАЗАН ПУСТ")), game.camp_cooking.servings]
 	if game.packing.active() and remaining_items == 0:
-		hint_text = "Лагерь собран. Езжай в парк сервиса на старте или финише СУ; ждём всех друзей." if game.in_car else "Лагерь собран. Садись в машину (F) и езжай в парк сервиса."
+		hint_text = "Лагерь собран. Езжай в парк сервиса на старте или финише СУ; ждём всех друзей." if game.in_car else "Лагерь собран. Садись в машину, свою или к другу (F), и езжай в парк сервиса."
 	if game.mobile_mode:
 		course_text = game.course.caption().replace("ПРОХОД ", "СУ ").replace(" · ПРЯМО", "").replace(" · ОБРАТНО", "").replace("ДО ОТКРЫТИЯ СУ", "СТАРТ ЧЕРЕЗ")
 		if injury != "" or game.crews.car_towed or game.tow_target != null:
-			info_text = info_text.replace("УДЕРЖИВАЙ T", "УДЕРЖИВАЙ ТРОС")
+			info_text = info_text.replace("УДЕРЖИВАЙ T", "УДЕРЖИВАЙ ТРОС").replace("T — ОТЦЕПИТЬ", "«ТРОС» — ОТЦЕПИТЬ")
+		elif game.rides.riding():
+			info_text = "ПАССАЖИР · %02d КМ/Ч" % int(absf(game.rides.speed()) * 3.6)
 		elif game.in_car:
-			info_text = "%02d КМ/Ч · МАШИНА %d%%" % [int(absf(game.speed) * 3.6), int(game.condition)]
+			info_text = "%02d КМ/Ч · МАШИНА %d%%" % [int(absf(game.speed) * 3.6), int(game.condition)] if game.condition > 0 else "МАШИНА СЛОМАНА · САДИСЬ К ДРУГУ"
 		elif game.drink_time < 0 and game.eat_time < 0 and game.beers < 30:
 			if game.packing.active():
 				info_text = "ВЕРНУТЬ ВЕЩИ В БАГАЖНИК · ОСТАЛОСЬ %d" % remaining_items
@@ -479,6 +488,8 @@ func update_hud() -> void:
 # whose car is being towed, and how many people help.
 func tow_text() -> String:
 	var helpers = " · ВМЕСТЕ: %d" % game.recovery_helpers if game.recovery_helpers > 1 else ""
+	if game.rides.hitch != "" and game.tow_target != game.car:
+		return "%02d КМ/Ч · ТЯНЕМ МАШИНУ ДРУГА НА ТРОСЕ   ·   T — ОТЦЕПИТЬ" % int(absf(game.speed) * 3.6)
 	if game.tow_distance < 0:
 		var whose = "СВОЮ МАШИНУ" if game.tow_target == game.car else "МАШИНУ ДРУГА"
 		return "ТЯНЕМ %s%s   ·   УДЕРЖИВАЙ T" % [whose, helpers]

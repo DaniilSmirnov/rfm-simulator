@@ -9,7 +9,7 @@ const TILE = Vector2(72, 64)
 const TOP = Vector2(64, 60)
 const STICK_FILL = Color("1d2b23aa")
 const STICK_LINE = Color("d7b479aa")
-const SHORT_LABELS = {"Вернуть коробку в багажник": "Вернуть", "Собрать казан с подставкой": "Убрать казан", "Потушить и собрать костёр": "Убрать костёр", "Сесть в машину": "В машину", "Сесть на стул": "На стул", "Встать со стула": "Встать", "Собрать гриб": "Собрать", "Собрать ягоды": "Собрать", "Собрать виноград": "Виноград", "Насадить гриб": "Насадить", "Съесть шашлык": "Шашлык", "Съесть гриб": "Есть гриб", "Выпить пиво": "Пиво", "Потушить и собрать мангал": "Убрать мангал", "Поставить казан на костёр": "На костёр", "Добавить ингредиенты и готовить плов": "Готовить плов", "Съесть плов": "Плов"}
+const SHORT_LABELS = {"Вернуть коробку в багажник": "Вернуть", "Собрать казан с подставкой": "Убрать казан", "Потушить и собрать костёр": "Убрать костёр", "Сесть в машину": "В машину", "Сесть к другу": "К другу", "Сесть на стул": "На стул", "Встать со стула": "Встать", "Собрать гриб": "Собрать", "Собрать ягоды": "Собрать", "Собрать виноград": "Виноград", "Насадить гриб": "Насадить", "Съесть шашлык": "Шашлык", "Съесть гриб": "Есть гриб", "Выпить пиво": "Пиво", "Потушить и собрать мангал": "Убрать мангал", "Поставить казан на костёр": "На костёр", "Добавить ингредиенты и готовить плов": "Готовить плов", "Съесть плов": "Плов"}
 
 var game: Node
 var fingers: Dictionary = {}
@@ -98,7 +98,8 @@ func _layout() -> void:
 		target = game.hud_target if game.hud_target_frame == Engine.get_process_frames() else game.interaction.current()
 	var state: Array = [size, active(), landscape(), world_blocked(), game.in_car, game.placement_kind,
 		gear_open, game.seated, game.beers < 30, game.packing.active(), game.flag_count(),
-		game.foraging.can_eat("berries"), game.tow_target != null, game.nearby_tow_target(), target.get("label", "")]
+		game.foraging.can_eat("berries"), game.tow_target != null, game.nearby_tow_target(), target.get("label", ""),
+		game.rides.ride, game.rides.hitch, game.rides.hitch_candidate() != ""]
 	if state == layout_state:
 		return
 	layout_state = state
@@ -125,15 +126,21 @@ func _layout() -> void:
 	add_button("Пауза", "pause_demo", false, Rect2(Vector2(size.x - EDGE - TOP.x, EDGE), TOP))
 	add_button("Карта", "map", false, Rect2(Vector2(size.x - EDGE - 2 * TOP.x - GAP, EDGE), TOP))
 
-# Two tall pedals under the right thumb; reverse and exit beside them.
+# Two tall pedals under the right thumb; reverse and exit beside them, the
+# tow rope above. A passenger only gets out.
 func _layout_driving() -> Array:
 	var bottom = look_center.y - LOOK_RADIUS - 14
 	var pedal = Vector2(88, 120)
+	var side = size.x - EDGE - 2 * pedal.x - 2 * GAP - TILE.x
+	if game.rides.riding():
+		add_button("Выйти", "interact", false, Rect2(Vector2(side, bottom - 56), Vector2(TILE.x, 56)))
+		return []
 	add_button("Газ", "forward", true, Rect2(Vector2(size.x - EDGE - pedal.x, bottom - pedal.y), pedal))
 	add_button("Тормоз", "brake", true, Rect2(Vector2(size.x - EDGE - 2 * pedal.x - GAP, bottom - pedal.y), pedal))
-	var side = size.x - EDGE - 2 * pedal.x - 2 * GAP - TILE.x
 	add_button("Назад", "back", true, Rect2(Vector2(side, bottom - pedal.y), Vector2(TILE.x, 56)))
 	add_button("Выйти", "interact", false, Rect2(Vector2(side, bottom - 56), Vector2(TILE.x, 56)))
+	if game.rides.hitch != "" or game.rides.hitch_candidate() != "":
+		add_button("Трос", "tow", true, Rect2(Vector2(side, bottom - pedal.y - 56 - GAP), Vector2(TILE.x, 56)))
 	return [["Вернуть", "recover"]]
 
 func _layout_walking(target: Dictionary) -> Array:
@@ -268,7 +275,7 @@ func _move_look(pos: Vector2) -> void:
 
 func button_icon(button: Dictionary) -> Texture2D:
 	var name: String = ICON_NAMES.get(button.action, "hand")
-	if button.action == "interact" and (game.in_car or button.label == "В машину"):
+	if button.action == "interact" and (game.in_car or button.label == "В машину" or button.label.begins_with("К другу")):
 		name = "door"
 	return icons.get(name)
 

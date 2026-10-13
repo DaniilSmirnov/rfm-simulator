@@ -18,7 +18,7 @@ func current() -> Dictionary:
 	if not game.playing or game.paused or game.dead or game.finished or game.drink_time >= 0 or game.eat_time >= 0 or (game.room.is_guest() and game.room.world_paused):
 		return {}
 	if game.in_car:
-		return {"action": "car", "label": "Выйти из машины"} if absf(game.speed) <= 1 else {}
+		return {"action": "car", "label": "Выйти из машины"} if absf(game.rides.speed()) <= 1 else {}
 	if game.beers >= 30 or game.injuries.down:
 		return {}
 	if game.seated:
@@ -29,6 +29,7 @@ func current() -> Dictionary:
 	game.cargo.offers(items, self)
 	if not game.cargo.at_open_trunk(game.chair_owner()):
 		offer(items, game.car.position + Vector3(0, 0.9, 0), 1.4, 4, "car", "Сесть в машину")
+	game.rides.offers(items, self)
 	game.camp_cooking.offers(items, self)
 	if game.stage.solids.bell != null:
 		offer(items, game.stage.solids.bell.handle_position(), 0.35, 2.0, "church_bell", "Позвонить в колокол")
@@ -161,6 +162,7 @@ func activate() -> void:
 		"dig_snow": game.dig_snow(target.value)
 		"pack": game.packing.pack(target.value)
 		"car": game._toggle_car()
+		"ride": game.rides.board(str(target.value))
 		"sit": game.sit_down()
 		"stand": game.stand_up()
 		"collect": game.foraging.collect(int(target.value))

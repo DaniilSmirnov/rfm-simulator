@@ -19,6 +19,7 @@ const Lobby = preload("res://scripts/room_lobby.gd")
 const ActionContext = preload("res://scripts/action_context.gd")
 const SharedActions = preload("res://scripts/shared_actions.gd")
 const DirectLink = preload("res://scripts/direct_link.gd")
+const CarRides = preload("res://scripts/car_rides.gd")
 
 var game: Node3D
 var transport: Node
@@ -351,7 +352,8 @@ func lamp_requests() -> Array:
 func local_state() -> Dictionary:
 	return {"drive_enabled": prediction_enabled, "drive_inputs": prediction.outgoing() if prediction_enabled else [], "pos": a(game.player_position()), "car": a(game.car.position), "heading": snappedf(game.heading, 0.001), "tilt": a(game.car.rotation), "yaw": snappedf(game.view_yaw, 0.001), "pitch": snappedf(game.view_pitch, 0.001), "in_car": game.in_car,
 		"tow": Input.is_action_pressed("tow") and not game.in_car and not game.injuries.down and not game.paused and not game.dead and not game.finished and game.beers < 30 and game.drink_time < 0 and game.eat_time < 0,
-		"push": a(game.walking_intent()), "speed": snappedf(game.speed, 0.01), "beers": game.beers, "trees": tree_requests(), "lamps": lamp_requests(), "beer": snappedf(game.drink_time, 0.01), "eat": snappedf(game.eat_time, 0.01), "food_kind": game.eat_kind, "food_species": game.food_species, "seated": game.seated, "running": game.running(), "airborne": game.jump_height > 0.01, "relief": game.player.relief.active}
+		"push": a(game.walking_intent()), "speed": snappedf(game.speed, 0.01), "beers": game.beers, "trees": tree_requests(), "lamps": lamp_requests(), "beer": snappedf(game.drink_time, 0.01), "eat": snappedf(game.eat_time, 0.01), "food_kind": game.eat_kind, "food_species": game.food_species, "seated": game.seated, "running": game.running(), "airborne": game.jump_height > 0.01, "relief": game.player.relief.active,
+		"ride": game.rides.ride, "hitch": game.rides.hitch, "broken": game.condition <= 0}
 
 # ---------------------------------------------------------------- peers
 
@@ -388,7 +390,7 @@ func _update_peer(p: Dictionary) -> void:
 		p.state.heading = drive.yaw
 		p.state.tilt = [drive.pitch, drive.yaw, drive.roll]
 		p.state.speed = v(drive.velocity).dot(Vector3(-sin(drive.yaw), 0, -cos(drive.yaw)))
-		if p.state.in_car:
+		if CarRides.driving(p.state):
 			p.state.pos = drive.pos
 	var peer = peers[p.id]
 	if p.state != null:
@@ -435,7 +437,7 @@ func _simulate_guest_drive(p: Dictionary) -> void:
 	if not p.state.in_car:
 		solver.motion.velocity = Vector3.ZERO
 	p.state.car = a(solver.node.position)
-	if p.state.in_car:
+	if CarRides.driving(p.state):
 		p.state.pos = p.state.car
 	p.state.heading = solver.yaw
 	p.state.speed = solver.motion.velocity.dot(Vector3(-sin(solver.yaw), 0, -cos(solver.yaw)))
@@ -609,8 +611,6 @@ func apply_drive_events(solver, authoritative: bool) -> void:
 					game.impact_shake = minf(0.8, float(event.speed) * 0.055)
 					game.toast("Удар! Сбавь скорость.")
 	solver.events.clear()
-	if authoritative and solver.condition <= 0:
-		game.die("Легковушка участника разбита. Совместный выезд окончен.")
 
 func recover_drive() -> bool:
 	if is_host or not prediction_enabled:

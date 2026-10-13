@@ -96,6 +96,7 @@ static func clean_state(s):
 			inputs.append(command)
 	var in_car: bool = s.in_car
 	var seated = s.get("seated") == true and not in_car
+	var ride = _member_id(s.get("ride")) if in_car else ""
 	var push = [0.0, 0.0, 0.0]
 	if _vec(s.get("push")):
 		push = [clampf(float(s.push[0]), -1, 1), 0.0, clampf(float(s.push[2]), -1, 1)]
@@ -106,7 +107,12 @@ static func clean_state(s):
 		"trees": _requests(s.get("trees"), 20000), "lamps": _requests(s.get("lamps"), 512),
 		"seated": seated, "running": s.get("running") == true and not in_car and not seated, "airborne": s.get("airborne") == true and not in_car and not seated,
 		"relief": s.get("relief") == true and not in_car and not seated,
+		"ride": ride, "hitch": _member_id(s.get("hitch")) if in_car and ride == "" else "", "broken": s.get("broken") == true,
 		"food_species": s.food_species if str(s.get("food_species", "")) in ["edible", "fly_agaric", "toadstool"] else "edible",
 		"food_kind": s.food_kind if str(s.get("food_kind", "")) in ["meat", "mushroom", "berries", "plov"] else "meat",
 		"eat": clampf(float(s.eat), -1, duration("eat")) if _number(s.get("eat")) else -1.0,
 		"beer": clampf(float(s.get("beer", 0)), -1, duration("drink")) if _number(s.get("beer")) else 0.0}
+
+# A room member id as a car owner (a ride or a tow rope); "" for anything else.
+static func _member_id(value) -> String:
+	return value if value is String and value.length() <= 64 else ""

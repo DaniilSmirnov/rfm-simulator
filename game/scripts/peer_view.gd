@@ -75,7 +75,16 @@ static func animate(game: Node, peer: Dictionary, delta: float, clock: float, fr
 		pose.ground = avatar_pose.position.y
 	CharacterRig.pose(peer.avatar, pose)
 	game.player.relief.draw_peer(peer, state)
-	peer.label.position = peer.car.position + Vector3(0, 2.8, 0) if state.in_car else peer.avatar.position + Vector3(0, 2.3, 0)
+	peer.label.position = _seat_label(game, peer, state) if state.in_car else peer.avatar.position + Vector3(0, 2.3, 0)
+
+# A driver's name hangs over their car; passengers' names stack above the
+# friend's car they ride in.
+static func _seat_label(game: Node, peer: Dictionary, state: Dictionary) -> Vector3:
+	var owner = str(state.get("ride", ""))
+	var ride_car: Node3D = game.rides.car_node(owner)
+	if ride_car == null:
+		return peer.car.position + Vector3(0, 2.8, 0)
+	return ride_car.position + Vector3(0, 3.3 + 0.45 * maxi(0, game.rides.riders(owner).find(str(peer.id))), 0)
 
 # Eating and drinking run locally from the last reported start time so the
 # arm moves smoothly between snapshots.

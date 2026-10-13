@@ -286,6 +286,25 @@ test('relief pose survives sync only for a pedestrian on foot', () => {
   assert.equal(reply.players[0].state.relief, false);
 });
 
+test('a ride in a friend\'s car and a tow rope name a room member and need a seat in a car', () => {
+  const { r, h, g } = setup();
+  const own = p => reply => reply.players.find(x => x.id === p.player).state;
+  let reply = r.sync({ token: g.token, state: { ...state(), in_car: true, ride: h.player, broken: true } }, 1100);
+  assert.equal(own(g)(reply).ride, h.player);
+  assert.equal(own(g)(reply).broken, true);
+  reply = r.sync({ token: g.token, state: { ...state(), in_car: false, ride: h.player } }, 1200);
+  assert.equal(own(g)(reply).ride, '', 'a player on foot rides nobody');
+  for (const ride of [g.player, 'stranger', 7]) {
+    reply = r.sync({ token: g.token, state: { ...state(), in_car: true, ride } }, 1300);
+    assert.equal(own(g)(reply).ride, '', 'only another member\'s car can be ridden');
+  }
+  reply = r.sync({ token: h.token, state: { ...state(), in_car: true, hitch: g.player } }, 1400);
+  assert.equal(own(h)(reply).hitch, g.player);
+  assert.equal(own(h)(reply).broken, false);
+  reply = r.sync({ token: h.token, state: { ...state(), in_car: true, ride: g.player, hitch: g.player } }, 1500);
+  assert.equal(own(h)(reply).hitch, '', 'a passenger tows nothing');
+});
+
 test('running and airborne pedestrian poses survive sync but cannot apply to seated drivers', () => {
   const { r, h } = setup();
   let reply = r.sync({ token: h.token, state: { ...state(), running: true, airborne: true } }, 1100);
