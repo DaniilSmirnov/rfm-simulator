@@ -55,6 +55,17 @@
         "sky_top": "5f8fb8", "sky_horizon": "d9e3dd", "ground_bottom": "4e5f45", "ground_horizon": "d9e3dd",
         "ambient": "c9d6c8", "ambient_energy": 0.4, "fog": "aebdb4", "fog_density": 0.0014
       }
+    },
+    {
+      "id": "mineshaft", "title": "Майншафт", "subtitle": "красный гравий, Австралия",
+      "biome": "res://scripts/mineshaft.gd",
+      "loading": "Буш и эвкалипты",
+      "minimap": "8a3f22e8",
+      "environment": {
+        "sky_top": "2a69bd", "sky_curve": 0.09, "sky_horizon": "bcd3e4", "ground_bottom": "7a4a30", "ground_horizon": "bcd3e4",
+        "ambient": "d9d6c8", "ambient_energy": 0.34, "fog": "c4d0d4", "fog_density": 0.0006
+      },
+      "sun": {"rotation": [-46, -24, 0], "color": "fff0d8", "energy": 0.85}
     }
   ]
 }

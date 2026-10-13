@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { RoomState, MAX_PLAYERS } from '../server/room-core.mjs';
+import { RoomState, MAX_PLAYERS, STAGE_COUNT } from '../server/room-core.mjs';
 const state = (x = 0) => ({ pos: [x, 1, 2], car: [3, 4, 5], heading: 1, yaw: 2, pitch: 0, in_car: false, tow: false, beer: -1 });
 const setup = () => { const r = new RoomState(); const h = r.add('Хозяин', 1000, true); const g = r.add('Друг', 1000); return { r, h, g }; };
 test('mushroom species survives player sync and rejects unknown species', () => {
@@ -417,7 +417,7 @@ test('Finnish Forest selection persists for guests and restored rooms', () => {
  assert.equal(h.stage,4);
  assert.equal(g.stage,4);
  assert.equal(new RoomState(structuredClone(r.data)).sync({token:g.token,state:state()},1200).stage,4);
- assert.equal(new RoomState().add('Host', 1000, true, {stage:9}).stage,4,'unknown stages are clamped to the last one');
+ assert.equal(new RoomState().add('Host', 1000, true, {stage:9}).stage,STAGE_COUNT - 1,'unknown stages are clamped to the last one');
 });
 
 test('raw drive inputs reach only the host and the host never downloads its own world', () => {

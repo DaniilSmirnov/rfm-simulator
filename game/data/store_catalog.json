@@ -49,6 +49,16 @@
     "price": 20
   },
   {
+    "sku": "stage_06",
+    "type": "stage",
+    "content_id": 5,
+    "title": "Майншафт",
+    "free": false,
+    "enabled": true,
+    "purchase_enabled": true,
+    "price": 20
+  },
+  {
     "sku": "car_01",
     "type": "car",
     "content_id": 0,
