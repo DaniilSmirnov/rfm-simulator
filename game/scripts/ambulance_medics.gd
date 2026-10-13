@@ -76,6 +76,7 @@ func _plan_patient(medic: Dictionary, patient: Vector3) -> bool:
 		var route = Navigation.plan(injuries.game, start, goal, ctx)
 		if not route.is_empty():
 			medic.goal = goal
+			medic.patient = patient
 			medic.navigation = {"goal": goal, "route": route, "retry": 0.0}
 			return true
 	return false
@@ -115,6 +116,11 @@ func _step(medic: Dictionary, van: Dictionary, delta: float) -> void:
 			if medic.time >= DOOR_SECONDS:
 				medic.state = "walking"
 		"walking":
+			# A helper can move a casualty after the doctor has planned a route.
+			if record.pos.distance_to(medic.get("patient", record.pos)) > 0.6:
+				if not _plan_patient(medic, record.pos):
+					_return(medic, van)
+					return
 			Navigation.move(injuries.game, medic, medic.goal, delta, false)
 			_face(medic, record.pos)
 			if Navigation.flat(medic.avatar.position).distance_to(Navigation.flat(medic.goal)) < 0.2 and _patient_distance(medic, record.pos) <= REACH:

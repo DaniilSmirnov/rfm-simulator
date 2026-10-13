@@ -27,6 +27,12 @@ func run() -> void:
 	check(not play.stand(key), "cannot stand while still flying")
 	game.injuries._land(game.injuries.records[key])
 	var fallen: Vector3 = game.injuries.records[key].pos
+	game.enable_mobile()
+	game.walker = fallen + Vector3(2, 0, 0)
+	check(game.mobile_controls.tow_caption() == "Тащить", "mobile tow caption names a nearby person")
+	game.walker = fallen + Vector3(10, 0, 0)
+	check(game.mobile_controls.tow_caption() == "Трос", "mobile caption switches back after leaving a person")
+	game.walker = fallen + Vector3(2, 0, 0)
 	var helper = {"pos": game.room.a(fallen + Vector3(2, 0, 0)), "in_car": false, "tow": true, "push": [1, 0, 0]}
 	var occupied = play.update({"local": helper}, 0.1)
 	check(occupied.has("local"), "person interaction consumes tow so it cannot also pull a car")
@@ -45,6 +51,19 @@ func run() -> void:
 	game.injuries.knock("player:local", pos, Vector3(8, 0, 0), pos)
 	game.injuries._land(game.injuries.records["player:local"])
 	check(not play.stand("player:local"), "space cannot bypass treatment for a car casualty")
+	var casualty: Dictionary = game.injuries.records["player:local"]
+	var casualty_start: Vector3 = casualty.pos
+	var ambulance_id = int(casualty.ambulance)
+	var rescuer = {"pos": game.room.a(casualty_start + Vector3(2, 0, 0)), "in_car": false, "tow": true, "push": [1, 0, 0]}
+	occupied = play.update({"friend": rescuer}, 0.1)
+	check(occupied.has("friend") and casualty.pos.x > casualty_start.x, "helper can drag a car casualty")
+	check(absf(casualty.station - game.race_station(casualty.pos)) < 0.001 and int(casualty.ambulance) == ambulance_id, "dragging updates rescue location without discarding ambulance")
+	rescuer.push = [0, 0, 0]
+	play.update({"friend": rescuer}, 2.0)
+	check(game.injuries.is_down("player:local") and not play.stand("player:local"), "stationary helper cannot heal a car casualty")
+	rescuer.tow = false
+	play.update({"friend": rescuer}, 0.1)
+	check(not play.grabbed("player:local"), "releasing tow also releases a car casualty")
 	for node in [Props.grill(game), Props.campfire(game), Props.cauldron(game)]:
 		check(node.is_in_group(Perches.GROUP), "camp object supplies a jump surface")
 	await game._shutdown_audio()

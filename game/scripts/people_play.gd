@@ -4,7 +4,12 @@ extends RefCounted
 const HEAD = 1.5
 const REACH = 2.5
 const HELP_SECONDS = 1.0
-var injuries
+var _owner: WeakRef
+var injuries:
+	get:
+		return _owner.get_ref() if _owner != null else null
+	set(value):
+		_owner = weakref(value)
 var previous: Dictionary = {}
 var grips: Dictionary = {}
 
@@ -53,7 +58,7 @@ func nearest(pos: Vector3, actor: String = "") -> String:
 	var source: Dictionary = injuries.records if injuries.authority() else injuries.targets
 	for key in source:
 		var r: Dictionary = source[key]
-		if key == actor or not r.get("play", false) or r.get("phase", "") != "lying":
+		if key == actor or r.get("phase", "") != "lying":
 			continue
 		var at: Vector3 = r.pos if injuries.authority() else injuries.game.room.v(r.pos)
 		var distance = pos.distance_to(at)
@@ -93,7 +98,7 @@ func update(players: Dictionary, delta: float) -> Dictionary:
 			grips[id] = {"key": key, "help": 0.0, "last": pos}
 		var grip: Dictionary = grips[id]
 		var r: Dictionary = injuries.records.get(grip.key, {})
-		if r.get("phase", "") != "lying" or not r.get("play", false) or pos.distance_to(r.pos) > REACH + 1.0:
+		if r.get("phase", "") != "lying" or pos.distance_to(r.pos) > REACH + 1.0:
 			grips.erase(id)
 			continue
 		occupied[id] = true
@@ -108,9 +113,12 @@ func update(players: Dictionary, delta: float) -> Dictionary:
 			next.y = game.stage.ground(next) + 0.25
 			if game.stage.solids.hit(r.pos, next, 0.35).is_empty() and game.stage.rock_hit(r.pos, next, 0.35).is_empty() and game.stage.obstacle_hit(r.pos, next, 0.35, true) < 0:
 				r.pos = next
+				r.station = game.race_station(next)
+				if not r.get("play", false):
+					injuries._retarget_all()
 				r.time = 0.0
 				injuries._pose(grip.key, r.pos, r.rot, 1.0)
-		else:
+		elif r.get("play", false):
 			grip.help += delta
 			if grip.help >= HELP_SECONDS:
 				stand(grip.key)

@@ -561,5 +561,9 @@
 "Недопустимый источник.": "Origin not allowed.",
 "Нужен POST.": "A POST request is required.",
 "Не удалось создать комнату. Попробуй ещё раз.": "Couldn't create the room. Try again.",
-"Неверный ID комнаты: нужны 6 символов.": "Wrong room ID: 6 characters are required."
+"Неверный ID комнаты: нужны 6 символов.": "Wrong room ID: 6 characters are required.",
+  "Тащить": "Drag",
+  "Ты снова на ногах.": "You are back on your feet.",
+  "ТЫ УПАЛ · ПРОБЕЛ — ВСТАТЬ · ДРУГ МОЖЕТ ПОМОЧЬ (T)": "YOU FELL · SPACE TO GET UP · A FRIEND CAN HELP (T)",
+  "Человек упал! Удерживай T: стой, чтобы поднять, иди, чтобы тащить. Пробел — встать.": "Someone fell! Hold T: stand still to help them up, move to drag. Space to get up."
 }
