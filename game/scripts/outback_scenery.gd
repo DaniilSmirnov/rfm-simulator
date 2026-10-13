@@ -8,6 +8,7 @@ const Props = preload("res://scripts/props.gd")
 const Records = preload("res://scripts/stage_records.gd")
 const DetailLayer = preload("res://scripts/detail_layer.gd")
 const MeshMerge = preload("res://scripts/mesh_merge.gd")
+const BlockText = preload("res://scripts/block_text.gd")
 
 const TIMBER = Color("8a6a48")
 const IRON = Color("858b8e")
@@ -308,7 +309,7 @@ func _kangaroo_sign(post: Node3D) -> void:
 	Props.box(post, Vector3(0.1, 2.25, front), Vector3(0.1, 0.03, 0.01), SIGN_BLACK)
 	# Distance plate below; the caption is sized to stay on the plate.
 	Props.box(post, Vector3(0, 1.4, 0.06), Vector3(KANGAROO_PLATE.x, KANGAROO_PLATE.y, 0.04), SIGN_YELLOW)
-	Props.fit_label_3d(post, Vector3(0, 1.4, 0.085), "NEXT 14 km", 40, 0.004, KANGAROO_CAPTION, SIGN_BLACK)
+	BlockText.fit(Props.label_3d(post, Vector3(0, 1.4, 0.085), "NEXT 14 km", 40, 0.004, SIGN_BLACK), KANGAROO_CAPTION)
 
 # White "DRIVE ON LEFT IN AUSTRALIA" signs like the ones at Australian tourist
 # spots: a black-framed plate, keep-left pictogram on top, lettering below.
@@ -335,10 +336,10 @@ func _drive_left_sign(post: Node3D) -> void:
 	_sign_car(post, Vector3(0.22, y0 + 0.52, front))
 	_sign_arrow(post, Vector3(0.22, y0 + 0.18, front), -1.0)
 	var front_text = front + 0.005
-	var drive = Props.fit_label_3d(post, Vector3(0, y0 - 0.1, front_text), "DRIVE", 64, 0.004, DRIVE_LEFT_CAPTION, SIGN_BLACK)
-	var left = Props.fit_label_3d(post, Vector3(0, y0 - 0.33, front_text), "ON LEFT", 64, 0.004, DRIVE_LEFT_CAPTION, SIGN_BLACK)
+	var drive = BlockText.fit(Props.label_3d(post, Vector3(0, y0 - 0.1, front_text), "DRIVE", 64, 0.004, SIGN_BLACK), DRIVE_LEFT_CAPTION)
+	var left = BlockText.fit(Props.label_3d(post, Vector3(0, y0 - 0.33, front_text), "ON LEFT", 64, 0.004, SIGN_BLACK), DRIVE_LEFT_CAPTION)
 	drive.pixel_size = minf(drive.pixel_size, left.pixel_size)
-	Props.fit_label_3d(post, Vector3(0, y0 - 0.55, front_text), "IN AUSTRALIA", 40, 0.004, Vector2(DRIVE_LEFT_CAPTION.x, 0.1), SIGN_BLACK)
+	BlockText.fit(Props.label_3d(post, Vector3(0, y0 - 0.55, front_text), "IN AUSTRALIA", 40, 0.004, SIGN_BLACK), Vector2(DRIVE_LEFT_CAPTION.x, 0.1))
 
 # Arrow pointing up (`way` 1) or down (-1) along the lane.
 func _sign_arrow(post: Node3D, at: Vector3, way: float) -> void:
