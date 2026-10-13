@@ -37,7 +37,7 @@ await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 let browser;
 try {
   browser = await chromium.launch({ headless: true, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
-  const mobileContext = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile Safari/604.1' });
+  const mobileContext = await browser.newContext({ locale: 'ru-RU', viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile Safari/604.1' });
   const mobilePage = await mobileContext.newPage();
   await mobilePage.setContent('<meta name="viewport" content="width=device-width,initial-scale=1"><canvas id="canvas"></canvas>');
   await mobilePage.addScriptTag({ content: await readFile(join(root, 'web/mobile-device.js'), 'utf8') });
@@ -53,7 +53,7 @@ try {
   await mobilePage.evaluate(() => RallyDevice.landscapeRequest);
   console.log('Mobile portrait prompt, fullscreen fallback and landscape transition verified.');
   await mobileContext.close();
-  const page = await browser.newPage();
+  const page = await browser.newPage({ locale: 'ru-RU' });
   let pass = false;
   let fail = '';
   page.on('console', message => {

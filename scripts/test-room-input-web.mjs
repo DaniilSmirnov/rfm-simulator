@@ -6,7 +6,7 @@ const source = await readFile(new URL('../web/room-input.js', import.meta.url), 
 const browser = await chromium.launch({headless:true});
 try {
  for (const viewport of [{width:844,height:390},{width:390,height:844}]) {
-  const page = await browser.newPage({viewport,isMobile:true,hasTouch:true});
+  const page = await browser.newPage({locale:'ru-RU',viewport,isMobile:true,hasTouch:true});
   await page.setContent('<meta name="rally-platform" content="vk"><canvas id="canvas" style="position:fixed;inset:0;width:100%;height:100%"></canvas>');
   await page.addScriptTag({content:source});
   const sync = state => page.evaluate(state => RallyRoomInput.sync(state),state);
@@ -28,7 +28,7 @@ try {
   assert.equal(await page.locator('#room-input-hit').isVisible(),false);
   await page.close();
  }
- const page=await browser.newPage();
+ const page=await browser.newPage({locale:'ru-RU'});
  await page.setContent('<meta name="rally-platform" content="standalone">');
  await page.addScriptTag({content:source});
  assert.equal(await page.locator('#room-input-hit').count(),0);

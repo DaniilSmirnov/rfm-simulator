@@ -152,7 +152,7 @@ try {
   async function client(role,room='') {
     if(web) {
       const browser=await browserFactory();browsers.push(browser);
-      const context=await browser.newContext({viewport:{width:844,height:390},...(role==='guest'?{isMobile:true,hasTouch:true}: {})});
+      const context=await browser.newContext({locale:'ru-RU',viewport:{width:844,height:390},...(role==='guest'?{isMobile:true,hasTouch:true}: {})});
       const page=await context.newPage();page.on('console',m=>observe(role,m.text()));page.on('pageerror',e=>errors.push(String(e)));page.on('crash',()=>errors.push(role+' renderer crashed'));
       await page.goto(`${origin}/?role=${role}${room?'&room='+room:''}`,{waitUntil:'domcontentloaded'});
       return page;

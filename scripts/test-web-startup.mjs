@@ -15,7 +15,7 @@ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const browser=await chromium.launch({headless:true,args:['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
 try {
  for(const mobile of [false,true]) {
-  const context=await browser.newContext(mobile?{viewport:{width:844,height:390},isMobile:true,hasTouch:true,userAgent:'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/130.0.0.0 Mobile Safari/537.36'}:{viewport:{width:1280,height:720}});
+  const context=await browser.newContext(mobile?{locale:'ru-RU',viewport:{width:844,height:390},isMobile:true,hasTouch:true,userAgent:'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/130.0.0.0 Mobile Safari/537.36'}:{locale:'ru-RU',viewport:{width:1280,height:720}});
   const page=await context.newPage();
   const logs=[];let ready=false;let failure='';
   page.on('console',m=>{const text=m.text();logs.push(text);console.log('[startup]',mobile,text);if(text.includes('[RFM] Запуск завершён'))ready=true;if(/FATAL:|RuntimeError:|SCRIPT ERROR/.test(text))failure=text;});
