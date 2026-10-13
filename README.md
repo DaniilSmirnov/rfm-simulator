@@ -147,6 +147,10 @@ Mini Web-движок пересобран с модулем GodotPhysics3D. П�
 
 Это исходный проект, а не готовое `.app` или `.exe`. Для отдельной native-сборки установите Export Templates своей версии Godot и выберите платформу в Project → Export. Проект использует Compatibility / OpenGL; C# не нужен.
 
+## Сборка для Android
+
+`npm run build:android` собирает релизный APK (`dist-android/Rally Fans Simulator.apk`, arm64 и armv7, пакет `ru.rallyfansmap.rallyfanssimulator`). Нужны Android SDK (`ANDROID_HOME`: build-tools 34, platform 34, cmdline-tools) и JDK 17+ (`JAVA_HOME`); официальные шаблоны экспорта скачиваются и проверяются по SHA-256, как для macOS. Собранные нативные версии ходят в production Worker (`RoomTransport.PRODUCTION_SERVER`), запуск из редактора по-прежнему использует `http://127.0.0.1:8787`. Для магазина подпишите APK своим ключом: `GODOT_ANDROID_KEYSTORE_RELEASE_PATH`, `GODOT_ANDROID_KEYSTORE_RELEASE_USER`, `GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD` (в CI это секреты `ANDROID_KEYSTORE_PATH`, `ANDROID_KEYSTORE_USER`, `ANDROID_KEYSTORE_PASSWORD`). Без них собирается тестовый APK с одноразовым ключом. Версия приложения берётся из `package.json`, `versionCode` растёт вместе с ней.
+
 ## Язык интерфейса: русский и английский
 
 Исходный текст игры — русский. Каждая русская строка в коде одновременно служит ключом в `game/data/translations_en.json`; английский берётся оттуда. Подписи кнопок, меню, подсказки и 3D-надписи переводятся сами при смене языка. Только текст, собранный из частей, оборачивается в `Loc.t()`: `Loc.t("Осталось %d шампуров.") % count` (формат целиком, а не обрезки фраз; плейсхолдеры в переводе те же, что в оригинале).

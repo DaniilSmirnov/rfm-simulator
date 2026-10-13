@@ -9,6 +9,8 @@ func _initialize() -> void:
 func run() -> void:
 	check(Transport.default_server(true) == "", "browser never defaults to localhost")
 	check(Transport.default_server(false) == "http://127.0.0.1:8787", "native dev default preserved")
+	check(Transport.default_server(false, true) == Transport.PRODUCTION_SERVER and Transport.PRODUCTION_SERVER.begins_with("https://"), "exported native builds use the HTTPS production Worker")
+	check(Transport.default_server(true, true) == "", "browser stays same-origin even in an export")
 	var instance = Transport.new()
 	instance.server = "https://rally-test.example"
 	check(instance.endpoint("create", "AB12EF") == "https://rally-test.example/api/rooms", "create targets same-origin room API")

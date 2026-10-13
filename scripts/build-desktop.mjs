@@ -2,13 +2,16 @@ import { cp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { join } from 'node:path';
+import { homedir } from 'node:os';
+import { spawnSync } from 'node:child_process';
 import { getGodot, root, run } from './godot.mjs';
 
-// Desktop exports for Steam. Usage: node scripts/build-desktop.mjs --platform=macos
+// Native exports (Steam desktop, Android). Usage: node scripts/build-desktop.mjs --platform=macos|android
 // The official 4.4.1 export templates are downloaded once into .cache/templates and
 // checked against a pinned SHA-256; only the one platform archive is unpacked.
 const platforms = {
   macos: { preset: 'macOS', template: 'macos.zip', output: 'Rally Fans Simulator.zip', patch: macosPatch },
+  android: { preset: 'Android', template: 'android_release.apk', output: 'Rally Fans Simulator.apk', patch: androidPatch, prepare: prepareAndroid },
 };
 const name = process.argv.find(arg => arg.startsWith('--platform='))?.split('=')[1] ?? 'macos';
 const platform = platforms[name];
@@ -51,6 +54,51 @@ function macosPatch(preset) {
     .replaceAll('application/version="0.10.29"', `application/version=${JSON.stringify(version)}`);
 }
 
+// 0.10.29 -> versionCode 10029; Google Play and RuStore need it to grow with every release.
+function androidPatch(preset) {
+  const [major = 0, minor = 0, patch = 0] = version.split('.').map(Number);
+  return preset
+    .replaceAll('version/code=1', `version/code=${major * 1000000 + minor * 1000 + patch}`)
+    .replaceAll('version/name="0.10.29"', `version/name=${JSON.stringify(version)}`);
+}
+
+// Godot reads the SDK and JDK locations from its editor settings, not from the preset.
+async function setEditorSetting(key, value) {
+  const config = process.env.XDG_CONFIG_HOME || join(homedir(), '.config');
+  const file = join(config, 'godot', 'editor_settings-4.4.tres');
+  let text = await exists(file) ? await readFile(file, 'utf8') : '[gd_resource type="EditorSettings" format=3]\n\n[resource]\n';
+  const line = `${key} = ${JSON.stringify(value)}`;
+  const pattern = new RegExp(`^${key} = .*$`, 'm');
+  text = pattern.test(text) ? text.replace(pattern, line) : text.replace('[resource]\n', `[resource]\n${line}\n`);
+  await mkdir(join(config, 'godot'), { recursive: true });
+  await writeFile(file, text);
+}
+
+// Release signing comes from the environment (GODOT_ANDROID_KEYSTORE_RELEASE_PATH/USER/PASSWORD);
+// without it a throwaway key is made so that the APK still installs, but it cannot go to a store.
+async function prepareAndroid() {
+  const sdk = process.env.ANDROID_HOME || process.env.ANDROID_SDK_ROOT;
+  if (!sdk || !await exists(join(sdk, 'build-tools'))) throw new Error('Set ANDROID_HOME to an Android SDK with build-tools 34, platform 34 and cmdline-tools.');
+  const java = process.env.JAVA_HOME;
+  if (!java) throw new Error('Set JAVA_HOME to JDK 17 or newer.');
+  await setEditorSetting('export/android/android_sdk_path', sdk);
+  await setEditorSetting('export/android/java_sdk_path', java);
+  if (process.env.GODOT_ANDROID_KEYSTORE_RELEASE_PATH) {
+    for (const key of ['USER', 'PASSWORD']) if (!process.env[`GODOT_ANDROID_KEYSTORE_RELEASE_${key}`]) throw new Error(`GODOT_ANDROID_KEYSTORE_RELEASE_${key} is missing.`);
+    return 'Signed with the release keystore.';
+  }
+  const keystore = join(root, '.cache', 'android', 'throwaway.keystore');
+  await mkdir(join(root, '.cache', 'android'), { recursive: true });
+  if (!await exists(keystore)) {
+    const made = spawnSync(join(java, 'bin', 'keytool'), ['-genkeypair', '-keystore', keystore, '-alias', 'rfm', '-storepass', 'throwaway', '-keypass', 'throwaway', '-keyalg', 'RSA', '-keysize', '2048', '-validity', '10000', '-dname', 'CN=Rally Fans Simulator test build'], { stdio: 'inherit' });
+    if (made.status !== 0) throw new Error('keytool failed to make a test keystore.');
+  }
+  process.env.GODOT_ANDROID_KEYSTORE_RELEASE_PATH = keystore;
+  process.env.GODOT_ANDROID_KEYSTORE_RELEASE_USER = 'rfm';
+  process.env.GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD = 'throwaway';
+  return 'WARNING: signed with a throwaway key. Set GODOT_ANDROID_KEYSTORE_RELEASE_* for a store release.';
+}
+
 const godot = await getGodot();
 const template = await getTemplate();
 const project = join(root, '.cache', 'export-project-' + name);
@@ -78,9 +126,10 @@ if (!settings.includes('\n[rendering]\n')) throw new Error('Unexpected project s
 await writeFile(settingsPath, settings.replace('\n[rendering]\n', '\n[rendering]\n\ntextures/vram_compression/import_etc2_astc=true\n'));
 // Same generated scenes as the Web build: village and rally tracks are baked before export.
 run(godot, ['--headless', '--editor', '--path', project, '--import']);
+const note = platform.prepare ? await platform.prepare() : '';
 run(godot, ['--headless', '--path', project, '--script', 'res://tools/bake_rally_tracks.gd']);
 run(godot, ['--headless', '--path', project, '--script', 'res://tools/bake_village.gd']);
 run(godot, ['--headless', '--path', project, '--export-release', platform.preset, join(output, platform.output)]);
 const size = (await stat(join(output, platform.output))).size;
 if (size < 1024 * 1024) throw new Error('Exported archive is suspiciously small.');
-console.log(`${platform.preset} ready: ${join(output, platform.output)} (${(size / 1048576).toFixed(1)} MiB).`);
+console.log(`${platform.preset} ready: ${join(output, platform.output)} (${(size / 1048576).toFixed(1)} MiB). ${note}`);

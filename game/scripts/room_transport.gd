@@ -44,12 +44,17 @@ var message_times: Dictionary = {}
 
 # In browser builds the Worker serves /api/rooms on the same origin as /vk/.
 # Never attempt to connect to the user's 127.0.0.1 or downgrade HTTPS to HTTP.
-# Native development still uses the localhost Worker unless overridden.
-static func default_server(is_web: bool) -> String:
-	return "" if is_web else "http://127.0.0.1:8787"
+# Exported native builds (macOS, Android) talk to the production Worker; running
+# from the editor still uses the localhost Worker. --room-server overrides both.
+const PRODUCTION_SERVER = "https://rally-fans-simulator.di-719.workers.dev"
+
+static func default_server(is_web: bool, is_export: bool = false) -> String:
+	if is_web:
+		return ""
+	return PRODUCTION_SERVER if is_export else "http://127.0.0.1:8787"
 
 func _ready() -> void:
-	server = default_server(OS.has_feature("web"))
+	server = default_server(OS.has_feature("web"), OS.has_feature("template"))
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--room-server="):
 			server = arg.trim_prefix("--room-server=").trim_suffix("/")
