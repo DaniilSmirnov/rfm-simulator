@@ -10,7 +10,8 @@ const DetailLayer = preload("res://scripts/detail_layer.gd")
 const MeshMerge = preload("res://scripts/mesh_merge.gd")
 
 const TIMBER = Color("8a6a48")
-const IRON = Color("a9adb0")
+const IRON = Color("858b8e")
+const RED_IRON = Color("7e3427")
 const SIGN_YELLOW = Color("f2c230")
 const SIGN_BLACK = Color("1d1c1a")
 # Stations of the kangaroo warning signs and the side of the road they stand on.
@@ -79,11 +80,12 @@ func _eucalypts() -> void:
 				continue
 			gums.append({"base": surface(p) - Vector3.UP * 0.05, "height": rng.randf_range(9.0, 17.0), "yaw": rng.randf() * TAU, "shade": rng.randf_range(-0.05, 0.06)})
 	stage.woodland.tree_layers("GumTree", gums, [
-		{"mesh": stick, "scale": Vector3(0.035, 0.72, 0.035), "y": 0.36, "tilt": 0.07, "color": "d8d0c0"},
-		{"mesh": stick, "scale": Vector3(0.022, 0.3, 0.022), "y": 0.66, "dx": 0.08, "tilt": 0.5, "color": "cfc6b4"},
-		{"mesh": clump, "scale": Vector3(0.3, 0.16, 0.26), "y": 0.8, "dx": 0.16, "color": "6f7d5a"},
-		{"mesh": clump, "scale": Vector3(0.26, 0.14, 0.24), "y": 0.9, "dx": -0.08, "color": "7f8c66"},
-		{"mesh": clump, "scale": Vector3(0.2, 0.12, 0.2), "y": 0.7, "dx": -0.17, "color": "66755a"},
+		{"mesh": stick, "scale": Vector3(0.028, 0.7, 0.028), "y": 0.35, "tilt": 0.06, "color": "bdb39e"},
+		{"mesh": clump, "scale": Vector3(0.15, 0.12, 0.14), "y": 0.6, "dx": 0.15, "color": "5d6b48"},
+		{"mesh": clump, "scale": Vector3(0.14, 0.11, 0.14), "y": 0.66, "dx": -0.14, "color": "65724c"},
+		{"mesh": clump, "scale": Vector3(0.18, 0.14, 0.17), "y": 0.76, "dx": 0.05, "color": "6c7a53"},
+		{"mesh": clump, "scale": Vector3(0.13, 0.1, 0.12), "y": 0.84, "dx": -0.09, "color": "5f6d4a"},
+		{"mesh": clump, "scale": Vector3(0.12, 0.1, 0.12), "y": 0.93, "dx": 0.02, "color": "75825a"},
 	])
 	counts["gums"] = gums.size()
 
@@ -93,7 +95,7 @@ func _ground_cover() -> void:
 	var shrub_p: Array = []
 	var shrub_c: Array = []
 	var shrubs = [Color("7b7f4f"), Color("6a7550"), Color("8f8656")]
-	for i in range(5200):
+	for i in range(9000):
 		var p = random_point()
 		if not open_ground(p, 6.5, 0.0):
 			continue
@@ -134,11 +136,11 @@ func _granite_tors() -> void:
 # Red earth termite mounds: knobbly cones up to head height.
 func _termite_mounds() -> void:
 	var cone = CylinderMesh.new()
-	cone.top_radius = 0.12
+	cone.top_radius = 0.22
 	cone.bottom_radius = 0.5
 	cone.height = 1.0
-	cone.radial_segments = 7
-	cone.rings = 3
+	cone.radial_segments = 6
+	cone.rings = 2
 	var poses: Array = []
 	var colors: Array = []
 	for i in range(220):
@@ -149,7 +151,7 @@ func _termite_mounds() -> void:
 		var width = height * rng.randf_range(0.45, 0.7)
 		p = surface(p) - Vector3.UP * 0.1
 		poses.append(Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(width, height, width * 0.85)), p + Vector3.UP * height * 0.5))
-		colors.append(Color("a2532f").lerp(Color("c07a4a"), rng.randf()))
+		colors.append(Color("6e3a24").lerp(Color("85492c"), rng.randf()))
 		stage.rocks.append(Records.rock(p, width * 0.45, height))
 	stage.detail_batch("TermiteMounds", cone, poses, colors, DetailLayer.tiled(240.0))
 	counts["termite_mounds"] = poses.size()
@@ -214,19 +216,21 @@ func _flag(parent: Node3D, at: Vector3) -> void:
 func _homestead() -> void:
 	var s: float = biome.HOMESTEAD[0]
 	var home = _anchor("Homestead", biome.homestead, stage.at(s) - biome.homestead)
-	Props.box(home, Vector3(0, 1.0, 0), Vector3(10.0, 3.6, 7.0), Color("c9b48f"))
+	Props.box(home, Vector3(0, 1.0, 0), Vector3(10.0, 3.6, 7.0), Color("a8916c"))
 	for sign in [-1.0, 1.0]:
-		var slab = Props.box(home, Vector3(0, 3.35, sign * 1.85), Vector3(10.6, 0.1, 4.0), IRON)
+		var slab = Props.box(home, Vector3(0, 3.35, sign * 1.85), Vector3(10.6, 0.1, 4.0), RED_IRON)
 		slab.rotation.x = sign * 0.32
-	Props.box(home, Vector3(0, 2.1, 4.0), Vector3(10.0, 0.1, 1.8), IRON.darkened(0.08))
+	Props.box(home, Vector3(0, 2.1, 4.0), Vector3(10.0, 0.1, 1.8), RED_IRON.lightened(0.06))
 	for x in [-4.6, -1.5, 1.5, 4.6]:
 		Props.cylinder(home, Vector3(x, 1.05, 4.8), 0.07, 0.07, 2.1, Color("e8e3d6"), 5)
 	Props.box(home, Vector3(-2.5, 1.0, 3.52), Vector3(1.0, 2.0, 0.06), Color("355a43"))
 	Props.box(home, Vector3(2.0, 1.4, 3.52), Vector3(1.4, 1.0, 0.06), Color("3b4a52"))
 	stage.rocks.append(Records.rock(biome.homestead, 5.6, 3.6, Records.BUILDING))
 	var tank = Vector3(7.5, 0, 1.0)
-	Props.cylinder(home, tank + Vector3.UP * 1.3, 1.7, 1.7, 2.6, Color("b7bcbd"), 14)
-	Props.cylinder(home, tank + Vector3.UP * 2.75, 1.75, 0.2, 0.35, Color("a2a7a8"), 14)
+	Props.cylinder(home, tank + Vector3.UP * 1.3, 1.7, 1.7, 2.6, Color("8f9599"), 14)
+	for ring in [0.5, 1.1, 1.7, 2.3]:
+		Props.cylinder(home, tank + Vector3.UP * ring, 1.74, 1.74, 0.08, Color("7a8084"), 14)
+	Props.cylinder(home, tank + Vector3.UP * 2.75, 1.75, 0.2, 0.35, Color("80868a"), 14)
 	stage.rocks.append(Records.rock(home.to_global(tank), 1.8, 2.9, Records.BUILDING))
 	_windmill(home, Vector3(10.5, 0, -4.0))
 

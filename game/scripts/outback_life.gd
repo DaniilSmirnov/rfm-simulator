@@ -37,6 +37,11 @@ func _build_kangaroos() -> void:
 	for mob in MOBS:
 		var s: float = mob[0]
 		var home = stage.at(s) + stage.side(s) * float(mob[1]) * float(mob[2])
+		# Graze away from spectators and buildings: step further out if needed.
+		for step in range(4):
+			if biome.scenery.open_ground(home, 18.0, 10.0):
+				break
+			home += stage.side(s) * float(mob[1]) * 12.0
 		for i in range(rng.randi_range(3, 5)):
 			var roo = _kangaroo_model(i == 0)
 			root.add_child(roo)
@@ -47,25 +52,29 @@ func _build_kangaroos() -> void:
 			roo.rotation.y = heading
 			kangaroos.append({"node": roo, "home": home, "target": p, "heading": heading, "wait": rng.randf_range(0.0, 6.0), "phase": 0.0, "speed": 0.0, "afraid": false})
 
-# A sitting-up kangaroo built from a few facets; facing -z. The big buck of
-# each mob is a little larger and redder.
+# An upright kangaroo about 1.5 m tall, facing -z: leaning body, pale chest,
+# small head with a long snout and tall ears, big hind legs and feet, and a
+# thick tail resting on the ground. The buck of each mob is larger and redder.
 func _kangaroo_model(buck: bool) -> Node3D:
 	var roo = Node3D.new()
 	roo.name = "Kangaroo"
-	var fur = FUR.darkened(0.08) if buck else FUR
-	Props.faceted(roo, Vector3(0, 0.75, 0.05), Vector3(0.42, 0.62, 0.55), fur, 8, 4)
-	Props.faceted(roo, Vector3(0, 1.12, -0.12), Vector3(0.26, 0.36, 0.28), fur, 7, 3)
-	Props.faceted(roo, Vector3(0, 1.38, -0.2), Vector3(0.17, 0.17, 0.3), fur.lightened(0.05), 7, 3)
+	var fur = FUR.darkened(0.06) if buck else FUR
+	var body = Props.faceted(roo, Vector3(0, 0.78, 0.02), Vector3(0.34, 0.74, 0.38), fur, 8, 4)
+	body.rotation.x = -0.35
+	var chest = Props.faceted(roo, Vector3(0, 0.86, -0.12), Vector3(0.22, 0.42, 0.12), FUR_LIGHT, 6, 3)
+	chest.rotation.x = -0.35
+	Props.faceted(roo, Vector3(0, 1.28, -0.2), Vector3(0.16, 0.17, 0.19), fur, 7, 3)
+	Props.faceted(roo, Vector3(0, 1.25, -0.32), Vector3(0.09, 0.09, 0.17), fur.lightened(0.04), 6, 3)
+	Props.box(roo, Vector3(0, 1.26, -0.405), Vector3(0.04, 0.03, 0.02), Color("1c1a18"))
 	for side in [-1.0, 1.0]:
-		var ear = Props.box(roo, Vector3(side * 0.06, 1.52, -0.14), Vector3(0.05, 0.16, 0.04), fur)
-		ear.rotation.z = -side * 0.25
-		Props.faceted(roo, Vector3(side * 0.16, 0.42, 0.12), Vector3(0.16, 0.34, 0.36), fur, 6, 3)
-		Props.box(roo, Vector3(side * 0.12, 0.05, -0.08), Vector3(0.08, 0.06, 0.42), fur.darkened(0.2))
-		Props.box(roo, Vector3(side * 0.09, 0.95, -0.28), Vector3(0.04, 0.2, 0.05), FUR_LIGHT)
-	Props.faceted(roo, Vector3(0, 0.82, -0.18), Vector3(0.26, 0.38, 0.12), FUR_LIGHT, 6, 3)
-	var tail = Props.box(roo, Vector3(0, 0.28, 0.62), Vector3(0.1, 0.1, 0.9), fur.darkened(0.05))
-	tail.rotation.x = 0.35
-	Props.box(roo, Vector3(0, 1.42, -0.36), Vector3(0.05, 0.05, 0.03), Color("1c1a18"))
+		var ear = Props.box(roo, Vector3(side * 0.055, 1.43, -0.16), Vector3(0.05, 0.17, 0.035), fur)
+		ear.rotation.z = -side * 0.3
+		Props.faceted(roo, Vector3(side * 0.14, 0.38, 0.1), Vector3(0.2, 0.36, 0.42), fur, 6, 3)
+		Props.box(roo, Vector3(side * 0.12, 0.04, -0.1), Vector3(0.09, 0.06, 0.45), fur.darkened(0.2))
+		var arm = Props.box(roo, Vector3(side * 0.08, 0.95, -0.24), Vector3(0.04, 0.22, 0.04), fur)
+		arm.rotation.x = 0.4
+	var tail = Props.cylinder(roo, Vector3(0, 0.24, 0.6), 0.08, 0.03, 0.92, fur.darkened(0.05), 6)
+	tail.rotation.x = 2.06
 	MeshMerge.bake(roo, "kangaroo:buck" if buck else "kangaroo:doe")
 	if buck:
 		roo.scale = Vector3.ONE * 1.18

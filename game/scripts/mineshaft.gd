@@ -161,10 +161,13 @@ func terrain_tile_step(p: Vector3) -> float:
 
 func terrain_color(v: Vector3) -> Color:
 	var patch = (sin(v.x * 0.061) * sin(v.z * 0.043) + 1.0) * 0.5
-	var dirt = Color("9a4a2a").lerp(Color("b4643a"), patch)
-	var grass = Color("b39a55").lerp(Color("8a8a4c"), patch)
-	var cover = smoothstep(0.35, 0.75, sin(v.x * 0.027 - v.z * 0.035) * 0.5 + 0.5 + sin(v.z * 0.11) * 0.12)
-	var color = dirt.lerp(grass, cover * smoothstep(7.0, 16.0, stage.road_distance(v)))
+	var dirt = Color("7c3c22").lerp(Color("8f4c2c"), patch)
+	var grass = Color("958a57").lerp(Color("7a7a4a"), patch)
+	# Dry paddock grass over red earth; bare red ground near the road and on
+	# scattered scalds where the grass has worn away.
+	var bare = smoothstep(0.62, 0.85, sin(v.x * 0.027 - v.z * 0.035) * 0.5 + 0.5 + sin(v.z * 0.11) * 0.12)
+	var cover = smoothstep(6.0, 14.0, stage.road_distance(v)) * (1.0 - bare * 0.85)
+	var color = dirt.lerp(grass, cover)
 	if stage.road_distance(v) > 4.5 and stage.road_distance(v) < 8.0:
 		color = color.darkened(0.08)
 	return color
@@ -173,7 +176,7 @@ func terrain_color(v: Vector3) -> Color:
 
 func road_color(p: Vector3, s: float) -> Color:
 	var lateral = (p - stage.at(s)).dot(stage.side(s))
-	var base = Color("b9673f")
+	var base = Color("a65a36")
 	var shade = sin(p.x * 0.17 + p.z * 0.11) * 0.025 + sin(p.z * 0.29 - p.x * 0.07) * 0.015
 	# Dark compacted wheel tracks and a pale loose crown between them.
 	var track = exp(-pow((absf(lateral) - 1.0) / 0.34, 2.0))
