@@ -34,6 +34,22 @@ const CRESTS = [[300.0, 0.6, 7.0], [372.0, 0.8, 8.0], [436.0, 0.5, 6.0], [LIP - 
 const TABLE_STEP = 0.5
 var lateral_table := PackedFloat32Array()
 
+const OutbackScenery = preload("res://scripts/outback_scenery.gd")
+const OutbackLife = preload("res://scripts/outback_life.gd")
+# Station, side and distance from the road of the spectator areas: two in the
+# opening bends, both banks of the jump, the outside of the corner after it and
+# the closing bends.
+const CLEARINGS = [[118.0, 1.0, 17.0], [196.0, -1.0, 17.0], [468.0, 1.0, 15.0], [486.0, -1.0, 15.0], [574.0, -1.0, 17.0], [700.0, 1.0, 16.0]]
+# Mine headframe beside the lip and the homestead by the opening bends.
+const MINE = [LIP - 6.0, 1.0, 26.0]
+const HOMESTEAD = [64.0, -1.0, 40.0]
+var scenery = OutbackScenery.new()
+var outback_life = OutbackLife.new()
+# Buildings and landmarks; trees, boulders and termite mounds keep clear.
+var reserved_spots: Array[Dictionary] = []
+var mine := Vector3.ZERO
+var homestead := Vector3.ZERO
+
 # ---------------------------------------------------------------- route
 
 # Tangent of the road heading at s; integrated into the lateral offset.
@@ -95,6 +111,41 @@ func rally_speed(s: float) -> float:
 func roughness(s: float) -> float:
 	# Corrugations of a dry outback road.
 	return sin(s * 0.9) * 0.025 + sin(s * 2.3) * 0.012
+
+# ---------------------------------------------------------------- places
+
+func place(spot: Array) -> Vector3:
+	var s: float = spot[0]
+	var p: Vector3 = stage.at(s) + stage.side(s) * float(spot[1]) * float(spot[2])
+	p.y = stage.base_ground(p)
+	return p
+
+func configure() -> void:
+	for spot in CLEARINGS:
+		stage.clearings.append(place(spot))
+	mine = place(MINE)
+	homestead = place(HOMESTEAD)
+	reserved_spots.append({"pos": mine, "radius": 13.0})
+	reserved_spots.append({"pos": homestead, "radius": 16.0})
+
+func reserved(pos: Vector3, padding: float = 0.0) -> bool:
+	for spot in reserved_spots:
+		if Vector2(pos.x - spot.pos.x, pos.z - spot.pos.z).length() < float(spot.radius) + padding:
+			return true
+	return false
+
+func roadside_rock_blocked(p: Vector3) -> bool:
+	return reserved(p, 1.0)
+
+func woodland_blocked(pos: Vector3, padding: float) -> bool:
+	return reserved(pos, padding)
+
+func build_details(_cooperative: bool) -> void:
+	scenery.build(stage, self)
+	outback_life.build(stage, self)
+
+func update_life(delta: float, focus: Vector3) -> void:
+	outback_life.update(delta, focus)
 
 # ---------------------------------------------------------------- ground
 

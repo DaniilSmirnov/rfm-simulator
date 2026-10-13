@@ -1,0 +1,100 @@
+extends "res://tests/harness.gd"
+const Stage = preload("res://scripts/stage.gd")
+const StageRegistry = preload("res://scripts/stage_registry.gd")
+func _initialize() -> void:
+	call_deferred("run")
+
+func turning(stage, from: float, to: float) -> float:
+	var total = 0.0
+	for s in range(int(from), int(to), 2):
+		var a = stage.direction(s)
+		var b = stage.direction(s + 2)
+		total += absf(atan2(a.cross(b).y, a.dot(b)))
+	return total
+
+func run() -> void:
+	var index = -1
+	for i in range(Stage.STAGES.size()):
+		if StageRegistry.entry(i).id == "mineshaft":
+			index = i
+	check(index >= 0, "Mineshaft is registered as a stage")
+	var stage = Stage.new(index)
+	root.add_child(stage)
+	stage.build()
+	var mine = stage.biome
+	check(Stage.STAGES[index].begins_with("Майншафт"), "stage is called Майншафт in the menu")
+
+	# --- Route character from the real stage.
+	check(turning(stage, mine.OPENING_BEGIN, mine.OPENING_END) > 4.0, "opening complex is a run of linked bends (%.2f rad)" % turning(stage, mine.OPENING_BEGIN, mine.OPENING_END))
+	check(turning(stage, mine.OPENING_END + 30.0, mine.LIP) < 0.25, "long straight before the jump (%.2f rad)" % turning(stage, mine.OPENING_END + 30.0, mine.LIP))
+	check(mine.LIP - mine.OPENING_END > 250.0, "the straight is long")
+	check(stage.at(mine.LIP).y - stage.at(mine.OPENING_END + 30.0).y > 3.0, "the straight climbs to the lip")
+	var drop = stage.at(mine.LIP).y - stage.at(mine.LIP + mine.DROP_LENGTH + 4.0).y
+	check(drop > 7.0, "giant drop-off beyond the lip (%.1f m)" % drop)
+	check(stage.at(mine.LIP - 3.0).y > stage.at(mine.LIP - 12.0).y, "a kicker rises to the lip")
+	check(turning(stage, mine.CORNER_BEGIN - 4.0, mine.CORNER_END + 4.0) > 0.7, "a corner follows the landing")
+	check(turning(stage, mine.CLOSING_BEGIN, mine.CLOSING_END) > 3.0, "short section of linked bends before the finish")
+	check(stage.rally_speed(mine.CORNER_BEGIN + 5.0) < stage.rally_speed(mine.LIP - 60.0), "crews brake for the corner after the jump")
+	var inside = true
+	for s in range(0, int(Stage.LENGTH), 4):
+		inside = inside and absf(stage.at(s).x) < 120.0
+	check(inside, "route stays well inside the map")
+
+	# --- A car at racing speed flies off the lip and lands beyond it.
+	var car = Node3D.new()
+	root.add_child(car)
+	var motion = preload("res://scripts/vehicle_motion.gd").new()
+	var s = mine.LIP - 40.0
+	var speed = 27.0
+	var airborne = 0.0
+	var flight = 0.0
+	car.position = stage.at(s)
+	for frame in range(240):
+		s += speed / 60.0
+		var p = stage.at(s)
+		car.position = Vector3(p.x, car.position.y, p.z)
+		var direction = stage.direction(s)
+		motion.suspension(car, stage, 1.0 / 60.0, atan2(-direction.x, -direction.z))
+		if not motion.grounded:
+			airborne += 1.0 / 60.0
+			flight = maxf(flight, car.position.y - stage.ground(car.position))
+	check(airborne > 0.5 and flight > 1.5, "the jump throws a car into a long flight (%.2f s, %.1f m up)" % [airborne, flight])
+
+	# --- Australian bush and landmarks.
+	var c = mine.scenery.counts
+	check(int(c.get("gums", 0)) > 150, "open eucalyptus woodland (%d gum trees)" % int(c.get("gums", 0)))
+	check(stage.trees.size() == int(c.get("gums", 0)), "gum trees stop cars like any tree")
+	check(int(c.get("tussocks", 0)) > 2000 and int(c.get("boulders", 0)) > 40 and int(c.get("termite_mounds", 0)) > 60, "tussock grass, granite tors and termite mounds")
+	var clear_road = true
+	for tree in stage.trees:
+		clear_road = clear_road and stage.road_distance(tree) > 9.0
+	check(clear_road, "no tree grows on the road")
+	for structure in ["MineHeadframe", "Homestead", "KangarooSigns", "MineshaftSign"]:
+		var node = stage.get_node_or_null(structure)
+		check(node != null and node.has_meta("baked_parts"), "%s is built as a merged mesh" % structure)
+	check(stage.get_node_or_null("Homestead/WindmillRotor") != null, "the windmill rotor can turn")
+	check(stage.road_distance(mine.mine) > 15.0, "mine headframe stands clear of the jump")
+	check(stage.clearings.size() == mine.CLEARINGS.size(), "spectator areas at the bends and both banks of the jump")
+	for clearing in stage.clearings:
+		check(stage.road_distance(clearing) > 10.0, "spectator area is off the road")
+
+	# --- Wildlife: kangaroos bound away from people, cockatoos and the windmill move.
+	var life = mine.outback_life
+	check(life.kangaroos.size() >= 18 and life.cockatoos.size() >= 15, "mobs of kangaroos and flocks of cockatoos")
+	var roo: Dictionary = life.kangaroos[0]
+	var start: Vector3 = roo.node.position
+	for i in range(40):
+		life.update(0.05, start + Vector3(3, 0, 0))
+	check(roo.node.position.distance_to(start) > 4.0 and life.hops > 0, "kangaroos hop away from a person")
+	check(absf(roo.node.position.y - stage.ground(roo.node.position)) < 1.6, "kangaroos stay on the ground")
+	var rotor_angle = life.rotor.rotation.z
+	life.update(0.1, Vector3(0, 0, 400))
+	check(life.rotor.rotation.z != rotor_angle, "windmill turns")
+
+	# --- Determinism across room members.
+	var copy = Stage.new(index)
+	check(stage.points == copy.points and stage.clearings == copy.clearings, "route and spectator areas match across clients")
+	copy.free()
+	stage.free()
+	print("MINESHAFT RESULT: %d failures" % failures)
+	finish()
