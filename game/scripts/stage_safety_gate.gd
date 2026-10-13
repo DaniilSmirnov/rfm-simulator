@@ -3,6 +3,7 @@ extends CanvasLayer
 ## Deliberately native Godot UI so desktop, mobile web and VK share one flow.
 
 const UiKit = preload("res://scripts/ui_kit.gd")
+const Loc = preload("res://scripts/loc.gd")
 
 signal accepted
 
@@ -83,13 +84,13 @@ func _ready() -> void:
 	_add_text(text_column, "Выбирай безопасное место, не мешай проведению гонки и выполняй указания маршалов.", 19)
 	_add_text(text_column, "ГДЕ СТОЯТЬ", 26, UiKit.HIGHLIGHT)
 	for rule in WHERE_TO_STAND:
-		_add_text(text_column, "• " + rule, 19)
+		_add_text(text_column, "• " + Loc.t(rule), 19)
 	_add_text(text_column, "ЧТО МОЖНО ДЕЛАТЬ", 26, UiKit.HIGHLIGHT)
 	for rule in ALLOWED:
-		_add_text(text_column, "• " + rule, 19)
+		_add_text(text_column, "• " + Loc.t(rule), 19)
 	_add_text(text_column, "ЧТО НЕЛЬЗЯ ДЕЛАТЬ", 26, UiKit.HIGHLIGHT)
 	for rule in FORBIDDEN:
-		_add_text(text_column, "• " + rule, 19)
+		_add_text(text_column, "• " + Loc.t(rule), 19)
 	_add_text(text_column, "БУДЬ ЗРИТЕЛЕМ, А НЕ УЧАСТНИКОМ АВАРИИ.", 19, UiKit.WARNING)
 	accept_button = Button.new()
 	accept_button.theme_type_variation = "PrimaryButton"
