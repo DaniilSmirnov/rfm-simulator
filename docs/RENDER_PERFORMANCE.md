@@ -7,11 +7,11 @@
 
 ## Замер
 
-`tools/profile_render.gd` строит СУ, выпускает 8 экипажей и снимает 60 кадров
+`tools/profile/profile_render.gd` строит СУ, выпускает 8 экипажей и снимает 60 кадров
 с камеры погони:
 
 ```sh
-xvfb-run godot --rendering-driver opengl3 --path game --script res://tools/profile_render.gd -- <СУ> [near|medium|far] [noshadow] [census]
+xvfb-run godot --rendering-driver opengl3 --path game --script res://tools/profile/profile_render.gd -- <СУ> [near|medium|far] [noshadow] [census]
 ```
 
 `RENDER_PROFILE` — средние вызовы, объекты и примитивы за кадр;

@@ -28,7 +28,7 @@ Two additional generated files provide moving-part geometry:
 - `niva_tailgate.obj` — only the upper rear door panel with opaque rear window and lower seal
 - `niva_wheels.obj` — four rubber wheels and matching hubs, split into rotating pivots at runtime
 
-`game/scripts/niva_asset.gd` creates `PlayerCar_2` with a separate `TrunkHinge/NivaTailgate_Lid` while reusing the standard inventory and auto-open behavior. The source mesh uses forward `-Z`. The body and wheels remain stationary with respect to the hinge; wheels rotate as the vehicle moves.
+`game/scripts/cars/niva_asset.gd` creates `PlayerCar_2` with a separate `TrunkHinge/NivaTailgate_Lid` while reusing the standard inventory and auto-open behavior. The source mesh uses forward `-Z`. The body and wheels remain stationary with respect to the hinge; wheels rotate as the vehicle moves.
 
 ## Verification
 

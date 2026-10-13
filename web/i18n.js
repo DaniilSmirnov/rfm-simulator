@@ -1,5 +1,5 @@
 /* Language of the page around the game (loading screen, rotate prompt, ID input).
- * Same rules as game/scripts/loc.gd: VK is Russian, otherwise the choice saved by
+ * Same rules as game/scripts/ui/loc.gd: VK is Russian, otherwise the choice saved by
  * the in-game language button, otherwise the browser language (Russian or English).
  * Russian text is the key; a missing entry shows the Russian text. */
 globalThis.RallyI18n = (() => {

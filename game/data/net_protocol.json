@@ -1,5 +1,5 @@
 {
-  "comment": "Room protocol shared by the Godot client (scripts/net_protocol.gd) and the Worker (server/room-core.mjs, server/worker.mjs). Change limits here only.",
+  "comment": "Room protocol shared by the Godot client (scripts/net/net_protocol.gd) and the Worker (server/room-core.mjs, server/worker.mjs). Change limits here only.",
   "protocol_version": 8,
   "max_players": 8,
   "room_id_pattern": "^[A-F0-9]{6}$",

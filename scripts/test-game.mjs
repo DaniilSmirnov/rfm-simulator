@@ -1,8 +1,8 @@
 import {spawnSync} from 'node:child_process';
-import {readdir, mkdir, writeFile} from 'node:fs/promises';
+import {mkdir, writeFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import {getGodot, root} from './godot.mjs';
-import {groups,nodeSuites,groupDescriptions,slowTests,verifyRegistry} from './test-catalog.mjs';
+import {groups,nodeSuites,groupDescriptions,slowTests,verifyRegistry,testPaths} from './test-catalog.mjs';
 
 const project=join(root,'game');
 const argv=process.argv.slice(2);
@@ -11,7 +11,8 @@ const shard=flag('--shard')||'all';
 const only=flag('--only');
 const listOnly=argv.includes('--list');
 if (!['all',...Object.keys(groups)].includes(shard)) throw Error('Unknown test shard: '+shard);
-const registry=verifyRegistry(await readdir(join(project,'tests')));
+const paths=await testPaths(join(project,'tests'));
+const registry=verifyRegistry([...paths.keys()]);
 if (listOnly){
  console.log(JSON.stringify({registry,description:groupDescriptions,groups,nodeSuites},null,2));
  process.exit(0);
@@ -59,7 +60,7 @@ if(!importOK) {
  // Tests use baked village assets. Bake them per isolated CI workspace before
  // running independent shards; never mutate an imported project concurrently.
  const bakeOK=execute('Village baked asset preparation',godot,
-  ['--headless','--path',project,'--script','res://tools/bake_village.gd'],120_000);
+  ['--headless','--path',project,'--script','res://tools/bake/bake_village.gd'],120_000);
  if(bakeOK){
   for(const group of activeShards)for(const args of nodeSuites[group]){
    const command=process.execPath;
@@ -71,7 +72,7 @@ if(!importOK) {
    // The shared harness fails the test itself a few seconds before the runner
    // would kill it, so a script error reports FAIL instead of a bare timeout.
    execute('Godot '+filename,godot,
-    ['--headless','--path',project,'--script','res://tests/'+filename,'--','--watchdog='+(timeoutMs/1000-5)],
+    ['--headless','--path',project,'--script','res://tests/'+paths.get(filename),'--','--watchdog='+(timeoutMs/1000-5)],
     timeoutMs);
   }
  }

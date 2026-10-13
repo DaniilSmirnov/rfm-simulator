@@ -11,15 +11,15 @@ Import into Blender for editing. Preserve the pivots `Head`, `LeftArm`, `RightAr
 (shoulders) with `LeftArm/LeftForearm`, `RightArm/RightForearm` (elbows, 0.22 m
 below), `LeftLeg`, `RightLeg` (hips) with `LeftLeg/LeftShin`, `RightLeg/RightShin`
 (knees, 0.33 m below), dimensions and origin; forward is -Z, up is +Y.
-`scripts/character_rig.gd` poses these pivots, so no skeleton or baked clips are
+`scripts/people/character_rig.gd` poses these pivots, so no skeleton or baked clips are
 required. Held items (beer, food, flag, clipboard) hang from the forearms.
 Mesh resources are shared across instances; transforms are independent.
 
-Optional reproducible source: `game/tools/character_source.gd`.
+Optional reproducible source: `game/tools/assets/character_source.gd`.
 Regenerate with Godot 4.4.1:
 
 ```sh
-Godot --headless --path game --script res://tools/export_characters.gd
+Godot --headless --path game --script res://tools/assets/export_characters.gd
 Godot --headless --editor --path game --import
 ```
 

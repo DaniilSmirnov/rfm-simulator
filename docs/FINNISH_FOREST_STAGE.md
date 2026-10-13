@@ -19,7 +19,7 @@ Finland — Оунинпохьей: прыжки на гребнях, длинн
 
 ## Вода
 
-`game/scripts/water.gd` — единая поверхность озёр. Уровень каждого озера точный и
+`game/scripts/stages/finnish_forest/water.gd` — единая поверхность озёр. Уровень каждого озера точный и
 детерминированный, рельеф дна (`finnish_forest.gd`) одинаков на всех клиентах.
 Небольшие волны рассчитываются одной формулой в шейдере
 (`shaders/lake_waves.gdshaderinc`) и на CPU, поэтому лодка и утки качаются на
@@ -44,7 +44,7 @@ Finland — Оунинпохьей: прыжки на гребнях, длинн
 Сосны, трава, камни и валуны, кусты с ягодами, грибы (включая мухоморы и
 поганки), муравейники — общая лесная генерация, которая на этом СУ обходит озёра,
 хутор и сауну. Ягоды и грибы собираются, как в «Лесном перевале».
-`game/scripts/forest_life.gd` добавляет то, что делает лес живым:
+`game/scripts/stages/finnish_forest/forest_life.gd` добавляет то, что делает лес живым:
 
 - ветер качает кроны и траву (`shaders/forest_wind.gdshader`), упавшие деревья не качаются;
 - тростник по берегам колышется, кувшинки с цветами качаются на волнах;
@@ -58,7 +58,7 @@ Finland — Оунинпохьей: прыжки на гребнях, длинн
 
 ## Проверка
 
-`game/tests/test_finnish_forest.gd` (входит в `npm test`, группа `world`) проверяет:
+`game/tests/stages/test_finnish_forest.gd` (входит в `npm test`, группа `world`) проверяет:
 
 - гребни и прыжок у жёлтого дома, шикану, озёра вдоль дороги и перешеек, брод,
   сухое полотно вне брода;
@@ -69,13 +69,13 @@ Finland — Оунинпохьей: прыжки на гребнях, длинн
 - гибель машины в озере в реальной игре.
 
 Сервер сохраняет номер СУ в комнате (`tests/room-core.test.mjs`).
-VK-доступ проверяют `tests/store.test.mjs` и `game/tests/test_vk_catalog_matrix.gd`.
+VK-доступ проверяют `tests/store.test.mjs` и `game/tests/ui/test_vk_catalog_matrix.gd`.
 
 Превью меню и скриншоты (`docs/screenshots/finnish-forest-*.webp`) снимает
-`game/tools/export_finnish_forest_screenshots.gd`:
+`game/tools/screenshots/export_finnish_forest_screenshots.gd`:
 
 ```sh
-xvfb-run -a godot --path game --rendering-method gl_compatibility --script res://tools/export_finnish_forest_screenshots.gd
+xvfb-run -a godot --path game --rendering-method gl_compatibility --script res://tools/screenshots/export_finnish_forest_screenshots.gd
 ```
 
 ![Первое озеро](screenshots/finnish-forest-lake.webp)

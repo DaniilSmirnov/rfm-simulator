@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import {readdir} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import {join,dirname} from 'node:path';
-import {groups,nodeSuites,verifyRegistry,slowTests} from '../scripts/test-catalog.mjs';
+import {groups,nodeSuites,verifyRegistry,slowTests,testPaths} from '../scripts/test-catalog.mjs';
 
 const here=dirname(fileURLToPath(import.meta.url));
 test('every functional Godot test is registered exactly once in a CI shard',async()=>{
- const actual=await readdir(join(here,'..','game','tests'));
+ const actual=[...(await testPaths(join(here,'..','game','tests'))).keys()];
  const manifest=verifyRegistry(actual);
  assert.equal(manifest.count,actual.filter(f=>/^test_[a-z0-9_]+\.gd$/.test(f)).length);
  assert.ok(manifest.count>=55);

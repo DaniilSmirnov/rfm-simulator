@@ -17,7 +17,7 @@
 Для повторной съёмки из корня репозитория, с Godot 4.4.1 и доступным графическим дисплеем:
 
 ```sh
-godot --path game --rendering-method gl_compatibility --audio-driver Dummy --script res://tools/export_winter_screenshots.gd
+godot --path game --rendering-method gl_compatibility --audio-driver Dummy --script res://tools/screenshots/export_winter_screenshots.gd
 ```
 
 На Linux без дисплея можно запустить эту команду через `xvfb-run -a` с программным OpenGL. Скрипт включает дальнюю прорисовку для съёмки, не меняя пользовательскую настройку.
@@ -35,6 +35,6 @@ godot --path game --rendering-method gl_compatibility --audio-driver Dummy --scr
 Видео прыжков и поездки: [perch-car.mp4](perch-car.mp4).
 
 ```sh
-xvfb-run -a godot --path game --rendering-method gl_compatibility --audio-driver Dummy --script res://tools/export_perch_screenshots.gd -- /tmp/perch-frames
+xvfb-run -a godot --path game --rendering-method gl_compatibility --audio-driver Dummy --script res://tools/screenshots/export_perch_screenshots.gd -- /tmp/perch-frames
 ffmpeg -framerate 30 -i /tmp/perch-frames/%04d.png -vf scale=960:-2 -c:v libx264 -pix_fmt yuv420p -crf 30 docs/screenshots/perch-car.mp4
 ```

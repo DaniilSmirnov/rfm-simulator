@@ -127,8 +127,8 @@ await writeFile(settingsPath, settings.replace('\n[rendering]\n', '\n[rendering]
 // Same generated scenes as the Web build: village and rally tracks are baked before export.
 run(godot, ['--headless', '--editor', '--path', project, '--import']);
 const note = platform.prepare ? await platform.prepare() : '';
-run(godot, ['--headless', '--path', project, '--script', 'res://tools/bake_rally_tracks.gd']);
-run(godot, ['--headless', '--path', project, '--script', 'res://tools/bake_village.gd']);
+run(godot, ['--headless', '--path', project, '--script', 'res://tools/bake/bake_rally_tracks.gd']);
+run(godot, ['--headless', '--path', project, '--script', 'res://tools/bake/bake_village.gd']);
 run(godot, ['--headless', '--path', project, '--export-release', platform.preset, join(output, platform.output)]);
 const size = (await stat(join(output, platform.output))).size;
 if (size < 1024 * 1024) throw new Error('Exported archive is suspiciously small.');

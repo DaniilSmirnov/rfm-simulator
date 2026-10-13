@@ -40,18 +40,18 @@ test('game title is Rally Fans Simulator everywhere it is presented', async () =
   const shell = await readFile(new URL('../game/branding/web-shell.html', import.meta.url), 'utf8');
   // ui_kit.gd owns the brand block (logo, title, byline); the HUD and
   // game.gd use it.
-  const game = (await readFile(new URL('../game/scripts/game.gd', import.meta.url), 'utf8'))
-    + await readFile(new URL('../game/scripts/game_hud.gd', import.meta.url), 'utf8')
-    + await readFile(new URL('../game/scripts/ui_kit.gd', import.meta.url), 'utf8');
+  const game = (await readFile(new URL('../game/scripts/core/game.gd', import.meta.url), 'utf8'))
+    + await readFile(new URL('../game/scripts/ui/game_hud.gd', import.meta.url), 'utf8')
+    + await readFile(new URL('../game/scripts/ui/ui_kit.gd', import.meta.url), 'utf8');
   assert.match(project, /config\/name="Rally Fans Simulator"/);
   assert.match(shell, /id="status-brand">Rally Fans Simulator<\/h1>/);
   assert.ok((game.match(/Rally Fans Simulator/g) ?? []).length >= 2);
   assert.equal(/СИМУЛЯТОР РАЛЛИЙНОГО ОВОЩА|РАЛЛИЙНЫЙ ОВОЩ/.test(game), false);
 });
 test('main menu credits Rally Fans Map and links to its site', async () => {
-  const kit = await readFile(new URL('../game/scripts/ui_kit.gd', import.meta.url), 'utf8');
-  const lobby = await readFile(new URL('../game/scripts/lobby_ui.gd', import.meta.url), 'utf8');
-  const hud = await readFile(new URL('../game/scripts/game_hud.gd', import.meta.url), 'utf8');
+  const kit = await readFile(new URL('../game/scripts/ui/ui_kit.gd', import.meta.url), 'utf8');
+  const lobby = await readFile(new URL('../game/scripts/ui/lobby_ui.gd', import.meta.url), 'utf8');
+  const hud = await readFile(new URL('../game/scripts/ui/game_hud.gd', import.meta.url), 'utf8');
   assert.match(kit, /BRAND_URL = "https:\/\/rallyfansmap\.ru\/"/);
   assert.match(kit, /Loc\.t\("от %s"\) % BRAND_NAME/);
   assert.match(kit, /LOGO = "res:\/\/branding\/rfm-icon\.svg"/);
@@ -95,7 +95,7 @@ test('all project brand references use Rally Fans Map spelling', async () => {
 });
 
 test('authored game content has no third-party vehicle brands or named crews', async () => {
-  const props = await readFile(new URL('../game/scripts/props.gd', import.meta.url), 'utf8');
+  const props = await readFile(new URL('../game/scripts/core/props.gd', import.meta.url), 'utf8');
   assert.doesNotMatch(props, /BMW|Lada|Hyundai|Kia Rio|Renault|ВАЗ|ТАТНЕФТЬ|Крылов|Ярош|KidneyGrille|var badge\s*=/i);
   // The rally fleet is data: every car is unbranded and carries the club sponsor.
   const fleetText = await readFile(new URL('../game/data/rally_cars.json', import.meta.url), 'utf8');
@@ -105,10 +105,10 @@ test('authored game content has no third-party vehicle brands or named crews', a
   assert.ok(fleet.cars.length >= 6);
   assert.equal(fleet.defaults.sponsor, 'Rally Fans Map');
   assert.ok(fleet.cars.every(car => (car.sponsor ?? fleet.defaults.sponsor) === 'Rally Fans Map'));
-  const model = await readFile(new URL('../game/scripts/rally_car_model.gd', import.meta.url), 'utf8');
+  const model = await readFile(new URL('../game/scripts/cars/rally_car_model.gd', import.meta.url), 'utf8');
   assert.doesNotMatch(model, brands);
   assert.match(props, /name = "SportGrille"/);
   assert.match(props, /"FANS MAP"/);
-  const room = await readFile(new URL('../game/scripts/room_lobby.gd', import.meta.url), 'utf8');
+  const room = await readFile(new URL('../game/scripts/net/room_lobby.gd', import.meta.url), 'utf8');
   assert.match(room, /"Твой ник"/);
 });
