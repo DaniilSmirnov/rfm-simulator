@@ -13,6 +13,7 @@ const Recovery = preload("res://scripts/recovery.gd")
 const Stage = preload("res://scripts/stage.gd")
 const ServiceTraffic = preload("res://scripts/service_traffic.gd")
 const Traffic = preload("res://scripts/rally_traffic.gd")
+const Loc = preload("res://scripts/loc.gd")
 
 var game
 # Somebody is towing the local player's own car (set by recovery.gd).
@@ -99,7 +100,7 @@ func spawn_racer(forced: String = "") -> void:
 	var racer = add_course_vehicle(node, game.rally_spawn_count + (game.course.pass_index - 1) * 200, kind, variant)
 	# A standing start from the line; a car placed straight on the road flies.
 	racer.drive_speed = 0.0 if waiting != null else Traffic.speed_limit(game, racer, 0.0)
-	game.toast("Приближается %s, номер %d!" % [node.get_meta("model"), node.get_meta("number")])
+	game.toast(Loc.t("Приближается %s, номер %d!") % [Loc.t(node.get_meta("model")), node.get_meta("number")])
 
 # Every client rolls the wheels of the crews, course cars and park convoy it
 # sees, whoever moves them: the host's simulation or a guest's snapshots.

@@ -26,7 +26,9 @@ const execute=(name,command,args,timeoutMs)=>{
  const started=Date.now();
  const result=spawnSync(command,args,{
   cwd:root,encoding:'utf8',stdio:['ignore','pipe','pipe'],
-  timeout:timeoutMs,maxBuffer:16*1024*1024,env:process.env,
+  timeout:timeoutMs,maxBuffer:16*1024*1024,
+  // Tests read the Russian source text; the language never depends on the machine.
+  env:{...process.env,RFM_LANG:'ru'},
  });
  const elapsedMs=Date.now()-started;
  const pass=!result.error && result.status===0;

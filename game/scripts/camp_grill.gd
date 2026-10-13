@@ -6,6 +6,7 @@ extends RefCounted
 # below zero while the grate holds no skewers.
 const Props = preload("res://scripts/props.gd")
 const GrillModel = preload("res://scripts/grill_model.gd")
+const Loc = preload("res://scripts/loc.gd")
 const COALS_SECONDS = 20.0
 const MEAT_SECONDS = 35.0
 const REACH = 4.0
@@ -85,7 +86,7 @@ func load_meat() -> bool:
 	servings = free_slots()
 	meat_time = 0.0
 	Props.set_grill_servings(game.grill, servings)
-	game.toast("Шампуры на углях. Шашлык будет готов через %d секунд." % int(MEAT_SECONDS))
+	game.toast(Loc.t("Шампуры на углях. Шашлык будет готов через %d секунд.") % int(MEAT_SECONDS))
 	return true
 
 # One skewer leaves the grate; an empty grate goes back to bare coals so the
@@ -137,16 +138,16 @@ func progress() -> float:
 func status(short: bool) -> String:
 	match phase():
 		"unlit":
-			return "НЕТ ОГНЯ" if short else "МАНГАЛ НЕ РАЗОЖЖЁН"
+			return Loc.t("НЕТ ОГНЯ") if short else Loc.t("МАНГАЛ НЕ РАЗОЖЖЁН")
 		"flaring":
-			return "УГЛИ %d%%" % int(progress() * 100)
+			return Loc.t("УГЛИ %d%%") % int(progress() * 100)
 		"coals":
-			return "УГЛИ ГОТОВЫ" if short else "УГЛИ ГОТОВЫ · ВЫЛОЖИ ШАМПУРЫ"
+			return Loc.t("УГЛИ ГОТОВЫ") if short else Loc.t("УГЛИ ГОТОВЫ · ВЫЛОЖИ ШАМПУРЫ")
 		"cooking":
-			return "ШАШЛЫК %d%%" % int(progress() * 100)
+			return Loc.t("ШАШЛЫК %d%%") % int(progress() * 100)
 		"ready":
-			return "ШАШЛЫК ГОТОВ"
-	return "БЕЗ МАНГАЛА" if short else "МАНГАЛ НЕ ПОСТАВЛЕН"
+			return Loc.t("ШАШЛЫК ГОТОВ")
+	return Loc.t("БЕЗ МАНГАЛА") if short else Loc.t("МАНГАЛ НЕ ПОСТАВЛЕН")
 
 func snapshot() -> Dictionary:
 	return {"lit": lit, "fire": snappedf(fire_time, 0.01)}

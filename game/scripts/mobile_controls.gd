@@ -2,6 +2,7 @@ extends Control
 class_name RallyMobileControls
 const StageRegistry = preload("res://scripts/stage_registry.gd")
 const UiKit = preload("res://scripts/ui_kit.gd")
+const Loc = preload("res://scripts/loc.gd")
 # Touch layout in canvas units (960×540 landscape, inside the safe area).
 const EDGE = 24.0
 const GAP = 8.0
@@ -71,7 +72,7 @@ func landscape() -> bool:
 	return size.x >= size.y
 
 func add_button(label: String, action: String, hold: bool, rect: Rect2) -> void:
-	buttons.append({"label": label, "action": action, "hold": hold, "rect": rect})
+	buttons.append({"label": Loc.t(label), "action": action, "hold": hold, "rect": rect})
 
 # Tile in the action grid above the right stick: columns count from the right
 # edge, rows from the bottom; span 2 makes the wide main action.
@@ -84,11 +85,11 @@ func grid_rect(column: int, row: int, span: int = 1) -> Rect2:
 # Short caption for the contextual action ("Сесть в машину" → "В машину").
 func action_caption(target: Dictionary) -> String:
 	if target.is_empty():
-		return "Действие"
+		return Loc.t("Действие")
 	var text = str(target.label)
 	for long_text in SHORT_LABELS:
-		text = text.replace(long_text, SHORT_LABELS[long_text])
-	return text.replace("Собрать ", "Убрать ")
+		text = text.replace(Loc.t(long_text), Loc.t(SHORT_LABELS[long_text]))
+	return text.replace(Loc.t("Собрать "), Loc.t("Убрать "))
 
 func _layout() -> void:
 	if not _has_role("stick"):
@@ -275,7 +276,7 @@ func _move_look(pos: Vector2) -> void:
 
 func button_icon(button: Dictionary) -> Texture2D:
 	var name: String = ICON_NAMES.get(button.action, "hand")
-	if button.action == "interact" and (game.in_car or button.label == "В машину" or button.label.begins_with("К другу")):
+	if button.action == "interact" and (game.in_car or button.label == Loc.t("В машину") or button.label.begins_with(Loc.t("К другу"))):
 		name = "door"
 	return icons.get(name)
 
@@ -326,7 +327,7 @@ func _draw() -> void:
 		return
 	var font = ThemeDB.fallback_font
 	if not landscape():
-		draw_string(font, Vector2(0, size.y / 2), "Поверните устройство горизонтально", HORIZONTAL_ALIGNMENT_CENTER, size.x, 24, UiKit.TEXT)
+		draw_string(font, Vector2(0, size.y / 2), Loc.t("Поверните устройство горизонтально"), HORIZONTAL_ALIGNMENT_CENTER, size.x, 24, UiKit.TEXT)
 		return
 	if gear_open and gear_rect.has_area():
 		draw_style_box(styles.drawer, gear_rect)

@@ -15,6 +15,7 @@ extends RefCounted
 # flatten() does the same for one multi-material mesh (imported characters),
 # sharing the result between all instances of that mesh.
 const BlockText = preload("res://scripts/block_text.gd")
+const Loc = preload("res://scripts/loc.gd")
 const CACHE_LIMIT = 192
 const KEEP = ["TrunkHinge", "TrunkBoxes"]
 static var _cache: Dictionary = {}
@@ -121,7 +122,7 @@ static func _append(groups: Dictionary, part: Dictionary) -> void:
 		var target = _group(groups, false, 0.95, 0.0)
 		var basis = xform.basis
 		var normal = (basis * Vector3.BACK).normalized()
-		for vertex in BlockText.triangles(node.text, BlockText.label_pixel(node)):
+		for vertex in BlockText.triangles(Loc.t(node.text), BlockText.label_pixel(node)):
 			target.v.append(xform * vertex)
 			target.n.append(normal)
 			target.c.append(node.modulate)

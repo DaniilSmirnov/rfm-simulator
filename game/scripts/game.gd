@@ -192,6 +192,7 @@ var lifecycle_pause_sequence = 0
 var mobile_safe_http: HTTPRequest
 const Traffic = preload("res://scripts/rally_traffic.gd")
 const Motion = preload("res://scripts/vehicle_motion.gd")
+const Loc = preload("res://scripts/loc.gd")
 var vehicle_motion = Motion.new()
 var stones: Array[Dictionary] = []
 var gravel_pool: Array[MeshInstance3D] = []
@@ -275,6 +276,7 @@ func _input(event: InputEvent) -> void:
 		enable_mobile()
 
 func _ready() -> void:
+	Loc.setup()
 	print("[RFM] Подготовка игрового мира")
 	foraging.game = self
 	interaction.game = self
@@ -537,7 +539,7 @@ func _invite_friends() -> void:
 		room.connect_room("")
 		if not room.busy:
 			invite_after_room_create = false
-			invite_status.text = "Не удалось создать комнату: " + room.ui.status.text
+			invite_status.text = Loc.t("Не удалось создать комнату: %s") % room.ui.status.text
 			invite_status.show()
 			toast(invite_status.text)
 		return
@@ -546,7 +548,7 @@ func _invite_friends() -> void:
 		invite_status.show()
 		toast(invite_status.text)
 		return
-	invite_status.text = "Открываем приглашение VK для комнаты " + room.room_id + "…"
+	invite_status.text = Loc.t("Открываем приглашение VK для комнаты %s…") % room.room_id
 	invite_status.show()
 	toast(invite_status.text)
 	invite_button.disabled = true
@@ -840,7 +842,7 @@ func select_stage(variant: int, hosted_guest: bool = false) -> void:
 	jump_height = 0
 	jump_velocity = 0
 	selected_stage = variant
-	stage_caption.text = Stage.STAGES[variant]
+	stage_caption.text = StageRegistry.caption(variant)
 	stage_choice.select(variant)
 	stage.free()
 	stage = Stage.new(variant)
@@ -944,7 +946,7 @@ func _check_finish() -> void:
 	if dead or finished or not packing.active() or packing.remaining() > 0 or eat_time >= 0 or drink_time >= 0 or not park_traffic.everyone_home():
 		return
 	finished = true
-	_show_result("Раллийный выезд завершён", "Оба прохода посмотрены. Лагерь собран. Все доехали до парка сервиса.\n\nЭкипажи: %d  ·  Помощь: %d\nМашина: %d%%\n\nДо следующего ралли!" % [RALLY_CREW_LIMIT + passed, helped, condition])
+	_show_result("Раллийный выезд завершён", Loc.t("Оба прохода посмотрены. Лагерь собран. Все доехали до парка сервиса.\n\nЭкипажи: %d  ·  Помощь: %d\nМашина: %d%%\n\nДо следующего ралли!") % [RALLY_CREW_LIMIT + passed, helped, condition])
 
 func die(reason: String) -> void:
 	hud.die(reason)

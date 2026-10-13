@@ -2,6 +2,7 @@ extends RefCounted
 # Local graphics preference; the simulation and room snapshots are unaffected.
 # Modes keep their saved numbers (LOW was added last); ORDER is how the menu
 # lists them, from cheapest to richest.
+const Loc = preload("res://scripts/loc.gd")
 const NEAR = 0
 const MEDIUM = 1
 const FAR = 2
@@ -109,7 +110,7 @@ func watch(delta: float) -> String:
 		if _warned:
 			return ""
 		_warned = true
-		return "Игра идёт медленно (%d FPS). Попробуйте графику «Минимум» в паузе (Esc)." % int(fps)
+		return Loc.t("Игра идёт медленно (%d FPS). Попробуйте графику «Минимум» в паузе (Esc).") % int(fps)
 	mode = cheaper(mode)
 	_played = 0.0
-	return "Игра шла медленно (%d FPS) — графика снижена до «%s». Изменить можно в паузе (Esc)." % [int(fps), LABELS[mode]]
+	return Loc.t("Игра шла медленно (%d FPS) — графика снижена до «%s». Изменить можно в паузе (Esc).") % [int(fps), Loc.t(LABELS[mode])]

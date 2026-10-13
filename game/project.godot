@@ -32,6 +32,10 @@ environment/defaults/default_clear_color=Color(0.64, 0.72, 0.72, 1)
 [audio]
 default_bus_layout="res://default_bus_layout.tres"
 
+[internationalization]
+
+locale/fallback="ru"
+
 [physics]
 2d/physics_engine="Dummy"
 3d/physics_engine="GodotPhysics3D"

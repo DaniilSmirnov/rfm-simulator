@@ -15,6 +15,7 @@ const NATURE_MUSHROOM_CAP = preload("res://models/nature/mushroom_cap.tres")
 const NATURE_MUSHROOM_STEM = preload("res://models/nature/mushroom_stem.tres")
 const NATURE_STONE = preload("res://models/nature/stone.tres")
 const Records = preload("res://scripts/stage_records.gd")
+const Loc = preload("res://scripts/loc.gd")
 # Metres a forest chunk (64 m cell of shared trees) stays drawn at MEDIUM.
 const FOREST_RANGE = 320.0
 
@@ -455,7 +456,7 @@ func clearing_signs() -> void:
 		var label = Label3D.new()
 		sign.add_child(label)
 		label.position = Vector3(0, 0, 0.075)
-		label.text = "ПОЛЯНА %d" % (i + 1)
+		label.text = Loc.t("ПОЛЯНА %d") % (i + 1)
 		label.font_size = 42
 		label.pixel_size = 0.005
 		label.modulate = Color("344537")

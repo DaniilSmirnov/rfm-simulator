@@ -1,8 +1,9 @@
 /* Local startup diagnostics. No reports are sent to a server. */
 globalThis.RallyBoot = (() => {
+  const t = text => globalThis.RallyI18n ? globalThis.RallyI18n.t(text) : text;
   const started = performance.now();
   const logs = [];
-  let stage = 'Проверка браузера';
+  let stage = 'Проверка браузера'; // Russian key; shown through t()
   let failed = false;
   let version = 'unknown';
   let lastPercent = -1;
@@ -15,19 +16,19 @@ globalThis.RallyBoot = (() => {
   function setStage(value) {
     if (failed) return;
     stage = value;
-    if (node('status-stage')) node('status-stage').textContent = value;
+    if (node('status-stage')) node('status-stage').textContent = t(value);
     record('stage', value);
   }
   function classify(detail) {
-    if (/WebGL|GPU|context lost/i.test(detail)) return 'Не удалось запустить графику. Попробуйте обновить браузер или открыть игру в Chrome/Safari.';
-    if (/memory|out of bounds|allocation|OOM/i.test(detail)) return 'Браузеру не хватило памяти для игры. Закройте лишние вкладки и повторите запуск.';
-    if (/HTTP|Failed to fetch|Network|fetch|загрузить/i.test(detail)) return 'Не удалось скачать файлы игры. Проверьте соединение и повторите запуск.';
-    if (/gzip|decompress|WebAssembly|CompileError|сборк/i.test(detail)) return 'Файлы движка повреждены или несовместимы. Обновите страницу; если ошибка повторяется, сохраните подробности.';
-    if (/unreachable|RuntimeError/i.test(detail)) return 'Движок игры аварийно остановился при запуске. Сохраните технические подробности — они помогут найти причину.';
-    return 'Не удалось запустить игру. Повторите запуск; если ошибка сохраняется, сохраните технические подробности.';
+    if (/WebGL|GPU|context lost/i.test(detail)) return t('Не удалось запустить графику. Попробуйте обновить браузер или открыть игру в Chrome/Safari.');
+    if (/memory|out of bounds|allocation|OOM/i.test(detail)) return t('Браузеру не хватило памяти для игры. Закройте лишние вкладки и повторите запуск.');
+    if (/HTTP|Failed to fetch|Network|fetch|загрузить/i.test(detail)) return t('Не удалось скачать файлы игры. Проверьте соединение и повторите запуск.');
+    if (/gzip|decompress|WebAssembly|CompileError|сборк/i.test(detail)) return t('Файлы движка повреждены или несовместимы. Обновите страницу; если ошибка повторяется, сохраните подробности.');
+    if (/unreachable|RuntimeError/i.test(detail)) return t('Движок игры аварийно остановился при запуске. Сохраните технические подробности — они помогут найти причину.');
+    return t('Не удалось запустить игру. Повторите запуск; если ошибка сохраняется, сохраните технические подробности.');
   }
   function report() {
-    return `Rally Fans Map ${version}\nЭтап: ${stage}\nБраузер: ${navigator.userAgent}\n\n${logs.join('\n')}`;
+    return `Rally Fans Map ${version}\n${t('Этап')}: ${t(stage)}\n${t('Браузер')}: ${navigator.userAgent}\n\n${logs.join('\n')}`;
   }
   function fail(error) {
     if (failed) return;
@@ -49,7 +50,7 @@ globalThis.RallyBoot = (() => {
       setStage('Проверка браузера');
       node('status-retry')?.addEventListener('click', () => location.reload());
       node('status-copy')?.addEventListener('click', async () => {
-        try { await navigator.clipboard.writeText(report()); node('status-copy').textContent = 'Скопировано'; }
+        try { await navigator.clipboard.writeText(report()); node('status-copy').textContent = t('Скопировано'); }
         catch { node('status-log')?.focus(); }
       });
       window.addEventListener('error', event => fail(event.error || event.message));
@@ -67,6 +68,6 @@ globalThis.RallyBoot = (() => {
     note(message) { record('info', message); },
     print(...args) { record('engine', args.join(' ')); },
     printError(...args) { record('error', args.join(' ')); },
-    ready() { if (!failed) { record('stage', 'Игра запущена'); node('status')?.remove(); } },
+    ready() { if (!failed) { record('stage', t('Игра запущена')); node('status')?.remove(); } },
   };
 })();

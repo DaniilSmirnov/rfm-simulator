@@ -29,6 +29,7 @@ const CharacterRig = preload("res://scripts/character_rig.gd")
 const Perches = preload("res://scripts/perches.gd")
 const Navigation = preload("res://scripts/crowd_navigation.gd")
 const Budget = preload("res://scripts/navigation_budget.gd")
+const Loc = preload("res://scripts/loc.gd")
 const LIMP_SECONDS = 60.0
 const LIMP_FACTOR = 0.55
 # Terrain collision under a flight: PATCH × PATCH vertices, one metre apart.
@@ -607,11 +608,11 @@ func treating(key: String) -> bool:
 func hud_line() -> String:
 	if down:
 		if treating(local_key()):
-			return "МЕДИКИ ОКАЗЫВАЮТ ПОМОЩЬ"
+			return Loc.t("МЕДИКИ ОКАЗЫВАЮТ ПОМОЩЬ")
 		var metres = eta(local_key())
-		return "ТЕБЯ СБИЛИ · СКОРАЯ В ПУТИ · %d М" % int(metres) if metres >= 0.0 else "ТЕБЯ СБИЛИ · СКОРАЯ ВЫЕЗЖАЕТ"
+		return Loc.t("ТЕБЯ СБИЛИ · СКОРАЯ В ПУТИ · %d М") % int(metres) if metres >= 0.0 else Loc.t("ТЕБЯ СБИЛИ · СКОРАЯ ВЫЕЗЖАЕТ")
 	if limp > 0.0:
-		return "ХРОМАЕШЬ · БЕЗ БЕГА И ПРЫЖКОВ · %d С" % ceili(limp)
+		return Loc.t("ХРОМАЕШЬ · БЕЗ БЕГА И ПРЫЖКОВ · %d С") % ceili(limp)
 	return ""
 
 # Third-person view of yourself lying, orbiting with the usual mouse look.

@@ -8,6 +8,7 @@ const Props = preload("res://scripts/props.gd")
 const Stage = preload("res://scripts/stage.gd")
 const StageRegistry = preload("res://scripts/stage_registry.gd")
 const UiKit = preload("res://scripts/ui_kit.gd")
+const Loc = preload("res://scripts/loc.gd")
 
 var game
 # Menu window parts that change with the screen (main menu / pause / result).
@@ -82,7 +83,7 @@ func build_top(ui: Control) -> void:
 	game.mobile_top = top
 	top.position = Vector2(24, 24)
 	top_box = UiKit.vbox(top, 4)
-	game.stage_caption = UiKit.label(top_box, Stage.STAGES[game.selected_stage].to_upper(), "caption")
+	game.stage_caption = UiKit.label(top_box, StageRegistry.caption(game.selected_stage).to_upper(), "caption")
 	game.course_label = UiKit.label(top_box, "", "hud")
 	game.course_label.hide()
 	game.fps_label = UiKit.label(top_box, "v%s · — FPS" % ProjectSettings.get_setting("application/config/version"), "muted")
@@ -212,7 +213,7 @@ func build_menu(canvas: CanvasLayer) -> void:
 	entry_slot = UiKit.vbox(game.menu_content, 0)
 	entry_slot.name = "Entry"
 	build_menu_actions(game.menu_content)
-	footer = UiKit.label(game.menu_content, "Версия %s" % ProjectSettings.get_setting("application/config/version"), "muted")
+	footer = UiKit.label(game.menu_content, Loc.t("Версия %s") % ProjectSettings.get_setting("application/config/version"), "muted")
 	footer.add_theme_font_size_override("font_size", 12)
 	game.lobby_ui.finish(game.menu_content)
 	game.how_to_play = preload("res://scripts/how_to_play.gd").new()
@@ -351,8 +352,9 @@ func show_consumption_warning(kind: String) -> void:
 	game.consumption_warning.show()
 
 func toast(message: String) -> void:
+	message = Loc.t(message)
 	if game.mobile_mode:
-		var labels = {"Space —": "Тормоз —", "F —": "Действие —", "Z —": "Стол —", "C —": "Стулья —", "G —": "Мангал —", "X —": "Есть —", "R —": "Заезды —", "— T": "— Трос", ": E.": ": Выйти.", "нажми X": "нажми Есть", "Удерживай T": "Удерживай Трос"}
+		var labels = {"Space —": Loc.t("Тормоз —"), "F —": Loc.t("Действие —"), "Z —": Loc.t("Стол —"), "C —": Loc.t("Стулья —"), "G —": Loc.t("Мангал —"), "X —": Loc.t("Есть —"), "R —": Loc.t("Заезды —"), "— T": Loc.t("— Трос"), ": E.": Loc.t(": Выйти."), Loc.t("нажми X"): Loc.t("нажми Есть"), Loc.t("Удерживай T"): Loc.t("Удерживай Трос")}
 		for key in labels:
 			message = message.replace(key, labels[key])
 	if game.toast_label != null:
@@ -408,71 +410,71 @@ func update_hud() -> void:
 	game.sobriety_panel.visible = game.beers >= 30 and game.playing and not game.dead and not game.finished
 	if game.sobriety_panel.visible:
 		var seconds = ceili(game.sober_remaining if game.sober_remaining > 0 else game.SOBER_SECONDS)
-		set_hud_text(game.sobriety_label, "ПРОТРЕЗВЛЕНИЕ · ВСТАНЕШЬ ЧЕРЕЗ %02d:%02d" % [seconds / 60, seconds % 60])
+		set_hud_text(game.sobriety_label, Loc.t("ПРОТРЕЗВЛЕНИЕ · ВСТАНЕШЬ ЧЕРЕЗ %02d:%02d") % [seconds / 60, seconds % 60])
 		game.sobriety_bar.value = game.SOBER_SECONDS - (game.sober_remaining if game.sober_remaining > 0 else game.SOBER_SECONDS)
 	course_text = game.course.caption()
-	quest_text = "%s Выбрать место для лагеря\n%s Разложить стол\n%s Поставить стулья\n%s Пожарить и съесть шашлык\n%s Посмотреть %d экипажей" % ["[x]" if game.camp != null else "[ ]", "[x]" if game.camp != null else "[ ]", "[x]" if game.has_chairs else "[ ]", "[x]" if game.eaten else "[ ]", "[x]" if game.passed >= game.RALLY_CREW_LIMIT else "[ ]", game.RALLY_CREW_LIMIT]
+	quest_text = Loc.t("%s Выбрать место для лагеря\n%s Разложить стол\n%s Поставить стулья\n%s Пожарить и съесть шашлык\n%s Посмотреть %d экипажей") % ["[x]" if game.camp != null else "[ ]", "[x]" if game.camp != null else "[ ]", "[x]" if game.has_chairs else "[ ]", "[x]" if game.eaten else "[ ]", "[x]" if game.passed >= game.RALLY_CREW_LIMIT else "[ ]", game.RALLY_CREW_LIMIT]
 	if game.packing.active():
-		quest_text = "Оба прохода завершены\nВернуть вещи в багажники: осталось %d\nБагажник открывается при подходе\nF — взять предмет / вернуть коробку\nЗатем все садятся в машины, свои или к друзьям" % remaining_items
-	status_text = "ПРОХОД %d/2 · ЭКИПАЖИ %d/%d · ПОМОЩЬ %d\nВЫЕЗД %02d:%02d" % [game.course.pass_index, game.passed, game.RALLY_CREW_LIMIT, game.helped, int(game.elapsed) / 60, int(game.elapsed) % 60]
+		quest_text = Loc.t("Оба прохода завершены\nВернуть вещи в багажники: осталось %d\nБагажник открывается при подходе\nF — взять предмет / вернуть коробку\nЗатем все садятся в машины, свои или к друзьям") % remaining_items
+	status_text = Loc.t("ПРОХОД %d/2 · ЭКИПАЖИ %d/%d · ПОМОЩЬ %d\nВЫЕЗД %02d:%02d") % [game.course.pass_index, game.passed, game.RALLY_CREW_LIMIT, game.helped, int(game.elapsed) / 60, int(game.elapsed) % 60]
 	if game.rides.riding():
-		info_text = "ПАССАЖИР    ·    МАШИНА: %s    ·    %02d КМ/Ч" % [game.rides.name_of(game.rides.ride).to_upper(), int(absf(game.rides.speed()) * 3.6)]
-		hint_text = "Мышь — смотреть   ·   F — выйти, когда машина стоит"
+		info_text = Loc.t("ПАССАЖИР    ·    МАШИНА: %s    ·    %02d КМ/Ч") % [game.rides.name_of(game.rides.ride).to_upper(), int(absf(game.rides.speed()) * 3.6)]
+		hint_text = Loc.t("Мышь — смотреть   ·   F — выйти, когда машина стоит")
 	elif game.in_car:
-		info_text = "%02d КМ/Ч    ·    ЛЕГКОВУШКА %d%%    ·    %s" % [int(absf(game.speed) * 3.6), int(game.condition), "ОБОЧИНА" if game.stage.road_distance(game.car.position) > 4 else "ГРАВИЙ / КОЛЕЯ"]
-		hint_text = "WASD / стрелки — газ и руль   ·   Space — тормоз   ·   F — выйти   ·   Home — вернуть на СУ"
+		info_text = Loc.t("%02d КМ/Ч    ·    ЛЕГКОВУШКА %d%%    ·    %s") % [int(absf(game.speed) * 3.6), int(game.condition), Loc.t("ОБОЧИНА") if game.stage.road_distance(game.car.position) > 4 else Loc.t("ГРАВИЙ / КОЛЕЯ")]
+		hint_text = Loc.t("WASD / стрелки — газ и руль   ·   Space — тормоз   ·   F — выйти   ·   Home — вернуть на СУ")
 		if game.rides.hitch_candidate() != "" and game.rides.hitch == "":
-			hint_text += "   ·   T — взять друга на трос"
+			hint_text += Loc.t("   ·   T — взять друга на трос")
 		if game.condition <= 0:
-			info_text = "МАШИНА СЛОМАНА    ·    САДИСЬ К ДРУГУ ИЛИ ЖДИ ТРОС"
+			info_text = Loc.t("МАШИНА СЛОМАНА    ·    САДИСЬ К ДРУГУ ИЛИ ЖДИ ТРОС")
 	else:
-		info_text = "ЗРИТЕЛЬ    ·    %s · ШАМПУРЫ %d/10    ·    %s" % [game.camp_grill.status(false), game.camp_grill.servings, game.course.caption()]
-		hint_text = "WASD — идти   ·   Shift — бег   ·   Space — прыжок   ·   мышь — смотреть   ·   F — действие   ·   Z — стол   ·   C — стулья   ·   G — мангал   ·   R — статус СУ"
+		info_text = Loc.t("ЗРИТЕЛЬ    ·    %s · ШАМПУРЫ %d/10    ·    %s") % [game.camp_grill.status(false), game.camp_grill.servings, game.course.caption()]
+		hint_text = Loc.t("WASD — идти   ·   Shift — бег   ·   Space — прыжок   ·   мышь — смотреть   ·   F — действие   ·   Z — стол   ·   C — стулья   ·   G — мангал   ·   R — статус СУ")
 		if game.drink_time >= 0:
-			info_text = "ОТКРЫВАЕМ БАНКУ" if game.drink_time < 1.25 else "ЗА ХОРОШИЙ ВЫЕЗД!"
+			info_text = Loc.t("ОТКРЫВАЕМ БАНКУ") if game.drink_time < 1.25 else Loc.t("ЗА ХОРОШИЙ ВЫЕЗД!")
 		if game.eat_time >= 0:
-			info_text = "ЕДИМ ПЛОВ" if game.eat_kind == "plov" else ("ЕДИМ ЯГОДЫ" if game.eat_kind == "berries" else ("ЕДИМ ГРИБЫ" if game.eat_kind == "mushroom" else "ЕДИМ ШАШЛЫК"))
+			info_text = Loc.t("ЕДИМ ПЛОВ") if game.eat_kind == "plov" else (Loc.t("ЕДИМ ЯГОДЫ") if game.eat_kind == "berries" else (Loc.t("ЕДИМ ГРИБЫ") if game.eat_kind == "mushroom" else Loc.t("ЕДИМ ШАШЛЫК")))
 		if game.beers >= 30:
-			info_text = "ТЫ ЛЕЖИШЬ · ОТДОХНИ ДО ВОССТАНОВЛЕНИЯ"
+			info_text = Loc.t("ТЫ ЛЕЖИШЬ · ОТДОХНИ ДО ВОССТАНОВЛЕНИЯ")
 	if game.crews.car_towed and game.tow_target == null:
-		info_text = "ТВОЮ МАШИНУ ТЯНУТ НА ТРОСЕ"
+		info_text = Loc.t("ТВОЮ МАШИНУ ТЯНУТ НА ТРОСЕ")
 	if game.tow_target != null:
 		info_text = tow_text()
 	if injury != "":
 		info_text = injury
 		if game.injuries.down:
-			hint_text = "Лежи и жди скорую · мышь — осмотреться"
+			hint_text = Loc.t("Лежи и жди скорую · мышь — осмотреться")
 	elif near_tow:
-		hint_text += "   ·   T — тянуть тросом в любую сторону · иди на машину — толкать"
+		hint_text += Loc.t("   ·   T — тянуть тросом в любую сторону · иди на машину — толкать")
 	if not game.in_car:
-		status_text += "\nГРИБЫ %d · %s %d" % [bag.mushrooms, StageRegistry.value(game.stage.variant, "berries_hud"), bag.berries]
+		status_text += Loc.t("\nГРИБЫ %d · %s %d") % [bag.mushrooms, Loc.t(StageRegistry.value(game.stage.variant, "berries_hud")), bag.berries]
 		if not target.is_empty():
-			hint_text = "F — " + target.label + ("" if game.packing.active() else "   ·   Z/C/G/V — поставить предмет")
+			hint_text = "F — " + target.label + ("" if game.packing.active() else Loc.t("   ·   Z/C/G/V — поставить предмет"))
 		elif game.seated:
-			hint_text = "F — встать со стула"
+			hint_text = Loc.t("F — встать со стула")
 		if game.foraging.can_eat("berries"):
-			hint_text += " · K — съесть ягоды"
+			hint_text += Loc.t(" · K — съесть ягоды")
 	if game.camp_cooking.pot != null:
-		status_text += "\nПЛОВ %s · %d/10" % [("ГОТОВ" if game.camp_cooking.phase == "ready" else ("ГОТОВИМ %d%%" % int(game.camp_cooking.cook_time / game.camp_cooking.COOK_SECONDS * 100) if game.camp_cooking.phase == "cooking" else "КАЗАН ПУСТ")), game.camp_cooking.servings]
+		status_text += Loc.t("\nПЛОВ %s · %d/10") % [(Loc.t("ГОТОВ") if game.camp_cooking.phase == "ready" else (Loc.t("ГОТОВИМ %d%%") % int(game.camp_cooking.cook_time / game.camp_cooking.COOK_SECONDS * 100) if game.camp_cooking.phase == "cooking" else Loc.t("КАЗАН ПУСТ"))), game.camp_cooking.servings]
 	if game.packing.active() and remaining_items == 0:
-		hint_text = "Лагерь собран. Езжай в парк сервиса на старте или финише СУ; ждём всех друзей." if game.in_car else "Лагерь собран. Садись в машину, свою или к другу (F), и езжай в парк сервиса."
+		hint_text = Loc.t("Лагерь собран. Езжай в парк сервиса на старте или финише СУ; ждём всех друзей.") if game.in_car else Loc.t("Лагерь собран. Садись в машину, свою или к другу (F), и езжай в парк сервиса.")
 	if game.mobile_mode:
-		course_text = game.course.caption().replace("ПРОХОД ", "СУ ").replace(" · ПРЯМО", "").replace(" · ОБРАТНО", "").replace("ДО ОТКРЫТИЯ СУ", "СТАРТ ЧЕРЕЗ")
+		course_text = game.course.short_caption()
 		if injury != "" or game.crews.car_towed or game.tow_target != null:
-			info_text = info_text.replace("УДЕРЖИВАЙ T", "УДЕРЖИВАЙ ТРОС").replace("T — ОТЦЕПИТЬ", "«ТРОС» — ОТЦЕПИТЬ")
+			info_text = info_text.replace(Loc.t("УДЕРЖИВАЙ T"), Loc.t("УДЕРЖИВАЙ ТРОС")).replace(Loc.t("T — ОТЦЕПИТЬ"), Loc.t("«ТРОС» — ОТЦЕПИТЬ"))
 		elif game.rides.riding():
-			info_text = "ПАССАЖИР · %02d КМ/Ч" % int(absf(game.rides.speed()) * 3.6)
+			info_text = Loc.t("ПАССАЖИР · %02d КМ/Ч") % int(absf(game.rides.speed()) * 3.6)
 		elif game.in_car:
-			info_text = "%02d КМ/Ч · МАШИНА %d%%" % [int(absf(game.speed) * 3.6), int(game.condition)] if game.condition > 0 else "МАШИНА СЛОМАНА · САДИСЬ К ДРУГУ"
+			info_text = Loc.t("%02d КМ/Ч · МАШИНА %d%%") % [int(absf(game.speed) * 3.6), int(game.condition)] if game.condition > 0 else Loc.t("МАШИНА СЛОМАНА · САДИСЬ К ДРУГУ")
 		elif game.drink_time < 0 and game.eat_time < 0 and game.beers < 30:
 			if game.packing.active():
-				info_text = "ВЕРНУТЬ ВЕЩИ В БАГАЖНИК · ОСТАЛОСЬ %d" % remaining_items
+				info_text = Loc.t("ВЕРНУТЬ ВЕЩИ В БАГАЖНИК · ОСТАЛОСЬ %d") % remaining_items
 			else:
 				info_text = "%s · %d/10" % [game.camp_grill.status(true), game.camp_grill.servings]
 				if game.camp_cooking.pot != null:
-					info_text += " · ПЛОВ %d/10" % game.camp_cooking.servings if game.camp_cooking.phase == "ready" else (" · ПЛОВ %d%%" % int(game.camp_cooking.cook_time / 45 * 100) if game.camp_cooking.phase == "cooking" else " · КАЗАН ПУСТ")
+					info_text += Loc.t(" · ПЛОВ %d/10") % game.camp_cooking.servings if game.camp_cooking.phase == "ready" else (Loc.t(" · ПЛОВ %d%%") % int(game.camp_cooking.cook_time / 45 * 100) if game.camp_cooking.phase == "cooking" else Loc.t(" · КАЗАН ПУСТ"))
 		else:
-			info_text = info_text.replace("УДЕРЖИВАЙ T", "УДЕРЖИВАЙ ТРОС")
+			info_text = info_text.replace(Loc.t("УДЕРЖИВАЙ T"), Loc.t("УДЕРЖИВАЙ ТРОС"))
 		if game.toast_time > 0:
 			info_text += "\n" + game.toast_label.text
 		elif not game.in_car and not target.is_empty():
@@ -487,13 +489,13 @@ func update_hud() -> void:
 # The rope the local player holds: how far the crew still has to the road, or
 # whose car is being towed, and how many people help.
 func tow_text() -> String:
-	var helpers = " · ВМЕСТЕ: %d" % game.recovery_helpers if game.recovery_helpers > 1 else ""
+	var helpers = Loc.t(" · ВМЕСТЕ: %d") % game.recovery_helpers if game.recovery_helpers > 1 else ""
 	if game.rides.hitch != "" and game.tow_target != game.car:
-		return "%02d КМ/Ч · ТЯНЕМ МАШИНУ ДРУГА НА ТРОСЕ   ·   T — ОТЦЕПИТЬ" % int(absf(game.speed) * 3.6)
+		return Loc.t("%02d КМ/Ч · ТЯНЕМ МАШИНУ ДРУГА НА ТРОСЕ   ·   T — ОТЦЕПИТЬ") % int(absf(game.speed) * 3.6)
 	if game.tow_distance < 0:
-		var whose = "СВОЮ МАШИНУ" if game.tow_target == game.car else "МАШИНУ ДРУГА"
-		return "ТЯНЕМ %s%s   ·   УДЕРЖИВАЙ T" % [whose, helpers]
-	return "ВЫТАСКИВАЕМ ЭКИПАЖ · ДО ДОРОГИ %d М%s   ·   УДЕРЖИВАЙ T" % [ceili(game.tow_distance), helpers]
+		var whose = Loc.t("СВОЮ МАШИНУ") if game.tow_target == game.car else Loc.t("МАШИНУ ДРУГА")
+		return Loc.t("ТЯНЕМ %s%s   ·   УДЕРЖИВАЙ T") % [whose, helpers]
+	return Loc.t("ВЫТАСКИВАЕМ ЭКИПАЖ · ДО ДОРОГИ %d М%s   ·   УДЕРЖИВАЙ T") % [ceili(game.tow_distance), helpers]
 
 func set_paused(value: bool) -> void:
 	game.paused = value
@@ -524,7 +526,7 @@ func show_result(title: String, body: String) -> void:
 
 func die(reason: String) -> void:
 	game.dead = true
-	show_result("Выезд окончен", reason + "\n\nЭкипажи: %d  ·  Помощь тросом: %d\nШашлык: %s" % [game.passed, game.helped, "съеден" if game.eaten else "не съеден"])
+	show_result(Loc.t("Выезд окончен"), reason + Loc.t("\n\nЭкипажи: %d  ·  Помощь тросом: %d\nШашлык: %s") % [game.passed, game.helped, Loc.t("съеден") if game.eaten else Loc.t("не съеден")])
 
 func enable_mobile() -> void:
 	if game.mobile_mode:

@@ -3,6 +3,7 @@ extends RefCounted
 # drinking beer and eating. Guest commands reach these through
 # shared_actions.gd with game.acting set (see action_context.gd).
 const Props = preload("res://scripts/props.gd")
+const Loc = preload("res://scripts/loc.gd")
 
 var game
 
@@ -411,7 +412,7 @@ func commit_meat(source_group: int = -2) -> bool:
 	elif game.spectators == null or source < 0 or source >= game.spectators.groups.size() or game.actor_position().distance_to(game.spectators.groups[source].grill.position) > 4 or not game.spectators.consume_serving(source):
 		return false
 	game.eaten = true
-	game.toast("Шашлык удался. Осталось %d шампуров." % game.camp_grill.servings if source == -1 else "У NPC нашлась порция шашлыка. Приятного аппетита!")
+	game.toast(Loc.t("Шашлык удался. Осталось %d шампуров.") % game.camp_grill.servings if source == -1 else "У NPC нашлась порция шашлыка. Приятного аппетита!")
 	game.eat_source_group = -2
 	return true
 
