@@ -10,7 +10,7 @@ const FLEE_DISTANCE = 15.0
 const FUR = Color("a0613d")
 const FUR_LIGHT = Color("c9926a")
 # Station, side and distance from the road of each kangaroo mob.
-const MOBS = [[90.0, 1.0, 46.0], [260.0, -1.0, 38.0], [400.0, 1.0, 42.0], [560.0, 1.0, 52.0], [660.0, -1.0, 44.0], [780.0, 1.0, 40.0]]
+const MOBS = [[90.0, 1.0, 46.0], [260.0, -1.0, 38.0], [400.0, 1.0, 42.0], [540.0, 1.0, 52.0], [690.0, 1.0, 46.0], [790.0, -1.0, 40.0]]
 
 var stage
 var biome

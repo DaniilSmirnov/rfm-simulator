@@ -15,7 +15,7 @@ const RED_IRON = Color("7e3427")
 const SIGN_YELLOW = Color("f2c230")
 const SIGN_BLACK = Color("1d1c1a")
 # Stations of the kangaroo warning signs and the side of the road they stand on.
-const KANGAROO_SIGNS = [[14.0, 1.0], [236.0, -1.0], [610.0, 1.0], [818.0, -1.0]]
+const KANGAROO_SIGNS = [[14.0, 1.0], [236.0, -1.0], [708.0, 1.0], [818.0, -1.0]]
 
 var stage
 var biome

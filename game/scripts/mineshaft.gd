@@ -6,30 +6,33 @@ extends "res://scripts/stage_biome.gd"
 # the finish. Deterministic geometry shared by driving, walking, camp placement,
 # rendering and every multiplayer client.
 
-# Lip of the giant jump: the road falls DROP metres over DROP_LENGTH beyond it.
-const LIP = 500.0
-const DROP = 8.0
-const DROP_LENGTH = 26.0
+# Lip of the giant jump: a near-vertical cliff of DROP metres over DROP_LENGTH,
+# then a run-out falling RUNOUT metres more. Crews flying at 100+ km/h land
+# 35-45 m beyond the lip; the corner starts well after that.
+const LIP = 620.0
+const DROP = 14.0
+const DROP_LENGTH = 8.0
+const RUNOUT = 2.0
 # Corner after the landing.
-const CORNER_BEGIN = LIP + 28.0
-const CORNER_END = LIP + 54.0
+const CORNER_BEGIN = LIP + 50.0
+const CORNER_END = LIP + 76.0
 # Linked bends after the start and before the finish.
 const OPENING_BEGIN = 30.0
 const OPENING_END = 222.0
-const CLOSING_BEGIN = 606.0
-const CLOSING_END = 790.0
+const CLOSING_BEGIN = 716.0
+const CLOSING_END = 812.0
 # Heading of the long straight (tangent of its angle to the -z axis).
 const STRAIGHT_SLOPE = -0.16
 
 # Road elevation keys (station, metres) before the drop is cut in.
 const KEYS = [
 	[-20.0, 50.0], [0.0, 50.0], [40.0, 50.5], [80.0, 52.0], [120.0, 51.2], [160.0, 52.8], [200.0, 54.2],
-	[240.0, 54.0], [280.0, 55.0], [330.0, 56.4], [380.0, 57.4], [430.0, 58.6], [470.0, 59.6], [500.0, 60.4],
-	[520.0, 60.6], [560.0, 60.4], [620.0, 60.0], [680.0, 59.4], [740.0, 59.8], [800.0, 60.4], [840.0, 60.8], [860.0, 60.8],
+	[240.0, 54.0], [300.0, 55.0], [360.0, 56.3], [420.0, 57.5], [480.0, 58.7], [540.0, 59.8], [590.0, 60.6],
+	[620.0, 61.2], [650.0, 61.4], [700.0, 61.2], [760.0, 61.0], [800.0, 61.2], [840.0, 61.6], [860.0, 61.6],
 ]
 # Station, height and half-width of the smaller crests on the straight; the
 # last one is the kicker that throws cars off the lip.
-const CRESTS = [[300.0, 0.6, 7.0], [372.0, 0.8, 8.0], [436.0, 0.5, 6.0], [LIP - 4.0, 0.7, 6.0]]
+const CRESTS = [[LIP - 300.0, 0.6, 7.0], [LIP - 200.0, 0.8, 8.0], [LIP - 110.0, 0.5, 6.0], [LIP - 4.0, 0.7, 6.0]]
 
 const TABLE_STEP = 0.5
 var lateral_table := PackedFloat32Array()
@@ -39,7 +42,7 @@ const OutbackLife = preload("res://scripts/outback_life.gd")
 # Station, side and distance from the road of the spectator areas: two in the
 # opening bends, both banks of the jump, the outside of the corner after it and
 # the closing bends.
-const CLEARINGS = [[118.0, 1.0, 17.0], [196.0, -1.0, 17.0], [468.0, 1.0, 15.0], [486.0, -1.0, 15.0], [574.0, -1.0, 17.0], [700.0, 1.0, 16.0]]
+const CLEARINGS = [[118.0, 1.0, 17.0], [196.0, -1.0, 17.0], [LIP - 32.0, 1.0, 15.0], [LIP - 14.0, -1.0, 15.0], [LIP + 70.0, -1.0, 18.0], [770.0, 1.0, 16.0]]
 # Mine headframe beside the lip and the homestead by the opening bends.
 const MINE = [LIP - 6.0, 1.0, 26.0]
 const HOMESTEAD = [64.0, -1.0, 40.0]
@@ -80,8 +83,8 @@ func elevation(s: float) -> float:
 	for crest in CRESTS:
 		var t = (s - crest[0]) / crest[2]
 		y += crest[1] * exp(-t * t)
-	# The drop-off: a short steep fall well beyond the reach of a flying car.
-	y -= DROP * smoothstep(LIP, LIP + DROP_LENGTH, s)
+	# The drop-off: a near-vertical cliff, then a run-out to the landing.
+	y -= DROP * smoothstep(LIP, LIP + DROP_LENGTH, s) + RUNOUT * smoothstep(LIP + DROP_LENGTH, LIP + 60.0, s)
 	return y + sin(s * 0.23) * 0.03
 
 func _keyed_elevation(s: float) -> float:
@@ -100,10 +103,8 @@ func route(s: float) -> Vector3:
 func rally_speed(s: float) -> float:
 	if s < OPENING_END + 6.0:
 		return 16.0
-	if s < LIP - 30.0:
-		return 29.0
 	if s < CORNER_BEGIN - 2.0:
-		return 26.0
+		return 31.0
 	if s < CORNER_END + 10.0:
 		return 13.0
 	return 17.0 if s < CLOSING_END + 4.0 else 24.0

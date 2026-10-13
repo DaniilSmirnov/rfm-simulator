@@ -1,6 +1,7 @@
 extends "res://tests/harness.gd"
 const Stage = preload("res://scripts/stage.gd")
 const StageRegistry = preload("res://scripts/stage_registry.gd")
+const CarRegistry = preload("res://scripts/car_registry.gd")
 func _initialize() -> void:
 	call_deferred("run")
 
@@ -27,10 +28,28 @@ func run() -> void:
 	# --- Route character from the real stage.
 	check(turning(stage, mine.OPENING_BEGIN, mine.OPENING_END) > 4.0, "opening complex is a run of linked bends (%.2f rad)" % turning(stage, mine.OPENING_BEGIN, mine.OPENING_END))
 	check(turning(stage, mine.OPENING_END + 30.0, mine.LIP) < 0.25, "long straight before the jump (%.2f rad)" % turning(stage, mine.OPENING_END + 30.0, mine.LIP))
-	check(mine.LIP - mine.OPENING_END > 250.0, "the straight is long")
+	check(mine.LIP - mine.OPENING_END > 350.0, "the straight is long")
 	check(stage.at(mine.LIP).y - stage.at(mine.OPENING_END + 30.0).y > 3.0, "the straight climbs to the lip")
-	var drop = stage.at(mine.LIP).y - stage.at(mine.LIP + mine.DROP_LENGTH + 4.0).y
-	check(drop > 7.0, "giant drop-off beyond the lip (%.1f m)" % drop)
+	# The slowest car of the fleet, leaving the opening bends at 40 km/h,
+	# passes 100 km/h well before the lip on full throttle.
+	var slowest = INF
+	for car in CarRegistry.cars:
+		slowest = minf(slowest, CarRegistry.launch(float(car.handling.zero_to_100)))
+	var v = 40.0 / 3.6
+	var at_hundred = INF
+	var x = mine.OPENING_END + 20.0
+	while x < mine.LIP:
+		v += CarRegistry.pull(slowest, v) * 0.05
+		x += v * 0.05
+		if v >= 100.0 / 3.6 and at_hundred == INF:
+			at_hundred = x
+	check(at_hundred < mine.LIP - 40.0, "the slowest car reaches 100 km/h %.0f m before the lip (%.0f km/h there)" % [mine.LIP - at_hundred, v * 3.6])
+	var drop = stage.at(mine.LIP).y - stage.at(mine.LIP + mine.DROP_LENGTH).y
+	check(drop > 12.0, "giant drop-off beyond the lip (%.1f m)" % drop)
+	var steepest = 0.0
+	for s in range(int(mine.LIP), int(mine.LIP + mine.DROP_LENGTH)):
+		steepest = maxf(steepest, stage.at(s).y - stage.at(s + 1).y)
+	check(steepest > 1.8, "the cliff is nearly vertical (%.0f° at its steepest)" % rad_to_deg(atan(steepest)))
 	check(stage.at(mine.LIP - 3.0).y > stage.at(mine.LIP - 12.0).y, "a kicker rises to the lip")
 	check(turning(stage, mine.CORNER_BEGIN - 4.0, mine.CORNER_END + 4.0) > 0.7, "a corner follows the landing")
 	check(turning(stage, mine.CLOSING_BEGIN, mine.CLOSING_END) > 3.0, "short section of linked bends before the finish")
@@ -40,14 +59,15 @@ func run() -> void:
 		inside = inside and absf(stage.at(s).x) < 120.0
 	check(inside, "route stays well inside the map")
 
-	# --- A car at racing speed flies off the lip and lands beyond it.
+	# --- A car at 100 km/h flies off the lip and lands before the corner.
 	var car = Node3D.new()
 	root.add_child(car)
 	var motion = preload("res://scripts/vehicle_motion.gd").new()
 	var s = mine.LIP - 40.0
-	var speed = 27.0
+	var speed = 100.0 / 3.6
 	var airborne = 0.0
 	var flight = 0.0
+	var landed = INF
 	car.position = stage.at(s)
 	for frame in range(240):
 		s += speed / 60.0
@@ -58,7 +78,10 @@ func run() -> void:
 		if not motion.grounded:
 			airborne += 1.0 / 60.0
 			flight = maxf(flight, car.position.y - stage.ground(car.position))
-	check(airborne > 0.5 and flight > 1.5, "the jump throws a car into a long flight (%.2f s, %.1f m up)" % [airborne, flight])
+		elif airborne > 0.0 and landed == INF:
+			landed = s
+	check(airborne > 1.0 and flight > 6.0, "the jump throws a car into a long flight (%.2f s, %.1f m above the ground)" % [airborne, flight])
+	check(landed < mine.CORNER_BEGIN, "a car at 100 km/h lands %.0f m past the lip, before the corner" % (landed - mine.LIP))
 
 	# --- Australian bush and landmarks.
 	var c = mine.scenery.counts
