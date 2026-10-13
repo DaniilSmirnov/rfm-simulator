@@ -12,6 +12,7 @@ extends RefCounted
 # Both choices travel in the player's state ("ride", "hitch", "broken"); the
 # host moves towed cars in Recovery.update, as it does for ropes held by hand.
 const Recovery = preload("res://scripts/recovery.gd")
+const Loc = preload("res://scripts/loc.gd")
 const SEATS = 5
 # Metres between two cars for hooking the rope, its length, and the distance
 # at which a stretched rope comes off (a car returned to the road, a host lag).
@@ -42,7 +43,7 @@ func state_of(owner: String):
 	return peer.state if peer != null else null
 
 func name_of(owner: String) -> String:
-	return str(game.room.members.get(owner, {}).get("name", "друг"))
+	return str(game.room.members.get(owner, {}).get("name", Loc.t("друг")))
 
 # The car of a player as this client renders it.
 func car_node(owner: String) -> Node3D:
@@ -120,7 +121,7 @@ func offers(items: Array, interaction) -> void:
 		var node = car_node(str(id))
 		if node == null or game.room.peers[id].state == null or absf(speed_of(str(id))) > 1:
 			continue
-		interaction.offer(items, node.position + Vector3(0, 0.9, 0), 1.4, 4, "ride", "Сесть к другу (%d/%d)" % [occupants(str(id)), SEATS], str(id))
+		interaction.offer(items, node.position + Vector3(0, 0.9, 0), 1.4, 4, "ride", Loc.t("Сесть к другу (%d/%d)") % [occupants(str(id)), SEATS], str(id))
 
 func board(owner: String) -> void:
 	var node = car_node(owner)
@@ -131,7 +132,7 @@ func board(owner: String) -> void:
 	elif absf(speed_of(owner)) > 1:
 		game.toast("Дождись, пока машина друга остановится.")
 	elif occupants(owner) >= SEATS:
-		game.toast("Мест нет: в машине максимум %d человек вместе с водителем." % SEATS)
+		game.toast(Loc.t("Мест нет: в машине максимум %d человек вместе с водителем.") % SEATS)
 	else:
 		ride = owner
 		hitch = ""
@@ -139,7 +140,7 @@ func board(owner: String) -> void:
 		game.speed = 0
 		game.vehicle_motion.velocity = Vector3.ZERO
 		game.view_yaw = node.rotation.y
-		game.toast("Ты в машине: %s. F — выйти, когда машина стоит." % name_of(owner))
+		game.toast(Loc.t("Ты в машине: %s. F — выйти, когда машина стоит.") % name_of(owner))
 
 func leave(force: bool = false) -> void:
 	var node = car_node(ride)
@@ -218,12 +219,12 @@ func toggle_hitch() -> void:
 	if game.condition <= 0:
 		game.toast("Сломанная машина не может никого тянуть.")
 	elif owner == "":
-		game.toast("Подъедь ближе %d м к машине друга, которая не едет сама." % int(TOW_RANGE))
+		game.toast(Loc.t("Подъедь ближе %d м к машине друга, которая не едет сама.") % int(TOW_RANGE))
 	elif absf(game.speed) > 1:
 		game.toast("Остановись, чтобы зацепить трос.")
 	else:
 		hitch = owner
-		game.toast("Трос зацеплен: тянем машину %s. T — отцепить." % name_of(owner))
+		game.toast(Loc.t("Трос зацеплен: тянем машину %s. T — отцепить.") % name_of(owner))
 
 # Host: every hooked car follows its tow car at the length of the rope.
 func pull(players: Dictionary, delta: float) -> void:

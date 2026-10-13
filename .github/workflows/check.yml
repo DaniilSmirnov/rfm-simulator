@@ -188,3 +188,43 @@ jobs:
           name: web-vk-prototype
           path: dist-vk-prototype/
           if-no-files-found: error
+
+  android:
+    name: Android build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      # Store builds are signed with GODOT_ANDROID_KEYSTORE_RELEASE_* secrets when they exist;
+      # pull requests get a throwaway key made by the build script.
+      GODOT_ANDROID_KEYSTORE_RELEASE_PATH: ${{ secrets.ANDROID_KEYSTORE_PATH }}
+      GODOT_ANDROID_KEYSTORE_RELEASE_USER: ${{ secrets.ANDROID_KEYSTORE_USER }}
+      GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - run: npm ci
+      - name: Export the release APK (production server, arm64 and armv7)
+        run: npm run build:android
+      - name: Check package name, version and signature
+        run: |
+          tools=$(ls -d "$ANDROID_HOME"/build-tools/34.* | sort -V | tail -1)
+          apk="dist-android/Rally Fans Simulator.apk"
+          "$tools/aapt2" dump badging "$apk" | tee badging.txt | grep -E "^package:|native-code|sdkVersion"
+          grep -q "name='ru.rallyfansmap.rallyfanssimulator'" badging.txt
+          "$tools/apksigner" verify --verbose "$apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: dist-android/
+          retention-days: 7
+          if-no-files-found: error

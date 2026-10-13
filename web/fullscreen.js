@@ -1,5 +1,6 @@
 (() => {
   const id = 'rally-fullscreen';
+  const t = text => globalThis.RallyI18n ? globalThis.RallyI18n.t(text) : text;
 
   const fullscreenElement = () =>
     document.fullscreenElement || document.webkitFullscreenElement || null;
@@ -22,8 +23,8 @@
   const updateButton = button => {
     const active = Boolean(fullscreenElement());
     button.dataset.fullscreen = active ? 'on' : 'off';
-    button.setAttribute('aria-label', active ? 'Выйти из полноэкранного режима' : 'На весь экран');
-    button.title = active ? 'Выйти из полноэкранного режима' : 'На весь экран';
+    button.setAttribute('aria-label', active ? t('Выйти из полноэкранного режима') : t('На весь экран'));
+    button.title = active ? t('Выйти из полноэкранного режима') : t('На весь экран');
     button.innerHTML = active
       ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3v6H3M15 3v6h6M9 21v-6H3M15 21v-6h6"/></svg>'
       : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9V3h6M21 9V3h-6M3 15v6h6M21 15v6h-6"/></svg>';
@@ -103,6 +104,7 @@
     const update = () => updateButton(button);
     document.addEventListener('fullscreenchange', update);
     document.addEventListener('webkitfullscreenchange', update);
+    globalThis.RallyI18n?.onChange(update);
     return button;
   };
 

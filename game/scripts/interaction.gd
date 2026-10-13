@@ -2,6 +2,7 @@ extends RefCounted
 # One gaze-selected world object; proximity alone never chooses an action.
 const Props = preload("res://scripts/props.gd")
 const GrillModel = preload("res://scripts/grill_model.gd")
+const Loc = preload("res://scripts/loc.gd")
 var game: Node3D
 
 func offer(items: Array, point: Vector3, radius: float, reach: float, action: String, label: String, value: Variant = null) -> void:
@@ -12,19 +13,19 @@ func offer(items: Array, point: Vector3, radius: float, reach: float, action: St
 	var depth = offset.dot(forward)
 	if depth <= 0 or offset.distance_to(forward * depth) > radius:
 		return
-	items.append({"action": action, "label": label, "value": value, "depth": depth, "aim_error": offset.distance_to(forward * depth) / depth})
+	items.append({"action": action, "label": Loc.t(label), "value": value, "depth": depth, "aim_error": offset.distance_to(forward * depth) / depth})
 
 func current() -> Dictionary:
 	if not game.playing or game.paused or game.dead or game.finished or game.drink_time >= 0 or game.eat_time >= 0 or (game.room.is_guest() and game.room.world_paused):
 		return {}
 	if game.in_car:
-		return {"action": "car", "label": "Выйти из машины"} if absf(game.rides.speed()) <= 1 else {}
+		return {"action": "car", "label": Loc.t("Выйти из машины")} if absf(game.rides.speed()) <= 1 else {}
 	if game.beers >= 30 or game.injuries.down:
 		return {}
 	if game.seated:
-		return {"action": "stand", "label": "Встать со стула"}
+		return {"action": "stand", "label": Loc.t("Встать со стула")}
 	if game.player.relief.active:
-		return {"action": "relief_stop", "label": "Закончить"}
+		return {"action": "relief_stop", "label": Loc.t("Закончить")}
 	var items: Array = []
 	game.cargo.offers(items, self)
 	if not game.cargo.at_open_trunk(game.chair_owner()):

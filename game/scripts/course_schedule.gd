@@ -1,5 +1,6 @@
 extends RefCounted
 # The host owns the timetable. Guests display snapshots without spawning cars.
+const Loc = preload("res://scripts/loc.gd")
 const OPENING_SECONDS = 180.0
 const TURNAROUND_SECONDS = 60.0
 var pass_index = 1
@@ -80,23 +81,31 @@ func service_id(base: int) -> int:
 	return base + (pass_index - 1) * 200
 
 func caption() -> String:
-	return "ПРОХОД %d/2 · %s · %s" % [pass_index, "ОБРАТНО" if pass_index == 2 else "ПРЯМО", phase_caption()]
+	return Loc.t("ПРОХОД %d/2 · %s · %s") % [pass_index, Loc.t("ОБРАТНО") if pass_index == 2 else Loc.t("ПРЯМО"), phase_caption()]
+
+# The phone shows a shorter line: no direction, and the countdown reads "starts in".
+func short_caption() -> String:
+	var phase_text = phase_caption()
+	if phase == "countdown" and not red_flag:
+		var seconds = ceili(remaining)
+		phase_text = Loc.t("СТАРТ ЧЕРЕЗ %02d:%02d") % [seconds / 60, seconds % 60]
+	return Loc.t("СУ %d/2 · %s") % [pass_index, phase_text]
 
 func phase_caption() -> String:
 	if red_flag:
-		return "КРАСНЫЙ ФЛАГ · СКОРАЯ НА СУ"
+		return Loc.t("КРАСНЫЙ ФЛАГ · СКОРАЯ НА СУ")
 	match phase:
 		"countdown":
 			var seconds = ceili(remaining)
-			return "ДО ОТКРЫТИЯ СУ %02d:%02d" % [seconds / 60, seconds % 60]
+			return Loc.t("ДО ОТКРЫТИЯ СУ %02d:%02d") % [seconds / 60, seconds % 60]
 		"intermission":
 			var seconds = ceili(remaining)
-			return "ДО ОБРАТНОГО ПРОХОДА %02d:%02d" % [seconds / 60, seconds % 60]
-		"opening_police": return "ОТКРЫТИЕ СУ · ПОЛИЦИЯ"
-		"zero": return "НУЛЕВОЙ ЭКИПАЖ %d/3 · № 0" % zero_index
-		"racing": return "СУ ОТКРЫТ · ГОНЩИКИ"
-		"closing_police": return "ЗАКРЫТИЕ СУ · ПОЛИЦИЯ"
-		_: return "СУ ЗАКРЫТ"
+			return Loc.t("ДО ОБРАТНОГО ПРОХОДА %02d:%02d") % [seconds / 60, seconds % 60]
+		"opening_police": return Loc.t("ОТКРЫТИЕ СУ · ПОЛИЦИЯ")
+		"zero": return Loc.t("НУЛЕВОЙ ЭКИПАЖ %d/3 · № 0") % zero_index
+		"racing": return Loc.t("СУ ОТКРЫТ · ГОНЩИКИ")
+		"closing_police": return Loc.t("ЗАКРЫТИЕ СУ · ПОЛИЦИЯ")
+		_: return Loc.t("СУ ЗАКРЫТ")
 
 func snapshot() -> Dictionary:
 	return {"pass_index": pass_index, "phase": phase, "remaining": ceilf(remaining), "zero_index": zero_index, "active_id": active_id, "red_flag": red_flag}

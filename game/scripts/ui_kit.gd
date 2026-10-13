@@ -6,6 +6,7 @@ extends RefCounted
 #   UiKit.label(box, "Спецучасток", "caption")
 #   UiKit.button(row, "ПОЕХАЛИ", "primary")
 #   var modal = UiKit.modal(layer, "SupportDialog")   # modal.panel / modal.content
+const Loc = preload("res://scripts/loc.gd")
 
 const BRAND_URL = "https://rallyfansmap.ru/"
 const BRAND_NAME = "Rally Fans Map"
@@ -168,7 +169,7 @@ static func brand(parent: Node, logo_size: float = 56) -> HBoxContainer:
 	names.alignment = BoxContainer.ALIGNMENT_CENTER
 	var title = label(names, GAME_NAME, "title")
 	title.name = "Title"
-	var by = label(names, "от " + BRAND_NAME, "muted")
+	var by = label(names, Loc.t("от %s") % BRAND_NAME, "muted")
 	by.name = "Byline"
 	return row
 

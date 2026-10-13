@@ -636,7 +636,7 @@ static func course_car(role: String, zero_index: int = 0) -> Node3D:
 	if role == "zero":
 		var node = rally_car(RallyCarModel.zero_variant(zero_index), 0, "БЕЗОПАСНОСТЬ")
 		node.name = "ZeroCrew_%d" % zero_index
-		node.set_meta("model", "Нулевой экипаж %d" % zero_index)
+		node.set_meta("model", preload("res://scripts/loc.gd").t("Нулевой экипаж %d") % zero_index)
 		node.set_meta("role", role)
 		return node
 	var node = RallyCarModel.ambulance() if role == "ambulance" else RallyCarModel.police()

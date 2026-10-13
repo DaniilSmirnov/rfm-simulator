@@ -295,6 +295,7 @@ func road_paint(p: Vector3, lateral: float) -> Color:
 const Water = preload("res://scripts/water.gd")
 const ForestLife = preload("res://scripts/forest_life.gd")
 const MeshMerge = preload("res://scripts/mesh_merge.gd")
+const Loc = preload("res://scripts/loc.gd")
 var forest_life: RefCounted = ForestLife.new()
 
 func make_water():
@@ -426,7 +427,7 @@ func _build_jump_boards() -> void:
 		board.rotation.y = atan2(-direction.x, -direction.z)
 		# Captions stay real text: the boards are seen up close at the jump.
 		for face in [[0.04, 0.0], [-0.04, PI]]:
-			var caption = Props.label_3d(board, Vector3(0, 0, face[0]), "%d м" % metres, 64, 0.005, Color("b0322a"), face[1])
+			var caption = Props.label_3d(board, Vector3(0, 0, face[0]), Loc.t("%d м") % metres, 64, 0.005, Color("b0322a"), face[1])
 			caption.set_meta("unbatched", true)
 
 func _build_sauna() -> void:

@@ -1,5 +1,6 @@
 extends RefCounted
 const Props = preload("res://scripts/props.gd")
+const Loc = preload("res://scripts/loc.gd")
 const GRILL_SECONDS = 10.0
 var game: Node3D
 var inventories: Dictionary = {}
@@ -42,7 +43,7 @@ func collect(id: int = -1, owner: String = "") -> bool:
 	if item.kind == "mushrooms":
 		for i in range(int(item.quantity)):
 			bag.mushroom_types.append(str(item.get("species", "edible")))
-	game.toast("Собрано: " + item.get("name", "гриб" if item.kind == "mushrooms" else "ягоды"))
+	game.toast(Loc.t("Собрано: %s") % Loc.t(item.get("name", "гриб" if item.kind == "mushrooms" else "ягоды")))
 	return true
 
 func grill_node(source: int) -> Node3D:

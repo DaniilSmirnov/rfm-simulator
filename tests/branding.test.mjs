@@ -53,7 +53,7 @@ test('main menu credits Rally Fans Map and links to its site', async () => {
   const lobby = await readFile(new URL('../game/scripts/lobby_ui.gd', import.meta.url), 'utf8');
   const hud = await readFile(new URL('../game/scripts/game_hud.gd', import.meta.url), 'utf8');
   assert.match(kit, /BRAND_URL = "https:\/\/rallyfansmap\.ru\/"/);
-  assert.match(kit, /"от " \+ BRAND_NAME/);
+  assert.match(kit, /Loc\.t\("от %s"\) % BRAND_NAME/);
   assert.match(kit, /LOGO = "res:\/\/branding\/rfm-icon\.svg"/);
   assert.match(lobby, /"О НАС"/);
   assert.doesNotMatch(hud + lobby, /ПЕРЕВАЛ\. РАЛЛИ\. ШАШЛЫК/i);

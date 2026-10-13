@@ -27,18 +27,18 @@ h1 { font-size:clamp(25px,5vw,34px); font-weight:600; margin:0 0 28px; letter-sp
 $GODOT_HEAD_INCLUDE
 </head>
 <body>
-<canvas id="canvas">Ваш браузер не поддерживает canvas.</canvas>
-<noscript>Для игры Rally Fans Simulator нужно включить JavaScript.</noscript>
+<canvas id="canvas" data-i18n>Ваш браузер не поддерживает canvas.</canvas>
+<noscript>Для игры Rally Fans Simulator нужно включить JavaScript. / Rally Fans Simulator needs JavaScript.</noscript>
 <div id="status">
   <div class="loading-card">
-    <img id="status-splash" src="favicon.svg" width="180" height="180" alt="Логотип Rally Fans Simulator">
+    <img id="status-splash" src="favicon.svg" width="180" height="180" alt="Логотип Rally Fans Simulator" data-i18n-alt>
     <h1 id="status-brand">Rally Fans Simulator</h1>
-    <div id="status-progress" class="indeterminate" role="progressbar" aria-label="Загрузка игры" aria-valuemin="0" aria-valuemax="100"><div id="status-fill"></div></div>
-    <p id="status-label" aria-live="polite">Загрузка игры…</p>
-    <p id="status-stage" aria-live="polite">Проверка браузера</p>
+    <div id="status-progress" class="indeterminate" role="progressbar" aria-label="Загрузка игры" data-i18n-label aria-valuemin="0" aria-valuemax="100"><div id="status-fill"></div></div>
+    <p id="status-label" aria-live="polite" data-i18n>Загрузка игры…</p>
+    <p id="status-stage" aria-live="polite" data-i18n>Проверка браузера</p>
     <div id="status-notice" role="alert" hidden></div>
-    <button id="status-retry" type="button" hidden>Повторить запуск</button>
-    <details id="status-details" hidden><summary>Технические подробности</summary><pre id="status-log" tabindex="0"></pre><button id="status-copy" type="button">Скопировать отчёт</button></details>
+    <button id="status-retry" type="button" hidden data-i18n>Повторить запуск</button>
+    <details id="status-details" hidden><summary data-i18n>Технические подробности</summary><pre id="status-log" tabindex="0"></pre><button id="status-copy" type="button" data-i18n>Скопировать отчёт</button></details>
   </div>
 </div>
 <script src="$GODOT_URL"></script>
@@ -46,6 +46,7 @@ $GODOT_HEAD_INCLUDE
 const GODOT_CONFIG = $GODOT_CONFIG;
 const GODOT_THREADS_ENABLED = $GODOT_THREADS_ENABLED;
 const boot = globalThis.RallyBoot;
+const t = text => globalThis.RallyI18n ? globalThis.RallyI18n.t(text) : text;
 boot?.install("$RFM_VERSION");
 GODOT_CONFIG.onPrint = (...args) => boot ? boot.print(...args) : console.log(...args);
 GODOT_CONFIG.onPrintError = (...args) => boot ? boot.printError(...args) : console.error(...args);
@@ -61,12 +62,12 @@ function loadingProgress(current, total) {
     progress.classList.remove('indeterminate');
     progress.setAttribute('aria-valuenow', percent);
     fill.style.width = percent + '%';
-    label.textContent = percent === 100 ? 'Запуск игры…' : 'Загрузка игры · ' + percent + '%';
+    label.textContent = percent === 100 ? t('Запуск игры…') : t('Загрузка игры · %s%').replace('%s', percent);
   } else {
     progress.classList.add('indeterminate');
     progress.removeAttribute('aria-valuenow');
     fill.style.width = '38%';
-    label.textContent = 'Загрузка игры…';
+    label.textContent = t('Загрузка игры…');
   }
 }
 function loadingFailure(error) {
@@ -80,7 +81,7 @@ function loadingFailure(error) {
 }
 const missing = Engine.getMissingFeatures({ threads: GODOT_THREADS_ENABLED });
 if (missing.length) {
-  loadingFailure('Браузер не поддерживает необходимые функции:\n' + missing.join('\n'));
+  loadingFailure(t('Браузер не поддерживает необходимые функции:') + '\n' + missing.join('\n'));
 } else {
   boot?.setStage('Загрузка файлов движка');
   engine.startGame({ onProgress: loadingProgress }).then(() => boot ? boot.ready() : overlay.remove(), loadingFailure);

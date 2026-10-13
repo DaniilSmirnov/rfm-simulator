@@ -36,8 +36,17 @@ const RallyDevice = {
     const prompt = document.createElement('div');
     prompt.id = 'rally-rotate';
     prompt.setAttribute('role', 'dialog');
-    prompt.setAttribute('aria-label', 'Горизонтальная ориентация');
-    prompt.innerHTML = '<span class="rotate-icon" aria-hidden="true">↻ ▭</span><p>Поверните устройство горизонтально</p><p>Движение — слева, обзор камеры — справа.</p><button type="button">На весь экран</button>';
+    const t = text => globalThis.RallyI18n ? globalThis.RallyI18n.t(text) : text;
+    const label = () => {
+      prompt.setAttribute('aria-label', t('Горизонтальная ориентация'));
+      const [rotate, controls] = prompt.querySelectorAll('p');
+      if (rotate && controls) { rotate.textContent = t('Поверните устройство горизонтально'); controls.textContent = t('Движение — слева, обзор камеры — справа.'); }
+      const full = prompt.querySelector('button');
+      if (full) full.textContent = t('На весь экран');
+    };
+    prompt.innerHTML = '<span class="rotate-icon" aria-hidden="true">↻ ▭</span><p></p><p></p><button type="button"></button>';
+    label();
+    globalThis.RallyI18n?.onChange(label);
     if (globalThis.RallyViewport?.isVKMobile()) prompt.querySelector('button').remove();
     else prompt.querySelector('button').addEventListener('click', () => { this.landscapeRequest = this.requestLandscape(); });
     document.body.appendChild(prompt);

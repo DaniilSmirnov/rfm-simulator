@@ -60,7 +60,7 @@ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const browser=await chromium.launch({headless:true,args:['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
 try {
  for(const mobile of [false,true]){
-  const context=await browser.newContext(mobile?{viewport:{width:844,height:390},isMobile:true,hasTouch:true}:{viewport:{width:1280,height:720}});
+  const context=await browser.newContext(mobile?{locale:'ru-RU',viewport:{width:844,height:390},isMobile:true,hasTouch:true}:{locale:'ru-RU',viewport:{width:1280,height:720}});
   const page=await context.newPage();let profile;let access;let failure;const logs=[];
   page.on('console',m=>{const t=m.text();logs.push(t);console.log('[platform]',t);if(t.includes('[RFM Platform] profile '))profile=JSON.parse(t.split('[RFM Platform] profile ')[1]);if(t.includes('[RFM Platform] access '))access=JSON.parse(t.split('[RFM Platform] access ')[1]);if(/SCRIPT ERROR|FATAL:|RuntimeError:|ERROR: Cannot open file|ERROR: Failed loading scene/.test(t))failure=t;});
   page.on('pageerror',e=>failure=String(e));
@@ -99,7 +99,7 @@ try {
  if(isVk){
   // A real exported Godot HTTPRequest must reach the same-origin Worker.
   // Previous tests issued JS fetch calls only and missed the localhost default.
-  const context=await browser.newContext({viewport:{width:1280,height:720}});
+  const context=await browser.newContext({locale:'ru-RU',viewport:{width:1280,height:720}});
   const page=await context.newPage();
   const logs=[];
   page.on('console',msg=>{logs.push(msg.text());});

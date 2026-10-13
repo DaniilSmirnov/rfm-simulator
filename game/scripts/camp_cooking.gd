@@ -1,5 +1,6 @@
 extends RefCounted
 const Props = preload("res://scripts/props.gd")
+const Loc = preload("res://scripts/loc.gd")
 const COOK_SECONDS = 45.0
 var game: Node3D
 var fire: Node3D
@@ -79,7 +80,7 @@ func consume() -> bool:
 		phase = "exhausted"
 	game.eaten = true
 	update(0)
-	game.toast("Плов удался. Осталось порций: %d/10." % servings)
+	game.toast(Loc.t("Плов удался. Осталось порций: %d/10.") % servings)
 	return true
 
 func update(delta: float, guest: bool = false) -> void:
@@ -115,7 +116,7 @@ func offers(items: Array, interaction) -> void:
 	elif phase == "empty" and heated():
 		interaction.offer(items, pot.position + Vector3(0, 1.1, 0), 0.65, 3.5, "plov_cook", "Добавить ингредиенты и готовить плов")
 	elif phase == "ready":
-		interaction.offer(items, pot.position + Vector3(0, 1.1, 0), 0.65, 3.5, "plov", "Съесть плов · %d/10" % servings)
+		interaction.offer(items, pot.position + Vector3(0, 1.1, 0), 0.65, 3.5, "plov", Loc.t("Съесть плов · %d/10") % servings)
 	else:
 		interaction.offer(items, pot.position + Vector3(0, 1.1, 0), 0.65, 3.5, "", "")
 

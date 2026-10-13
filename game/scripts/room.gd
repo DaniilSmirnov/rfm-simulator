@@ -20,6 +20,7 @@ const ActionContext = preload("res://scripts/action_context.gd")
 const SharedActions = preload("res://scripts/shared_actions.gd")
 const DirectLink = preload("res://scripts/direct_link.gd")
 const CarRides = preload("res://scripts/car_rides.gd")
+const Loc = preload("res://scripts/loc.gd")
 
 var game: Node3D
 var transport: Node
@@ -94,7 +95,7 @@ func connect_room(id: String) -> void:
 	if busy or connected or game.loading_world:
 		return
 	if id != "" and not NetProtocol.valid_room_id(id):
-		ui.status.text = "ID состоит из %d символов: 0–9 и A–F." % NetProtocol.room_id_length()
+		ui.status.text = Loc.t("ID состоит из %d символов: 0–9 и A–F.") % NetProtocol.room_id_length()
 		return
 	# This runs directly from the create/join button. Capture here, before the
 	# server response calls start_game() after its asynchronous request.
@@ -116,7 +117,7 @@ func _on_left() -> void:
 
 func _on_rate_limited(retry: float) -> void:
 	clock = -retry
-	ui.room_label.text = "Слишком много запросов. Повторим через %d сек." % ceili(retry)
+	ui.room_label.text = Loc.t("Слишком много запросов. Повторим через %d сек.") % ceili(retry)
 
 func _on_failure(kind: String, code: int, message: String, _data) -> void:
 	if connected and (code in [401, 404, 410] or transport.errors >= 2):
@@ -130,7 +131,7 @@ func _on_failure(kind: String, code: int, message: String, _data) -> void:
 		ui.set_entry_enabled(true)
 		if game.invite_after_room_create:
 			game.invite_after_room_create = false
-			game.invite_status.text = "Не удалось создать комнату: " + message
+			game.invite_status.text = Loc.t("Не удалось создать комнату: %s") % message
 			game.invite_status.show()
 			game.invite_button.disabled = false
 			game.toast(game.invite_status.text)
@@ -172,7 +173,7 @@ func _joined(data: Dictionary) -> void:
 		var lane = int(data.get("slot", 0))
 		game.avatar_variant = posmod(lane, Props.SPECTATOR_MODELS.size())
 		game.heading = game.stage.parks.park_visitor(game.car, lane)
-	game.toast("Комната %s · %s. Передай ID друзьям!" % [room_id, game.car.get_meta("model")])
+	game.toast(Loc.t("Комната %s · %s. Передай ID друзьям!") % [room_id, Loc.t(game.car.get_meta("model"))])
 	if game.invite_after_room_create:
 		game.invite_after_room_create = false
 		game._invite_friends()

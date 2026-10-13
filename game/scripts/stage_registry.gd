@@ -3,6 +3,7 @@ extends RefCounted
 # needs "which stages exist" asks here: the menu, Stage.new(), previews, tests.
 # Each entry names a biome script (stage_biome.gd subclass) and the stage's
 # look: sky, sun, loading caption, minimap tint and what berries are called.
+const Loc = preload("res://scripts/loc.gd")
 const PATH = "res://data/stages.json"
 static var spec: Dictionary = _load()
 
@@ -20,15 +21,17 @@ static func count() -> int:
 static func entry(index: int) -> Dictionary:
 	return spec.stages[clampi(index, 0, count() - 1)]
 
-# Menu caption, "Title · subtitle".
+# Menu caption, "Title · subtitle", in the current language.
 static func caption(index: int) -> String:
 	var e = entry(index)
-	return "%s · %s" % [e.title, e.subtitle]
+	return "%s · %s" % [Loc.t(e.title), Loc.t(e.subtitle)]
 
+# Russian captions: the keys the menu translates, fixed at load.
 static func captions() -> Array:
 	var result: Array = []
 	for i in range(count()):
-		result.append(caption(i))
+		var e = entry(i)
+		result.append("%s · %s" % [e.title, e.subtitle])
 	return result
 
 static func index_of(id: String) -> int:

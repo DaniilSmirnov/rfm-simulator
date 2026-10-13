@@ -3,8 +3,9 @@ extends RefCounted
 # UI only: pressing a button calls room.connect_room(); room.gd decides the rest.
 const NetProtocol = preload("res://scripts/net_protocol.gd")
 const UiKit = preload("res://scripts/ui_kit.gd")
+const Loc = preload("res://scripts/loc.gd")
 const DEFAULT_NAME = "Фанат"
-var default_hint = "До %d фанатов в одном лагере. Создатель выезда должен оставаться в комнате." % NetProtocol.max_players()
+var default_hint = Loc.t("До %d фанатов в одном лагере. Создатель выезда должен оставаться в комнате.") % NetProtocol.max_players()
 var room
 var game
 var panel: PanelContainer
@@ -25,11 +26,11 @@ func build(owner_room) -> void:
 	caption = UiKit.label(box, "ВЫЕЗД", "caption")
 	var start_row = UiKit.hbox(box, 12)
 	name_input = field(start_row, "Твой ник", NetProtocol.name_input_length())
-	name_input.text = DEFAULT_NAME
+	name_input.text = Loc.t(DEFAULT_NAME)
 	create_button = UiKit.expand(UiKit.button(start_row, "СОЗДАТЬ ВЫЕЗД", "primary", 48))
 	create_button.pressed.connect(func(): room.connect_room(""))
 	var join_row = UiKit.hbox(box, 12)
-	id_input = field(join_row, "ID комнаты друга · %d символов" % NetProtocol.room_id_length(), NetProtocol.room_id_length())
+	id_input = field(join_row, Loc.t("ID комнаты друга · %d символов") % NetProtocol.room_id_length(), NetProtocol.room_id_length())
 	if OS.has_feature("web") and OS.has_feature("vk"):
 		# VK mobile web: a native DOM input opens the keyboard reliably.
 		var native_input = preload("res://scripts/mobile_room_input.gd").new()
@@ -50,6 +51,16 @@ func build(owner_room) -> void:
 	room_label.name = "RoomLine"
 	room_label.add_theme_color_override("font_color", UiKit.HIGHLIGHT)
 	room_label.hide()
+
+# The language changed: texts assembled in code and the untouched default name follow it.
+func refresh_language() -> void:
+	var old_hint = default_hint
+	default_hint = Loc.t("До %d фанатов в одном лагере. Создатель выезда должен оставаться в комнате.") % NetProtocol.max_players()
+	if status.text == old_hint:
+		status.text = default_hint
+	id_input.placeholder_text = Loc.t("ID комнаты друга · %d символов") % NetProtocol.room_id_length()
+	if name_input.text in [DEFAULT_NAME, Loc.t(DEFAULT_NAME), "Fan"]:
+		name_input.text = Loc.t(DEFAULT_NAME)
 
 func field(parent: Control, placeholder: String, length: int) -> LineEdit:
 	var input = LineEdit.new()
@@ -72,4 +83,4 @@ func show_connected() -> void:
 	room_label.show()
 
 func show_room_status(room_id: String, players: int, is_host: bool, host_paused: bool) -> void:
-	room_label.text = "КОМНАТА %s · %d/%d · %s%s" % [room_id, players, NetProtocol.max_players(), "СОЗДАТЕЛЬ" if is_host else "ГОСТЬ", " · ПАУЗА ХОЗЯИНА" if host_paused else ""]
+	room_label.text = Loc.t("КОМНАТА %s · %d/%d · %s%s") % [room_id, players, NetProtocol.max_players(), Loc.t("СОЗДАТЕЛЬ") if is_host else Loc.t("ГОСТЬ"), Loc.t(" · ПАУЗА ХОЗЯИНА") if host_paused else ""]

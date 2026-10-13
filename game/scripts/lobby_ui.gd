@@ -4,6 +4,7 @@ extends Node
 # Ownership remains in PlatformService and the backend.
 const NetProtocol = preload("res://scripts/net_protocol.gd")
 const UiKit = preload("res://scripts/ui_kit.gd")
+const Loc = preload("res://scripts/loc.gd")
 const SUPPORT_EMAIL = "rallyfansmap@yandex.com"
 const AUDIO_SETTINGS_PATH = "user://audio_settings.cfg"
 const KINDS = ["МАШИНА", "СПЕЦУЧАСТОК"]
@@ -19,6 +20,7 @@ var purchase_status: Label
 var return_button: Button
 var host_pause: PanelContainer
 var help_button: Button
+var language_button: Button
 var help_dialog: Control
 var about_button: Button
 var about_dialog: Control
@@ -28,6 +30,34 @@ var volume_slider: HSlider
 var master_base_db = 0.0
 var last_size = Vector2.ZERO
 var last_playing = false
+
+func _is_vk_family() -> bool:
+	return OS.has_feature("vk") or (game.platform_service != null and game.platform_service.profile.get("platform", "") in ["vk", "vk-prototype"])
+
+# Text assembled in code is rebuilt in the new language; labels and buttons
+# translate themselves when the locale changes.
+func _switch_language() -> void:
+	Loc.set_language(Loc.other())
+	retranslate()
+
+func retranslate() -> void:
+	language_button.text = Loc.other_name()
+	help_button.tooltip_text = Loc.t("Написать в поддержку: %s") % SUPPORT_EMAIL
+	about_button.tooltip_text = Loc.t("Сайт Rally Fans Map: %s") % UiKit.BRAND_URL
+	help_dialog.find_child("Message", true, false).text = _help_message()
+	about_dialog.find_child("Message", true, false).text = _about_message()
+	game.hud.footer.text = Loc.t("Версия %s") % ProjectSettings.get_setting("application/config/version")
+	game.stage_caption.text = game.StageRegistry.caption(game.selected_stage) if game.playing else game.StageRegistry.caption(game.selected_stage).to_upper()
+	game.room.ui.refresh_language()
+	if game.mobile_controls != null:
+		game.mobile_controls.layout_state = []
+	refresh()
+
+func _help_message() -> String:
+	return Loc.t("Если с игрой что-то не так, напиши нам:\n%s\n\nСкопируй адрес и отправь письмо из удобной почты.") % SUPPORT_EMAIL
+
+func _about_message() -> String:
+	return Loc.t("Rally Fans Simulator сделан командой Rally Fans Map. Подробнее о проекте — на сайте:\n%s") % UiKit.BRAND_URL
 
 func _is_vk_platform() -> bool:
 	return game.platform_service != null and game.platform_service.profile.get("platform", "") == "vk"
@@ -92,14 +122,20 @@ func add_preview(parent: Control, kind: String) -> void:
 func build_links(parent: Control) -> void:
 	about_button = UiKit.button(parent, "О НАС", "ghost", 40)
 	about_button.name = "AboutButton"
-	about_button.tooltip_text = "Сайт Rally Fans Map: " + UiKit.BRAND_URL
+	about_button.tooltip_text = Loc.t("Сайт Rally Fans Map: %s") % UiKit.BRAND_URL
 	about_button.add_theme_font_size_override("font_size", 15)
 	about_button.pressed.connect(_open_about)
 	help_button = UiKit.button(parent, "ПОМОЩЬ", "ghost", 40)
 	help_button.name = "HelpButton"
-	help_button.tooltip_text = "Написать в поддержку: " + SUPPORT_EMAIL
+	help_button.tooltip_text = Loc.t("Написать в поддержку: %s") % SUPPORT_EMAIL
 	help_button.add_theme_font_size_override("font_size", 15)
 	help_button.pressed.connect(_open_help)
+	# The button names the language it switches to, in that language. VK is Russian only.
+	language_button = UiKit.button(parent, Loc.other_name(), "ghost", 40)
+	language_button.name = "LanguageButton"
+	language_button.add_theme_font_size_override("font_size", 15)
+	language_button.pressed.connect(_switch_language)
+	language_button.visible = not _is_vk_family()
 
 # A small window with an address and two actions; used where the WebView may
 # not open mailto: or external links (VK clients).
@@ -140,7 +176,7 @@ func _copy(text: String, message: String) -> void:
 	game.toast(message)
 
 func _copy_support_email() -> void:
-	_copy(SUPPORT_EMAIL, "Адрес поддержки: " + SUPPORT_EMAIL)
+	_copy(SUPPORT_EMAIL, Loc.t("Адрес поддержки: %s") % SUPPORT_EMAIL)
 
 # ---------------------------------------------------------------- settings
 
@@ -178,7 +214,7 @@ func _apply_volume(percent: float) -> void:
 	var master = AudioServer.get_bus_index("Master")
 	AudioServer.set_bus_mute(master, percent <= 0)
 	AudioServer.set_bus_volume_db(master, master_base_db + linear_to_db(maxf(percent / 100.0, 0.0001)))
-	volume_label.text = "ЗВУК ВЫКЛЮЧЕН" if percent <= 0 else "ГРОМКОСТЬ · %d%%" % roundi(percent)
+	volume_label.text = Loc.t("ЗВУК ВЫКЛЮЧЕН") if percent <= 0 else Loc.t("ГРОМКОСТЬ · %d%%") % roundi(percent)
 
 # ---------------------------------------------------------------- assembly
 
@@ -187,8 +223,8 @@ func finish(parent: Control) -> void:
 	return_button.name = "ReturnButton"
 	return_button.pressed.connect(game.return_to_main_menu)
 	return_button.hide()
-	help_dialog = _link_dialog("SupportDialog", "Помощь и поддержка", "Если с игрой что-то не так, напиши нам:\n" + SUPPORT_EMAIL + "\n\nСкопируй адрес и отправь письмо из удобной почты.", [["СКОПИРОВАТЬ АДРЕС", "primary", _copy_support_email]])
-	about_dialog = _link_dialog("AboutDialog", UiKit.BRAND_NAME, "Rally Fans Simulator сделан командой Rally Fans Map. Подробнее о проекте — на сайте:\n" + UiKit.BRAND_URL, [["ОТКРЫТЬ САЙТ", "primary", func(): UiKit.open_url(UiKit.BRAND_URL)], ["СКОПИРОВАТЬ", "secondary", func(): _copy(UiKit.BRAND_URL, "Ссылка скопирована: " + UiKit.BRAND_URL)]])
+	help_dialog = _link_dialog("SupportDialog", "Помощь и поддержка", _help_message(), [["СКОПИРОВАТЬ АДРЕС", "primary", _copy_support_email]])
+	about_dialog = _link_dialog("AboutDialog", UiKit.BRAND_NAME, _about_message(), [["ОТКРЫТЬ САЙТ", "primary", func(): UiKit.open_url(UiKit.BRAND_URL)], ["СКОПИРОВАТЬ", "secondary", func(): _copy(UiKit.BRAND_URL, Loc.t("Ссылка скопирована: %s") % UiKit.BRAND_URL)]])
 	# Backdrop fills the viewport independently of the inset HUD root.
 	background = TextureRect.new()
 	background.name = "StageBackdrop"
@@ -226,6 +262,12 @@ func allowed(kind: String, index: int) -> bool:
 func refresh() -> void:
 	if images.size() < 2:
 		return
+	# The VK profile can arrive after the menu was built.
+	if _is_vk_family():
+		language_button.visible = false
+		if Loc.current != "ru":
+			Loc.force("ru")
+			language_button.text = Loc.other_name()
 	var service = game.platform_service
 	var product = service.product("stage", game.stage_choice.selected) if service != null else {}
 	var can_buy: bool = product.get("purchase_enabled", false) and not allowed("stage", game.stage_choice.selected)
@@ -233,10 +275,10 @@ func refresh() -> void:
 	var can_buy_car: bool = car_product.get("purchase_enabled", false) and not allowed("car", game.car_choice.selected)
 	car_purchase_button.visible = can_buy_car and not game.playing
 	car_purchase_button.disabled = service.busy if service != null else true
-	car_purchase_button.text = ("ТЕСТ: " if car_product.get("payment_mode") == "test" else "") + "КУПИТЬ МАШИНУ · " + vote_price(int(car_product.get("price", 0)))
+	car_purchase_button.text = ("ТЕСТ: " if car_product.get("payment_mode") == "test" else "") + Loc.t("КУПИТЬ МАШИНУ · %s") % vote_price(int(car_product.get("price", 0)))
 	purchase_button.visible = can_buy and not game.playing
 	purchase_button.disabled = service.busy if service != null else true
-	purchase_button.text = ("ТЕСТ: " if product.get("payment_mode") == "test" else "") + "ОТКРЫТЬ СУ · " + vote_price(int(product.get("price", 0)))
+	purchase_button.text = ("ТЕСТ: " if product.get("payment_mode") == "test" else "") + Loc.t("ОТКРЫТЬ СУ · %s") % vote_price(int(product.get("price", 0)))
 	check_purchase.visible = service != null and service.profile.get("platform") == "vk" and (can_buy or can_buy_car or not service.purchase_message.is_empty()) and not game.playing
 	check_purchase.disabled = service.busy if service != null else true
 	purchase_status.text = service.purchase_message if service != null else ""
