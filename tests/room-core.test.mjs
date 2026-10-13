@@ -496,3 +496,16 @@ test('a guest with a live direct link gets only slow sections and the roster', (
   assert.ok(r.sync({ token: g.token, state: state(), cold_revs: { camp: 4 }, direct: true }, 1370).world.paused, 'a backgrounded host pauses guests even over a direct link');
   assert.equal(r.view(r.data.players[h.player], 1400).world, undefined, 'the host never reads the world back');
 });
+
+test('a walker standing on a car keeps its car key and feet; anything else stands on nothing', () => {
+  const { r, h } = setup();
+  let reply = r.sync({ token: h.token, state: { ...state(), stand: 'car:abc', stand_at: [0.3, 1.4, 20] } }, 1100);
+  assert.equal(reply.players[0].state.stand, 'car:abc');
+  assert.deepEqual(reply.players[0].state.stand_at, [0.3, 1.4, 8]);
+  reply = r.sync({ token: h.token, state: { ...state(), stand: 'racer:3', stand_at: [0, 1, 0], in_car: true } }, 1200);
+  assert.equal(reply.players[0].state.stand, '');
+  reply = r.sync({ token: h.token, state: { ...state(), stand: 'house:1', stand_at: [0, 1, 0] } }, 1300);
+  assert.equal(reply.players[0].state.stand, '');
+  reply = r.sync({ token: h.token, state: { ...state(), stand: 'racer:3' } }, 1400);
+  assert.equal(reply.players[0].state.stand, '', 'a key without feet is dropped');
+});
