@@ -122,7 +122,7 @@ func contact_blocked(start: Vector3, end: Vector3, driving: bool, limit: float =
 	for person in game.spectators.people:
 		if not game.injuries.holds(person.avatar):
 			# Spectators are solid for walkers; drivers meet them as people.
-			(people if driving else cars).append(person.avatar.position)
+			people.append(person.avatar.position)
 	if driving:
 		for group in game.spectators.groups:
 			cars.append(group.car.position)
@@ -144,6 +144,8 @@ func contact_blocked(start: Vector3, end: Vector3, driving: bool, limit: float =
 			if end.distance_to(other) <= start.distance_to(other):
 				return true
 	for person in people:
+		if not driving and minf(start.y, end.y) >= person.y + 1.5:
+			continue
 		if Motion.swept_hit(start + Vector3(0, 0.7, 0), end + Vector3(0, 0.7, 0), person + Vector3(0, 0.7, 0), 1.55 if driving else 0.6):
 			if end.distance_to(person) <= start.distance_to(person):
 				return true
@@ -163,6 +165,7 @@ func walk(delta: float) -> void:
 	perches.settle()
 
 func walk_step(delta: float) -> void:
+	var previous_feet: Vector3 = game.walker
 	if game.beers >= 30 or game.seated or game.injuries.down:
 		return
 	var motion = Vector2(Input.get_axis("left", "right"), Input.get_axis("forward", "back"))
@@ -210,6 +213,8 @@ func walk_step(delta: float) -> void:
 			game.jump_velocity = 0
 		remaining -= step
 	game.walker.y = floor_height + game.jump_height
+	game.injuries.play.injuries = game.injuries
+	game.injuries.play.landing(game.injuries.local_key(), previous_feet, game.walker)
 	snow_hint(delta)
 
 # 0 on firm ground, 1 when wading through a full-depth forest drift.
@@ -233,6 +238,11 @@ func running() -> bool:
 	return not game.in_car and not game.seated and game.beers < 30 and game.injuries.limp <= 0.0 and not game.injuries.down and not game.paused and not game.dead and not game.finished and game.drink_time < 0 and game.eat_time < 0 and Input.is_action_pressed("sprint") and (absf(Input.get_axis("left", "right")) + absf(Input.get_axis("forward", "back"))) > 0.01
 
 func jump() -> bool:
+	if game.injuries.down and not game.paused and not game.dead and not game.finished:
+		if game.room.submit("stand_person"):
+			return true
+		game.injuries.play.injuries = game.injuries
+		return game.injuries.play.stand(game.injuries.local_key())
 	if not game.playing or relief.active or game.in_car or game.seated or game.beers >= 30 or game.injuries.down or game.injuries.limp > 0.0 or game.paused or game.dead or game.finished or game.drink_time >= 0 or game.eat_time >= 0 or game.jump_height > 0.01 or game.jump_velocity > 0:
 		return false
 	if game.stage.water != null and game.stage.water.depth(game.walker) > 0.6:

@@ -40,6 +40,8 @@ static func update(game, players: Dictionary, delta: float) -> void:
 		game.crews.clear_recovery_ropes()
 		return
 	game.recovery_links.clear()
+	game.injuries.play.injuries = game.injuries
+	var occupied = game.injuries.play.update(players, delta)
 	var targets = _targets(game, players)
 	var forces: Dictionary = {}
 	var helpers: Dictionary = {}
@@ -48,6 +50,8 @@ static func update(game, players: Dictionary, delta: float) -> void:
 	participants.merge(game.spectators.push_helpers())
 	participants.merge(game.stage.officials.push_helpers(game))
 	for id in participants:
+		if occupied.has(str(id)):
+			continue
 		var p: Dictionary = participants[id]
 		if p.get("in_car", true) or p.get("seated", false) or p.get("airborne", false) or int(p.get("beers", 0)) >= 30:
 			continue

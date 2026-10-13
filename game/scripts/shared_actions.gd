@@ -18,6 +18,9 @@ static func run(game: Node, context, action: String, placement: Dictionary) -> v
 	game.acting = context
 	game.cargo.context = context.cargo_context(game.car.position)
 	match action:
+		"stand_person":
+			game.injuries.play.injuries = game.injuries
+			game.injuries.play.stand("player:" + context.owner)
 		"trunk":
 			if spot != Vector3.INF:
 				game.cargo.toggle(spot)

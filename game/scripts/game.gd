@@ -1003,7 +1003,8 @@ func can_tow_racer(racer: Dictionary) -> bool:
 	return crews.can_tow_racer(racer)
 
 func nearby_tow_target() -> bool:
-	return crews.nearby_tow_target()
+	injuries.play.injuries = injuries
+	return crews.nearby_tow_target() or injuries.play.nearest(walker, injuries.local_key()) != ""
 
 func recover_racer(racer: Dictionary) -> void:
 	crews.recover_racer(racer)

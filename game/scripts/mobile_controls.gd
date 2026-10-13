@@ -98,7 +98,7 @@ func _layout() -> void:
 	if active() and not game.in_car:
 		target = game.hud_target if game.hud_target_frame == Engine.get_process_frames() else game.interaction.current()
 	var state: Array = [size, active(), landscape(), world_blocked(), game.in_car, game.placement_kind,
-		gear_open, game.seated, game.beers < 30, game.packing.active(), game.flag_count(),
+		gear_open, game.seated, game.injuries.down, game.beers < 30, game.packing.active(), game.flag_count(),
 		game.foraging.can_eat("berries"), game.tow_target != null, game.nearby_tow_target(), target.get("label", ""),
 		game.rides.ride, game.rides.hitch, game.rides.hitch_candidate() != ""]
 	if state == layout_state:
@@ -147,10 +147,10 @@ func _layout_driving() -> Array:
 func _layout_walking(target: Dictionary) -> Array:
 	add_button(action_caption(target), "interact", false, grid_rect(0, 0, 2))
 	if not game.seated and game.beers < 30:
-		add_button("Прыжок", "jump", false, grid_rect(2, 0))
+		add_button("Встать" if game.injuries.down else "Прыжок", "jump", false, grid_rect(2, 0))
 		add_button("Бег", "sprint", true, grid_rect(2, 1))
 	if game.tow_target != null or game.nearby_tow_target():
-		add_button("Трос", "tow", true, grid_rect(0, 1))
+		add_button("Помочь / тащить", "tow", true, grid_rect(0, 1))
 	var gear: Array = []
 	if not game.packing.active():
 		gear = [["Стол", "table"], ["Стул", "chairs"], ["Мангал", "grill"], ["Дрова", "firewood"], ["Казан", "cauldron"]]

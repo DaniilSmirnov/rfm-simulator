@@ -45,6 +45,7 @@ const AMBULANCE_ID = 500
 
 var game
 var medics = Medics.new()
+var play = preload("res://scripts/people_play.gd").new()
 # Host: key -> {"phase": "flying"|"lying"|"limp", "pos", "rot", "time", "body",
 # "patch", "station", "ambulance", "treat", "limp", "home"}.
 var records: Dictionary = {}
@@ -92,7 +93,7 @@ func red_flag() -> bool:
 		if racer.get("role", "") == "ambulance":
 			return true
 	for key in records:
-		if records[key].phase != "limp":
+		if records[key].phase != "limp" and not records[key].get("play", false):
 			return true
 	return false
 
@@ -161,7 +162,7 @@ func knock_near(at: Vector3, velocity: Vector3, car: Vector3) -> bool:
 			found = person
 	return not found.is_empty() and knock(found.key, found.pos, velocity, car)
 
-func knock(key: String, feet: Vector3, velocity: Vector3, car: Vector3) -> bool:
+func knock(key: String, feet: Vector3, velocity: Vector3, car: Vector3, playful: bool = false) -> bool:
 	if not authority() or is_down(key):
 		return false
 	var away = feet - car
@@ -188,7 +189,13 @@ func knock(key: String, feet: Vector3, velocity: Vector3, car: Vector3) -> bool:
 			avatar.get_meta("solid_record").pos.y = -1000.0
 	if key.begins_with("villager:"):
 		_set_villager_knocked(key, true)
+	record.play = playful
 	records[key] = record
+	if playful:
+		if key == local_key():
+			_go_down()
+		game.toast("Человек упал! Удерживай T: стой, чтобы поднять, иди, чтобы тащить. Пробел — встать.")
+		return true
 	_assign(record, key)
 	# Broadcast the emergency immediately, not only on the next update tick.
 	game.course.red_flag = true
@@ -327,6 +334,7 @@ static func ambulance_speed(racer: Dictionary, s: float) -> float:
 
 func update(delta: float) -> void:
 	medics.injuries = self
+	play.injuries = self
 	_held.clear()
 	if authority():
 		_update_host(delta)
@@ -347,6 +355,11 @@ func _update_host(delta: float) -> void:
 				if r.phase == "lying":
 					_retarget_all()
 			"lying":
+				if r.get("play", false):
+					_pose(key, r.pos, r.rot, 1.0)
+					if not str(key).begins_with("player:") and r.time > 12.0 and not play.grabbed(key):
+						play.stand(key)
+					continue
 				var ambulance = _ambulance(int(r.ambulance))
 				if ambulance.is_empty():
 					_assign(r, key)
@@ -443,7 +456,7 @@ func _stand(key: String, r: Dictionary) -> void:
 		r.pos = spot
 		r.rot = Vector3(0, float(r.rot.y), 0)
 		if key == local_key():
-			_stand_local(spot)
+			_stand_local(spot, bool(r.get("play", false)))
 	else:
 		if avatar != null:
 			returning[key] = {"avatar": avatar, "navigation_budget": return_budget, "goal": r.get("home", _home(key, spot)), "home_yaw": r.get("home_yaw", avatar.rotation.y), "clock": 0.0, "moving": false}
@@ -508,6 +521,7 @@ func snapshot() -> Array:
 		var p: Vector3 = r.pos
 		var rot: Vector3 = r.rot
 		var entry = {"key": key, "phase": r.phase, "pos": [snappedf(p.x, 0.01), snappedf(p.y, 0.01), snappedf(p.z, 0.01)], "rot": [snappedf(rot.x, 0.01), snappedf(rot.y, 0.01), snappedf(rot.z, 0.01)]}
+		entry.play = r.get("play", false)
 		if r.phase == "limp":
 			entry.limp = snappedf(float(r.limp), 0.1)
 		else:
@@ -561,7 +575,7 @@ func apply_snapshot(entries: Array) -> void:
 		var spot = game.walker
 		if mine != null:
 			spot = Vector3(mine.pos[0], mine.pos[1], mine.pos[2])
-		_stand_local(spot)
+		_stand_local(spot, bool(previous_targets.get(local_key(), {}).get("play", false)))
 	if mine != null and str(mine.phase) == "limp":
 		limp = float(mine.get("limp", limp))
 
@@ -578,16 +592,16 @@ func _go_down() -> void:
 		game.add_child(local_avatar)
 		local_avatar.position = game.walker
 
-func _stand_local(spot: Vector3) -> void:
+func _stand_local(spot: Vector3, playful: bool = false) -> void:
 	down = false
-	limp = LIMP_SECONDS
+	limp = 0.0 if playful else LIMP_SECONDS
 	game.walker = spot
 	game.jump_height = 0.0
 	game.jump_velocity = 0.0
 	if local_avatar != null:
 		local_avatar.queue_free()
 		local_avatar = null
-	game.toast("Медики помогли подняться. Пока без бега и прыжков.")
+	game.toast("Ты снова на ногах." if playful else "Медики помогли подняться. Пока без бега и прыжков.")
 
 # Metres the ambulance still has to drive to this casualty; -1 before it left.
 func eta(key: String) -> float:
@@ -607,6 +621,8 @@ func treating(key: String) -> bool:
 # Status line for the HUD; empty when nothing applies.
 func hud_line() -> String:
 	if down:
+		if records.get(local_key(), targets.get(local_key(), {})).get("play", false):
+			return "ТЫ УПАЛ · ПРОБЕЛ — ВСТАТЬ · ДРУГ МОЖЕТ ПОМОЧЬ (T)"
 		if treating(local_key()):
 			return Loc.t("МЕДИКИ ОКАЗЫВАЮТ ПОМОЩЬ")
 		var metres = eta(local_key())

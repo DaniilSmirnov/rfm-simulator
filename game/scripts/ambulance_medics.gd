@@ -156,7 +156,7 @@ func _next(medic: Dictionary, van: Dictionary, origin: Vector3) -> void:
 	for key in injuries.records:
 		var record: Dictionary = injuries.records[key]
 		var distance: float = origin.distance_to(record.pos)
-		if record.phase == "lying" and distance <= WALK_RADIUS and not claimed(key):
+		if record.phase == "lying" and not record.get("play", false) and distance <= WALK_RADIUS and not claimed(key):
 			choices.append({"key": key, "distance": distance})
 	choices.sort_custom(func(a, b): return a.distance < b.distance)
 	for candidate in choices:

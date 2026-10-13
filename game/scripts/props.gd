@@ -736,9 +736,10 @@ static func campfire(parent: Node3D) -> Node3D:
 	root.add_child(flames)
 	for i in range(5):
 		var flame = faceted(flames, Vector3(sin(i * 2.4) * 0.23, 0.35, cos(i * 2.4) * 0.23), Vector3(0.19, 0.55, 0.19), Color("ff751e") if i % 2 else Color("ffc53f"), 5, 3)
+		flame.set_meta("perch_ignore", true)
 		unique_material(flame)
 		flame.material_override.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	return root
+	return load("res://scripts/perches.gd").mark(root, false)
 
 static func cauldron(parent: Node3D) -> Node3D:
 	var root = Node3D.new()
@@ -803,7 +804,7 @@ static func cauldron(parent: Node3D) -> Node3D:
 	for i in range(5):
 		faceted(steam, Vector3.ZERO, Vector3.ONE * 0.13, Color("dbe0d6"), 6, 3)
 	pose_cauldron(root, "empty", 0, 0, 0)
-	return root
+	return load("res://scripts/perches.gd").mark(root, false)
 
 static func pose_cauldron(root: Node3D, phase: String, progress: float, servings: int, time: float) -> void:
 	root.set_meta("phase", phase)
