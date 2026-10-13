@@ -468,3 +468,31 @@ test('pushed views remember the delivered cold revisions', () => {
   assert.deepEqual(r.view(player, 1200).world.cold, { camp: { chairs: true } });
   assert.equal(r.view(player, 1250).world.cold, undefined);
 });
+
+test('a guest from another protocol version is refused at join', () => {
+  const r = new RoomState();
+  r.add('Host', 1000, true, { protocol: 7 });
+  assert.throws(() => r.add('Old', 1000, false, { protocol: 6 }), e => e.status === 409 && /Версия игры/.test(e.message));
+  assert.throws(() => r.add('Unknown', 1000, false, {}), e => e.status === 409);
+  assert.equal(r.add('Same', 1000, false, { protocol: 7 }).host, false);
+});
+test('a guest with a live direct link gets only slow sections and the roster', () => {
+  const { r, h, g } = setup();
+  const hot = { racers: [{ id: 1 }], stones: [{ id: 5 }], cold_revs: { camp: 3 } };
+  r.sync({ token: h.token, state: state(), world: hot, cold: { camp: { table_yaw: 1 } } }, 1100);
+  const full = r.sync({ token: g.token, state: state(), cold_revs: {} }, 1150);
+  assert.ok(full.world.racers && full.world.cold.camp, 'a guest without a link gets the whole world');
+  assert.ok(full.players.every(p => p.state));
+  r.sync({ token: h.token, state: state(), world: { ...hot, cold_revs: { camp: 4 } }, cold: { camp: { table_yaw: 2 } } }, 1200);
+  const direct = r.sync({ token: g.token, state: state(), cold_revs: { camp: 3 }, direct: true }, 1250);
+  assert.deepEqual(Object.keys(direct.world).sort(), ['cold', 'cold_revs', 'direct']);
+  assert.deepEqual(direct.world.cold, { camp: { table_yaw: 2 } });
+  assert.equal(direct.players.length, 2);
+  assert.ok(direct.players.every(p => p.state === null && p.name));
+  const back = r.sync({ token: g.token, state: state(), cold_revs: { camp: 4 } }, 1300);
+  assert.ok(back.world.racers, 'dropping the flag brings the hot world back at once');
+  r.sync({ token: g.token, state: state(), cold_revs: { camp: 4 }, direct: true }, 1350);
+  r.heartbeat(h.token, 1360, true);
+  assert.ok(r.sync({ token: g.token, state: state(), cold_revs: { camp: 4 }, direct: true }, 1370).world.paused, 'a backgrounded host pauses guests even over a direct link');
+  assert.equal(r.view(r.data.players[h.player], 1400).world, undefined, 'the host never reads the world back');
+});

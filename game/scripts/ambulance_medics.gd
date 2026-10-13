@@ -189,7 +189,7 @@ func snapshot() -> Array:
 	var result: Array = []
 	for medic in active.values():
 		var pos: Vector3 = medic.avatar.position
-		result.append({"id": medic.id, "pos": [pos.x, pos.y, pos.z], "yaw": medic.avatar.rotation.y, "state": medic.state, "moving": medic.moving, "clock": medic.clock, "time": medic.time})
+		result.append({"id": medic.id, "pos": [snappedf(pos.x, 0.01), snappedf(pos.y, 0.01), snappedf(pos.z, 0.01)], "yaw": snappedf(medic.avatar.rotation.y, 0.01), "state": medic.state, "moving": medic.moving, "clock": snappedf(medic.clock, 0.01), "time": snappedf(medic.time, 0.01)})
 	return result
 
 func apply_snapshot(entries: Array) -> void:
