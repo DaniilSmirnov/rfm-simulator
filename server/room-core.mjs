@@ -43,13 +43,18 @@ export class RoomState {
     if (!host && (!this.data.host || this.data.closed)) throw new RoomError(404, 'Комната не найдена или закрыта.');
     if (host && this.data.host) throw new RoomError(409, 'Этот ID занят.');
     if (Object.keys(this.data.players).length >= MAX_PLAYERS) throw new RoomError(409, `Комната заполнена: максимум ${MAX_PLAYERS} игроков.`);
+    // Hot-world and state encodings change between protocol versions: a guest
+    // from another build would misread the host's snapshots, so it is refused.
+    const hostProtocol = this.data.players[this.data.host]?.protocol ?? 0;
+    const protocolVersion = Number.isSafeInteger(options.protocol) ? options.protocol : 0;
+    if (!host && protocolVersion !== hostProtocol) throw new RoomError(409, 'Версия игры не совпадает с версией хозяина комнаты. Обнови страницу и зайди снова.');
     const used = new Set(Object.values(this.data.players).map(p => p.slot));
     let slot = 0;
     while (used.has(slot)) slot++;
     const car_model = Number.isSafeInteger(options.car_model) && options.car_model >= 0 && options.car_model < CAR_COUNT ? options.car_model : slot;
     if (host) this.data.stage = Number.isSafeInteger(options.stage) ? Math.max(0, Math.min(STAGE_COUNT - 1, options.stage)) : 0;
     const id = crypto.randomUUID();
-    const p = { id, slot, car_model, token: crypto.randomUUID(), name: String(name || 'Фанат').replace(/[\u0000-\u001f]/g, '').trim().slice(0, protocol.name_max_length) || 'Фанат', seen: now, state: null, seq: 0, protocol: Number.isSafeInteger(options.protocol) ? options.protocol : 0 };
+    const p = { id, slot, car_model, token: crypto.randomUUID(), name: String(name || 'Фанат').replace(/[\u0000-\u001f]/g, '').trim().slice(0, protocol.name_max_length) || 'Фанат', seen: now, state: null, seq: 0, protocol: protocolVersion };
     this.data.players[id] = p;
     if (host) this.data.host = id;
     return { player: id, token: p.token, host, name: p.name, slot, car_model, stage: this.data.stage ?? 0 };
@@ -91,6 +96,9 @@ export class RoomState {
     p.state = { drive_enabled: this.driveEnabled(p, s), drive_inputs, pos: s.pos, car: s.car, heading: s.heading, tilt: vec(s.tilt) ? s.tilt : [0, s.heading, 0], yaw: s.yaw, pitch: s.pitch, in_car: s.in_car, tow: s.tow === true && !s.in_car, push: vec(s.push) ? s.push.map((n, i) => i === 1 ? 0 : Math.max(-1, Math.min(1, n))) : [0, 0, 0], speed: number(s.speed) ? Math.max(-50, Math.min(50, s.speed)) : 0, beers: Number.isSafeInteger(s.beers) ? Math.max(0, Math.min(100000, s.beers)) : 0, trees: Array.isArray(s.trees) ? s.trees.slice(0, LIMIT.object_requests_per_sync).filter(t => Number.isSafeInteger(t?.id) && t.id >= 0 && t.id < 20000 && vec(t.dir)).map(t => ({ id: t.id, dir: t.dir })) : [], lamps: Array.isArray(s.lamps) ? s.lamps.slice(0, LIMIT.object_requests_per_sync).filter(t => Number.isSafeInteger(t?.id) && t.id >= 0 && t.id < 512 && vec(t.dir)).map(t => ({ id: t.id, dir: t.dir })) : [], seated: s.seated === true && !s.in_car, running: s.running === true && !s.in_car && s.seated !== true, airborne: s.airborne === true && !s.in_car && s.seated !== true, relief: s.relief === true && !s.in_car && s.seated !== true, ride, hitch: s.in_car && !ride ? this.carOwner(p, s.hitch) : '', broken: s.broken === true, food_species: ['edible', 'fly_agaric', 'toadstool'].includes(s.food_species) ? s.food_species : 'edible', food_kind: ['meat', 'mushroom', 'berries', 'plov'].includes(s.food_kind) ? s.food_kind : 'meat', eat: Number.isFinite(s.eat) ? Math.max(-1, Math.min(protocol.durations.eat, s.eat)) : -1, beer: Math.max(-1, Math.min(protocol.durations.drink, Number(s.beer) || 0)) };
     p.seen = now;
     p.state_time = now;
+    // A guest whose direct link is alive gets the hot world and the states from
+    // the host itself; the server then sends it only the slow sections.
+    p.direct = p.id !== this.data.host && body.direct === true;
     this.trackColdRevisions(p, body);
     if (p.id === this.data.host) {
       if (body.world !== undefined) {
@@ -158,9 +166,15 @@ export class RoomState {
         world = {...world, cold_revs: {...(this.data.cold_revs ?? {})}, ...(Object.keys(cold).length ? {cold} : {})};
       }
     }
+    // A guest with a live direct link gets the hot world and every member's
+    // state from the host itself. Only the slow sections and the roster come
+    // from here, unless the host is paused or silent (the link carries nothing
+    // then, and the guest needs the "paused" mark).
+    const viaHost = !isHost && p.direct === true && p.cold_mode === 'split' && world && typeof world === 'object' && !staleHost && host?.background !== true;
+    if (viaHost) world = { direct: true, cold_revs: world.cold_revs ?? {}, ...(world.cold ? { cold: world.cold } : {}) };
     // Raw drive inputs are only needed by the host, which simulates them.
     const players = Object.values(this.data.players).map(({ id, name, slot, car_model, state_time, state }) => ({ id, name, slot, car_model: car_model ?? slot, state_time: state_time ?? 0,
-      state: state && !isHost && state.drive_inputs?.length ? {...state, drive_inputs: []} : state }));
+      state: viaHost ? null : state && !isHost && state.drive_inputs?.length ? {...state, drive_inputs: []} : state }));
     return { server_time: now, world_time: this.data.world_time ?? 0, stage: this.data.stage ?? 0, host: hostId, ...(world === undefined ? {} : {world}), accepted: p.seq,
       ...(isHost ? {cold_revs: this.data.cold_revs ?? {}} : {}),
       players, commands: isHost ? this.data.commands : [] };

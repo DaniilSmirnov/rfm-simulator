@@ -53,6 +53,26 @@ func reset(position: Vector3, heading: float) -> void:
 func snapshot() -> Dictionary:
 	return {"recovery_ack": recovery_ack, "condition": condition, "impact_timer": impact_timer, "ack": ack, "pos": [node.position.x, node.position.y, node.position.z], "yaw": yaw, "velocity": [motion.velocity.x, motion.velocity.y, motion.velocity.z], "vertical": motion.vertical_speed, "initialized": motion.initialized, "grounded": motion.grounded, "pitch": motion.pitch, "roll": motion.roll, "steering": motion.handling.steering, "yaw_rate": motion.handling.yaw_rate, "longitudinal": motion.handling.longitudinal_accel}
 
+# The snapshot as it travels: rounded to a millimetre (a hundredth of a
+# milliradian for angles) and without the fields that sit at the value restore()
+# assumes when they are missing.
+func wire_snapshot() -> Dictionary:
+	var s = snapshot()
+	var wire = {"ack": s.ack, "pos": _round_vec(s.pos, 0.001), "yaw": snappedf(s.yaw, 0.0001), "velocity": _round_vec(s.velocity, 0.001), "vertical": snappedf(s.vertical, 0.001), "grounded": s.grounded,
+		"pitch": snappedf(s.pitch, 0.0001), "roll": snappedf(s.roll, 0.0001), "steering": snappedf(s.steering, 0.001), "yaw_rate": snappedf(s.yaw_rate, 0.0001), "longitudinal": snappedf(s.longitudinal, 0.001)}
+	if not s.initialized:
+		wire.initialized = false
+	if s.condition != 100.0:
+		wire.condition = snappedf(s.condition, 0.01)
+	if s.impact_timer != 0.0:
+		wire.impact_timer = snappedf(s.impact_timer, 0.01)
+	if s.recovery_ack != 0:
+		wire.recovery_ack = s.recovery_ack
+	return wire
+
+static func _round_vec(v: Array, step: float) -> Array:
+	return [snappedf(v[0], step), snappedf(v[1], step), snappedf(v[2], step)]
+
 func restore(s: Dictionary) -> void:
 	node.position = Vector3(s.pos[0], s.pos[1], s.pos[2])
 	yaw = s.yaw

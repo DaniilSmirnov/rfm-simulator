@@ -147,7 +147,56 @@ func run() -> void:
 	var packet: Dictionary = host.room.direct.world_packet()
 	check(not packet.world.has("cold_revs") and not packet.world.has("npc_people") and not packet.world.has("camp"), "slow sections stay on the server path")
 	for entry in packet.players:
-		check(entry.state.drive_inputs.is_empty(), "raw driving input is never forwarded to guests")
+		check(not entry.state.has("drive_inputs") and not entry.state.has("trees") and not entry.has("name"), "raw driving input, object requests and the roster are never forwarded to guests")
+	check(guest.room.sync_body().get("direct", false) == true and not host.room.sync_body().has("direct"), "a guest with a healthy link tells the server to leave the hot world to it")
+	# Compact states expand to what the server would have listed, after a JSON round trip.
+	var original: Dictionary = host.room.local_state()
+	original.beers = 3
+	original.speed = 12.3456
+	var compact: Dictionary = NetProtocol.compact_state(original)
+	check(not compact.has("food_kind") and not compact.has("push") and not compact.has("ride") and not compact.has("car") and not compact.has("tilt"), "idle values, the driver's car position and flat tilt are left out")
+	var restored: Dictionary = NetProtocol.expand_state(JSON.parse_string(JSON.stringify(compact)))
+	var restored_ok = true
+	for key in original:
+		if key in NetProtocol.STATE_HOST_ONLY:
+			restored_ok = restored_ok and restored[key] == []
+		elif key == "tilt":
+			# The middle angle is the heading; guests overwrite it with the heading anyway.
+			restored_ok = restored_ok and absf(restored.tilt[0] - original.tilt[0]) < 0.002 and absf(restored.tilt[2] - original.tilt[2]) < 0.002 and restored.tilt[1] == restored.heading
+		elif original[key] is Array:
+			restored_ok = restored_ok and str(restored[key].map(func(n): return snappedf(float(n), 0.001))) == str(original[key].map(func(n): return snappedf(float(n), 0.001)))
+		elif original[key] is float:
+			restored_ok = restored_ok and absf(float(restored[key]) - original[key]) < 0.006
+		else:
+			restored_ok = restored_ok and restored[key] == original[key]
+	check(restored_ok and restored.size() == original.size() and int(restored.beers) == 3, "an expanded state matches the original")
+	var walking: Dictionary = original.duplicate(true)
+	walking.in_car = false
+	walking.car = [4.0, 1.0, 2.0]
+	walking.tilt = [0.1, walking.heading, -0.2]
+	walking.push = [0.5, 0.0, -0.5]
+	walking.ride = "friend"
+	var walking_back: Dictionary = NetProtocol.expand_state(JSON.parse_string(JSON.stringify(NetProtocol.compact_state(walking))))
+	check(walking_back.car == [4.0, 1.0, 2.0] and absf(walking_back.tilt[2] + 0.2) < 0.002 and absf(walking_back.tilt[1] - walking.heading) < 0.002 and walking_back.push == [0.5, 0.0, -0.5] and walking_back.ride == "friend", "a walking member keeps its car, tilt, push and ride")
+	# Gravel travels as events: new stones in full, every living stone by id.
+	host.stones.clear()
+	var node = Node3D.new()
+	host.add_child(node)
+	node.position = Vector3(1, 2, 3)
+	host.stones.append({"id": 77, "node": node, "velocity": Vector3(1, 0, 0), "life": 2.0, "bounces": 0})
+	var snapshot_a: Dictionary = host.room.world_sync._stones_snapshot()
+	check(snapshot_a.stones.size() == 1 and snapshot_a.stone_ids == [77], "a new stone travels in full")
+	host.stones[0].fresh_until = 0
+	var snapshot_b: Dictionary = host.room.world_sync._stones_snapshot()
+	check(snapshot_b.stones.is_empty() and snapshot_b.stone_ids == [77] and not snapshot_b.has("impacts"), "an older stone is only listed by id")
+	guest.room.apply_stones(JSON.parse_string(JSON.stringify(snapshot_a)), -1.0)
+	check(guest.stones.size() == 1 and int(guest.stones[0].id) == 77, "the guest creates the stone")
+	guest.room.apply_stones({"stones": [], "stone_ids": [77]}, -1.0)
+	check(guest.stones.size() == 1, "a listed stone keeps flying on the guest")
+	guest.room.apply_stones({"stones": [], "stone_ids": []}, -1.0)
+	check(guest.stones.is_empty(), "a stone that left the list is removed")
+	host.stones.clear()
+	node.queue_free()
 	# While the link is healthy, server snapshots only bring slow sections.
 	var stale_world = host.room.world_sync.current_parts().hot.duplicate()
 	stale_world.racers = []

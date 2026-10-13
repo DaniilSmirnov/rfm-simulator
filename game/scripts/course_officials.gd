@@ -177,9 +177,17 @@ func update(game, delta: float, guest: bool) -> void:
 		if guest and targets.has(person.id):
 			var pose: Dictionary = targets[person.id]
 			avatar.position = avatar.position.lerp(game.room.v(pose.pos), 1 - exp(-delta * 10))
-			avatar.rotation.y = lerp_angle(avatar.rotation.y, float(pose.yaw), 1 - exp(-delta * 10))
-			person.helper = int(pose.helper)
-			person.action = str(pose.action)
+			person.helper = int(pose.get("helper", -1))
+			person.action = str(pose.get("action", "watch"))
+			if pose.has("yaw"):
+				avatar.rotation.y = lerp_angle(avatar.rotation.y, float(pose.yaw), 1 - exp(-delta * 10))
+			else:
+				# A marshal watching the stage turns toward the nearest crew, so
+				# the host does not send the angle.
+				var look = _watch_facing(game, person) - avatar.position
+				look.y = 0
+				if look.length() > 0.05:
+					avatar.rotation.y = lerp_angle(avatar.rotation.y, atan2(-look.x, -look.z), 1 - exp(-delta * 8))
 		elif not guest:
 			var racer = game.spectators.nearby_stranded(person)
 			person.helper = -1
@@ -193,15 +201,7 @@ func update(game, delta: float, guest: bool) -> void:
 			else:
 				Navigation.move(game, person, person.home, delta)
 				person.action = "flag" if game.course.red_flag else "watch"
-				var nearest = 65.0
-				facing = game.stage.at(game.stage.road_s(person.home))
-				for crew in game.racers:
-					if crew.state not in ["racing", "offroad", "rock_bounce"]:
-						continue
-					var distance: float = crew.node.position.distance_to(avatar.position)
-					if distance < nearest:
-						nearest = distance
-						facing = crew.node.position
+				facing = _watch_facing(game, person)
 			var direction = facing - avatar.position
 			direction.y = 0
 			if direction.length() > 0.05:
@@ -225,11 +225,33 @@ func push_helpers(game) -> Dictionary:
 				result["marshal_%d" % person.id] = {"pos": game.room.a(person.avatar.position), "in_car": false, "tow": false, "push": game.room.a(game.Recovery.road_direction(game, racer)), "beers": 0, "racer": racer.id}
 	return result
 
+# Where a marshal who is not helping looks: at the nearest crew on the stage,
+# else along the road at the post.
+func _watch_facing(game, person: Dictionary) -> Vector3:
+	var nearest = 65.0
+	var facing: Vector3 = game.stage.at(game.stage.road_s(person.home))
+	for crew in game.racers:
+		if crew.state not in ["racing", "offroad", "rock_bounce"]:
+			continue
+		var distance: float = crew.node.position.distance_to(person.avatar.position)
+		if distance < nearest:
+			nearest = distance
+			facing = crew.node.position
+	return facing
+
 func snapshot() -> Array:
 	var result: Array = []
 	for person in people:
 		var p: Vector3 = person.avatar.position
-		result.append({"id": person.id, "pos": [snappedf(p.x, 0.01), snappedf(p.y, 0.01), snappedf(p.z, 0.01)], "yaw": snappedf(person.avatar.rotation.y, 0.001), "helper": person.helper, "action": person.action})
+		# Idle values are left out; a watching marshal's angle follows from the crews.
+		var entry = {"id": person.id, "pos": [snappedf(p.x, 0.01), snappedf(p.y, 0.01), snappedf(p.z, 0.01)]}
+		if person.helper != -1:
+			entry.helper = person.helper
+		if person.action != "watch":
+			entry.action = person.action
+		if not person.action in ["watch", "flag"]:
+			entry.yaw = snappedf(person.avatar.rotation.y, 0.001)
+		result.append(entry)
 	return result
 
 func apply_snapshot(poses: Array) -> void:
@@ -241,6 +263,6 @@ func apply_snapshot(poses: Array) -> void:
 			for person in people:
 				if person.id == int(pose.id):
 					person.avatar.position = Vector3(pose.pos[0], pose.pos[1], pose.pos[2])
-					person.avatar.rotation.y = float(pose.yaw)
+					person.avatar.rotation.y = float(pose.get("yaw", person.avatar.rotation.y))
 					var record: Dictionary = person.avatar.get_meta("solid_record")
 					record.pos = person.avatar.position

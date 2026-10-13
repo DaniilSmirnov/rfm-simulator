@@ -116,3 +116,46 @@ static func clean_state(s):
 # A room member id as a car owner (a ride or a tow rope); "" for anything else.
 static func _member_id(value) -> String:
 	return value if value is String and value.length() <= 64 else ""
+
+# ---------------------------------------------------------------- direct packets
+
+# What a guest does not need from another member's state, or can rebuild from
+# the rest, is left out of the host's direct packets: values that equal the
+# defaults below, the host-only fields (driving input, object requests), the
+# car position of a driver (it is the player position) and the middle tilt
+# angle (it is the heading). expand_state() puts them back.
+const STATE_DEFAULTS = {"airborne": false, "beer": -1.0, "beers": 0, "broken": false, "drive_enabled": false, "eat": -1.0, "food_kind": "meat",
+	"food_species": "edible", "hitch": "", "relief": false, "ride": "", "running": false, "seated": false, "tow": false, "speed": 0.0}
+const STATE_HOST_ONLY = ["drive_inputs", "trees", "lamps"]
+
+static func compact_state(s: Dictionary) -> Dictionary:
+	var out = {"pos": s.pos, "heading": snappedf(float(s.heading), 0.001), "yaw": snappedf(float(s.yaw), 0.001), "pitch": snappedf(float(s.pitch), 0.001), "in_car": s.in_car}
+	for key in STATE_DEFAULTS:
+		if not s.has(key):
+			continue
+		var value = s[key]
+		if key == "speed":
+			value = snappedf(float(value), 0.01)
+		if value != STATE_DEFAULTS[key]:
+			out[key] = value
+	if not (s.in_car and s.car == s.pos):
+		out.car = s.car
+	if s.has("tilt") and (absf(float(s.tilt[0])) > 0.0005 or absf(float(s.tilt[2])) > 0.0005):
+		out.tilt = [snappedf(float(s.tilt[0]), 0.001), snappedf(float(s.tilt[2]), 0.001)]
+	if s.has("push") and (float(s.push[0]) != 0.0 or float(s.push[2]) != 0.0):
+		out.push = s.push
+	return out
+
+static func expand_state(c: Dictionary) -> Dictionary:
+	var s = STATE_DEFAULTS.duplicate()
+	s.merge(c, true)
+	s.drive_inputs = []
+	s.trees = []
+	s.lamps = []
+	if not s.has("car"):
+		s.car = s.pos
+	var tilt = c.get("tilt", [0.0, 0.0])
+	s.tilt = [tilt[0], s.heading, tilt[1]]
+	if not s.has("push"):
+		s.push = [0.0, 0.0, 0.0]
+	return s

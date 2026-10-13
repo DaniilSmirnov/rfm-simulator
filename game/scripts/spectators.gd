@@ -123,7 +123,7 @@ func update(world_time: float, delta: float, guest: bool) -> void:
 			person.avatar.position = person.avatar.position.lerp(game.room.v(target.pos), 1.0 - exp(-delta * 10))
 			person.avatar.rotation.y = lerp_angle(person.avatar.rotation.y, float(target.yaw), 1.0 - exp(-delta * 10))
 			person.helper = int(target.get("helper", -1))
-			action = str(target.action)
+			action = str(target.get("action", "idle"))
 			# The drink/meal timer follows the shared schedule (activity() of the
 			# replicated clock), so it is not sent; a host that diverged from the
 			# schedule still shows the action, timed locally from its start.
@@ -148,8 +148,7 @@ func update(world_time: float, delta: float, guest: bool) -> void:
 					action = "return"
 				elif action == "idle" and passing_car(person.avatar.position):
 					action = "cheer"
-				var toward: Vector3 = game.stage.at(game.stage.road_s(person.avatar.position)) - person.avatar.position
-				person.avatar.rotation.y = atan2(-toward.x, -toward.z)
+				person.avatar.rotation.y = _road_yaw(person.avatar.position)
 		if action == "eat" and int(group.servings) <= 0 and int(person.eat_cycle) != int(pose.cycle):
 			action = "idle"
 		person.action = action
@@ -256,6 +255,11 @@ func nearby_stranded(person: Dictionary) -> Dictionary:
 			found = racer
 	return found
 
+# The angle that faces the road from a point.
+func _road_yaw(point: Vector3) -> float:
+	var toward: Vector3 = game.stage.at(game.stage.road_s(point)) - point
+	return atan2(-toward.x, -toward.z)
+
 func passing_car(point: Vector3) -> bool:
 	for racer in game.racers:
 		if racer.state in ["racing", "offroad", "rock_bounce"] and racer.node.position.distance_to(point) < 42:
@@ -276,11 +280,16 @@ func push_helpers() -> Dictionary:
 func actor_snapshot() -> Array:
 	var result: Array = []
 	for person in people:
-		var entry = {"id": person.id, "pos": game.room.a(person.avatar.position), "yaw": snappedf(person.avatar.rotation.y, 0.01), "action": person.action}
-		# The helper is sent only while someone pushes a car. The action timer is
-		# never sent: guests derive it from the shared schedule.
+		var entry = {"id": person.id, "pos": game.room.a(person.avatar.position)}
+		if person.action != "idle":
+			entry.action = person.action
+		# The helper and the angle toward the car are sent only while someone
+		# pushes a car; everyone else faces the road, which a guest works out
+		# itself. The action timer is never sent: guests derive it from the
+		# shared schedule.
 		if int(person.helper) != -1:
 			entry.helper = person.helper
+			entry.yaw = snappedf(person.avatar.rotation.y, 0.01)
 		result.append(entry)
 	return result
 
@@ -289,6 +298,8 @@ func apply_actor_snapshot(poses: Array) -> void:
 	actor_targets.clear()
 	for pose in poses:
 		actor_targets[int(pose.id)] = pose
+		if not pose.has("yaw"):
+			pose["yaw"] = _road_yaw(game.room.v(pose.pos))
 		if first:
 			for person in people:
 				if person.id == int(pose.id):

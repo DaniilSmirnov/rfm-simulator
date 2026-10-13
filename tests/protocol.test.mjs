@@ -69,11 +69,11 @@ test('host world must be a plain object with plain keys', () => {
   assert.doesNotThrow(() => r.sync({token: h.token, state: state(), world: {elapsed: 1}}, 1200));
 });
 
-test('protocol 2 guests are simulated by the host once they received the world', () => {
+test('guests are simulated by the host once they received the world', () => {
   const r = new RoomState();
   const h = r.add('Host', 1000, true, {protocol: protocol.protocol_version});
   const g = r.add('Guest', 1000, false, {protocol: protocol.protocol_version});
-  const legacy = r.add('Old', 1000);
+  assert.throws(() => r.add('Old', 1000), e => e.status === 409, 'clients without the current protocol are refused');
   let reply = r.sync({token: g.token, state: {...state(), drive_enabled: false}}, 1100);
   assert.equal(reply.world, null, 'no world yet');
   assert.equal(r.data.players[g.player].state.drive_enabled, false);
@@ -81,8 +81,6 @@ test('protocol 2 guests are simulated by the host once they received the world',
   r.sync({token: g.token, state: {...state(), drive_enabled: false}}, 1300);
   reply = r.sync({token: g.token, state: {...state(), drive_enabled: false}}, 1400);
   assert.equal(r.data.players[g.player].state.drive_enabled, true, 'the guest cannot opt out of host simulation');
-  r.sync({token: legacy.token, state: {...state(), drive_enabled: false}}, 1500);
-  assert.equal(r.data.players[legacy.player].state.drive_enabled, false, 'older clients keep their own flag');
   assert.equal(r.data.players[h.player].state.drive_enabled, false, 'the host is never simulated');
 });
 

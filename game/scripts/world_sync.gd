@@ -52,7 +52,7 @@ func rebuild() -> void:
 			providers.append(p)
 	providers.append(provider("camp", "camp", ["camp", "table_yaw", "chairs", "chair_poses", "flag_poses", "cooking", "grill_pose", "grill_fire", "grill_servings", "npc_servings", "eaten"], _camp_snapshot, _camp_apply))
 	providers.append(provider("drive", "", ["drive_protocol", "driving"], _drive_snapshot, func(_f, _t): pass))
-	providers.append(provider("stones", "", ["stones", "impacts"], func(): return {"stones": room.stone_state(), "impacts": game.impact_serials}, _stones_apply))
+	providers.append(provider("stones", "", ["stones", "stone_ids", "impacts"], _stones_snapshot, _stones_apply))
 	providers.append(provider("status", "", ["paused", "notice", "notice_time", "cook_time"], _status_snapshot, _status_apply))
 	# Spectators, marshals, the schedule, trunks and foraging stand still most of
 	# the time: as their own sections they travel only when they change.
@@ -229,34 +229,52 @@ func apply_world(w: Dictionary, sample_time: float) -> void:
 func _drive_snapshot() -> Dictionary:
 	var driving = {}
 	for id in room.host_drives:
-		driving[id] = room.host_drives[id].snapshot()
+		driving[id] = room.host_drives[id].wire_snapshot()
 	return {"drive_protocol": 1, "driving": driving}
 
 func _status_snapshot() -> Dictionary:
 	# The toast text only travels while it is on screen.
+	# Idle values are left out: a guest reads a missing field as the idle value.
 	var showing: bool = game.toast_time > 0
-	return {"paused": game.paused, "notice": game.toast_label.text if showing else "", "notice_time": snappedf(game.toast_time, 0.1) if showing else 0.0, "cook_time": snappedf(game.camp_grill.meat_time, 0.01)}
+	var status = {}
+	if game.paused:
+		status.paused = true
+	if showing:
+		status.notice = game.toast_label.text
+		status.notice_time = snappedf(game.toast_time, 0.1)
+	if game.camp_grill.meat_time != -1.0:
+		status.cook_time = snappedf(game.camp_grill.meat_time, 0.01)
+	return status
 
 func _status_apply(w: Dictionary, _t: float) -> void:
 	room.world_paused = bool(w.get("paused", false))
 	if w.get("notice_time", 0) > 0 and w.get("notice", "") != last_notice:
 		last_notice = w.notice
 		game.toast(last_notice)
-	game.camp_grill.meat_time = float(w.get("cook_time", game.camp_grill.meat_time))
+	game.camp_grill.meat_time = float(w.get("cook_time", -1.0))
 
 func _progress_snapshot() -> Dictionary:
-	return {"racing": game.racing, "passed": game.passed, "helped": game.helped, "elapsed": game.elapsed}
+	var progress = {"elapsed": snappedf(game.elapsed, 0.01)}
+	if game.racing:
+		progress.racing = true
+	if game.passed != 0:
+		progress.passed = game.passed
+	if game.helped != 0:
+		progress.helped = game.helped
+	return progress
 
 func _progress_apply(w: Dictionary, _t: float) -> void:
-	game.racing = bool(w.get("racing", game.racing))
-	game.passed = int(w.get("passed", game.passed))
-	game.helped = int(w.get("helped", game.helped))
+	game.racing = bool(w.get("racing", false))
+	game.passed = int(w.get("passed", 0))
+	game.helped = int(w.get("helped", 0))
 	game.elapsed = float(w.get("elapsed", game.elapsed))
 
 func _outcome_snapshot() -> Dictionary:
-	var result = {"dead": game.dead, "finished": game.finished}
-	# The result text is only needed once the shared run ends.
+	# The flags and the result text only exist once the shared run ends.
+	var result = {}
 	if game.dead or game.finished:
+		result.dead = game.dead
+		result.finished = game.finished
 		result.title = game.menu_title.text
 		result.text = game.menu_text.text
 	return result
@@ -268,6 +286,12 @@ func _outcome_apply(w: Dictionary, _t: float) -> void:
 		game.dead = dead
 		game.finished = finished
 		game._show_result(str(w.get("title", "")), str(w.get("text", "")))
+
+func _stones_snapshot() -> Dictionary:
+	var result = {"stones": room.stone_state(), "stone_ids": game.stones.map(func(stone): return stone.id)}
+	if not game.impact_serials.is_empty():
+		result.impacts = game.impact_serials
+	return result
 
 func _stones_apply(w: Dictionary, sample_time: float) -> void:
 	room.apply_stones(w, sample_time)
@@ -348,7 +372,9 @@ func _racers_snapshot() -> Dictionary:
 	var racers = []
 	for r in game.racers:
 		# Default fields are left out; the guest reads them with the same defaults.
-		var entry = {"id": r.id, "variant": r.variant, "pos": room.a(r.node.position), "yaw": snappedf(r.node.rotation.y, 0.001), "tilt": room.a(r.node.rotation), "state": r.state}
+		var entry = {"id": r.id, "variant": r.variant, "pos": room.a(r.node.position), "yaw": snappedf(r.node.rotation.y, 0.001), "state": r.state}
+		# Pitch and roll only; the middle angle is the yaw.
+		entry.tilt = [snappedf(r.node.rotation.x, 0.01), snappedf(r.node.rotation.z, 0.01)]
 		if r.get("role", "racer") != "racer":
 			entry.role = r.role
 		if int(r.get("zero_index", 0)) != 0:
@@ -358,7 +384,10 @@ func _racers_snapshot() -> Dictionary:
 		if int(r.get("recovery_helpers", 0)) != 0:
 			entry.recovery_helpers = r.recovery_helpers
 		racers.append(entry)
-	return {"racers": racers, "recovery_links": game.recovery_links}
+	var result = {"racers": racers}
+	if not game.recovery_links.is_empty():
+		result.recovery_links = game.recovery_links
+	return result
 
 func _racers_apply(w: Dictionary, sample_time: float) -> void:
 	if not w.has("racers"):
@@ -383,8 +412,8 @@ func _racers_apply(w: Dictionary, sample_time: float) -> void:
 			game.racers.append({"id": r.id, "role": role, "zero_index": int(r.get("zero_index", 0)), "node": node, "state": r.state, "variant": r.variant})
 		if not racer_motion.has(r.id):
 			racer_motion[r.id] = SnapshotMotion.new()
-		var tilt = room.v(r.get("tilt", [0, r.yaw, 0]))
-		tilt.y = r.yaw
+		var lean: Array = r.get("tilt", [0.0, 0.0])
+		var tilt = Vector3(lean[0], r.yaw, lean[1])
 		racer_motion[r.id].push(sample_time, room.v(r.pos), tilt)
 		racer_targets[r.id] = r
 	for local in game.racers.duplicate():

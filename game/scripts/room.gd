@@ -216,9 +216,11 @@ func _apply_sync(data: Dictionary) -> void:
 				acknowledgements.append(command.id)
 	else:
 		commands = commands.filter(func(c): return c.seq > int(data.accepted))
-		if direct.healthy(host_id):
+		if direct.healthy(host_id) or (world is Dictionary and world.get("direct", false) == true):
 			# The direct link carries the hot world and everyone's state; the
-			# server still delivers slow sections and membership.
+			# server still delivers slow sections and membership. A reply marked
+			# "direct" has no hot world even when the link just went quiet: the
+			# next sync (sent without the flag) brings the full world back.
 			if world is Dictionary:
 				world_sync.apply_cold(world, stamp / 1000.0 if stamp >= 0 else server_clock())
 			_update_peers(data.players, false)
@@ -263,6 +265,9 @@ func sync_body() -> Dictionary:
 	if is_host:
 		world_sync.host_upload(body)
 		body.ack = acknowledgements
+	elif direct.healthy(host_id):
+		# The server then leaves the hot world and the states to the direct link.
+		body.direct = true
 	# Commands in this body are on the wire and must not be merged further.
 	prediction.seal()
 	return body
@@ -467,10 +472,19 @@ func _apply_command(c: Dictionary) -> void:
 
 # ---------------------------------------------------------------- gravel
 
+# Guests fly a stone themselves (advance_gravel with the same stage), so its
+# state travels only while it is new, for long enough to survive a lost packet
+# on the direct link; "stone_ids" lists every stone still alive.
+const STONE_FRESH_MSEC = 200
+
 func stone_state() -> Array:
+	var now = Time.get_ticks_msec()
 	var result = []
 	for stone in game.stones:
-		result.append({"id": stone.id, "pos": a(stone.node.position), "velocity": a(stone.velocity), "bounces": int(stone.get("bounces", 0))})
+		if not stone.has("fresh_until"):
+			stone.fresh_until = now + STONE_FRESH_MSEC
+		if now < int(stone.fresh_until):
+			result.append({"id": stone.id, "pos": a(stone.node.position), "velocity": a(stone.velocity), "bounces": int(stone.get("bounces", 0))})
 	return result
 
 func apply_stones(w: Dictionary, sample_time: float = -1.0) -> void:
@@ -499,8 +513,14 @@ func apply_stones(w: Dictionary, sample_time: float = -1.0) -> void:
 		if not found:
 			var node = Props.box(game, position, Vector3.ONE * 0.10, Color("9b9079"))
 			game.stones.append({"id": remote.id, "node": node, "velocity": velocity, "bounces": int(remote.get("bounces", 0))})
+	# With the list of living stones, a stone missing from "stones" just flies on.
+	var alive = null
+	if w.has("stone_ids"):
+		alive = {}
+		for id in w.stone_ids:
+			alive[int(id)] = true
 	for stone in game.stones.duplicate():
-		if not present.has(stone.id):
+		if not (present.has(stone.id) if alive == null else alive.has(int(stone.id))):
 			stone.node.queue_free()
 			game.stones.erase(stone)
 

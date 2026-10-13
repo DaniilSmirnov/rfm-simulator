@@ -99,7 +99,7 @@ func phase_caption() -> String:
 		_: return "СУ ЗАКРЫТ"
 
 func snapshot() -> Dictionary:
-	return {"pass_index": pass_index, "phase": phase, "remaining": remaining, "zero_index": zero_index, "active_id": active_id, "red_flag": red_flag}
+	return {"pass_index": pass_index, "phase": phase, "remaining": ceilf(remaining), "zero_index": zero_index, "active_id": active_id, "red_flag": red_flag}
 
 func apply_snapshot(data: Dictionary) -> void:
 	pass_index = clampi(int(data.get("pass_index", 1)), 1, 2)

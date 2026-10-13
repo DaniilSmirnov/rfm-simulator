@@ -250,26 +250,28 @@ func _send(delta: float) -> void:
 			room.prediction.seal()
 
 # What the host sends each guest directly: the hot world (slow sections stay on
-# the server path) and every member's state, as the server would list them.
+# the server path) and every member's state, as the server would list them. The
+# roster (name, slot, car) is not repeated: the server delivers it. States are
+# compacted by NetProtocol.compact_state().
 func world_packet() -> Dictionary:
 	var hot: Dictionary = room.world_sync.current_parts().hot.duplicate()
 	hot.erase("cold_revs")
 	var now_ms = int(room.server_clock() * 1000.0)
-	var own = room.local_state()
-	own.drive_inputs = []
-	var players: Array = [_member_entry(room.player_id, own, now_ms)]
+	var players: Array = [_member_entry(room.player_id, room.local_state(), now_ms)]
 	for id in room.peers:
 		var peer: Dictionary = room.peers[id]
 		if peer.state == null:
 			continue
-		var state: Dictionary = peer.state.duplicate()
-		state.drive_inputs = []
-		players.append(_member_entry(str(id), state, int(float(peer.get("last_state_time", room.server_clock())) * 1000.0)))
+		players.append(_member_entry(str(id), peer.state, int(float(peer.get("last_state_time", room.server_clock())) * 1000.0)))
 	return {"t": "w", "time": now_ms, "world": hot, "players": players}
 
 func _member_entry(id: String, state: Dictionary, state_time: int) -> Dictionary:
-	var member: Dictionary = room.members.get(id, {})
-	return {"id": id, "name": member.get("name", ""), "slot": member.get("slot", 0), "car_model": member.get("car_model", 0), "state_time": state_time, "state": state}
+	return {"id": id, "state_time": state_time, "state": NetProtocol.compact_state(state)}
+
+# A member entry as the server would list it, with the roster filled in.
+func _full_entry(entry: Dictionary) -> Dictionary:
+	var member: Dictionary = room.members.get(str(entry.get("id", "")), {})
+	return {"id": entry.id, "name": member.get("name", ""), "slot": member.get("slot", 0), "car_model": member.get("car_model", 0), "state_time": entry.get("state_time", 0), "state": NetProtocol.expand_state(entry.state)}
 
 func _receive(from: String, message: Dictionary) -> void:
 	match str(message.get("t", "")):
@@ -278,7 +280,11 @@ func _receive(from: String, message: Dictionary) -> void:
 				_receive_state(from, message.get("state"))
 		"w":
 			if not room.is_host and from == room.host_id and message.get("world") is Dictionary and message.get("players") is Array:
-				room._guest_world(message.world, float(message.get("time", -1)), message.players, false)
+				var players: Array = []
+				for entry in message.players:
+					if entry is Dictionary and entry.get("id") is String and entry.get("state") is Dictionary and NetProtocol._vec(entry.state.get("pos")):
+						players.append(_full_entry(entry))
+				room._guest_world(message.world, float(message.get("time", -1)), players, false)
 
 # The host takes a guest's state straight from its link, with the checks the
 # server applies to the same state on the server path.
