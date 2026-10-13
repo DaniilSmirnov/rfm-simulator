@@ -333,13 +333,14 @@ func _blocked(node: Node3D, from: Vector3, ahead: Vector3) -> bool:
 
 # ---------------------------------------------------------------- the way home
 
-# The day ends when the local car and every friend's car stand in a service
-# park, either one, with everybody inside.
+# The day ends when everybody sits in a car, their own or a friend's, standing
+# in a service park, either one. A car left on the stage (a broken one whose
+# owner came with a friend) does not hold the day up.
 func everyone_home() -> bool:
-	if parks() == null or not game.in_car or parks().park_at(game.car.position) < 0:
+	if parks() == null or not game.in_car or parks().park_at(game.player_position()) < 0:
 		return false
 	for peer in game.room.peers.values():
-		if peer.state == null or not peer.state.in_car or parks().park_at(game.room.v(peer.state.car)) < 0:
+		if peer.state == null or not peer.state.in_car or parks().park_at(game.rides.seat_of(peer.state)) < 0:
 			return false
 	return true
 

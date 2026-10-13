@@ -11,6 +11,7 @@ var player = preload("res://scripts/player_motion.gd").new()
 var camp_actions = preload("res://scripts/camp_actions.gd").new()
 var camp_grill = preload("res://scripts/camp_grill.gd").new()
 var park_traffic = preload("res://scripts/park_traffic.gd").new()
+var rides = preload("res://scripts/car_rides.gd").new()
 var hud = preload("res://scripts/game_hud.gd").new()
 var injuries = preload("res://scripts/injuries.gd").new()
 var seated = false
@@ -205,7 +206,7 @@ var hud_target_frame = -1
 var minimap_redraw_at = 0
 
 func _init() -> void:
-	for system in [crews, player, camp_actions, camp_grill, park_traffic, hud, injuries]:
+	for system in [crews, player, camp_actions, camp_grill, park_traffic, rides, hud, injuries]:
 		system.game = self
 
 func actor_pos() -> Vector3:
@@ -244,9 +245,6 @@ func dig_snow(spot: Vector3) -> void:
 
 func begin_placement(kind: String) -> void:
 	camp_actions.begin_placement(kind)
-
-func _update_placement() -> void:
-	camp_actions.update_placement()
 
 func cancel_placement() -> void:
 	camp_actions.cancel_placement()
@@ -707,7 +705,7 @@ func _process(delta: float) -> void:
 	if room.connected and room.prediction_enabled:
 		camera.position += room.prediction.visual_offset
 	room.smooth_car_visuals()
-	_update_placement()
+	camp_actions.update_placement()
 	Props.animate_wheels(car)
 	cargo.update(delta)
 	camp_cooking.update(delta, room.is_guest())
@@ -748,7 +746,7 @@ func _update_intoxication(delta: float) -> void:
 	player.update_intoxication(delta)
 
 func player_position() -> Vector3:
-	return car.position if in_car else walker
+	return rides.seat_position() if in_car else walker
 
 func _drive(delta: float) -> void:
 	player.drive(delta)

@@ -9,7 +9,8 @@ extends RefCounted
 # recovered as soon as it stands on the carriageway again.
 #
 # recovery_links: one entry per rope, {"player", "pos", "racer": id} or
-# {"player", "pos", "car": owner id}; the room snapshot carries them.
+# {"player", "pos", "car": owner id}; "hitch": true marks a rope between two
+# cars (car_rides.gd). The room snapshot carries them.
 const ROPE_RANGE = 6.0
 const ROPE_SLACK = 2.4
 const PUSH_RANGE = 2.6
@@ -72,6 +73,7 @@ static func update(game, players: Dictionary, delta: float) -> void:
 	for target in targets:
 		if helpers.has(target.key):
 			_drag(game, target, forces[target.key], delta, float(slack.get(target.key, INF)))
+	game.rides.pull(players, delta)
 	local_target(game)
 	game.crews.draw_recovery_ropes()
 
@@ -160,20 +162,24 @@ static func car_position(game, owner: String):
 		return room.v(room.peers[owner].state.car)
 	return null
 
-static func move_car(game, owner: String, next: Vector3, yaw: float, delta: float) -> void:
+# A car towed by another car (`turn_rate` given) turns even with its owner inside.
+static func move_car(game, owner: String, next: Vector3, yaw: float, delta: float, turn_rate: float = -1.0) -> void:
 	var room = game.room
+	var towed = turn_rate > 0
+	if not towed:
+		turn_rate = TURN_RATE
 	if owner == (room.player_id if room.connected else "local"):
 		game.car.position = next
-		if not game.in_car and not is_nan(yaw):
-			game.heading = rotate_toward(game.heading, yaw, TURN_RATE * delta)
+		if (towed or not game.in_car) and not is_nan(yaw):
+			game.heading = rotate_toward(game.heading, yaw, turn_rate * delta)
 			game.car.rotation.y = game.heading
 		return
 	var peer = room.peers.get(owner)
 	if room.host_drives.has(owner):
 		var solver = room.host_drives[owner]
 		solver.node.position = next
-		if peer != null and peer.state != null and not peer.state.in_car and not is_nan(yaw):
-			solver.yaw = rotate_toward(solver.yaw, yaw, TURN_RATE * delta)
+		if peer != null and peer.state != null and (towed or not peer.state.in_car) and not is_nan(yaw):
+			solver.yaw = rotate_toward(solver.yaw, yaw, turn_rate * delta)
 			solver.node.rotation.y = solver.yaw
 	if peer != null and peer.state != null:
 		peer.state.car = room.a(next)

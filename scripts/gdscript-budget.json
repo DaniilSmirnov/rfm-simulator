@@ -3,7 +3,7 @@
  "file_lines": {
   "default": 700,
   "game/scripts/props.gd": 1095,
-  "game/scripts/game.gd": 1028,
+  "game/scripts/game.gd": 1026,
   "game/scripts/village_architecture.gd": 970,
   "game/scripts/stage.gd": 863
  },

@@ -47,7 +47,7 @@ func player_marker_position() -> Vector2:
 	return point.clamp(Vector2.ONE * 12, size - Vector2.ONE * 12)
 
 func player_direction() -> Vector2:
-	var yaw = game.heading if game.in_car else game.view_yaw
+	var yaw = game.rides.heading() if game.in_car else game.view_yaw
 	# Godot forward is -Z; map Y increases with world Z. Respect both map scales.
 	return Vector2(-sin(yaw) * 0.6, -cos(yaw) * (size.y - 26) / _span()).normalized()
 
