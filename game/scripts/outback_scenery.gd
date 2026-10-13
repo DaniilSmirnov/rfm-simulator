@@ -16,6 +16,15 @@ const SIGN_YELLOW = Color("f2c230")
 const SIGN_BLACK = Color("1d1c1a")
 # Stations of the kangaroo warning signs and the side of the road they stand on.
 const KANGAROO_SIGNS = [[14.0, 1.0], [236.0, -1.0], [708.0, 1.0], [818.0, -1.0]]
+# Distance plate under a kangaroo sign and the area its caption may take.
+const KANGAROO_PLATE = Vector2(0.86, 0.24)
+const KANGAROO_CAPTION = Vector2(0.76, 0.14)
+# "Drive on left in Australia" reminders for visitors: after the start and
+# after the jump, on the left verge.
+const DRIVE_LEFT_SIGNS = [[40.0, -1.0], [744.0, -1.0]]
+const DRIVE_LEFT_PLATE = Vector2(1.0, 1.5)
+const DRIVE_LEFT_CAPTION = Vector2(0.76, 0.17)
+const SIGN_WHITE = Color("f2f2ee")
 
 var stage
 var biome
@@ -33,10 +42,11 @@ func build(owner_stage, owner_biome) -> void:
 	_mine_headframe()
 	_homestead()
 	_kangaroo_signs()
+	_drive_left_signs()
 	_jump_sign()
 	_scorecards()
 	_creek()
-	for node_name in ["MineHeadframe", "Homestead", "KangarooSigns", "MineshaftSign", "JumpScorecards"]:
+	for node_name in ["MineHeadframe", "Homestead", "KangarooSigns", "DriveLeftSigns", "MineshaftSign", "JumpScorecards"]:
 		var node = stage.get_node_or_null(node_name)
 		if node != null:
 			MeshMerge.bake(node)
@@ -265,16 +275,19 @@ func _kangaroo_signs() -> void:
 	signs.name = "KangarooSigns"
 	stage.add_child(signs)
 	for item in KANGAROO_SIGNS:
-		var s: float = item[0]
-		var p = stage.at(s) + stage.side(s) * float(item[1]) * (stage.road_width(s) * 0.5 + 1.6)
-		p.y = stage.ground(p)
-		var post = Node3D.new()
-		signs.add_child(post)
-		post.position = p
-		var direction = stage.direction(s)
-		post.rotation.y = atan2(-direction.x, -direction.z)
-		_kangaroo_sign(post)
-		stage.rocks.append(Records.rock(p, 0.15, 2.4, Records.BARRIER))
+		_kangaroo_sign(_roadside_post(signs, item[0], item[1]))
+
+# A sign post on the verge facing oncoming crews at station `s`.
+func _roadside_post(signs: Node3D, s: float, side: float) -> Node3D:
+	var p = stage.at(s) + stage.side(s) * side * (stage.road_width(s) * 0.5 + 1.6)
+	p.y = stage.ground(p)
+	var post = Node3D.new()
+	signs.add_child(post)
+	post.position = p
+	var direction = stage.direction(s)
+	post.rotation.y = atan2(-direction.x, -direction.z)
+	stage.rocks.append(Records.rock(p, 0.15, 2.4, Records.BARRIER))
+	return post
 
 func _kangaroo_sign(post: Node3D) -> void:
 	Props.box(post, Vector3(0, 1.1, 0), Vector3(0.08, 2.2, 0.08), Color("8f9497"))
@@ -293,9 +306,55 @@ func _kangaroo_sign(post: Node3D) -> void:
 	var leg = Props.box(post, Vector3(-0.02, 1.98, front), Vector3(0.26, 0.07, 0.01), SIGN_BLACK)
 	leg.rotation.z = 0.2
 	Props.box(post, Vector3(0.1, 2.25, front), Vector3(0.1, 0.03, 0.01), SIGN_BLACK)
-	# Distance plate below: "NEXT 14 km" style, kept as a short caption.
-	Props.box(post, Vector3(0, 1.4, 0.06), Vector3(0.8, 0.26, 0.04), SIGN_YELLOW)
-	Props.label_3d(post, Vector3(0, 1.4, 0.085), "NEXT 14 km", 40, 0.004, SIGN_BLACK)
+	# Distance plate below; the caption is sized to stay on the plate.
+	Props.box(post, Vector3(0, 1.4, 0.06), Vector3(KANGAROO_PLATE.x, KANGAROO_PLATE.y, 0.04), SIGN_YELLOW)
+	Props.fit_label_3d(post, Vector3(0, 1.4, 0.085), "NEXT 14 km", 40, 0.004, KANGAROO_CAPTION, SIGN_BLACK)
+
+# White "DRIVE ON LEFT IN AUSTRALIA" signs like the ones at Australian tourist
+# spots: a black-framed plate, keep-left pictogram on top, lettering below.
+func _drive_left_signs() -> void:
+	var signs = Node3D.new()
+	signs.name = "DriveLeftSigns"
+	stage.add_child(signs)
+	for item in DRIVE_LEFT_SIGNS:
+		_drive_left_sign(_roadside_post(signs, item[0], item[1]))
+
+func _drive_left_sign(post: Node3D) -> void:
+	var y0 = 1.9
+	Props.box(post, Vector3(0, (y0 - 0.5) * 0.5, 0), Vector3(0.08, y0 - 0.5, 0.08), Color("8f9497"))
+	Props.box(post, Vector3(0, y0, 0.05), Vector3(DRIVE_LEFT_PLATE.x, DRIVE_LEFT_PLATE.y, 0.02), SIGN_WHITE)
+	Props.box(post, Vector3(0, y0, 0.065), Vector3(DRIVE_LEFT_PLATE.x - 0.06, DRIVE_LEFT_PLATE.y - 0.06, 0.01), SIGN_BLACK)
+	# Pictogram panel and lettering panel, split by the black frame.
+	Props.box(post, Vector3(0, y0 + 0.37, 0.075), Vector3(0.86, 0.62, 0.01), SIGN_WHITE)
+	Props.box(post, Vector3(0, y0 - 0.33, 0.075), Vector3(0.86, 0.7, 0.01), SIGN_WHITE)
+	var front = 0.083
+	for dash in [0.58, 0.37, 0.16]:
+		Props.box(post, Vector3(0, y0 + dash, front), Vector3(0.025, 0.11, 0.005), SIGN_BLACK)
+	_sign_arrow(post, Vector3(-0.22, y0 + 0.56, front), 1.0)
+	_sign_car(post, Vector3(-0.22, y0 + 0.2, front))
+	_sign_car(post, Vector3(0.22, y0 + 0.52, front))
+	_sign_arrow(post, Vector3(0.22, y0 + 0.18, front), -1.0)
+	var front_text = front + 0.005
+	var drive = Props.fit_label_3d(post, Vector3(0, y0 - 0.1, front_text), "DRIVE", 64, 0.004, DRIVE_LEFT_CAPTION, SIGN_BLACK)
+	var left = Props.fit_label_3d(post, Vector3(0, y0 - 0.33, front_text), "ON LEFT", 64, 0.004, DRIVE_LEFT_CAPTION, SIGN_BLACK)
+	drive.pixel_size = minf(drive.pixel_size, left.pixel_size)
+	Props.fit_label_3d(post, Vector3(0, y0 - 0.55, front_text), "IN AUSTRALIA", 40, 0.004, Vector2(DRIVE_LEFT_CAPTION.x, 0.1), SIGN_BLACK)
+
+# Arrow pointing up (`way` 1) or down (-1) along the lane.
+func _sign_arrow(post: Node3D, at: Vector3, way: float) -> void:
+	Props.box(post, at + Vector3(0, -0.03 * way, 0), Vector3(0.035, 0.12, 0.005), SIGN_BLACK)
+	for row in range(5):
+		var width = 0.02 + 0.026 * row
+		Props.box(post, at + Vector3(0, (0.09 - 0.016 * row) * way, 0), Vector3(width, 0.017, 0.005), SIGN_BLACK)
+
+# Front view of a car: body, roof with a white windscreen, wheels.
+func _sign_car(post: Node3D, at: Vector3) -> void:
+	Props.box(post, at, Vector3(0.24, 0.08, 0.005), SIGN_BLACK)
+	Props.box(post, at + Vector3(0, 0.075, 0), Vector3(0.17, 0.07, 0.005), SIGN_BLACK)
+	Props.box(post, at + Vector3(0, 0.072, 0.002), Vector3(0.13, 0.045, 0.004), SIGN_WHITE)
+	for x in [-0.085, 0.085]:
+		Props.box(post, at + Vector3(x, -0.06, 0), Vector3(0.045, 0.05, 0.005), SIGN_BLACK)
+		Props.box(post, at + Vector3(x * 0.85, 0.005, 0.002), Vector3(0.03, 0.03, 0.004), SIGN_WHITE)
 
 # A weathered timber sign at the start of the straight names the jump.
 func _jump_sign() -> void:

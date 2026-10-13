@@ -629,6 +629,16 @@ static func label_3d(parent: Node3D, pos: Vector3, text: String, size: int, pixe
 	label.rotation.y = yaw
 	return label
 
+# A caption no larger than `box` (metres): the block letters it bakes into are
+# shrunk from `size` until the whole text fits the plate it is printed on.
+static func fit_label_3d(parent: Node3D, pos: Vector3, text: String, size: int, pixel_size: float, box: Vector2, color: Color, yaw: float = 0.0) -> Label3D:
+	var label = label_3d(parent, pos, text, size, pixel_size, color, yaw)
+	var cells = BlockText.cells(text)
+	var cell = minf(BlockText.label_pixel(label), minf(box.x / maxf(cells.x, 1.0), box.y / cells.y))
+	label.pixel_size = cell * 10.0 / float(size)
+	label.set_meta("fit_box", box)
+	return label
+
 static func rally_car(variant: int, number_override: int = -1, sponsor_override: String = "") -> Node3D:
 	var car = RallyCarModel.build(variant, number_override, sponsor_override)
 	return bake_car(car, "rally:%d:%d:%s" % [car.get_meta("variant"), car.get_meta("number"), sponsor_override])

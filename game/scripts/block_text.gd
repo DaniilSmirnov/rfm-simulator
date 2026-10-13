@@ -104,6 +104,10 @@ static func triangles(text: String, pixel: float) -> PackedVector3Array:
 				col = run
 	return vertices
 
+# Width and height of `text` in cells.
+static func cells(text: String) -> Vector2:
+	return Vector2(maxf(text.length() * 6 - 1, 0), ROWS)
+
 # Cell size that gives block letters the cap height of a Label3D.
 static func label_pixel(label: Label3D) -> float:
 	return float(label.font_size) * label.pixel_size / 10.0
