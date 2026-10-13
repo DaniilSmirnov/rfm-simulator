@@ -75,6 +75,8 @@ func add_course_vehicle(node: Node3D, id: int, kind: String, variant: int, role:
 	var driver = Traffic.profile(id)
 	var racer = {"bias": driver.bias, "phase": driver.phase, "pace": driver.pace, "line": 0.0, "drive_speed": race_speed(s) * driver.pace, "avoiding": false, "avoid_line": 0.0, "role": role, "zero_index": zero_index, "id": id, "node": node, "s": s, "focus": focus, "kind": kind, "state": "racing", "offset": 0.0, "age": 0.0, "counted": false, "start": Vector3.ZERO, "target": Vector3.ZERO, "variant": variant, "launch": CarRegistry.launch(float(node.get_meta("zero_to_100", 2.0))), "motion": Motion.new(), "previous": node.position, "slide": 0.0, "slide_speed": 0.0}
 	racer.track_parts = RallyTracks.choose(game.stage, game.rng, role)
+	if role == "racer":
+		racer.nerve = Traffic.nerve(id)
 	game.racers.append(racer)
 	return racer
 

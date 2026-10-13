@@ -261,6 +261,17 @@ func run() -> void:
 	check(medical.state == "parked" and medical.drive_speed == 0.0, "ambulance parks without driving into the casualty")
 	check(str(medical.get("treating", "")) == "", "parking alone does not start treatment before the doctor arrives")
 	game.injuries.records.erase("test:casualty")
+	# Nerve: a bold driver carries more speed into the tightest bend, a driver
+	# with none brakes exactly as before.
+	var tightest = 0.0
+	var slowest_target = INF
+	for station in range(0, int(game.stage.LENGTH), 5):
+		var calm = game.Traffic.competition_target(game.stage, float(station))
+		if calm < slowest_target:
+			slowest_target = calm
+			tightest = float(station)
+	check(game.Traffic.competition_target(game.stage, tightest, 1.0, false, 1.0) > slowest_target + 0.5, "a driver with nerve takes the tightest bend faster (%.1f vs %.1f m/s)" % [game.Traffic.competition_target(game.stage, tightest, 1.0, false, 1.0), slowest_target])
+	check(game.Traffic.competition_target(game.stage, tightest, 1.0, false, 0.0) == slowest_target, "no nerve changes nothing")
 	clear_cars(game)
 	await game._shutdown_audio()
 	game.queue_free()

@@ -37,6 +37,9 @@ func run() -> void:
 	var start: Vector3 = game.walker
 	game.spawn_racer("pass")
 	var crew = game.racers[0]
+	# Fixed pace into the bend: this test is about the rescue, not driver nerve.
+	crew.nerve = 0.0
+	crew.drive_speed = game.Traffic.speed_limit(game, crew, 0.0)
 	crew.s = 270.0
 	crew.node.position = game.race_at(crew.s)
 	crew.previous = crew.node.position

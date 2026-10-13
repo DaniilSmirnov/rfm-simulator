@@ -164,6 +164,11 @@ func grip(pos: Vector3) -> float:
 func rally_speed(_s: float) -> float:
 	return 27.0
 
+# Station range (start, end) where a crew's nerve decides whether it lifts
+# for an abrupt drop or carries its speed over it; empty when there is none.
+func jump_zone() -> Vector2:
+	return Vector2.ZERO
+
 # How far beyond the road edge crews may run when cutting or overtaking.
 func shoulder(_s: float) -> float:
 	return 1.4
