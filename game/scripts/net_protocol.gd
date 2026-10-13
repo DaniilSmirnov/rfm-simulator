@@ -111,7 +111,14 @@ static func clean_state(s):
 		"food_species": s.food_species if str(s.get("food_species", "")) in ["edible", "fly_agaric", "toadstool"] else "edible",
 		"food_kind": s.food_kind if str(s.get("food_kind", "")) in ["meat", "mushroom", "berries", "plov"] else "meat",
 		"eat": clampf(float(s.eat), -1, duration("eat")) if _number(s.get("eat")) else -1.0,
-		"beer": clampf(float(s.get("beer", 0)), -1, duration("drink")) if _number(s.get("beer")) else 0.0}
+		"beer": clampf(float(s.get("beer", 0)), -1, duration("drink")) if _number(s.get("beer")) else 0.0}.merged(_stand(s, in_car or seated))
+
+# The car (perches.gd key) a walker stands on and the feet in its frame.
+static func _stand(s: Dictionary, sitting: bool) -> Dictionary:
+	var key = s.get("stand")
+	if sitting or not key is String or key.length() > 64 or not (key.begins_with("car:") or key.begins_with("racer:")) or not _vec(s.get("stand_at")):
+		return {"stand": "", "stand_at": [0.0, 0.0, 0.0]}
+	return {"stand": key, "stand_at": [clampf(float(s.stand_at[0]), -8, 8), clampf(float(s.stand_at[1]), -1, 4), clampf(float(s.stand_at[2]), -8, 8)]}
 
 # A room member id as a car owner (a ride or a tow rope); "" for anything else.
 static func _member_id(value) -> String:
@@ -125,7 +132,8 @@ static func _member_id(value) -> String:
 # car position of a driver (it is the player position) and the middle tilt
 # angle (it is the heading). expand_state() puts them back.
 const STATE_DEFAULTS = {"airborne": false, "beer": -1.0, "beers": 0, "broken": false, "drive_enabled": false, "eat": -1.0, "food_kind": "meat",
-	"food_species": "edible", "hitch": "", "relief": false, "ride": "", "running": false, "seated": false, "tow": false, "speed": 0.0}
+	"food_species": "edible", "hitch": "", "relief": false, "ride": "", "running": false, "seated": false, "tow": false, "speed": 0.0,
+	"stand": "", "stand_at": [0.0, 0.0, 0.0]}
 const STATE_HOST_ONLY = ["drive_inputs", "trees", "lamps"]
 
 static func compact_state(s: Dictionary) -> Dictionary:
@@ -144,6 +152,8 @@ static func compact_state(s: Dictionary) -> Dictionary:
 		out.tilt = [snappedf(float(s.tilt[0]), 0.001), snappedf(float(s.tilt[2]), 0.001)]
 	if s.has("push") and (float(s.push[0]) != 0.0 or float(s.push[2]) != 0.0):
 		out.push = s.push
+	if str(out.get("stand", "")) == "":
+		out.erase("stand_at")
 	return out
 
 static func expand_state(c: Dictionary) -> Dictionary:
