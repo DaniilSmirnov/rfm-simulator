@@ -21,6 +21,14 @@ export function validWorld(world) {
 }
 const vec = value => Array.isArray(value) && value.length === 3 && value.every(n => Number.isFinite(n) && Math.abs(n) < 3000);
 const number = n => Number.isFinite(n) && Math.abs(n) < 100000;
+// The car a walker stands on (perches.gd key) and the feet in its frame.
+function standing(s) {
+  const key = s.stand;
+  if (s.in_car || s.seated === true || typeof key !== 'string' || key.length > 64 || !(key.startsWith('car:') || key.startsWith('racer:')) || !vec(s.stand_at)) return { stand: '', stand_at: [0, 0, 0] };
+  const clamp = (n, low, high) => Math.max(low, Math.min(high, n));
+  return { stand: key, stand_at: [clamp(s.stand_at[0], -8, 8), clamp(s.stand_at[1], -1, 4), clamp(s.stand_at[2], -8, 8)] };
+}
+
 export class RoomError extends Error {
   constructor(status, message) { super(message); this.status = status; }
 }
@@ -93,7 +101,7 @@ export class RoomState {
       .map(({seq,ticks,throttle,steer,brake,recover}) => ({seq,ticks,throttle,steer,brake, ...(recover === true ? {recover: true} : {})}));
     // A passenger names the friend whose car they sit in; a driver, the car on their tow rope.
     const ride = s.in_car ? this.carOwner(p, s.ride) : '';
-    p.state = { drive_enabled: this.driveEnabled(p, s), drive_inputs, pos: s.pos, car: s.car, heading: s.heading, tilt: vec(s.tilt) ? s.tilt : [0, s.heading, 0], yaw: s.yaw, pitch: s.pitch, in_car: s.in_car, tow: s.tow === true && !s.in_car, push: vec(s.push) ? s.push.map((n, i) => i === 1 ? 0 : Math.max(-1, Math.min(1, n))) : [0, 0, 0], speed: number(s.speed) ? Math.max(-50, Math.min(50, s.speed)) : 0, beers: Number.isSafeInteger(s.beers) ? Math.max(0, Math.min(100000, s.beers)) : 0, trees: Array.isArray(s.trees) ? s.trees.slice(0, LIMIT.object_requests_per_sync).filter(t => Number.isSafeInteger(t?.id) && t.id >= 0 && t.id < 20000 && vec(t.dir)).map(t => ({ id: t.id, dir: t.dir })) : [], lamps: Array.isArray(s.lamps) ? s.lamps.slice(0, LIMIT.object_requests_per_sync).filter(t => Number.isSafeInteger(t?.id) && t.id >= 0 && t.id < 512 && vec(t.dir)).map(t => ({ id: t.id, dir: t.dir })) : [], seated: s.seated === true && !s.in_car, running: s.running === true && !s.in_car && s.seated !== true, airborne: s.airborne === true && !s.in_car && s.seated !== true, relief: s.relief === true && !s.in_car && s.seated !== true, ride, hitch: s.in_car && !ride ? this.carOwner(p, s.hitch) : '', broken: s.broken === true, food_species: ['edible', 'fly_agaric', 'toadstool'].includes(s.food_species) ? s.food_species : 'edible', food_kind: ['meat', 'mushroom', 'berries', 'plov'].includes(s.food_kind) ? s.food_kind : 'meat', eat: Number.isFinite(s.eat) ? Math.max(-1, Math.min(protocol.durations.eat, s.eat)) : -1, beer: Math.max(-1, Math.min(protocol.durations.drink, Number(s.beer) || 0)) };
+    p.state = { drive_enabled: this.driveEnabled(p, s), drive_inputs, pos: s.pos, car: s.car, heading: s.heading, tilt: vec(s.tilt) ? s.tilt : [0, s.heading, 0], yaw: s.yaw, pitch: s.pitch, in_car: s.in_car, tow: s.tow === true && !s.in_car, push: vec(s.push) ? s.push.map((n, i) => i === 1 ? 0 : Math.max(-1, Math.min(1, n))) : [0, 0, 0], speed: number(s.speed) ? Math.max(-50, Math.min(50, s.speed)) : 0, beers: Number.isSafeInteger(s.beers) ? Math.max(0, Math.min(100000, s.beers)) : 0, trees: Array.isArray(s.trees) ? s.trees.slice(0, LIMIT.object_requests_per_sync).filter(t => Number.isSafeInteger(t?.id) && t.id >= 0 && t.id < 20000 && vec(t.dir)).map(t => ({ id: t.id, dir: t.dir })) : [], lamps: Array.isArray(s.lamps) ? s.lamps.slice(0, LIMIT.object_requests_per_sync).filter(t => Number.isSafeInteger(t?.id) && t.id >= 0 && t.id < 512 && vec(t.dir)).map(t => ({ id: t.id, dir: t.dir })) : [], seated: s.seated === true && !s.in_car, running: s.running === true && !s.in_car && s.seated !== true, airborne: s.airborne === true && !s.in_car && s.seated !== true, relief: s.relief === true && !s.in_car && s.seated !== true, ride, hitch: s.in_car && !ride ? this.carOwner(p, s.hitch) : '', broken: s.broken === true, food_species: ['edible', 'fly_agaric', 'toadstool'].includes(s.food_species) ? s.food_species : 'edible', food_kind: ['meat', 'mushroom', 'berries', 'plov'].includes(s.food_kind) ? s.food_kind : 'meat', eat: Number.isFinite(s.eat) ? Math.max(-1, Math.min(protocol.durations.eat, s.eat)) : -1, beer: Math.max(-1, Math.min(protocol.durations.drink, Number(s.beer) || 0)), ...standing(s) };
     p.seen = now;
     p.state_time = now;
     // A guest whose direct link is alive gets the hot world and the states from

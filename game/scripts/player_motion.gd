@@ -12,7 +12,9 @@ var game:
 	set(value):
 		game = value
 		relief.game = value
+		perches.game = value
 var relief = preload("res://scripts/tree_relief.gd").new()
+var perches = preload("res://scripts/perches.gd").new()
 
 func drive(delta: float) -> void:
 	game.rides.update()
@@ -107,26 +109,35 @@ func knock_tree(index: int, direction_hint: Vector3) -> void:
 			game.tree_requests[index] = direction_hint.normalized()
 		game.toast("Дерево падает!")
 
-func contact_blocked(start: Vector3, end: Vector3, driving: bool) -> bool:
+# A walker meets cars as perches (perches.gd: climbed onto or walked into),
+# a driver as round volumes. `limit` is the highest top the walker's feet can
+# take (default: a step up from `start`).
+func contact_blocked(start: Vector3, end: Vector3, driving: bool, limit: float = NAN) -> bool:
 	var cars = []
 	var people = []
 	if not driving:
-		cars.append(game.car.position)
-	for group in game.spectators.groups:
-		cars.append(group.car.position)
+		perches.near(start)
+		if perches.blocked(start, end, start.y + perches.STEP_UP if is_nan(limit) else limit):
+			return true
 	for person in game.spectators.people:
 		if not game.injuries.holds(person.avatar):
 			# Spectators are solid for walkers; drivers meet them as people.
 			(people if driving else cars).append(person.avatar.position)
-	for racer in game.racers:
-		cars.append(racer.node.position)
-	cars.append_array(game.park_traffic.car_positions())
+	if driving:
+		for group in game.spectators.groups:
+			cars.append(group.car.position)
+		for racer in game.racers:
+			cars.append(racer.node.position)
+		cars.append_array(game.park_traffic.car_positions())
 	for peer in game.room.peers.values():
 		if peer.state == null:
 			continue
-		cars.append(game.room.v(peer.state.car))
-		if not peer.state.in_car and not game.injuries.is_down("player:%s" % peer.id):
-			people.append(game.room.v(peer.state.pos))
+		if driving:
+			cars.append(game.room.v(peer.state.car))
+		var feet = game.room.v(peer.state.pos)
+		# Somebody standing on a car rides over the road, not in the way.
+		if not peer.state.in_car and not game.injuries.is_down("player:%s" % peer.id) and not (driving and perches.riding_above(feet, start)):
+			people.append(feet)
 	for other in cars:
 		if Motion.swept_hit(start + Vector3(0, 0.65, 0), end + Vector3(0, 0.65, 0), other + Vector3(0, 0.65, 0), 2.5 if driving else 1.75):
 			# Let an initially overlapping walker move out of the volume.
@@ -140,13 +151,16 @@ func contact_blocked(start: Vector3, end: Vector3, driving: bool) -> bool:
 
 func walk(delta: float) -> void:
 	game.rides.update()
+	perches.carry()
 	if relief.update(delta):
 		return
+	perches.gather(game.walker)
 	var remaining = maxf(delta, 0.0)
 	while remaining > 0.000001:
 		var step = minf(remaining, 1.0 / 60.0)
 		walk_step(step)
 		remaining -= step
+	perches.settle()
 
 func walk_step(delta: float) -> void:
 	if game.beers >= 30 or game.seated or game.injuries.down:
@@ -163,11 +177,22 @@ func walk_step(delta: float) -> void:
 	var old_floor = game.walker.y - game.jump_height
 	var floor_height = game.stage.solids.walking_floor(next, game.walker.y)
 	floor_height = game.stage.walk_floor(next, floor_height)
+	# Cars, furniture, lying people, boxes and rocks within reach of the feet.
+	var limit = game.walker.y + perches.allowance()
+	var perch = perches.support(next, limit)
+	# Coming down, a top within the ledge reach is climbed, not bumped into.
+	var lift = limit if game.jump_velocity < 0.0 else -INF
+	if perch >= floor_height:
+		floor_height = perch
+		lift = maxf(lift, perch + 0.01)
 	if game.stage.water != null:
 		if game.stage.water.depth(next) > 0.2 and next.distance_to(game.walker) > 0.0001:
 			game.stage.water.wake(game.get_instance_id(), next, (next - game.walker) / maxf(delta, 0.001), minf(game.stage.water.depth(next), 1.0), delta, 0.35)
 	next.y = floor_height if game.jump_height <= 0 and floor_height >= old_floor - 0.45 else game.walker.y
-	var hit = game.stage.biome.walk_blocked(next, game.walker.y) or not game.stage.solids.hit(game.walker, next, 0.3).is_empty() or not game.stage.rock_hit(game.walker, next, 0.3).is_empty() or game.stage.obstacle_hit(game.walker, next, 0.3, true) >= 0 or contact_blocked(game.walker, next, false)
+	# Landing on a top: the way there is tested at its height, not below it.
+	var from = Vector3(game.walker.x, maxf(game.walker.y, lift), game.walker.z)
+	var to = Vector3(next.x, maxf(next.y, lift), next.z)
+	var hit = game.stage.biome.walk_blocked(to, from.y) or not game.stage.solids.hit(from, to, 0.3).is_empty() or not game.stage.rock_hit(from, to, 0.3).is_empty() or game.stage.obstacle_hit(from, to, 0.3, true) >= 0 or contact_blocked(from, to, false, maxf(limit, perch + perches.STEP_UP))
 	if not hit:
 		game.walker = next
 	else:

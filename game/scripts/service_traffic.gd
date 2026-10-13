@@ -20,7 +20,8 @@ static func people(game) -> Array:
 	# Keep injury avatars discoverable for animation, but block service traffic
 	# only with standing people and the actual displaced body positions.
 	for person in game.injuries.people():
-		if not game.injuries.is_down(str(person.key)):
+		# Somebody riding on a car is not in the road.
+		if not game.injuries.is_down(str(person.key)) and not person.get("riding", false):
 			result.append(person)
 	# Injured people can be displaced from their ordinary walking positions.
 	for key in game.injuries.records:

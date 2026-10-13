@@ -26,6 +26,7 @@ const MAX_LAUNCH = 13.0
 const TREAT_SECONDS = 3.0
 const Medics = preload("res://scripts/ambulance_medics.gd")
 const CharacterRig = preload("res://scripts/character_rig.gd")
+const Perches = preload("res://scripts/perches.gd")
 const Navigation = preload("res://scripts/crowd_navigation.gd")
 const Budget = preload("res://scripts/navigation_budget.gd")
 const LIMP_SECONDS = 60.0
@@ -69,6 +70,18 @@ func is_down(key: String) -> bool:
 	var entry = records.get(key, targets.get(key))
 	return entry != null and str(entry.phase) in ["flying", "lying"]
 
+# People lying on the ground after a hit, as something to climb onto
+# (perches.gd); never yourself.
+func lying_avatars() -> Array:
+	var result: Array = []
+	for source in [records, targets]:
+		for key in source:
+			if key != local_key() and str(source[key].get("phase", "")) == "lying":
+				var avatar = avatar_of(key)
+				if avatar != null and not result.has(avatar):
+					result.append(avatar)
+	return result
+
 # This avatar's pose is driven from here this frame.
 func holds(avatar: Node) -> bool:
 	return avatar != null and _held.has(avatar.get_instance_id())
@@ -91,11 +104,11 @@ func walk_factor() -> float:
 func people() -> Array:
 	var result: Array = []
 	if not game.in_car:
-		result.append({"key": local_key(), "pos": game.walker, "avatar": local_avatar})
+		result.append({"key": local_key(), "pos": game.walker, "avatar": local_avatar, "riding": not game.player.perches.stand.is_empty()})
 	for id in game.room.peers:
 		var peer = game.room.peers[id]
 		if peer.state != null and not peer.state.in_car:
-			result.append({"key": "player:%s" % id, "pos": game.room.v(peer.state.pos), "avatar": peer.get("avatar")})
+			result.append({"key": "player:%s" % id, "pos": game.room.v(peer.state.pos), "avatar": peer.get("avatar"), "riding": str(peer.state.get("stand", "")) != ""})
 	if game.spectators != null:
 		for person in game.spectators.people:
 			result.append({"key": "npc:%d" % person.id, "pos": person.avatar.position, "avatar": person.avatar})
@@ -128,9 +141,9 @@ func vehicle_sweep(previous: Vector3, next: Vector3, velocity: Vector3, min_spee
 		return false
 	var hit = false
 	for person in people():
-		if is_down(person.key):
-			continue
 		var feet: Vector3 = person.pos
+		if is_down(person.key) or Perches.riding_above(feet, previous):
+			continue
 		var radius = VILLAGER_HIT_RADIUS if str(person.key).begins_with("villager:") else HIT_RADIUS
 		if Motion.swept_hit(previous + Vector3(0, 0.7, 0), next + Vector3(0, 0.7, 0), feet + Vector3(0, 0.7, 0), radius):
 			hit = knock(person.key, feet, velocity, previous) or hit

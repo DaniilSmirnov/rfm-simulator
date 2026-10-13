@@ -46,6 +46,11 @@ static func animate(game: Node, peer: Dictionary, delta: float, clock: float, fr
 		return
 	var avatar_pose = peer.avatar_motion.render(clock, frozen)
 	peer.avatar.position = avatar_pose.position
+	# On a car: placed on this client's copy of it, not where it was a packet ago.
+	var standing = game.player.perches.resolve(state)
+	if standing != null:
+		peer.avatar.position = standing
+		state.pos = [standing.x, standing.y, standing.z]
 	peer.avatar.rotation.y = avatar_pose.rotation.y
 	peer.avatar.visible = not state.in_car
 	Props.update_player_trunk(peer.car, bool(game.cargo.opened.get(peer.id, false)), game.cargo.boxes(peer.id), delta)

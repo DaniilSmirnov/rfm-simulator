@@ -178,7 +178,6 @@ static func player_avatar(variant: int = 0) -> Node3D:
 		part.visibility_range_end = 110
 	return root
 
-
 # Wheel rolling lives with the wheels (car_parts.gd).
 static func animate_wheels(car_root: Node3D) -> void:
 	CarParts.animate_wheels(car_root)
@@ -471,7 +470,7 @@ static func bake_car(car: Node3D, cache_key: String) -> Node3D:
 	var hinge = car.get_node_or_null("TrunkHinge")
 	if hinge != null:
 		MeshMerge.bake(hinge, cache_key + ":lid", [], "BakedLid")
-	return car
+	return load("res://scripts/perches.gd").mark(car)
 
 # The generic faceted car of cars.json, built by the shared car_body.gd.
 static func player_car_shell(variant: int) -> Node3D:
@@ -705,6 +704,7 @@ static func table(parent: Node3D, variant: int = 0, style: String = "camp") -> v
 const CHAIR_SEAT = 0.30
 
 static func chair(parent: Node3D, pos: Vector3) -> void:
+	load("res://scripts/perches.gd").mark(parent, false)
 	box(parent, pos + Vector3(0, CHAIR_SEAT - 0.045, 0), Vector3(0.65, 0.09, 0.65), Color("cf703e"))
 	box(parent, pos + Vector3(0, CHAIR_SEAT + 0.32, 0.3), Vector3(0.65, 0.65, 0.08), Color("cf703e"))
 	for x in [-0.27, 0.27]:
