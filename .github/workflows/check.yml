@@ -233,6 +233,14 @@ jobs:
     name: iOS build
     runs-on: macos-14
     timeout-minutes: 45
+    env:
+      # Signed IPA when all four secrets exist; otherwise an unsigned Xcode project zip.
+      IOS_CERTIFICATE_BASE64: ${{ secrets.IOS_CERTIFICATE_BASE64 }}
+      IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+      IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+      IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+      IOS_CODE_SIGN_IDENTITY: ${{ secrets.IOS_CODE_SIGN_IDENTITY }}
+      IOS_EXPORT_METHOD: ${{ secrets.IOS_EXPORT_METHOD }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -242,18 +250,30 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Export the iOS Xcode project (unsigned, arm64)
+      - name: Export iOS (signed IPA when secrets exist, else Xcode project)
         run: npm run build:ios
-      - name: Check the Xcode project layout
+      - name: Verify IPA signature or Xcode project layout
         run: |
-          unzip -q "dist-ios/RallyFansSimulator-ios-xcode.zip" -d ios-check
-          find ios-check -maxdepth 4 -type d | head -40 | tee tree.txt
-          test -n "$(find ios-check -name '*.xcodeproj' -print -quit)"
-          grep -R --include='*.pbxproj' --include='Info.plist' -n 'ru.rallyfansmap.rallyfanssimulator' ios-check | head -5
+          if [ -f "dist-ios/Rally Fans Simulator.ipa" ]; then
+            unzip -l "dist-ios/Rally Fans Simulator.ipa" | tee ipa-list.txt
+            grep -q "Payload/" ipa-list.txt
+            rm -rf ipa-check
+            unzip -q "dist-ios/Rally Fans Simulator.ipa" -d ipa-check
+            app=$(find ipa-check/Payload -maxdepth 1 -name '*.app' -print -quit)
+            test -n "$app"
+            codesign -dv --verbose=4 "$app" 2>&1 | tee codesign.txt
+            grep -q "Authority=" codesign.txt
+            grep -R --include='Info.plist' -n 'ru.rallyfansmap.rallyfanssimulator' "$app" | head -5
+          else
+            unzip -q "dist-ios/RallyFansSimulator-ios-xcode.zip" -d ios-check
+            find ios-check -maxdepth 4 -type d | head -40 | tee tree.txt
+            test -n "$(find ios-check -name '*.xcodeproj' -print -quit)"
+            grep -R --include='*.pbxproj' --include='Info.plist' -n 'ru.rallyfansmap.rallyfanssimulator' ios-check | head -5
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ios-xcode
+          name: ios-build
           path: dist-ios/
           retention-days: 7
           if-no-files-found: error
