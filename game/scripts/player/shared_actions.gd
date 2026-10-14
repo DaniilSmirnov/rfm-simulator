@@ -33,6 +33,9 @@ static func run(game: Node, context, action: String, placement: Dictionary) -> v
 		"return_gear":
 			if spot != Vector3.INF:
 				game.cargo.return_item(spot)
+		"rearrange":
+			if spot != Vector3.INF:
+				game.packing.pack(spot, true, true)
 		"pack":
 			if spot != Vector3.INF:
 				game.packing.pack(spot, true)

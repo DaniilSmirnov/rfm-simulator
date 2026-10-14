@@ -15,7 +15,7 @@ func can_act() -> bool:
 func deploy_fire(spot: Vector3, yaw: float) -> bool:
 	if pot != null and spot.distance_to(pot.position) < 1.5:
 		spot = pot.position
-	if not can_act() or game.packing.active() or not game.valid_furniture_spot(spot, "firewood"):
+	if not can_act() or (game.packing.active() and not game.cargo.can_redeploy()) or not game.valid_furniture_spot(spot, "firewood"):
 		return false
 	if fire == null:
 		fire = Props.campfire(game)
@@ -31,7 +31,7 @@ func heated() -> bool:
 func place_pot(spot: Vector3, yaw: float = 0) -> bool:
 	if fire != null and spot.distance_to(fire.position) < 1.5:
 		spot = fire.position
-	if not can_act() or game.packing.active() or game.actor_pos().distance_to(spot) > 5 or not game.valid_furniture_spot(spot, "cauldron"):
+	if not can_act() or (game.packing.active() and not game.cargo.can_redeploy()) or game.actor_pos().distance_to(spot) > 5 or not game.valid_furniture_spot(spot, "cauldron"):
 		return false
 	if pot == null:
 		pot = Props.cauldron(game)

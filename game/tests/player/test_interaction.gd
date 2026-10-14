@@ -5,10 +5,15 @@ func aim(game: Node3D, point: Vector3) -> void:
 	game._update_camera(1)
 	game.camera.look_at(point)
 func press(game: Node3D) -> void:
+	# Processing is disabled in this fixture: explicitly simulate a complete tap.
+	Input.action_press("interact")
 	var event = InputEventAction.new()
 	event.action = "interact"
 	event.pressed = true
 	game._unhandled_input(event)
+	game.interaction.hold.update(game.interaction, 0.05)
+	Input.action_release("interact")
+	game.interaction.hold.update(game.interaction, 0.0)
 func run() -> void:
 	var game = load("res://main.tscn").instantiate()
 	root.add_child(game)

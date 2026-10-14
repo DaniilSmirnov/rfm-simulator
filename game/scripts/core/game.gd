@@ -620,7 +620,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			begin_placement(furniture_action)
 			return
 	if event.is_action_pressed("interact"):
-		interaction.activate()
+		interaction.press()
 		return
 	if event.is_action_pressed("eat_berries"):
 		eat_foraged("berries")
@@ -672,12 +672,12 @@ func show_consumption_warning(kind: String) -> void:
 
 func _process(delta: float) -> void:
 	pointer.update()
+	interaction.tick(delta)
 	consumption_warning_time = maxf(0, consumption_warning_time - delta)
 	consumption_warning.visible = consumption_warning_time > 0 and playing and not paused and not dead and not finished
 	update_mobile_safe_area(delta)
 	_update_fps_counter(delta)
-	if soundscape != null:
-		soundscape.update(delta)
+	if soundscape != null: soundscape.update(delta)
 	camp_cooking.animate_flames(Time.get_ticks_msec() / 1000.0)
 	camp_grill.animate(Time.get_ticks_msec() / 1000.0)
 	if not playing or paused or dead or finished or (room.is_guest() and room.world_paused):
