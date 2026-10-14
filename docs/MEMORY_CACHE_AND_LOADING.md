@@ -7,7 +7,7 @@ There is one image per car and per stage (`car_N`, `stage_N`, `backdrop_N`), gen
 The menu background uses a separately captured 1280×720 panorama of the selected
 stage, scaled to cover desktop/mobile viewports. Only the selected image is held;
 it is released when play begins. It does not intercept input or appear over the
-pause/gameplay view. Regenerate with `res://tools/export_stage_backdrops.gd`.
+pause/gameplay view. Regenerate with `res://tools/screenshots/export_stage_backdrops.gd`.
 
 Selecting locked content still shows its image; existing entitlement checks block
 starting it. A guest can still borrow the host's stage.
@@ -58,7 +58,7 @@ SurfaceTool buffers are separate remaining sources of memory consumption.
 After changes to car or stage appearance, run with a graphical Godot 4.4.1 renderer:
 
 ```sh
-godot --path game --script res://tools/export_menu_previews.gd
+godot --path game --script res://tools/screenshots/export_menu_previews.gd
 ```
 
 The generator renders offscreen from the game geometry and overwrites

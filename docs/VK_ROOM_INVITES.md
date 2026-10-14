@@ -23,7 +23,7 @@
 ## Тесты
 
 - `node --test tests/platform.test.mjs`: выбор друга, формат requestKey, launch params, ошибки и доступность исключительно на VK target.
-- `game/tests/test_vk_invite_ui.gd`: видимость кнопки в VK, отсутствие на standalone/prototype, отмена некорректного приглашения.
+- `game/tests/ui/test_vk_invite_ui.gd`: видимость кнопки в VK, отсутствие на standalone/prototype, отмена некорректного приглашения.
 - `.github/workflows/vk-room-invites.yml`: изолированный прогон тестов JS и Godot без зависимости от известных проблем других моделей автомобилей.
 
 ## Проверка в реальном VK

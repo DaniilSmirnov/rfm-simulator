@@ -1,6 +1,11 @@
 // Registry for the authoritative functional Godot tests.
 // Any new test_*.gd must be classified; the runner rejects forgotten tests.
 // Keep file ownership/categories explicit so CI failures identify their subsystem.
+// Tests are named by file; they live in subject folders under game/tests and
+// testPaths() finds each one, so a file name must be unique across folders.
+import {readdir} from 'node:fs/promises';
+import {basename} from 'node:path';
+
 export const groups = Object.freeze({
  core: [
   "test_character_asset.gd", "test_character_rig.gd", "test_player_handling.gd", "test_rolling_wheels.gd",
@@ -68,4 +73,14 @@ export function verifyRegistry(files) {
  const stale=[...seen.keys()].filter(f=>!actual.has(f));
  if (missing.length||stale.length) throw Error("Godot test registry drift: unclassified="+missing.join(",")+" missing_files="+stale.join(","));
  return {count:seen.size,groups:Object.fromEntries(Object.entries(groups).map(([k,v])=>[k,v.length]))};
+}
+export async function testPaths(dir) {
+ const paths = new Map();
+ for (const path of (await readdir(dir, {recursive: true})).sort()) {
+  const file = basename(path);
+  if (!/^test_[a-z0-9_]+\.gd$/.test(file)) continue;
+  if (paths.has(file)) throw Error("Test "+file+" exists twice: "+paths.get(file)+", "+path);
+  paths.set(file, path.split('\\').join('/'));
+ }
+ return paths;
 }

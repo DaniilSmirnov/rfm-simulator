@@ -2,7 +2,7 @@
 
 ## Findings and policy
 
-Current counts come from `node scripts/test-game.mjs --list` (registry) and the directory listing; on 2026-10-10 there are 63 functional `game/tests/test_*.gd` scripts, 16 Node test modules in `tests/`, eight standalone `scripts/test-*.mjs` scenarios and ten Godot screenshot/preview generators. Every functional script extends `res://tests/harness.gd`, which provides `check()`, `finish()` and a watchdog that fails the test a few seconds before the runner timeout when a script error stops it. Counts describe **files**, not assertions, coverage percentages or independently executable scenarios. This is not a claim of 100% unit coverage.
+Current counts come from `node scripts/test-game.mjs --list` (registry) and the directory listing; on 2026-10-10 there are 63 functional `game/tests/**/test_*.gd` scripts, 16 Node test modules in `tests/`, eight standalone `scripts/test-*.mjs` scenarios and ten Godot screenshot/preview generators. Every functional script extends `res://tests/harness.gd`, which provides `check()`, `finish()` and a watchdog that fails the test a few seconds before the runner timeout when a script error stops it. Counts describe **files**, not assertions, coverage percentages or independently executable scenarios. This is not a claim of 100% unit coverage.
 
 **Keep the gameplay tests.** We found no demonstrably redundant test that can safely be deleted. In particular:
 - `test_rolling_wheels.gd` identified real missing Granta wheel pivots.

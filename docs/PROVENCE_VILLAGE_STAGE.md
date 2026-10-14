@@ -85,7 +85,7 @@
 `stage.gd`. Игровые системы обращаются к `stage.solids`, который есть на каждом
 СУ и без построек всегда отвечает «нет контакта».
 
-Сцена деревни запекается заранее (`tools/bake_village.gd`, `generated/village.scn`);
+Сцена деревни запекается заранее (`tools/bake/bake_village.gd`, `generated/village.scn`);
 жизнь деревни собирается после загрузки по сохранённым якорям.
 
 ## Перегенерация
@@ -93,14 +93,14 @@
 После изменения маршрута:
 
 ```sh
-godot --headless --path game --script res://tools/bake_rally_tracks.gd
-godot --headless --path game --script res://tools/bake_village.gd
+godot --headless --path game --script res://tools/bake/bake_rally_tracks.gd
+godot --headless --path game --script res://tools/bake/bake_village.gd
 ```
 
 Скриншоты документации (нужен графический дисплей или `xvfb-run -a`):
 
 ```sh
-godot --path game --rendering-method gl_compatibility --script res://tools/export_provence_screenshots.gd
+godot --path game --rendering-method gl_compatibility --script res://tools/screenshots/export_provence_screenshots.gd
 ```
 
 Обгоны в деревне: ИИ ограничивает линию обгона шириной улицы (`stage.shoulder()`

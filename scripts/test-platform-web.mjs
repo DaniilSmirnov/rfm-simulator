@@ -50,7 +50,7 @@ const server=createServer(async(req,res)=>{
  try {
   let body=await readFile(join(root,target,assetPath||'index.html'));
   if(!assetPath){
-  const scene=new URL(req.url,'http://localhost').searchParams.has('room_probe')?'res://scripts/room_origin_probe.tscn':'res://scripts/platform_probe.tscn';
+  const scene=new URL(req.url,'http://localhost').searchParams.has('room_probe')?'res://scripts/platform/room_origin_probe.tscn':'res://scripts/platform/platform_probe.tscn';
   body=Buffer.from(body.toString().replace('RallyDevice.configure(GODOT_CONFIG);',`GODOT_CONFIG.args.unshift("${scene}"); RallyDevice.configure(GODOT_CONFIG);`));
  }
   res.writeHead(200,{'Content-Type':path.endsWith('.js')?'application/javascript':!assetPath?'text/html':path.endsWith('.svg')?'image/svg+xml':'application/octet-stream'}).end(body);

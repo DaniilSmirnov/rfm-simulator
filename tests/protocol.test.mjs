@@ -9,9 +9,9 @@ const state = () => ({ pos: [0, 1, 2], car: [3, 4, 5], heading: 1, yaw: 2, pitch
 test('room protocol file is the single source of client and server limits', async () => {
   assert.equal(MAX_PLAYERS, protocol.max_players);
   assert.equal(new Set(protocol.actions).size, protocol.actions.length, 'actions are unique');
-  const gd = await read('game/scripts/net_protocol.gd');
+  const gd = await read('game/scripts/net/net_protocol.gd');
   assert.match(gd, /res:\/\/data\/net_protocol\.json/);
-  const room = await read('game/scripts/room.gd');
+  const room = await read('game/scripts/net/room.gd');
   assert.doesNotMatch(room, /SHARED_ACTIONS|\/8|max_length = 6/, 'room.gd uses NetProtocol instead of literals');
   const exportPresets = await read('game/export_presets.cfg');
   assert.match(exportPresets, /include_filter="data\/\*\.json"/, 'the protocol file ships in Web builds');
@@ -34,7 +34,7 @@ test('game scripts avoid engine modules missing from the Web template', async ()
   // Disabled modules parse natively but fail to compile in the exported game.
   const disabled = {RegEx: 'regex', XMLParser: 'xml', ZIPReader: 'zip'};
   const dir = new URL('../game/scripts/', import.meta.url);
-  for (const file of (await readdir(dir)).filter(f => f.endsWith('.gd'))) {
+  for (const file of (await readdir(dir, {recursive: true})).filter(f => f.endsWith('.gd'))) {
     const text = (await readFile(new URL(file, dir), 'utf8')).replace(/#.*$/gm, '');
     for (const [symbol, module] of Object.entries(disabled)) {
       if (custom.includes(`module_${module}_enabled = True`)) continue;
@@ -88,7 +88,7 @@ test('network classes from optional engine modules are reached through ClassDB',
   // Older Web templates lack these modules: a bare identifier would stop the
   // script from compiling, a ClassDB lookup just reports the class missing.
   const dir = new URL('../game/scripts/', import.meta.url);
-  for (const file of (await readdir(dir)).filter(f => f.endsWith('.gd'))) {
+  for (const file of (await readdir(dir, {recursive: true})).filter(f => f.endsWith('.gd'))) {
     const code = (await readFile(new URL(file, dir), 'utf8')).replace(/#.*$/gm, '').replace(/"(?:\\.|[^"\\])*"/g, '""');
     assert.doesNotMatch(code, /\b(WebSocketPeer|WebRTCPeerConnection|WebRTCDataChannel|WebRTCMultiplayerPeer)\b/, `${file} names an optional network class directly`);
   }
@@ -102,9 +102,9 @@ test('stage registry: one entry per catalog stage, each with an existing biome s
   for (const [i, s] of stages.entries()) {
     assert.equal(catalog.find(p => p.content_id === i).title, s.title, 'catalog title of stage ' + i);
     const biome = await read(s.biome.replace('res://', 'game/'));
-    assert.match(biome, /^extends "res:\/\/scripts\/stage_biome\.gd"/, s.biome + ' implements the stage contract');
+    assert.match(biome, /^extends "res:\/\/scripts\/stages\/stage_biome\.gd"/, s.biome + ' implements the stage contract');
   }
-  const stageGd = await read('game/scripts/stage.gd');
+  const stageGd = await read('game/scripts/stages/stage.gd');
   assert.doesNotMatch(stageGd.replace(/#.*$/gm, ''), /\bif (not )?(winter|provence|desert|lakeland)\b|variant == \d/, 'stage.gd does not branch on a stage identity');
 });
 
@@ -119,7 +119,7 @@ test('car registry: one record per catalog car, same names, known drive and mode
     assert.ok(!car.model || car.model === 'shell' ? car.shape?.length === 6 : true, car.name + ' needs a shape');
   }
   // Car look, handling and trunk come from cars.json, not from index checks.
-  for (const file of ['game/scripts/props.gd', 'game/scripts/player_handling.gd']) {
+  for (const file of ['game/scripts/core/props.gd', 'game/scripts/cars/player_handling.gd']) {
     const code = (await read(file)).replace(/#.*$/gm, '');
     const fleet = code.slice(code.indexOf('func player_car('), code.indexOf('func skewer('));
     const scope = file.endsWith('props.gd') ? fleet + code.slice(code.indexOf('func trunk_profile('), code.indexOf('func gear_box(')) : code;

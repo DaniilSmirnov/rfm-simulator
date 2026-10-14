@@ -31,7 +31,7 @@ Godot 4.4.1 Linux, headless, лесной СУ, одиночная игра, б�
 Повторить (аргумент — индекс СУ: 0 лес, 1 зима, 2 деревня):
 
 ```sh
-godot --headless --path game --script res://tools/profile_cpu.gd -- 0
+godot --headless --path game --script res://tools/profile/profile_cpu.gd -- 0
 ```
 
 Инструмент не включается в обычной игре. Подкласс измеряет выбранные методы
@@ -173,7 +173,7 @@ Godot 4.4.1 native headless, seed=20261008, 8 экипажей с интерва
 Сценарий не является замером WebView/GPU или восьми сетевых игроков.
 
 ```sh
-godot --headless --path game --script res://tools/profile_cpu.gd -- 0 racing
+godot --headless --path game --script res://tools/profile/profile_cpu.gd -- 0 racing
 # Индекс СУ — позиция в RallyStage.STAGES: 0 лес, 1 зима, 2 деревня, 3 каньон, 4 Финский лес.
 # Без racing сохраняется countdown-сценарий.
 ```
@@ -227,7 +227,7 @@ MultiMesh-трансформации проверены, включая паде
 iPhone или VK WebView; результат на устройстве требует отдельной проверки.
 
 ```sh
-godot --headless --path game --script res://tools/profile_cpu.gd -- 0 offroad
+godot --headless --path game --script res://tools/profile/profile_cpu.gd -- 0 offroad
 # racing — только вторым аргументом (AI экипажи); offroad можно добавить после него: -- 0 racing offroad.
 ```
 
@@ -245,7 +245,7 @@ CPU улучшение в этом сценарии составляет око�
 
 ## Гонка: экипажи, зрители, поиск станции (октябрь 2026)
 
-Замер `tools/profile_cpu.gd -- <СУ> racing` (8 экипажей, 30 кадров прогрева,
+Замер `tools/profile/profile_cpu.gd -- <СУ> racing` (8 экипажей, 30 кадров прогрева,
 300 замеров по 1/60 с, Godot 4.4.1 headless). `game._process` целиком,
 среднее, мс:
 

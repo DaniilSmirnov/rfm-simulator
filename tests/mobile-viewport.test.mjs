@@ -48,7 +48,7 @@ test('invalid Bridge edges cannot corrupt UI; visual viewport reserves obscured 
 test('safety memo remains compatible with the mini web engine without JavaScript eval', async () => {
   const [engine, gate] = await Promise.all([
     readFile(new URL('../engine/custom.py', import.meta.url), 'utf8'),
-    readFile(new URL('../game/scripts/stage_safety_gate.gd', import.meta.url), 'utf8'),
+    readFile(new URL('../game/scripts/ui/stage_safety_gate.gd', import.meta.url), 'utf8'),
   ]);
   assert.match(engine, /javascript_eval\s*=\s*False/);
   assert.doesNotMatch(gate, /JavaScriptBridge\s*\./, 'browser data must use the viewport transport supported by our release template');

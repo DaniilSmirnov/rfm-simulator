@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 
-const source = readFileSync(new URL('../game/scripts/game.gd', import.meta.url), 'utf8');
-const roomSource = readFileSync(new URL('../game/scripts/room.gd', import.meta.url), 'utf8');
+const source = readFileSync(new URL('../game/scripts/core/game.gd', import.meta.url), 'utf8');
+const roomSource = readFileSync(new URL('../game/scripts/net/room.gd', import.meta.url), 'utf8');
 
 test('desktop start requests pointer capture before asynchronous world preparation', () => {
   const start = source.slice(source.indexOf('func start_game()'), source.indexOf('func _show_stage_safety_gate()'));
@@ -37,7 +37,7 @@ test('mouse look turns the camera only while the pointer is locked', () => {
 });
 
 test('a pointer lock lost during play pauses the game', () => {
-  const pointer = readFileSync(new URL('../game/scripts/pointer_capture.gd', import.meta.url), 'utf8');
+  const pointer = readFileSync(new URL('../game/scripts/platform/pointer_capture.gd', import.meta.url), 'utf8');
   assert.match(pointer, /if was_captured and not is_captured and wanted\(\):\n\t\tgame\._set_paused\(true\)/);
   assert.match(source, /func _process\(delta: float\) -> void:\n\tpointer\.update\(\)/);
 });

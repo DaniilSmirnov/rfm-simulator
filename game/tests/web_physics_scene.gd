@@ -1,6 +1,6 @@
 extends Node3D
-const Stage = preload("res://scripts/stage.gd")
-const Motion = preload("res://scripts/vehicle_motion.gd")
+const Stage = preload("res://scripts/stages/stage.gd")
+const Motion = preload("res://scripts/cars/vehicle_motion.gd")
 func _ready() -> void:
 	var motion = Motion.new()
 	var heading = 0.0

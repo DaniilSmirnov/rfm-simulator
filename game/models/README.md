@@ -6,7 +6,7 @@ All eight OBJ files are in metres, Y up, vehicle front toward -Z (Godot orientat
 
 `game/models/cars/camping_hatchback/`
 
-The loader is `game/scripts/camping_hatchback_asset.gd`, invoked by the updated `player_car_camping_hatchback()` factory in `game/scripts/props.gd`. When models are absent, the existing procedural asset remains in use.
+The loader is `game/scripts/cars/camping_hatchback_asset.gd`, invoked by the updated `player_car_camping_hatchback()` factory in `game/scripts/core/props.gd`. When models are absent, the existing procedural asset remains in use.
 
 Parts: body, glass, lights, trim, wheels_rubber, wheels_metal, boat, rack. The boat model is separate and sits above the roof, with visible seats and cross-tube edges. Truck compartment remains driven by the existing `add_player_trunk` implementation.
 

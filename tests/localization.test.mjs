@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync, readdirSync} from 'node:fs';
-import {join} from 'node:path';
+import {basename, join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 // Every Russian string shown to a player is the key of game/data/translations_en.json.
@@ -31,9 +31,9 @@ function literals(line) {
 function scriptStrings() {
   const used = new Map();
   const dir = join(root, 'game/scripts');
-  for (const name of readdirSync(dir).filter(n => n.endsWith('.gd'))) {
+  for (const name of readdirSync(dir, {recursive: true}).filter(n => n.endsWith('.gd'))) {
     // Block lettering glyph tables and the language module itself are not UI text.
-    if (name === 'block_text.gd' || name === 'loc.gd') continue;
+    if (['block_text.gd', 'loc.gd'].includes(basename(name))) continue;
     readFileSync(join(dir, name), 'utf8').split('\n').forEach((line, i) => {
       for (const text of literals(line)) {
         if (cyrillic.test(text) && !text.startsWith('[RFM]')) used.set(unescape(text), `${name}:${i + 1}`);
