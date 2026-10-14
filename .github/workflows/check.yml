@@ -228,3 +228,35 @@ jobs:
           path: dist-android/
           retention-days: 7
           if-no-files-found: error
+
+  desktop:
+    name: Desktop build (${{ matrix.platform }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [linux, windows]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install Wine for the exe icon and file properties (rcedit)
+        if: matrix.platform == 'windows'
+        run: sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends wine wine64
+      - run: npm ci
+      - name: Export the release build (production server, x86_64)
+        run: npm run build:${{ matrix.platform }}
+      - name: Check the executable format
+        run: file dist-${{ matrix.platform }}/* | tee file.txt && grep -qE "ELF 64-bit LSB.*x86-64|PE32\+ executable.*x86-64" file.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.platform }}
+          path: dist-${{ matrix.platform }}/
+          retention-days: 7
+          if-no-files-found: error

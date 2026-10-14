@@ -22,6 +22,8 @@
     "test:vk": "node --test tests/rate-limits.test.mjs tests/platform.test.mjs tests/auth-vk.test.mjs tests/payments-vk.test.mjs tests/store.test.mjs tests/room-session.test.mjs tests/deploy-cloudflare.test.mjs tests/fullscreen.test.mjs",
     "build:standalone": "node scripts/build-web.mjs --target=standalone",
     "build:macos": "node scripts/build-desktop.mjs --platform=macos",
+    "build:linux": "node scripts/build-desktop.mjs --platform=linux",
+    "build:windows": "node scripts/build-desktop.mjs --platform=windows",
     "build:android": "node scripts/build-desktop.mjs --platform=android"
   },
   "devDependencies": {

@@ -163,6 +163,10 @@ Mini Web-движок пересобран с модулем GodotPhysics3D. П�
 
 `npm run build:macos` экспортирует универсальный (Intel + Apple Silicon) `Rally Fans Simulator.app` в `dist-macos/Rally Fans Simulator.zip`. Скрипт `scripts/build-desktop.mjs` один раз скачивает официальные шаблоны Godot 4.4.1 в `.cache/templates` (проверка SHA-256), запекает деревенский СУ и треки, как Web-сборка, и экспортирует пресет `macOS`. Собирается на Linux. Подпись ad-hoc, без нотаризации: для раздачи вне Steam нужны сертификат Apple Developer ID и нотаризация. Интеграции Steamworks в сборке пока нет.
 
+## Сборка для Linux и Windows (Steam)
+
+`npm run build:linux` и `npm run build:windows` экспортируют x86_64-версии тем же скриптом и из тех же проверенных шаблонов: `dist-linux/RallyFansSimulator.x86_64` и `dist-windows/Rally Fans Simulator.exe`, у каждой рядом лежит `.pck` с данными игры (обычная раскладка депо Steam). Обе собираются на Linux и, как остальные нативные версии, ходят в production Worker. Windows-версия без подписи кода, поэтому вне Steam SmartScreen покажет предупреждение. Интеграции Steamworks пока нет.
+
 ## Web и Cloudflare Workers
 
 В репозитории лежат исходники в `game/`, уменьшенный шаблон движка в `engine/` и воспроизводимая сборка. `npm run build` скачивает проверенный по SHA-256 Godot 4.4.1, экспортирует актуальные исходники, сжимает WASM и создаёт `dist/`. Движок повторно компилировать не нужно.
