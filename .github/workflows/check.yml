@@ -115,7 +115,7 @@ jobs:
       - name: Validate Worker deploy configuration
         run: |
           mkdir -p .cache
-          printf '%s' '{"VK_APP_SECRET":"ci-dry-run-only"}' > .cache/ci-secrets.json
+          printf '%s' '{\"VK_APP_SECRET\":\"ci-dry-run-only\"}' > .cache/ci-secrets.json
           chmod 600 .cache/ci-secrets.json
           npx wrangler deploy --dry-run --outdir .cache/worker --secrets-file .cache/ci-secrets.json
           rm -f .cache/ci-secrets.json
@@ -133,7 +133,7 @@ jobs:
 
       - name: Detect physical Web template
         id: physics
-        run: node -e 'const fs = require("node:fs"); const m = JSON.parse(fs.readFileSync("engine/manifest.json")); fs.appendFileSync(process.env.GITHUB_OUTPUT, "enabled=" + Boolean(m.physics_3d) + "\nwebsocket=" + Boolean(m.websocket) + "\nwebrtc=" + Boolean(m.webrtc) + "\n");'
+        run: node -e 'const fs = require("node:fs"); const m = JSON.parse(fs.readFileSync("engine/manifest.json")); fs.appendFileSync(process.env.GITHUB_OUTPUT, "enabled=" + Boolean(m.physics_3d) + "\\nwebsocket=" + Boolean(m.websocket) + "\\nwebrtc=" + Boolean(m.webrtc) + "\\n");'
 
       - name: Verify exported physics in Chromium
         if: steps.physics.outputs.enabled == 'true'
@@ -226,6 +226,35 @@ jobs:
         with:
           name: android-apk
           path: dist-android/
+          retention-days: 7
+          if-no-files-found: error
+
+  ios:
+    name: iOS build
+    runs-on: macos-14
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Export the iOS Xcode project (unsigned, arm64)
+        run: npm run build:ios
+      - name: Check the Xcode project layout
+        run: |
+          unzip -q "dist-ios/RallyFansSimulator-ios-xcode.zip" -d ios-check
+          find ios-check -maxdepth 4 -type d | head -40 | tee tree.txt
+          test -n "$(find ios-check -name '*.xcodeproj' -print -quit)"
+          grep -R --include='*.pbxproj' --include='Info.plist' -n 'ru.rallyfansmap.rallyfanssimulator' ios-check | head -5
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-xcode
+          path: dist-ios/
           retention-days: 7
           if-no-files-found: error
 
