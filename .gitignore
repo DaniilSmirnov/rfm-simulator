@@ -8,6 +8,8 @@ dist/
 dist-vk/
 dist-vk-prototype/
 dist-macos/
+dist-linux/
+dist-windows/
 
 .dev.vars*
 .env*

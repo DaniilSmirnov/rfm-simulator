@@ -6,12 +6,15 @@ import { homedir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { getGodot, root, run } from './godot.mjs';
 
-// Native exports (Steam desktop, Android). Usage: node scripts/build-desktop.mjs --platform=macos|android
+// Native exports (Steam desktop, Android). Usage: node scripts/build-desktop.mjs --platform=macos|linux|windows|android
 // The official 4.4.1 export templates are downloaded once into .cache/templates and
 // checked against a pinned SHA-256; only the one platform archive is unpacked.
+// Linux and Windows export the executable next to its .pck, the usual layout of a Steam depot.
 const platforms = {
-  macos: { preset: 'macOS', template: 'macos.zip', output: 'Rally Fans Simulator.zip', patch: macosPatch },
-  android: { preset: 'Android', template: 'android_release.apk', output: 'Rally Fans Simulator.apk', patch: androidPatch, prepare: prepareAndroid },
+  macos: { preset: 'macOS', template: 'macos.zip', output: 'Rally Fans Simulator.zip', patch: macosPatch, mobileTextures: true },
+  linux: { preset: 'Linux', template: 'linux_release.x86_64', output: 'RallyFansSimulator.x86_64', pck: 'RallyFansSimulator.pck', patch: preset => preset },
+  windows: { preset: 'Windows', template: 'windows_release_x86_64.exe', output: 'Rally Fans Simulator.exe', pck: 'Rally Fans Simulator.pck', patch: windowsPatch, prepare: prepareWindows },
+  android: { preset: 'Android', template: 'android_release.apk', output: 'Rally Fans Simulator.apk', patch: androidPatch, prepare: prepareAndroid, mobileTextures: true },
 };
 const name = process.argv.find(arg => arg.startsWith('--platform='))?.split('=')[1] ?? 'macos';
 const platform = platforms[name];
@@ -31,7 +34,7 @@ function sha256(path) {
 async function exists(path) { try { await stat(path); return true; } catch { return false; } }
 
 async function getTemplate() {
-  const target = join(cache, `${name}-4.4.1.zip`);
+  const target = join(cache, `4.4.1-${platform.template}`);
   if (await exists(target)) return target;
   await mkdir(cache, { recursive: true });
   const archive = join(cache, 'templates.tpz');
@@ -52,6 +55,13 @@ function macosPatch(preset) {
   return preset
     .replaceAll('application/short_version="0.10.29"', `application/short_version=${JSON.stringify(version)}`)
     .replaceAll('application/version="0.10.29"', `application/version=${JSON.stringify(version)}`);
+}
+
+// Windows file properties need four numeric parts: 0.10.29 -> 0.10.29.0.
+function windowsPatch(preset) {
+  return preset
+    .replaceAll('application/file_version="0.10.29.0"', `application/file_version=${JSON.stringify(version + '.0')}`)
+    .replaceAll('application/product_version="0.10.29.0"', `application/product_version=${JSON.stringify(version + '.0')}`);
 }
 
 // 0.10.29 -> versionCode 10029; Google Play and RuStore need it to grow with every release.
@@ -99,6 +109,24 @@ async function prepareAndroid() {
   return 'WARNING: signed with a throwaway key. Set GODOT_ANDROID_KEYSTORE_RELEASE_* for a store release.';
 }
 
+// The exe icon and file properties are written by rcedit, which runs under Wine on Linux.
+// Without Wine the build still works but keeps the stock Godot icon and properties.
+const rceditSha = '3e7801db1a5edbec91b49a24a094aad776cb4515488ea5a4ca2289c400eade2a';
+async function prepareWindows() {
+  const wine = spawnSync('sh', ['-c', 'command -v wine'], { encoding: 'utf8' }).stdout.trim();
+  if (!wine) return 'WARNING: Wine not found, so the exe keeps the stock Godot icon and file properties.';
+  const rcedit = join(root, '.cache', 'rcedit-x64-2.0.0.exe');
+  if (!await exists(rcedit)) {
+    const response = await fetch('https://github.com/electron/rcedit/releases/download/v2.0.0/rcedit-x64.exe');
+    if (!response.ok) throw new Error(`rcedit download failed: ${response.status}`);
+    await writeFile(rcedit, Buffer.from(await response.arrayBuffer()));
+  }
+  if (await sha256(rcedit) !== rceditSha) throw new Error('rcedit failed its SHA-256 check.');
+  await setEditorSetting('export/windows/rcedit', rcedit);
+  await setEditorSetting('export/windows/wine', wine);
+  return 'Icon and file properties set with rcedit.';
+}
+
 const godot = await getGodot();
 const template = await getTemplate();
 const project = join(root, '.cache', 'export-project-' + name);
@@ -119,11 +147,13 @@ for (const kind of ['debug', 'release']) {
   preset = preset.slice(0, at) + `custom_template/${kind}=${JSON.stringify(template)}` + preset.slice(at + marker.length);
 }
 await writeFile(presetPath, platform.patch(preset));
-// Apple Silicon needs ETC2/ASTC textures; the Web project does not, so only this copy enables them.
-const settingsPath = join(project, 'project.godot');
-const settings = await readFile(settingsPath, 'utf8');
-if (!settings.includes('\n[rendering]\n')) throw new Error('Unexpected project settings.');
-await writeFile(settingsPath, settings.replace('\n[rendering]\n', '\n[rendering]\n\ntextures/vram_compression/import_etc2_astc=true\n'));
+// Apple Silicon and Android need ETC2/ASTC textures; the Web and PC builds do not, so only those copies enable them.
+if (platform.mobileTextures) {
+  const settingsPath = join(project, 'project.godot');
+  const settings = await readFile(settingsPath, 'utf8');
+  if (!settings.includes('\n[rendering]\n')) throw new Error('Unexpected project settings.');
+  await writeFile(settingsPath, settings.replace('\n[rendering]\n', '\n[rendering]\n\ntextures/vram_compression/import_etc2_astc=true\n'));
+}
 // Same generated scenes as the Web build: village and rally tracks are baked before export.
 run(godot, ['--headless', '--editor', '--path', project, '--import']);
 const note = platform.prepare ? await platform.prepare() : '';
@@ -132,4 +162,5 @@ run(godot, ['--headless', '--path', project, '--script', 'res://tools/bake/bake_
 run(godot, ['--headless', '--path', project, '--export-release', platform.preset, join(output, platform.output)]);
 const size = (await stat(join(output, platform.output))).size;
 if (size < 1024 * 1024) throw new Error('Exported archive is suspiciously small.');
+if (platform.pck && (await stat(join(output, platform.pck))).size < 1024 * 1024) throw new Error('Exported game data (.pck) is suspiciously small.');
 console.log(`${platform.preset} ready: ${join(output, platform.output)} (${(size / 1048576).toFixed(1)} MiB). ${note}`);
