@@ -247,7 +247,11 @@ func run() -> void:
 	game.walker.y = game.stage.ground(game.walker)
 	game._update_camera(1)
 	game.camera.look_at(game.camp.position + Vector3(0, 0.75, 0))
+	# Processing is disabled in this fixture: complete the tap, as the table defers its action until release.
 	c.touch_begin(1, button(c, "interact"))
+	game.interaction.hold.update(game.interaction, 0.05)
+	c.touch_end(1)
+	game.interaction.hold.update(game.interaction, 0.0)
 	check(game.drink_time >= 0, "touch starts beer animation")
 	c.touch_begin(2, c.stick_center + Vector2(60, 0))
 	c.last_size = Vector2.ZERO

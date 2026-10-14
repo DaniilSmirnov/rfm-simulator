@@ -1,0 +1,25 @@
+[remap]
+
+importer="wavefront_obj"
+importer_version=1
+type="Mesh"
+uid="uid://dsskpaqpisxfc"
+path="res://.godot/imported/niva_low_poly.obj-b5717f69fe5d4a1a0b3b7c7c175b8fc3.mesh"
+
+[deps]
+
+files=["res://.godot/imported/niva_low_poly.obj-b5717f69fe5d4a1a0b3b7c7c175b8fc3.mesh"]
+
+source_file="res://models/cars/niva/niva_low_poly.obj"
+dest_files=["res://.godot/imported/niva_low_poly.obj-b5717f69fe5d4a1a0b3b7c7c175b8fc3.mesh", "res://.godot/imported/niva_low_poly.obj-b5717f69fe5d4a1a0b3b7c7c175b8fc3.mesh"]
+
+[params]
+
+generate_tangents=true
+generate_lods=true
+generate_shadow_mesh=true
+generate_lightmap_uv2=false
+generate_lightmap_uv2_texel_size=0.2
+scale_mesh=Vector3(1, 1, 1)
+offset_mesh=Vector3(0, 0, 0)
+force_disable_mesh_compression=false

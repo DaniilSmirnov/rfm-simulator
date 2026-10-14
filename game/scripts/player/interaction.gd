@@ -40,7 +40,6 @@ func press() -> void:
 	hold.press(self)
 
 func tick(delta: float) -> void:
-	game.pointer.update()
 	hold.update(self, delta)
 
 func normal_target() -> Dictionary:
