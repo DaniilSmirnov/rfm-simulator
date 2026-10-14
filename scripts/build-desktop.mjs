@@ -6,19 +6,22 @@ import { homedir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { getGodot, root, run } from './godot.mjs';
 
-// Native exports (Steam desktop, Android). Usage: node scripts/build-desktop.mjs --platform=macos|linux|windows|android
+// Native exports (Steam desktop, Android, iOS Xcode project). Usage:
+//   node scripts/build-desktop.mjs --platform=macos|linux|windows|android|ios
 // The official 4.4.1 export templates are downloaded once into .cache/templates and
 // checked against a pinned SHA-256; only the one platform archive is unpacked.
 // Linux and Windows export the executable next to its .pck, the usual layout of a Steam depot.
+// iOS exports an unsigned Xcode project (export_project_only) for CI and local signing.
 const platforms = {
   macos: { preset: 'macOS', template: 'macos.zip', output: 'Rally Fans Simulator.zip', patch: macosPatch, mobileTextures: true },
   linux: { preset: 'Linux', template: 'linux_release.x86_64', output: 'RallyFansSimulator.x86_64', pck: 'RallyFansSimulator.pck', patch: preset => preset },
   windows: { preset: 'Windows', template: 'windows_release_x86_64.exe', output: 'Rally Fans Simulator.exe', pck: 'Rally Fans Simulator.pck', patch: windowsPatch, prepare: prepareWindows },
   android: { preset: 'Android', template: 'android_release.apk', output: 'Rally Fans Simulator.apk', patch: androidPatch, prepare: prepareAndroid, mobileTextures: true },
+  ios: { preset: 'iOS', template: 'ios.zip', output: 'RallyFansSimulator', archive: 'RallyFansSimulator-ios-xcode.zip', patch: iosPatch, prepare: prepareIos, mobileTextures: true, directory: true },
 };
 const name = process.argv.find(arg => arg.startsWith('--platform='))?.split('=')[1] ?? 'macos';
 const platform = platforms[name];
-if (!platform) throw new Error('Unknown desktop platform: ' + name);
+if (!platform) throw new Error('Unknown native platform: ' + name);
 const version = JSON.parse(await readFile(join(root, 'package.json'), 'utf8')).version;
 const tpzSha = '7a8d14ade489fd4d22f178193021fe8a876a9e51068ed4dde26dac3ae4c59a88';
 const tpzUrl = 'https://github.com/godotengine/godot-builds/releases/download/4.4.1-stable/Godot_v4.4.1-stable_export_templates.tpz';
@@ -70,6 +73,22 @@ function androidPatch(preset) {
   return preset
     .replaceAll('version/code=1', `version/code=${major * 1000000 + minor * 1000 + patch}`)
     .replaceAll('version/name="0.10.29"', `version/name=${JSON.stringify(version)}`);
+}
+
+function iosPatch(preset) {
+  return preset
+    .replaceAll('application/short_version="0.10.29"', `application/short_version=${JSON.stringify(version)}`)
+    .replaceAll('application/version="0.10.29"', `application/version=${JSON.stringify(version)}`);
+}
+
+// iOS export needs a macOS host with Xcode; the product is an Xcode project, not a signed IPA.
+async function prepareIos() {
+  if (process.platform !== 'darwin') {
+    throw new Error('iOS export requires macOS with Xcode. Run this job on a macos-* GitHub runner.');
+  }
+  const xcode = spawnSync('xcodebuild', ['-version'], { encoding: 'utf8' });
+  if (xcode.status !== 0) throw new Error('xcodebuild is missing. Install Xcode and accept the license.');
+  return `Xcode project only (unsigned). ${xcode.stdout.trim().split('\n')[0]}.`;
 }
 
 // Godot reads the SDK and JDK locations from its editor settings, not from the preset.
@@ -159,8 +178,21 @@ run(godot, ['--headless', '--editor', '--path', project, '--import']);
 const note = platform.prepare ? await platform.prepare() : '';
 run(godot, ['--headless', '--path', project, '--script', 'res://tools/bake/bake_rally_tracks.gd']);
 run(godot, ['--headless', '--path', project, '--script', 'res://tools/bake/bake_village.gd']);
-run(godot, ['--headless', '--path', project, '--export-release', platform.preset, join(output, platform.output)]);
-const size = (await stat(join(output, platform.output))).size;
-if (size < 1024 * 1024) throw new Error('Exported archive is suspiciously small.');
-if (platform.pck && (await stat(join(output, platform.pck))).size < 1024 * 1024) throw new Error('Exported game data (.pck) is suspiciously small.');
-console.log(`${platform.preset} ready: ${join(output, platform.output)} (${(size / 1048576).toFixed(1)} MiB). ${note}`);
+run(godot, ['--headless', '--path', project, '--export-release', platform.preset, join(output, platform.output)], { timeout: 600000 });
+const product = join(output, platform.output);
+if (platform.directory) {
+  // iOS writes an Xcode project tree; pack it so the CI artifact is a single file.
+  const { readdir } = await import('node:fs/promises');
+  const entries = await readdir(product).catch(() => []);
+  if (!entries.length) throw new Error('iOS export produced an empty directory.');
+  const archive = join(output, platform.archive);
+  run('python3', ['-c', 'import shutil,sys; shutil.make_archive(sys.argv[2].removesuffix(".zip"), "zip", sys.argv[1])', product, archive]);
+  const size = (await stat(archive)).size;
+  if (size < 1024 * 1024) throw new Error('Exported iOS project archive is suspiciously small.');
+  console.log(`${platform.preset} ready: ${archive} (${(size / 1048576).toFixed(1)} MiB). ${note}`);
+} else {
+  const size = (await stat(product)).size;
+  if (size < 1024 * 1024) throw new Error('Exported archive is suspiciously small.');
+  if (platform.pck && (await stat(join(output, platform.pck))).size < 1024 * 1024) throw new Error('Exported game data (.pck) is suspiciously small.');
+  console.log(`${platform.preset} ready: ${product} (${(size / 1048576).toFixed(1)} MiB). ${note}`);
+}
