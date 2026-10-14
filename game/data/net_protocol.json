@@ -9,7 +9,7 @@
   "max_message_bytes": 65536,
   "name_input_length": 24,
   "name_max_length": 64,
-  "actions": ["table", "chairs", "grill", "flag", "eat", "rally", "collect", "mount_mushroom", "eat_mushroom", "eat_berries", "pack", "take_gear", "return_gear", "trunk", "firewood", "cauldron", "plov_cook", "eat_plov", "light_grill", "load_meat", "church_bell", "dig_snow", "stand_person"],
+  "actions": ["table", "chairs", "grill", "flag", "eat", "rally", "collect", "mount_mushroom", "eat_mushroom", "eat_berries", "pack", "take_gear", "return_gear", "trunk", "firewood", "cauldron", "plov_cook", "eat_plov", "light_grill", "load_meat", "church_bell", "rearrange", "dig_snow", "stand_person"],
   "limits": {
     "drive_inputs_per_sync": 96,
     "ticks_per_input": 12,

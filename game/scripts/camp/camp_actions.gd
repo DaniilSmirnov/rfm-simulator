@@ -55,7 +55,7 @@ func dig_snow(spot: Vector3) -> void:
 	elif local_actor: game.toast("Здесь уже расчищено или раскопок слишком много.")
 
 func begin_placement(kind: String) -> void:
-	if game.packing.active():
+	if game.packing.active() and not game.cargo.can_redeploy():
 		game.toast("Выезд завершён. Соберите предметы через F.")
 		return
 	if game.seated:

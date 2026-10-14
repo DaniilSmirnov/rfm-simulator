@@ -565,5 +565,9 @@
   "Тащить": "Drag",
   "Ты снова на ногах.": "You are back on your feet.",
   "ТЫ УПАЛ · ПРОБЕЛ — ВСТАТЬ · ДРУГ МОЖЕТ ПОМОЧЬ (T)": "YOU FELL · SPACE TO GET UP · A FRIEND CAN HELP (T)",
-  "Человек упал! Удерживай T: стой, чтобы поднять, иди, чтобы тащить. Пробел — встать.": "Someone fell! Hold T: stand still to help them up, move to drag. Space to get up."
+  "Человек упал! Удерживай T: стой, чтобы поднять, иди, чтобы тащить. Пробел — встать.": "Someone fell! Hold T: stand still to help them up, move to drag. Space to get up.",
+  "Удерживай F — забрать предмет": "Hold action to pick up",
+  "Поставить предмет": "Place item",
+  "Предмет в руках. F — выбрать новое место или вернуть в багажник владельца.": "Item picked up. Use action to choose a new spot or return it to its owner's trunk.",
+  "Удерживай — забрать": "Hold to pick up"
 }

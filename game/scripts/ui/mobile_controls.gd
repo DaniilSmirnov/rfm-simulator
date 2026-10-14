@@ -10,7 +10,7 @@ const TILE = Vector2(72, 64)
 const TOP = Vector2(64, 60)
 const STICK_FILL = Color("1d2b23aa")
 const STICK_LINE = Color("d7b479aa")
-const SHORT_LABELS = {"Вернуть коробку в багажник": "Вернуть", "Собрать казан с подставкой": "Убрать казан", "Потушить и собрать костёр": "Убрать костёр", "Сесть в машину": "В машину", "Сесть к другу": "К другу", "Сесть на стул": "На стул", "Встать со стула": "Встать", "Собрать гриб": "Собрать", "Собрать ягоды": "Собрать", "Собрать виноград": "Виноград", "Насадить гриб": "Насадить", "Съесть шашлык": "Шашлык", "Съесть гриб": "Есть гриб", "Выпить пиво": "Пиво", "Потушить и собрать мангал": "Убрать мангал", "Поставить казан на костёр": "На костёр", "Добавить ингредиенты и готовить плов": "Готовить плов", "Съесть плов": "Плов"}
+const SHORT_LABELS = {"Удерживай F — забрать предмет": "Удерживай — забрать","Вернуть коробку в багажник": "Вернуть", "Собрать казан с подставкой": "Убрать казан", "Потушить и собрать костёр": "Убрать костёр", "Сесть в машину": "В машину", "Сесть к другу": "К другу", "Сесть на стул": "На стул", "Встать со стула": "Встать", "Собрать гриб": "Собрать", "Собрать ягоды": "Собрать", "Собрать виноград": "Виноград", "Насадить гриб": "Насадить", "Съесть шашлык": "Шашлык", "Съесть гриб": "Есть гриб", "Выпить пиво": "Пиво", "Потушить и собрать мангал": "Убрать мангал", "Поставить казан на костёр": "На костёр", "Добавить ингредиенты и готовить плов": "Готовить плов", "Съесть плов": "Плов"}
 
 var game: Node
 var fingers: Dictionary = {}
@@ -151,7 +151,7 @@ func _layout_driving() -> Array:
 	return [["Вернуть", "recover"]]
 
 func _layout_walking(target: Dictionary) -> Array:
-	add_button(action_caption(target), "interact", false, grid_rect(0, 0, 2))
+	add_button(action_caption(target), "interact", true, grid_rect(0, 0, 2))
 	if not game.seated and game.beers < 30:
 		add_button("Встать" if game.injuries.down else "Прыжок", "jump", false, grid_rect(2, 0))
 		add_button("Бег", "sprint", true, grid_rect(2, 1))
@@ -187,6 +187,8 @@ func _input(event: InputEvent) -> void:
 				return
 			touch_begin(event.index, point)
 		else:
+			if event.canceled:
+				game.interaction.hold.cancel()
 			touch_end(event.index)
 		get_viewport().set_input_as_handled()
 	elif event is InputEventScreenDrag:
@@ -310,6 +312,11 @@ func _set_axis(negative: String, positive: String, value: float) -> void:
 func _hold(action: String, strength: float = 1.0) -> void:
 	held[action] = int(held.get(action, 0)) + 1
 	Input.action_press(action, strength)
+	if action == "interact":
+		var event = InputEventAction.new()
+		event.action = action
+		event.pressed = true
+		game._unhandled_input(event)
 
 func _release(action: String) -> void:
 	var count = int(held.get(action, 0)) - 1
@@ -320,6 +327,8 @@ func _release(action: String) -> void:
 		held[action] = count
 
 func reset_input() -> void:
+	if held.has("interact"):
+		game.interaction.hold.cancel()
 	for action in held.keys():
 		if not str(action).begins_with("axis_"):
 			Input.action_release(action)

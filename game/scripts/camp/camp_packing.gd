@@ -53,8 +53,8 @@ func remove(item: Dictionary) -> void:
 				game.personal_flags.erase(item.owner)
 	item.node.queue_free()
 
-func pack(spot: Vector3, remote: bool = false) -> bool:
-	if not active() or not game.playing or game.paused or game.dead or game.finished or game.actor_in_car() or game.actor_beers() >= 30 or (not remote and (game.eat_time >= 0 or game.drink_time >= 0)) or game.actor_pos().distance_to(spot) > 3.5:
+func pack(spot: Vector3, remote: bool = false, rearrange: bool = false) -> bool:
+	if game.injuries.is_down("player:" + game.cargo.actor()) or (not active() and not rearrange) or not game.playing or game.paused or game.dead or game.finished or game.actor_in_car() or game.actor_beers() >= 30 or (not remote and (game.eat_time >= 0 or game.drink_time >= 0)) or game.actor_pos().distance_to(spot) > 3.5:
 		return false
 	for item in items():
 		# The position identifies the exact item: retries cannot pack a different flag.
@@ -64,12 +64,12 @@ func pack(spot: Vector3, remote: bool = false) -> bool:
 		if item.kind == "firewood" and game.camp_cooking.pot != null:
 			game.toast("Сначала собери казан и подставку.")
 			return false
-		if game.room.submit("pack", {"pos": spot_array(spot), "yaw": 0.0}):
+		if game.room.submit("rearrange" if rearrange else "pack", {"pos": spot_array(spot), "yaw": 0.0}):
 			return true
-		if item.kind != "flag" and not game.cargo.pick_up(item):
+		if item.kind != "flag" and not game.cargo.pick_up(item, rearrange):
 			return false
 		remove(item)
-		game.toast("Флаг собран." if item.kind == "flag" else "Предмет в руках. Верни его в открытый багажник через F.")
+		game.toast("Флаг собран." if item.kind == "flag" else ("Предмет в руках. F — выбрать новое место или вернуть в багажник владельца." if rearrange else "Предмет в руках. Верни его в открытый багажник через F."))
 		return true
 	return false
 

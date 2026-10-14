@@ -4,6 +4,7 @@ const Props = preload("res://scripts/core/props.gd")
 const GrillModel = preload("res://scripts/camp/grill_model.gd")
 const Loc = preload("res://scripts/ui/loc.gd")
 var game: Node3D
+var hold = preload("res://scripts/player/interaction_hold.gd").new()
 
 func offer(items: Array, point: Vector3, radius: float, reach: float, action: String, label: String, value: Variant = null) -> void:
 	if game.walker.distance_to(point) > reach:
@@ -16,6 +17,33 @@ func offer(items: Array, point: Vector3, radius: float, reach: float, action: St
 	items.append({"action": action, "label": Loc.t(label), "value": value, "depth": depth, "aim_error": offset.distance_to(forward * depth) / depth})
 
 func current() -> Dictionary:
+	var target = normal_target()
+	if target.is_empty() and not hold_target().is_empty():
+		return {"action": "hold_gear", "label": Loc.t("Удерживай F — забрать предмет")}
+	return target
+
+func hold_target() -> Dictionary:
+	if not game.playing or game.paused or game.dead or game.finished or game.in_car or game.seated or game.beers >= 30 or game.injuries.down or game.drink_time >= 0 or game.eat_time >= 0 or game.placement_kind != "" or game.how_to_play.is_open() or game.cargo.held.has(game.chair_owner()) or (game.room.is_guest() and game.room.world_paused):
+		return {}
+	var candidates: Array = []
+	for item in game.packing.items():
+		if item.kind == "flag":
+			continue
+		offer(candidates, item.node.global_position + Vector3.UP * item.height, item.radius, 3.5, "rearrange", "", item.node)
+	var selected = select_target(candidates)
+	var normal = normal_target()
+	if not selected.is_empty() and normal.get("depth", INF) < selected.depth - 0.5:
+		return {}
+	return selected
+
+func press() -> void:
+	hold.press(self)
+
+func tick(delta: float) -> void:
+	game.pointer.update()
+	hold.update(self, delta)
+
+func normal_target() -> Dictionary:
 	if not game.playing or game.paused or game.dead or game.finished or game.drink_time >= 0 or game.eat_time >= 0 or (game.room.is_guest() and game.room.world_paused):
 		return {}
 	if game.in_car:
@@ -34,7 +62,7 @@ func current() -> Dictionary:
 	game.camp_cooking.offers(items, self)
 	if game.stage.solids.bell != null:
 		offer(items, game.stage.solids.bell.handle_position(), 0.35, 2.0, "church_bell", "Позвонить в колокол")
-	if game.packing.active():
+	if game.packing.active() and not game.cargo.can_redeploy():
 		for item in game.packing.items():
 			if item.kind == "firewood" and game.camp_cooking.pot != null:
 				continue
@@ -51,7 +79,10 @@ func current() -> Dictionary:
 					if game.stage.snow.can_dig(game.stage, point):
 						offer(items, point, 0.15, 4.0, "dig_snow", "Копать снег", point)
 					break
-		return select_target(items)
+		var target = select_target(items)
+		if target.is_empty() and game.cargo.can_redeploy():
+			return {"action": "place_held", "label": Loc.t("Поставить предмет")}
+		return target
 	var owner = game.chair_owner()
 	if game.personal_chairs.has(owner):
 		offer(items, game.personal_chairs[owner].position + Vector3(0, 0.65, 0), 0.5, 2.5, "sit", "Сесть на стул")
@@ -148,6 +179,7 @@ func activate() -> void:
 	if target.is_empty():
 		return
 	match target.action:
+		"place_held": game.begin_placement(game.cargo.held[game.chair_owner()].kind)
 		"church_bell":
 			if not game.room.submit("church_bell"):
 				game.stage.solids.bell.pull(game.walker)

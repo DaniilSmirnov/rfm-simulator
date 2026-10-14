@@ -138,13 +138,16 @@ func toggle(spot: Vector3) -> bool:
 	var owner = target_owner(spot)
 	return available() and owner != "" and near(owner) and opened.get(owner, false)
 
+func can_redeploy() -> bool:
+	return held.get(actor(), {}).get("movable", false)
+
 func take(kind: String) -> bool:
 	refresh_opened()
-	if kind not in KINDS or not available() or game.packing.active():
+	if kind not in KINDS or not available() or (game.packing.active() and not can_redeploy()):
 		return false
 	var owner = actor()
 	if held.has(owner):
-		return held[owner].kind == kind and not held[owner].returning
+		return held[owner].kind == kind and (not held[owner].returning or can_redeploy())
 	# Moving an existing item does not produce another box or duplicate equipment.
 	for item in game.packing.items():
 		if (item.kind == kind or (kind == "chairs" and item.kind == "chair")) and owner_of(item) == owner and game.actor_pos().distance_to(item.node.global_position) < 3.5:
@@ -165,32 +168,35 @@ func take(kind: String) -> bool:
 
 func deploy(kind: String, spot: Vector3, yaw: float) -> bool:
 	var owner = actor()
-	if not available() or game.packing.active() or not held.has(owner) or held[owner].kind != kind or held[owner].returning or game.actor_pos().distance_to(spot) > 5:
+	if not available() or (game.packing.active() and not can_redeploy()) or not held.has(owner) or held[owner].kind != kind or (held[owner].returning and not can_redeploy()) or game.actor_pos().distance_to(spot) > 5:
 		return false
 	var existing = game.camp if kind == "table" else (game.grill if kind == "grill" else (game.camp_cooking.fire if kind == "firewood" else (game.camp_cooking.pot if kind == "cauldron" else null)))
 	if existing != null and str(existing.get_meta("gear_owner", owner)) != owner:
 		game.toast("Общий предмет уже установлен другим игроком. Верни коробку.")
 		return false
+	var equipment_owner = str(held[owner].owner)
+	if can_redeploy() and (existing != null or (kind == "chairs" and game.personal_chairs.has(equipment_owner))):
+		return false
 	var placed = false
 	match kind:
 		"table": placed = game.place_table(spot, yaw)
-		"chairs": placed = game.place_chairs(spot, yaw, owner)
+		"chairs": placed = game.place_chairs(spot, yaw, equipment_owner)
 		"grill": placed = game.start_grill(spot, yaw)
 		"firewood": placed = game.camp_cooking.deploy_fire(spot, yaw)
 		"cauldron": placed = game.camp_cooking.place_pot(spot, yaw)
 	if placed:
-		var node = game.camp if kind == "table" else (game.grill if kind == "grill" else (game.camp_cooking.fire if kind == "firewood" else (game.camp_cooking.pot if kind == "cauldron" else game.personal_chairs[owner])))
-		node.set_meta("gear_owner", owner)
+		var node = game.camp if kind == "table" else (game.grill if kind == "grill" else (game.camp_cooking.fire if kind == "firewood" else (game.camp_cooking.pot if kind == "cauldron" else game.personal_chairs[equipment_owner])))
+		node.set_meta("gear_owner", equipment_owner)
 		held.erase(owner)
 	return placed
 
-func pick_up(item: Dictionary) -> bool:
+func pick_up(item: Dictionary, movable: bool = false) -> bool:
 	var owner = actor()
 	if held.has(owner):
 		game.toast("Сначала верни предмет в открытый багажник.")
 		return false
 	var kind = "chairs" if item.kind == "chair" else str(item.kind)
-	held[owner] = {"kind": kind, "owner": owner_of(item), "returning": true}
+	held[owner] = {"kind": kind, "owner": owner_of(item), "returning": true, "movable": movable}
 	return true
 
 func return_item(spot: Vector3) -> bool:
