@@ -236,7 +236,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [linux, windows]
+        platform: [macos, linux, windows]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -252,7 +252,14 @@ jobs:
       - name: Export the release build (production server, x86_64)
         run: npm run build:${{ matrix.platform }}
       - name: Check the executable format
-        run: file dist-${{ matrix.platform }}/* | tee file.txt && grep -qE "ELF 64-bit LSB.*x86-64|PE32\+ executable.*x86-64" file.txt
+        run: |
+          if [ "${{ matrix.platform }}" = macos ]; then
+            unzip -q dist-macos/*.zip -d macos-check
+            file macos-check/*.app/Contents/MacOS/* | tee file.txt
+            grep -q "Mach-O universal binary with 2 architectures" file.txt
+          else
+            file dist-${{ matrix.platform }}/* | tee file.txt && grep -qE "ELF 64-bit LSB.*x86-64|PE32\+ executable.*x86-64" file.txt
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
