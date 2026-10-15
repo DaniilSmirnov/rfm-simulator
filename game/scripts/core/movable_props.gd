@@ -3,6 +3,8 @@ extends RefCounted
 const Specials = preload("res://scripts/core/prop_specials.gd")
 const Registry = preload("res://scripts/core/prop_registry.gd")
 const REACH = 2.5
+const SETTLE_SPEED = 5.0
+const SETTLE_EPSILON = 0.02
 var game
 var stage_id = 0
 var records: Dictionary = {}
@@ -68,6 +70,7 @@ func knock(key: String, velocity: Vector3) -> bool:
 	r.anchored = false
 	r.node.set_meta("prop_anchored", false)
 	r.changed = true
+	r.settling = true
 	r.velocity = (r.velocity + velocity * clampf(30.0 / r.mass, 0.08, 0.8)).limit_length(12.0)
 	if r.mass < 300.0:
 		r.spin = Vector3(velocity.z, 0, -velocity.x).limit_length(3.0)
@@ -121,7 +124,7 @@ func _distance(r: Dictionary, pos: Vector3) -> float:
 	return (r.node.global_transform * local.clamp(box.position, box.end)).distance_to(pos + Vector3.UP * 0.8)
 
 func _move(r: Dictionary, delta: float) -> void:
-	if r.velocity.length_squared() < 0.00001 and r.spin.length_squared() < 0.00001:
+	if r.velocity.length_squared() < 0.00001 and r.spin.length_squared() < 0.00001 and not r.get("settling", false):
 		return
 	if r.has("lamp"):
 		Specials.move_lamp(game, r)
@@ -136,6 +139,18 @@ func _move(r: Dictionary, delta: float) -> void:
 		r.velocity = Vector3.ZERO
 		next = start
 	var rotation: Vector3 = r.node.global_rotation + r.spin * minf(delta, 0.05)
+	var can_settle = r.get("settling", false) and r.velocity.length_squared() < 0.25 and r.spin.length_squared() < 0.16
+	if can_settle:
+		# A custom movable prop is not a full rigid body. Once impact energy is
+		# gone, bring its pitch and roll back to the stable upright pose instead
+		# of leaving a table or chair balanced on an edge forever. Yaw is retained.
+		var weight = 1.0 - exp(-SETTLE_SPEED * minf(delta, 0.05))
+		rotation.x = lerp_angle(rotation.x, 0.0, weight)
+		rotation.z = lerp_angle(rotation.z, 0.0, weight)
+		if absf(rotation.x) < SETTLE_EPSILON and absf(rotation.z) < SETTLE_EPSILON:
+			rotation.x = 0.0
+			rotation.z = 0.0
+			r.settling = false
 	var basis = Basis.from_euler(rotation)
 	var bounds: AABB = Transform3D(basis, Vector3.ZERO) * r.box
 	var floor_y: float = game.stage.solids.walking_floor(next, start.y)
