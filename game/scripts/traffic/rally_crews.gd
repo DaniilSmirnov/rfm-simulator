@@ -334,6 +334,12 @@ func update_racers_step(delta: float) -> void:
 # A crew running into a car stops; the local player's car takes the damage.
 func car_contact(racer: Dictionary, delta: float) -> void:
 	var node: Node3D = racer.node
+	var car_box: AABB = Hitbox.bounds(node)
+	var car_shape = Hitbox.shape(car_box, node.rotation.y)
+	var travel = node.position - racer.previous
+	var midpoint = (node.position + racer.previous) * 0.5
+	var travel_radius = Vector2(travel.x, travel.z).length() * 0.5
+	var car_radius = Vector2(car_box.size.x, car_box.size.z).length() * 0.5
 	var blockers = [Hitbox.contact(game.car)]
 	for peer in game.room.peers.values():
 		if peer.state != null:
@@ -342,7 +348,12 @@ func car_contact(racer: Dictionary, delta: float) -> void:
 		if other.id < racer.id or other.state in ["stopped", "stranded", "parked"]:
 			blockers.append(Hitbox.contact(other.node))
 	for blocker in blockers:
-		if Hitbox.blocked(racer.previous, node.position, Hitbox.shape(Hitbox.bounds(node), node.rotation.y), blocker):
+		var blocker_box: AABB = blocker.get("box", Hitbox.player(0))
+		var blocker_radius = Vector2(blocker_box.size.x, blocker_box.size.z).length() * 0.5
+		var gap = Vector2(blocker.position.x - midpoint.x, blocker.position.z - midpoint.z).length()
+		if gap > travel_radius + car_radius + blocker_radius:
+			continue
+		if Hitbox.blocked(racer.previous, node.position, car_shape, blocker):
 			var collision_speed = racer.motion.velocity.length() if racer.state in ["offroad", "rock_bounce"] else racer.previous.distance_to(node.position) / maxf(delta, 0.001)
 			node.position = racer.previous
 			racer.state = "stranded" if racer.kind in ["stuck", "crash"] else "stopped"

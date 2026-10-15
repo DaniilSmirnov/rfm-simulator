@@ -25,7 +25,11 @@ const BEND_OVERSHOOT = 0.3
 # Lateral allowance (m) when skipping far objects before projecting them.
 const FAR_MARGIN = 40.0
 # Travel (m) over which obstacle probes along a passing line are reused.
-const PROBE_REFRESH = 2.0
+# A route probe is a conservative static-world check. Refreshing every couple
+# of metres made each racer redo six collision sweeps for every candidate lane;
+# the age limit below still picks up moved props while allowing the indexed
+# stage queries to be reused across several frames.
+const PROBE_REFRESH = 8.0
 # Seconds a probe is kept even without travel: a car waiting behind a
 # momentary obstruction must see the road clear again.
 const PROBE_MAX_AGE = 0.5
@@ -275,6 +279,12 @@ static func _clear_path(game, racer: Dictionary, target: float, distance: float)
 	var previous: Vector3 = racer.node.position
 	var current: float = racer.get("line", 0.0) + racer.slide
 	var box = Hitbox.bounds(racer.node)
+	# Route planning only needs a conservative clearance envelope. The full
+	# oriented-box SAT is still used when a car moves, but probing six segments
+	# for every passing candidate with it made the 120 Hz traffic update scale
+	# poorly with the number of racers. A circumscribed footprint keeps the
+	# route safe while reusing the stage's indexed, scalar collision queries.
+	var route_radius = maxf(box.size.x, box.size.z) * 0.5 + 0.15
 	for i in range(1, 7):
 		var ahead = distance * i / 6.0
 		var s: float = minf(stage.LENGTH - 0.01, racer.s + ahead)
@@ -285,11 +295,16 @@ static func _clear_path(game, racer: Dictionary, target: float, distance: float)
 			if absf(line) > line_limit(game, s) + 1.2: return false
 			if absf(point.y - previous.y) > maxf(0.5, point.distance_to(previous) * 0.45): return false
 			if stage.water != null and stage.water.depth(point) > 0.2: return false
-		var direction: Vector3 = point - previous
-		var shape = Hitbox.shape(box, atan2(-direction.x, -direction.z))
-		if not Hitbox.rocks(stage, previous, point, shape).is_empty() or Hitbox.tree(stage, previous, point, shape) >= 0:
+		var route_blocked = not stage.rock_hit(previous, point, route_radius).is_empty() or stage.obstacle_hit(previous, point, route_radius, true) >= 0
+		# Ambulance shoulder passes use the exact footprint: the wider scalar
+		# envelope would reject a valid verge gap beside a stopped car.
+		if racer.get("role", "") == "ambulance":
+			var direction: Vector3 = point - previous
+			var shape = Hitbox.shape(box, atan2(-direction.x, -direction.z))
+			route_blocked = not Hitbox.rocks(stage, previous, point, shape).is_empty() or Hitbox.tree(stage, previous, point, shape) >= 0 or not Hitbox.solids(stage.solids, previous, point, shape, []).is_empty()
+		if route_blocked:
 			return false
-		if not Hitbox.solids(stage.solids, previous, point, shape, []).is_empty():
+		if racer.get("role", "") != "ambulance" and not stage.solids.hit(previous, point, route_radius).is_empty():
 			return false
 		previous = point
 	return true
