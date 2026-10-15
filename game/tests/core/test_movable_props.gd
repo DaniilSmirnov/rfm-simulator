@@ -67,6 +67,11 @@ func run() -> void:
 	game.stage.solids.solid(wall, Vector3.UP, Vector3(0.2, 2, 4), "wall")
 	for i in range(20): props.update({}, {}, 0.05)
 	check(node.position.x < wall.position.x, "drag/impact motion cannot pass through a wall")
+	node.rotation.z = 0.7
+	props.records["test:prop"].settling = true
+	props.records["test:prop"].changed = true
+	for i in range(80): props.update({}, {}, 0.05)
+	check(absf(node.rotation.x) < 0.02 and absf(node.rotation.z) < 0.02, "a knocked prop settles upright instead of freezing on its edge")
 	game.room.connected = true
 	game.room.is_host = false
 	check(not props.knock("test:prop", Vector3(10, 0, 0)), "guest cannot authoritatively knock a prop")
