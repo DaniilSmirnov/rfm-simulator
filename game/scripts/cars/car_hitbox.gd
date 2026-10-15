@@ -95,7 +95,7 @@ static func circle(start: Vector3, end: Vector3, car: Dictionary, center: Vector
 	half.y = 10000
 	if minf(a.x, b.x) > half.x + radius or maxf(a.x, b.x) < -half.x - radius or minf(a.z, b.z) > half.z + radius or maxf(a.z, b.z) < -half.z - radius: return {}
 	var closest = a.clamp(-half, half)
-	if a.distance_to(closest) < radius and b.distance_to(b.clamp(-half, half)) > a.distance_to(closest) + 0.0000001: return {}
+	if a.distance_to(closest) < radius and b.length_squared() > a.length_squared() + 0.0000001 and a.dot(b - a) >= 0: return {}
 	var best: Dictionary = {}
 	# Two strips plus four circular corners give the exact rounded rectangle.
 	for size in [Vector3(half.x + radius, 10000, half.z), Vector3(half.x, 10000, half.z + radius)]:

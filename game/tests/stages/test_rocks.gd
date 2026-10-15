@@ -121,6 +121,7 @@ func run() -> void:
 	racer.start = origin + Vector3(-4, 0, 0)
 	racer.target = origin + Vector3(4, 0, 0)
 	racer.node.position = racer.start
+	racer.node.rotation.y = -PI / 2
 	racer.motion.velocity = Vector3(16, 0, 0)
 	racer.yaw_rate = 0.0
 	# Checked right after the impact: off the road the car rolls on the drawn
@@ -144,6 +145,7 @@ func run() -> void:
 	racer.start = origin + Vector3(-4, 0, 0)
 	racer.target = origin + Vector3(1, 0, 0)
 	racer.node.position = racer.start
+	racer.node.rotation.y = -PI / 2
 	racer.motion.velocity = Vector3(16, 0, 0)
 	racer.yaw_rate = 0.0
 	game._update_racers(0.8)

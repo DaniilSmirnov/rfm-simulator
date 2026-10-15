@@ -36,6 +36,8 @@ func run() -> void:
 	var shape = Hitbox.shape(box, 0)
 	check(not Hitbox.blocked(Vector3.ZERO, Vector3.FORWARD, shape, {"position": Vector3(box.size.x + 0.1, 0, 0), "box": box}), "parallel cars do not collide across the old oversized round side zone")
 	check(Hitbox.blocked(Vector3.ZERO, Vector3.FORWARD * 10, shape, {"position": Vector3(0, 0, -7), "box": box}), "car-to-car collisions use both bodies and their bumpers")
+	check(Hitbox.circle(Vector3.ZERO, Vector3.BACK * 0.1, shape, Vector3(0, 0, -0.8), 0.2).is_empty(), "an initially overlapping tree allows reversing before it clears the full car length")
+	check(not Hitbox.circle(Vector3.ZERO, Vector3.FORWARD * 0.1, shape, Vector3(0, 0, -0.8), 0.2).is_empty(), "initial overlap still blocks driving further into the tree")
 	var stage = Stage.new()
 	root.add_child(stage)
 	stage.trees.append(Vector3(0, 0, box.position.z - 0.4))
