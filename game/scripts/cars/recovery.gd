@@ -50,7 +50,7 @@ static func update(game, players: Dictionary, delta: float) -> void:
 	participants.merge(game.spectators.push_helpers())
 	participants.merge(game.stage.officials.push_helpers(game))
 	for id in participants:
-		if occupied.has(str(id)):
+		if occupied.has(str(id)) or game.movable_props.grips.has(id):
 			continue
 		var p: Dictionary = participants[id]
 		if p.get("in_car", true) or p.get("seated", false) or p.get("airborne", false) or int(p.get("beers", 0)) >= 30:
@@ -60,6 +60,7 @@ static func update(game, players: Dictionary, delta: float) -> void:
 		var effort = _effort(game, p, targets)
 		if effort.is_empty():
 			continue
+		occupied[str(id)] = true
 		var key: String = effort.target.key
 		forces[key] = forces.get(key, Vector3.ZERO) + effort.force
 		helpers[key] = int(helpers.get(key, 0)) + 1
@@ -72,6 +73,8 @@ static func update(game, players: Dictionary, delta: float) -> void:
 			else:
 				link.car = effort.target.owner
 			game.recovery_links.append(link)
+	# Keep car towing available beside camp furniture; an existing prop grip persists.
+	game.movable_props.update(players, occupied, delta)
 	for racer in game.racers:
 		racer.recovery_helpers = int(helpers.get("racer:%d" % racer.id, 0))
 	for target in targets:

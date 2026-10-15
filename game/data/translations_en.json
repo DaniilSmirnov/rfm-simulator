@@ -569,5 +569,6 @@
   "Удерживай F — забрать предмет": "Hold action to pick up",
   "Поставить предмет": "Place item",
   "Предмет в руках. F — выбрать новое место или вернуть в багажник владельца.": "Item picked up. Use action to choose a new spot or return it to its owner's trunk.",
-  "Удерживай — забрать": "Hold to pick up"
+  "Удерживай — забрать": "Hold to pick up",
+  "   ·   Удерживай T и иди — тащить предмет": "   ·   Hold T and walk to drag the object"
 }

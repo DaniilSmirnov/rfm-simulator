@@ -69,6 +69,9 @@ func rebuild() -> void:
 	providers.append(provider("racers", "", ["racers", "recovery_links"], _racers_snapshot, _racers_apply))
 	providers.append(provider("park_movers", "", ["park_movers"], func(): return {"park_movers": game.park_traffic.movers_snapshot()}, func(f, t): game.park_traffic.apply_movers(f.get("park_movers", []), t)))
 	providers.append(_subsystem("injuries", func(): return game.injuries, "snapshot", "apply_snapshot"))
+	var props = _subsystem("movable_props", func(): return game.movable_props, "snapshot", "apply_snapshot", "props", 0.1)
+	props.collision = true
+	providers.append(props)
 	providers.append(_subsystem("medics", func(): return game.injuries.medics, "snapshot", "apply_snapshot"))
 	providers.append(provider("outcome", "", ["dead", "finished", "title", "text"], _outcome_snapshot, _outcome_apply))
 
@@ -367,6 +370,7 @@ func _camp_apply(f: Dictionary, _t: float) -> void:
 		Props.set_grill_servings(game.grill, game.camp_grill.servings)
 	game.spectators.apply_snapshot(f.get("npc_servings", []))
 	game.eaten = bool(f.get("eaten", false))
+	game.stage.solids.indexed_obstacle_count = -1
 
 func _racers_snapshot() -> Dictionary:
 	var racers = []

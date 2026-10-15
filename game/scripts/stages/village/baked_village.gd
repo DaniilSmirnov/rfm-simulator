@@ -2,7 +2,7 @@ extends RefCounted
 # Packed geometry stays spatially partitioned. Only mutable MultiMeshes are
 # uploaded once per scene; immutable meshes and materials retain shared resources.
 const SCHEMA = 4
-const SOURCES = ["stages/stage", "traffic/service_parks", "stages/stage_solids", "core/primitive_batcher", "stages/village/village_stage", "stages/village/village_layout", "stages/village/village_architecture", "stages/village/village_landscape", "stages/village/village_farmland", "core/props", "stages/village/village_interiors", "stages/village/church_bell"]
+const SOURCES = ["stages/stage", "traffic/service_parks", "stages/stage_solids", "stages/stage_forest", "core/prop_registry", "traffic/service_park_model", "core/primitive_batcher", "stages/village/village_stage", "stages/village/village_layout", "stages/village/village_architecture", "stages/village/village_landscape", "stages/village/village_farmland", "core/props", "stages/village/village_interiors", "stages/village/church_bell"]
 const STAGE_FIELDS = ["woodland_details", "collectibles", "collectible_parts", "rocks", "trees", "forest_data", "detail_tree_groups", "detail_tree_visuals", "forest_layers", "forest_chunk_slots", "forest_chunk_centers"]
 
 static func fingerprint() -> String:
@@ -105,7 +105,8 @@ static func save(stage: Node3D, path: String) -> Error:
 		var park = stage.get_node_or_null("ServicePark_%d" % index)
 		if park != null:
 			park.free()
-	stage.solids.obstacles.assign(stage.solids.obstacles.filter(func(o): return o.kind != "service"))
+	stage.solids.obstacles.assign(stage.solids.obstacles.filter(func(o): return is_instance_valid(o.body) and o.kind != "service"))
+	stage.solids.movables.assign(stage.solids.movables.filter(func(o): return is_instance_valid(o.node)))
 	# Village life is local animation, rebuilt from the baked anchors on load.
 	if stage.life != null:
 		stage.life.root.free()

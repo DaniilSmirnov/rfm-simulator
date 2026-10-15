@@ -378,6 +378,7 @@ func update_hud() -> void:
 		game.minimap.queue_redraw()
 		game.minimap_redraw_at = now + 100
 	var near_tow = game.nearby_tow_target() if game.tow_target == null else false
+	var near_prop = not game.in_car and game.movable_props.nearby()
 	var injury = game.injuries.hud_line()
 	var remaining_items = game.packing.remaining() if game.packing.active() else -1
 	var bag = game.foraging.stock() if not game.in_car else {}
@@ -390,7 +391,7 @@ func update_hud() -> void:
 		int(game.elapsed) if not game.mobile_mode else 0, game.camp != null, game.has_chairs, game.eaten, game.passed, game.helped, game.beers,
 		game.camp_grill.phase(), int(game.camp_grill.progress() * 100),
 		game.cooking, game.camp_grill.servings, game.drink_time >= 0, game.drink_time >= 1.25, game.eat_time >= 0, game.eat_kind,
-		game.tow_target != null, ceili(game.tow_distance), game.recovery_helpers, near_tow, game.crews.car_towed, injury,
+		game.tow_target != null, ceili(game.tow_distance), game.recovery_helpers, near_tow, near_prop, game.crews.car_towed, injury,
 		remaining_items, game.seated, game.stage.variant, bag.get("mushrooms", 0), bag.get("berries", 0),
 		game.foraging.can_eat("berries"), pot, game.camp_cooking.phase if pot else "",
 		game.camp_cooking.servings if pot else 0,
@@ -444,6 +445,8 @@ func update_hud() -> void:
 		info_text = injury
 		if game.injuries.down:
 			hint_text = Loc.t("Лежи и жди скорую · мышь — осмотреться")
+	elif near_prop:
+		hint_text += Loc.t("   ·   Удерживай T и иди — тащить предмет")
 	elif near_tow:
 		hint_text += Loc.t("   ·   T — тянуть тросом в любую сторону · иди на машину — толкать")
 	if not game.in_car:
@@ -485,9 +488,7 @@ func update_hud() -> void:
 	set_hud_text(game.info_label, info_text)
 	set_hud_text(game.hint_label, hint_text)
 
-
 # The rope the local player holds: how far the crew still has to the road, or
-# whose car is being towed, and how many people help.
 func tow_text() -> String:
 	var helpers = Loc.t(" · ВМЕСТЕ: %d") % game.recovery_helpers if game.recovery_helpers > 1 else ""
 	if game.rides.hitch != "" and game.tow_target != game.car:

@@ -1,5 +1,6 @@
 extends Node3D
 # Fixed camps and a shared timeline make NPCs identical for late-joining clients.
+const Movable = preload("res://scripts/core/prop_registry.gd")
 const Navigation = preload("res://scripts/people/crowd_navigation.gd")
 const Props = preload("res://scripts/core/props.gd")
 const GrillModel = preload("res://scripts/camp/grill_model.gd")
@@ -38,6 +39,9 @@ func rebuild(cooperative: bool = false) -> void:
 		var s = 85.0 + i * 190.0
 		var center = stage.at(s) + stage.side(s) * (7.2 if i % 2 == 0 else -7.2)
 		_add_group(center, s, i + stage.clearings.size(), 1)
+	# Pick watching positions only after every camp collider exists.
+	for person in people:
+		person.watch = watch_spot(float(person.station), person.home)
 	update(clock, 0.0, false)
 
 func grounded(pos: Vector3) -> Vector3:
@@ -63,6 +67,9 @@ func _add_group(center: Vector3, s: float, id: int, count: int) -> void:
 	grill.rotation.y = yaw
 	# A camp of neighbours is always already roasting: bare glowing coals.
 	GrillModel.set_fire(grill, 1.0, 0.0)
+	Movable.register(game.stage.solids, table, 12, false, "npc:%d:table" % id)
+	Movable.register(game.stage.solids, grill, 25, false, "npc:%d:grill" % id)
+	Movable.register(game.stage.solids, car, 1000, false, "npc:%d:car" % id)
 	groups.append({"car": car, "table": table, "grill": grill, "servings": Props.FOOD_PORTIONS, "last_eat_cycle": {}})
 	var group_index = groups.size() - 1
 	for j in range(count):
@@ -78,8 +85,9 @@ func _add_group(center: Vector3, s: float, id: int, count: int) -> void:
 		Props.chair(chair, Vector3.ZERO)
 		chair.position = grounded(avatar.position + forward * 0.85)
 		chair.rotation.y = avatar.rotation.y
+		Movable.register(game.stage.solids, chair, 5, false, "npc:%d:chair:%d" % [id, j])
 		var arm = CharacterRig.hand(avatar)
-		people.append({"id": id * 2 + j, "group": group_index, "avatar": avatar, "arm": arm, "can": arm.get_node("BeerCan"), "food": arm.get_node("Skewer"), "action": "idle", "time": -1.0, "eat_cycle": -1, "home": avatar.position, "watch": watch_spot(s + j * 2.0, avatar.position), "helper": -1})
+		people.append({"id": id * 2 + j, "group": group_index, "avatar": avatar, "arm": arm, "can": arm.get_node("BeerCan"), "food": arm.get_node("Skewer"), "action": "idle", "time": -1.0, "eat_cycle": -1, "home": avatar.position, "station": s + j * 2.0, "watch": avatar.position, "helper": -1})
 
 func activity(id: int, time: float) -> Dictionary:
 	var period = 15.0 + float((id * 7) % 11)

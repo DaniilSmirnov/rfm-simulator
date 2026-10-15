@@ -39,6 +39,8 @@ func run() -> void:
 	baked.build()
 	var loaded_us = Time.get_ticks_usec() - before
 	check(baked.loaded_baked, "village uses prepared scene")
+	check(prop_signature(generated) == prop_signature(baked), "movable identities, geometry bounds and masses survive baking")
+	check(baked.solids.movables.all(func(r): return not str(r.node.name) in ["Church", "AccessibleHouse"]), "buildings are never movable")
 	check(render_signature(generated) == render_signature(baked), "terrain, spatial blocks and every MultiMesh transform survive serialization")
 	check(generated.collectibles == baked.collectibles and generated.trees == baked.trees and generated.rocks.size() == baked.rocks.size(), "deterministic collectible/tree/rock identities survive loading")
 	check(baked.trees.size() > 0 and baked.detail_tree_visuals.size() == baked.trees.size(), "olives, cypresses, oaks and pines have collision and falling visuals")
@@ -114,3 +116,9 @@ func run() -> void:
 	for stage in [generated, baked, other, empty]:
 		stage.free()
 	finish()
+
+func prop_signature(stage) -> Dictionary:
+	var result = {}
+	for r in stage.solids.movables:
+		result[r.key] = [r.mass, r.anchored, r.box, stage.solids.relative_pose(r.node)]
+	return result

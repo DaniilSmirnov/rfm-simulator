@@ -79,7 +79,8 @@ func run() -> void:
 	root.add_child(urban_sync)
 	urban_sync.build()
 	check(guest.stage.collectibles == urban_sync.collectibles and guest.stage.woodland_details == urban_sync.woodland_details, "cooperative village preserves collectible positions and instance batches")
-	check(guest.stage.village.counts == urban_sync.village.counts and guest.stage.solids.obstacles.size() == urban_sync.solids.obstacles.size(), "cooperative village preserves vines, houses and collision obstacles")
+	# NPC camp colliders belong to the game; compare only stage-authored geometry.
+	check(guest.stage.village.counts == urban_sync.village.counts and guest.stage.solids.obstacles.filter(func(o): return guest.stage.is_ancestor_of(o.body)).size() == urban_sync.solids.obstacles.size(), "cooperative village preserves vines, houses and collision obstacles")
 	urban_sync.free()
 	guest.room.connected = false
 	await guest._shutdown_audio()

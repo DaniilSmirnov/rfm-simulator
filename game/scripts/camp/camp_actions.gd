@@ -15,7 +15,9 @@ func valid_furniture_spot(spot: Vector3, kind: String, ignored_owner: String = "
 		return false
 	if game.stage.road_distance(spot) < 6.0 or game.stage.parks.contains(spot, 1.0):
 		return false
-	if not game.stage.solids.hit(spot, spot, 0.8, false).is_empty():
+	# Camp spacing below already handles furniture and intentional pot/fire overlap.
+	var furniture = game.packing.items().map(func(item): return item.node)
+	if not game.stage.solids.hit(spot, spot, 0.8, false, Vector3(0, 0.35, 0), null, furniture).is_empty():
 		return false
 	if not game.stage.rock_hit(spot, spot, 0.8, false).is_empty():
 		return false
@@ -160,6 +162,7 @@ func place_table(spot: Vector3 = Vector3.INF, yaw: float = 0.0) -> bool:
 	game.camp.position = spot
 	game.camp.position.y = game.stage.ground(spot)
 	game.camp.rotation.y = yaw
+	game.stage.solids.indexed_obstacle_count = -1
 	game.toast("Стол установлен.")
 	return true
 
@@ -187,6 +190,7 @@ func apply_chair(owner: String, spot: Vector3, yaw: float) -> void:
 	game.personal_chairs[owner].position = spot
 	game.personal_chairs[owner].position.y = game.stage.ground(spot)
 	game.personal_chairs[owner].rotation.y = yaw
+	game.stage.solids.indexed_obstacle_count = -1
 	game.has_chairs = not game.personal_chairs.is_empty()
 
 func place_flag(spot: Vector3 = Vector3.INF, yaw: float = 0.0, owner: String = "", replicated: bool = false) -> bool:
@@ -218,6 +222,7 @@ func start_grill(spot: Vector3 = Vector3.INF, yaw: float = 0.0, replicated: bool
 		game.grill.position = spot
 		game.grill.position.y = game.stage.ground(spot)
 		game.grill.rotation.y = yaw
+		game.stage.solids.indexed_obstacle_count = -1
 		game.fire_audio.position = game.grill.position
 		return true
 	game.grill = Props.grill(game)

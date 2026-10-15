@@ -481,3 +481,4 @@ func _build_sauna() -> void:
 	Props.box(boat, Vector3(0, 0.33, 0), Vector3(1.05, 0.05, 0.28), Color("9b7a52"))
 	Props.box(boat, Vector3(0, 0.33, 0.7), Vector3(0.95, 0.05, 0.24), Color("9b7a52"))
 	stage.water.add_floater(boat, -0.22, 1.6)
+	preload("res://scripts/core/prop_registry.gd").register(stage.solids, boat, 100)

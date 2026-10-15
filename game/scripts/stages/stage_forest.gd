@@ -4,6 +4,7 @@ extends RefCounted
 # boulders, bushes, berries, mushrooms, ant hills) and the instanced detail
 # layers every stage draws its vegetation with (detail_layer.gd). State stays
 # on the stage: trees[], rocks[], collectibles[], woodland_details.
+const Movable = preload("res://scripts/core/prop_registry.gd")
 const BakedVillage = preload("res://scripts/stages/village/baked_village.gd")
 const DetailLayer = preload("res://scripts/stages/detail_layer.gd")
 const NATURE_BERRY = preload("res://models/nature/berry.tres")
@@ -63,8 +64,11 @@ func plant_forest(cooperative: bool = false) -> void:
 		p.y = stage.ground(p)
 		var radius = stage.rng.randf_range(0.3, 1)
 		var rock = RallyProps.cylinder(stage, p + Vector3(0, 0.2, 0), radius, 0.18, 0.65, Color("7d8070"), 5)
-		stage.rocks.append(Records.rock(p, radius, 0.75))
+		if radius >= 0.6:
+			stage.rocks.append(Records.rock(p, radius, 0.75))
 		rock.rotation.z = stage.rng.randf_range(-0.3, 0.3)
+		if radius < 0.6:
+			Movable.group(stage.solids, stage, stage.get_child_count() - 1, 40)
 
 # Four instanced draw calls for the forest instead of thousands of nodes.
 # Collision positions remain in `trees`, matching the original gameplay.
@@ -450,7 +454,9 @@ func tree_layers(name: String, trees: Array, layers: Array) -> void:
 # Signposts at the spectator clearings ("ПОЛЯНА N").
 func clearing_signs() -> void:
 	for i in range(stage.clearings.size()):
-		var c: Vector3 = stage.clearings[i]
+		var first = stage.get_child_count()
+		var c: Vector3 = stage.clearings[i] + stage.direction(stage.road_s(stage.clearings[i])) * 8.0
+		c.y = stage.ground(c)
 		RallyProps.cylinder(stage, c + Vector3(0, 1.2, 0), 0.07, 0.07, 2.4, Color("d5bc8e"), 5)
 		var sign = RallyProps.box(stage, c + Vector3(0, 2.15, 0), Vector3(2, 0.65, 0.12), Color("e5d9b9"))
 		var label = Label3D.new()
@@ -461,3 +467,4 @@ func clearing_signs() -> void:
 		label.pixel_size = 0.005
 		label.modulate = Color("344537")
 		label.outline_size = 0
+		Movable.group(stage.solids, stage, first, 15, true)
