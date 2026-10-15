@@ -29,7 +29,10 @@ func hold_target() -> Dictionary:
 	for item in game.packing.items():
 		if item.kind == "flag":
 			continue
-		offer(candidates, item.node.global_position + Vector3.UP * item.height, item.radius, 3.5, "rearrange", "", item.node)
+		# Select the object's body rather than its highest point. This is much
+		# easier to aim at for low campfires and lets the same hold gesture work
+		# consistently for every piece of equipment.
+		offer(candidates, item.node.global_position + Vector3.UP * item.height * 0.5, maxf(item.radius, 0.8), 3.5, "rearrange", "", item.node)
 	var selected = select_target(candidates)
 	var normal = normal_target()
 	if not selected.is_empty() and normal.get("depth", INF) < selected.depth - 0.5:
@@ -67,7 +70,7 @@ func normal_target() -> Dictionary:
 				continue
 			if item.kind != "flag" and game.cargo.held.has(game.chair_owner()):
 				continue
-			offer(items, item.node.global_position + Vector3(0, item.height, 0), item.radius, 3.5, "pack", item.label, item.node.global_position)
+			offer(items, item.node.global_position + Vector3.UP * item.height * 0.5, maxf(item.radius, 0.8), 3.5, "pack", item.label, item.node.global_position)
 		return select_target(items)
 	if game.cargo.held.has(game.chair_owner()):
 		if game.cargo.held[game.chair_owner()].kind == "shovel" and game.stage.has_snow:

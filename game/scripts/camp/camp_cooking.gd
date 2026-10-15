@@ -112,13 +112,13 @@ func offers(items: Array, interaction) -> void:
 			interaction.offer(items, pot.position + Vector3(0, 0.45, 0), 0.8, 3.5, "mount_firewood", "Разжечь костёр под казаном")
 		return
 	if pot == null:
-		interaction.offer(items, fire.position + Vector3(0, 0.3, 0), 0.75, 3.5, "", "")
+		interaction.offer(items, fire.position + Vector3(0, 0.2, 0), 0.9, 3.5, "", "")
 	elif phase == "empty" and heated():
-		interaction.offer(items, pot.position + Vector3(0, 1.1, 0), 0.65, 3.5, "plov_cook", "Добавить ингредиенты и готовить плов")
+		interaction.offer(items, pot.position + Vector3(0, 0.55, 0), 0.9, 3.5, "plov_cook", "Добавить ингредиенты и готовить плов")
 	elif phase == "ready":
-		interaction.offer(items, pot.position + Vector3(0, 1.1, 0), 0.65, 3.5, "plov", Loc.t("Съесть плов · %d/10") % servings)
+		interaction.offer(items, pot.position + Vector3(0, 0.55, 0), 0.9, 3.5, "plov", Loc.t("Съесть плов · %d/10") % servings)
 	else:
-		interaction.offer(items, pot.position + Vector3(0, 1.1, 0), 0.65, 3.5, "", "")
+		interaction.offer(items, pot.position + Vector3(0, 0.55, 0), 0.9, 3.5, "", "")
 
 func remove_pot() -> void:
 	if pot != null:
