@@ -3,6 +3,7 @@ func _initialize() -> void:
 	call_deferred("run")
 func run() -> void:
 	var game = load("res://main.tscn").instantiate()
+	game.defer_world = true
 	root.add_child(game)
 	await process_frame
 	game.set_process(false)
@@ -82,6 +83,7 @@ func run() -> void:
 	game.select_stage(0)
 	game.lobby_ui.refresh()
 	check(not game.room.ui.create_button.disabled, "free baseline enables create")
+	check(not game.world_ready and game.stage.get_child_count() == 0, "menu previews keep the world deferred across selection changes")
 	game.room.connected = true
 	game.room.is_host = false
 	game.room.world_paused = true

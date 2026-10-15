@@ -430,18 +430,19 @@ func clearing_signs() -> bool:
 
 # Keep a whole picnic group clear of both sides of every junction.
 func spectator_camp(_index: int, clearing: Vector3, s: float, _outward: Vector3) -> Vector3:
-	var center = clearing + stage.direction(s) * 7.0
-	for offset in [7.0, -7.0, 14.0, -14.0, 21.0, -21.0, 0.0]:
-		var candidate = clearing + stage.direction(s) * offset
-		var available = true
-		for along in [-2.4, 0.0, 3.2]:
-			var spot = candidate + stage.direction(s) * along
-			spot.y = stage.ground(spot)
-			available = available and stage.road_distance(spot) > 6.0 and stage.solids.hit(spot, spot, 1.2, false).is_empty()
-		if available:
-			center = candidate
-			break
-	return center
+	# Layout depends on authored scenery, never on camps already instantiated.
+	var camps = stage.solids.movables.filter(func(r): return is_instance_valid(r.node) and str(r.key).begins_with("npc:")).map(func(r): return r.node)
+	for lateral in [0.0, 4.0, -4.0, 8.0, -8.0]:
+		for offset in [7.0, -7.0, 14.0, -14.0, 21.0, -21.0]:
+			var candidate = clearing + stage.direction(s) * offset + stage.side(s) * lateral
+			var available = true
+			for along in [-2.4, 0.0, 3.2]:
+				var spot = candidate + stage.direction(s) * along
+				spot.y = stage.ground(spot)
+				available = available and spot.distance_to(clearing) > 3.0 and stage.road_distance(spot) > 6.0 and stage.solids.hit(spot, spot, 1.2, false, Vector3(0, 0.35, 0), null, camps).is_empty()
+			if available:
+				return candidate
+	return clearing + stage.direction(s) * 7.0
 
 # Village spectators use the roadside spots and the square.
 func roadside_spectators() -> bool:

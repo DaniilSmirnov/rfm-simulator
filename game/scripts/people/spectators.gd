@@ -39,6 +39,9 @@ func rebuild(cooperative: bool = false) -> void:
 		var s = 85.0 + i * 190.0
 		var center = stage.at(s) + stage.side(s) * (7.2 if i % 2 == 0 else -7.2)
 		_add_group(center, s, i + stage.clearings.size(), 1)
+	# Pick watching positions only after every camp collider exists.
+	for person in people:
+		person.watch = watch_spot(float(person.station), person.home)
 	update(clock, 0.0, false)
 
 func grounded(pos: Vector3) -> Vector3:
@@ -84,7 +87,7 @@ func _add_group(center: Vector3, s: float, id: int, count: int) -> void:
 		chair.rotation.y = avatar.rotation.y
 		Movable.register(game.stage.solids, chair, 5, false, "npc:%d:chair:%d" % [id, j])
 		var arm = CharacterRig.hand(avatar)
-		people.append({"id": id * 2 + j, "group": group_index, "avatar": avatar, "arm": arm, "can": arm.get_node("BeerCan"), "food": arm.get_node("Skewer"), "action": "idle", "time": -1.0, "eat_cycle": -1, "home": avatar.position, "watch": watch_spot(s + j * 2.0, avatar.position), "helper": -1})
+		people.append({"id": id * 2 + j, "group": group_index, "avatar": avatar, "arm": arm, "can": arm.get_node("BeerCan"), "food": arm.get_node("Skewer"), "action": "idle", "time": -1.0, "eat_cycle": -1, "home": avatar.position, "station": s + j * 2.0, "watch": avatar.position, "helper": -1})
 
 func activity(id: int, time: float) -> Dictionary:
 	var period = 15.0 + float((id * 7) % 11)
