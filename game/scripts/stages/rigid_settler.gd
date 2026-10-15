@@ -8,8 +8,9 @@ const GROUND_EPSILON = 0.035
 const ALIGN_SPEED = 7.0
 
 static func configure(body: RigidBody3D, upright: bool = true) -> void:
-	body.linear_damp = maxf(body.linear_damp, 1.8)
-	body.angular_damp = maxf(body.angular_damp, 3.0)
+	# Keep the policy identical for procedural and scene-authored bodies.
+	body.linear_damp = 1.8
+	body.angular_damp = 3.0
 	body.sleeping = false
 	body.set_meta("settle_upright", upright)
 	body.set_meta("settle_grounded", false)
