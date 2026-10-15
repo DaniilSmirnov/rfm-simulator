@@ -8,8 +8,10 @@ const GROUND_EPSILON = 0.035
 const ALIGN_SPEED = 7.0
 
 static func configure(body: RigidBody3D, upright: bool = true) -> void:
-	body.linear_damp = maxf(body.linear_damp, 1.8)
-	body.angular_damp = maxf(body.angular_damp, 3.0)
+	# Use explicit minimum assignments instead of relying on the project default
+	# being readable before the body enters the scene tree (Godot can defer it).
+	body.linear_damp = 1.8 if body.linear_damp < 1.8 else body.linear_damp
+	body.angular_damp = 3.0 if body.angular_damp < 3.0 else body.angular_damp
 	body.sleeping = false
 	body.set_meta("settle_upright", upright)
 	body.set_meta("settle_grounded", false)
