@@ -6,19 +6,22 @@ import { homedir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { getGodot, root, run } from './godot.mjs';
 
-// Native exports (Steam desktop, Android). Usage: node scripts/build-desktop.mjs --platform=macos|linux|windows|android
+// Native exports (Steam desktop, Android, iOS Xcode project). Usage:
+//   node scripts/build-desktop.mjs --platform=macos|linux|windows|android|ios
 // The official 4.4.1 export templates are downloaded once into .cache/templates and
 // checked against a pinned SHA-256; only the one platform archive is unpacked.
 // Linux and Windows export the executable next to its .pck, the usual layout of a Steam depot.
+// iOS exports an unsigned Xcode project (export_project_only) for CI and local signing.
 const platforms = {
   macos: { preset: 'macOS', template: 'macos.zip', output: 'Rally Fans Simulator.zip', patch: macosPatch, mobileTextures: true },
   linux: { preset: 'Linux', template: 'linux_release.x86_64', output: 'RallyFansSimulator.x86_64', pck: 'RallyFansSimulator.pck', patch: preset => preset },
   windows: { preset: 'Windows', template: 'windows_release_x86_64.exe', output: 'Rally Fans Simulator.exe', pck: 'Rally Fans Simulator.pck', patch: windowsPatch, prepare: prepareWindows },
   android: { preset: 'Android', template: 'android_release.apk', output: 'Rally Fans Simulator.apk', patch: androidPatch, prepare: prepareAndroid, mobileTextures: true },
+  ios: { preset: 'iOS', template: 'ios.zip', output: 'RallyFansSimulator', archive: 'RallyFansSimulator-ios-xcode.zip', patch: iosPatch, prepare: prepareIos, mobileTextures: true, directory: true },
 };
 const name = process.argv.find(arg => arg.startsWith('--platform='))?.split('=')[1] ?? 'macos';
 const platform = platforms[name];
-if (!platform) throw new Error('Unknown desktop platform: ' + name);
+if (!platform) throw new Error('Unknown native platform: ' + name);
 const version = JSON.parse(await readFile(join(root, 'package.json'), 'utf8')).version;
 const tpzSha = '7a8d14ade489fd4d22f178193021fe8a876a9e51068ed4dde26dac3ae4c59a88';
 const tpzUrl = 'https://github.com/godotengine/godot-builds/releases/download/4.4.1-stable/Godot_v4.4.1-stable_export_templates.tpz';
@@ -70,6 +73,105 @@ function androidPatch(preset) {
   return preset
     .replaceAll('version/code=1', `version/code=${major * 1000000 + minor * 1000 + patch}`)
     .replaceAll('version/name="0.10.29"', `version/name=${JSON.stringify(version)}`);
+}
+
+function iosPatch(preset) {
+  return preset
+    .replaceAll('application/short_version="0.10.29"', `application/short_version=${JSON.stringify(version)}`)
+    .replaceAll('application/version="0.10.29"', `application/version=${JSON.stringify(version)}`);
+}
+
+// Export method enum in Godot: App Store=0, Development=1, Ad-Hoc=2, Enterprise=3.
+function iosExportMethod() {
+  const name = (process.env.IOS_EXPORT_METHOD || 'app-store').toLowerCase().replace(/_/g, '-');
+  return ({ 'app-store': 0, development: 1, 'ad-hoc': 2, enterprise: 3 })[name] ?? 0;
+}
+
+function iosSigningSecrets() {
+  const keys = ['IOS_CERTIFICATE_BASE64', 'IOS_CERTIFICATE_PASSWORD', 'IOS_PROVISIONING_PROFILE_BASE64', 'IOS_TEAM_ID'];
+  const present = keys.filter(key => process.env[key]);
+  if (present.length === 0) return null;
+  if (present.length !== keys.length) {
+    throw new Error(`Partial iOS signing secrets: set all of ${keys.join(', ')} (missing ${keys.filter(k => !process.env[k]).join(', ')}).`);
+  }
+  return {
+    certificate: process.env.IOS_CERTIFICATE_BASE64,
+    password: process.env.IOS_CERTIFICATE_PASSWORD,
+    profile: process.env.IOS_PROVISIONING_PROFILE_BASE64,
+    teamId: process.env.IOS_TEAM_ID,
+    identity: process.env.IOS_CODE_SIGN_IDENTITY || 'iPhone Distribution',
+  };
+}
+
+// Install the distribution certificate and provisioning profile into a temporary keychain,
+// then point the Godot preset at them so export produces a signed .ipa.
+async function prepareIos() {
+  if (process.platform !== 'darwin') {
+    throw new Error('iOS export requires macOS with Xcode. Run this job on a macos-* GitHub runner.');
+  }
+  const xcode = spawnSync('xcodebuild', ['-version'], { encoding: 'utf8' });
+  if (xcode.status !== 0) throw new Error('xcodebuild is missing. Install Xcode and accept the license.');
+  const secrets = iosSigningSecrets();
+  if (!secrets) {
+    return `Xcode project only (unsigned). Set IOS_CERTIFICATE_BASE64, IOS_CERTIFICATE_PASSWORD, IOS_PROVISIONING_PROFILE_BASE64 and IOS_TEAM_ID for a signed IPA. ${xcode.stdout.trim().split('\n')[0]}.`;
+  }
+
+  const dir = join(root, '.cache', 'ios-signing');
+  await mkdir(dir, { recursive: true });
+  const certPath = join(dir, 'certificate.p12');
+  const profilePath = join(dir, 'profile.mobileprovision');
+  await writeFile(certPath, Buffer.from(secrets.certificate, 'base64'));
+  await writeFile(profilePath, Buffer.from(secrets.profile, 'base64'));
+
+  const keychain = join(dir, 'signing.keychain-db');
+  const keychainPassword = 'rfm-ios-ci';
+  for (const args of [
+    ['delete-keychain', keychain],
+    ['create-keychain', '-p', keychainPassword, keychain],
+    ['set-keychain-settings', '-lut', '21600', keychain],
+    ['unlock-keychain', '-p', keychainPassword, keychain],
+    ['import', certPath, '-P', secrets.password, '-A', '-t', 'cert', '-f', 'pkcs12', '-k', keychain],
+    ['set-key-partition-list', '-S', 'apple-tool:,apple:,codesign:', '-s', '-k', keychainPassword, keychain],
+  ]) {
+    // delete-keychain fails when the keychain does not exist yet; ignore that.
+    const result = spawnSync('security', args, { encoding: 'utf8' });
+    if (result.status !== 0 && args[0] !== 'delete-keychain') {
+      throw new Error(`security ${args[0]} failed: ${(result.stderr || result.stdout || '').trim()}`);
+    }
+  }
+  const listed = spawnSync('security', ['list-keychain', '-d', 'user'], { encoding: 'utf8' });
+  const existing = (listed.stdout || '').split('\n').map(line => line.trim().replace(/^"|"$/g, '')).filter(Boolean);
+  spawnSync('security', ['list-keychain', '-d', 'user', '-s', keychain, ...existing], { stdio: 'inherit' });
+
+  // UUID is embedded in the profile plist.
+  const decoded = spawnSync('security', ['cms', '-D', '-i', profilePath], { encoding: 'utf8' });
+  if (decoded.status !== 0) throw new Error('Failed to decode the provisioning profile.');
+  const uuidMatch = decoded.stdout.match(/<key>UUID<\/key>\s*<string>([^<]+)<\/string>/);
+  if (!uuidMatch) throw new Error('Provisioning profile has no UUID.');
+  const profileUuid = uuidMatch[1];
+  const profilesDir = join(homedir(), 'Library', 'MobileDevice', 'Provisioning Profiles');
+  await mkdir(profilesDir, { recursive: true });
+  await writeFile(join(profilesDir, `${profileUuid}.mobileprovision`), await readFile(profilePath));
+
+  // prepare runs after the preset is written: rewrite signing fields and switch to IPA output.
+  const presetPath = join(root, '.cache', 'export-project-' + name, 'export_presets.cfg');
+  let preset = await readFile(presetPath, 'utf8');
+  const replacements = [
+    ['application/app_store_team_id=""', `application/app_store_team_id=${JSON.stringify(secrets.teamId)}`],
+    ['application/export_project_only=true', 'application/export_project_only=false'],
+    ['application/code_sign_identity_release=""', `application/code_sign_identity_release=${JSON.stringify(secrets.identity)}`],
+    ['application/provisioning_profile_uuid_release=""', `application/provisioning_profile_uuid_release=${JSON.stringify(profileUuid)}`],
+    ['application/export_method_release=1', `application/export_method_release=${iosExportMethod()}`],
+  ];
+  for (const [from, to] of replacements) {
+    if (!preset.includes(from)) throw new Error(`iOS preset marker missing: ${from}`);
+    preset = preset.replace(from, to);
+  }
+  await writeFile(presetPath, preset);
+
+  platform.directory = false;
+  platform.output = 'Rally Fans Simulator.ipa';
+  return `Signed IPA (${secrets.identity}, team ${secrets.teamId}, profile ${profileUuid}).`;
 }
 
 // Godot reads the SDK and JDK locations from its editor settings, not from the preset.
@@ -159,8 +261,21 @@ run(godot, ['--headless', '--editor', '--path', project, '--import']);
 const note = platform.prepare ? await platform.prepare() : '';
 run(godot, ['--headless', '--path', project, '--script', 'res://tools/bake/bake_rally_tracks.gd']);
 run(godot, ['--headless', '--path', project, '--script', 'res://tools/bake/bake_village.gd']);
-run(godot, ['--headless', '--path', project, '--export-release', platform.preset, join(output, platform.output)]);
-const size = (await stat(join(output, platform.output))).size;
-if (size < 1024 * 1024) throw new Error('Exported archive is suspiciously small.');
-if (platform.pck && (await stat(join(output, platform.pck))).size < 1024 * 1024) throw new Error('Exported game data (.pck) is suspiciously small.');
-console.log(`${platform.preset} ready: ${join(output, platform.output)} (${(size / 1048576).toFixed(1)} MiB). ${note}`);
+run(godot, ['--headless', '--path', project, '--export-release', platform.preset, join(output, platform.output)], { timeout: 600000 });
+const product = join(output, platform.output);
+if (platform.directory) {
+  // iOS writes an Xcode project tree; pack it so the CI artifact is a single file.
+  const { readdir } = await import('node:fs/promises');
+  const entries = await readdir(product).catch(() => []);
+  if (!entries.length) throw new Error('iOS export produced an empty directory.');
+  const archive = join(output, platform.archive);
+  run('python3', ['-c', 'import shutil,sys; shutil.make_archive(sys.argv[2].removesuffix(".zip"), "zip", sys.argv[1])', product, archive]);
+  const size = (await stat(archive)).size;
+  if (size < 1024 * 1024) throw new Error('Exported iOS project archive is suspiciously small.');
+  console.log(`${platform.preset} ready: ${archive} (${(size / 1048576).toFixed(1)} MiB). ${note}`);
+} else {
+  const size = (await stat(product)).size;
+  if (size < 1024 * 1024) throw new Error('Exported archive is suspiciously small.');
+  if (platform.pck && (await stat(join(output, platform.pck))).size < 1024 * 1024) throw new Error('Exported game data (.pck) is suspiciously small.');
+  console.log(`${platform.preset} ready: ${product} (${(size / 1048576).toFixed(1)} MiB). ${note}`);
+}

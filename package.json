@@ -24,7 +24,8 @@
     "build:macos": "node scripts/build-desktop.mjs --platform=macos",
     "build:linux": "node scripts/build-desktop.mjs --platform=linux",
     "build:windows": "node scripts/build-desktop.mjs --platform=windows",
-    "build:android": "node scripts/build-desktop.mjs --platform=android"
+    "build:android": "node scripts/build-desktop.mjs --platform=android",
+    "build:ios": "node scripts/build-desktop.mjs --platform=ios"
   },
   "devDependencies": {
     "wrangler": "4.147.0"

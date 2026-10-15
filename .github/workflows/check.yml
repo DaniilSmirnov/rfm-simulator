@@ -115,7 +115,7 @@ jobs:
       - name: Validate Worker deploy configuration
         run: |
           mkdir -p .cache
-          printf '%s' '{"VK_APP_SECRET":"ci-dry-run-only"}' > .cache/ci-secrets.json
+          printf '%s' '{\"VK_APP_SECRET\":\"ci-dry-run-only\"}' > .cache/ci-secrets.json
           chmod 600 .cache/ci-secrets.json
           npx wrangler deploy --dry-run --outdir .cache/worker --secrets-file .cache/ci-secrets.json
           rm -f .cache/ci-secrets.json
@@ -133,7 +133,7 @@ jobs:
 
       - name: Detect physical Web template
         id: physics
-        run: node -e 'const fs = require("node:fs"); const m = JSON.parse(fs.readFileSync("engine/manifest.json")); fs.appendFileSync(process.env.GITHUB_OUTPUT, "enabled=" + Boolean(m.physics_3d) + "\nwebsocket=" + Boolean(m.websocket) + "\nwebrtc=" + Boolean(m.webrtc) + "\n");'
+        run: node -e 'const fs = require("node:fs"); const m = JSON.parse(fs.readFileSync("engine/manifest.json")); fs.appendFileSync(process.env.GITHUB_OUTPUT, "enabled=" + Boolean(m.physics_3d) + "\\nwebsocket=" + Boolean(m.websocket) + "\\nwebrtc=" + Boolean(m.webrtc) + "\\n");'
 
       - name: Verify exported physics in Chromium
         if: steps.physics.outputs.enabled == 'true'
@@ -226,6 +226,55 @@ jobs:
         with:
           name: android-apk
           path: dist-android/
+          retention-days: 7
+          if-no-files-found: error
+
+  ios:
+    name: iOS build
+    runs-on: macos-14
+    timeout-minutes: 45
+    env:
+      # Signed IPA when all four secrets exist; otherwise an unsigned Xcode project zip.
+      IOS_CERTIFICATE_BASE64: ${{ secrets.IOS_CERTIFICATE_BASE64 }}
+      IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+      IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+      IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+      IOS_CODE_SIGN_IDENTITY: ${{ secrets.IOS_CODE_SIGN_IDENTITY }}
+      IOS_EXPORT_METHOD: ${{ secrets.IOS_EXPORT_METHOD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Export iOS (signed IPA when secrets exist, else Xcode project)
+        run: npm run build:ios
+      - name: Verify IPA signature or Xcode project layout
+        run: |
+          if [ -f "dist-ios/Rally Fans Simulator.ipa" ]; then
+            unzip -l "dist-ios/Rally Fans Simulator.ipa" | tee ipa-list.txt
+            grep -q "Payload/" ipa-list.txt
+            rm -rf ipa-check
+            unzip -q "dist-ios/Rally Fans Simulator.ipa" -d ipa-check
+            app=$(find ipa-check/Payload -maxdepth 1 -name '*.app' -print -quit)
+            test -n "$app"
+            codesign -dv --verbose=4 "$app" 2>&1 | tee codesign.txt
+            grep -q "Authority=" codesign.txt
+            grep -R --include='Info.plist' -n 'ru.rallyfansmap.rallyfanssimulator' "$app" | head -5
+          else
+            unzip -q "dist-ios/RallyFansSimulator-ios-xcode.zip" -d ios-check
+            find ios-check -maxdepth 4 -type d | head -40 | tee tree.txt
+            test -n "$(find ios-check -name '*.xcodeproj' -print -quit)"
+            grep -R --include='*.pbxproj' --include='Info.plist' -n 'ru.rallyfansmap.rallyfanssimulator' ios-check | head -5
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-build
+          path: dist-ios/
           retention-days: 7
           if-no-files-found: error
 
