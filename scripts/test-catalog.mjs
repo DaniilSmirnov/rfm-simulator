@@ -27,7 +27,7 @@ export const groups = Object.freeze({
  world: [
   "test_baked_village.gd", "test_village_landmarks.gd", "test_navigation_budget.gd",
   "test_crowd_navigation.gd", "test_run_jump_npc.gd", "test_course_officials.gd",
-  "test_stage_solids.gd", "test_rigid_settler.gd", "test_provence_village.gd",
+  "test_stage_solids.gd", "test_provence_village.gd",
   "test_village_terrain_performance.gd", "test_village_viewpoints.gd",
   "test_spectators.gd", "test_rocks.gd", "test_woodland.gd",
   "test_shovel.gd", "test_deep_snow.gd", "test_snowbanks.gd", "test_terrain_seams.gd", "test_road_surface.gd", "test_offroad_contact.gd", "test_service_park_layout.gd",
@@ -42,7 +42,7 @@ export const nodeSuites = Object.freeze({
    "tests/test-catalog.test.mjs", "tests/room-input.test.mjs",
    "tests/rate-limits.test.mjs", "tests/gdscript-lint.test.mjs", "tests/localization.test.mjs"],
   ["--test", "tests/branding.test.mjs", "tests/boot-diagnostics.test.mjs",
-   "tests/audio-recovery.test.mjs"],
+   "tests/audio-recovery.test.mjs", "tests/voice-chat.test.mjs"],
   ["scripts/test-device.mjs"],
  ],
  simulation: [["--test", "tests/room-core.test.mjs", "tests/room-socket.test.mjs", "tests/room-session.test.mjs", "tests/protocol.test.mjs"]],

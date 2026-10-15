@@ -275,6 +275,8 @@ func _set_paused(value: bool) -> void:
 func _input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch and event.pressed and not mobile_mode:
 		enable_mobile()
+	if event is InputEventKey and event.physical_keycode == KEY_V and not event.echo and room != null and room.voice != null:
+		room.voice.set_ptt(event.pressed)
 
 func _ready() -> void:
 	Loc.setup()
@@ -363,7 +365,7 @@ func _ready() -> void:
 	print("[RFM] Запуск завершён")
 
 func _setup_input() -> void:
-	var bindings = {"forward": [KEY_W, KEY_UP], "back": [KEY_S, KEY_DOWN], "left": [KEY_A, KEY_LEFT], "right": [KEY_D, KEY_RIGHT], "brake": [KEY_SPACE], "jump": [KEY_SPACE], "sprint": [KEY_SHIFT], "interact": [KEY_F], "table": [KEY_Z], "flag": [KEY_V], "chairs": [KEY_C], "grill": [KEY_G], "firewood": [KEY_J], "cauldron": [KEY_H], "beer": [KEY_B], "eat": [], "collect": [], "mount_mushroom": [], "eat_mushroom": [], "eat_berries": [KEY_K], "rally": [KEY_R], "tow": [KEY_T], "map": [KEY_M], "recover": [KEY_HOME], "pause_demo": [KEY_ESCAPE], "placement_confirm": [KEY_ENTER], "placement_rotate": [KEY_Q], "placement_cancel": []}
+	var bindings = {"forward": [KEY_W, KEY_UP], "back": [KEY_S, KEY_DOWN], "left": [KEY_A, KEY_LEFT], "right": [KEY_D, KEY_RIGHT], "brake": [KEY_SPACE], "jump": [KEY_SPACE], "sprint": [KEY_SHIFT], "interact": [KEY_F], "table": [KEY_Z], "flag": [], "radio": [KEY_V], "chairs": [KEY_C], "grill": [KEY_G], "firewood": [KEY_J], "cauldron": [KEY_H], "beer": [KEY_B], "eat": [], "collect": [], "mount_mushroom": [], "eat_mushroom": [], "eat_berries": [KEY_K], "rally": [KEY_R], "tow": [KEY_T], "map": [KEY_M], "recover": [KEY_HOME], "pause_demo": [KEY_ESCAPE], "placement_confirm": [KEY_ENTER], "placement_rotate": [KEY_Q], "placement_cancel": []}
 	for action in bindings:
 		if not InputMap.has_action(action):
 			InputMap.add_action(action)
