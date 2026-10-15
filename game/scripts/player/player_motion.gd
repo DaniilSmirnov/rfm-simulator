@@ -4,6 +4,8 @@ extends RefCounted
 # State lives on game (walker, car, heading, speed, ...) where the room,
 # subsystems and tests read it.
 const DeepSnowRules = preload("res://scripts/stages/winter/deep_snow.gd")
+const Hitbox = preload("res://scripts/cars/car_hitbox.gd")
+const PropContact = preload("res://scripts/cars/prop_contact.gd")
 const Motion = preload("res://scripts/cars/vehicle_motion.gd")
 const CarRegistry = preload("res://scripts/cars/car_registry.gd")
 const Stage = preload("res://scripts/stages/stage.gd")
@@ -51,30 +53,30 @@ func drive(delta: float) -> void:
 		next.x = clampf(next.x, -185, 185)
 		next.z = clampf(next.z, game.stage.parks.z_limits.x, game.stage.parks.z_limits.y)
 		# Fast enough, the car throws people in its way instead of stopping.
-		game.injuries.vehicle_sweep(previous, next, game.vehicle_motion.velocity, game.injuries.PLAYER_CAR_SPEED)
-		var rock_hit = game.stage.rock_hit(previous, next, 0.85)
+		var car_shape = Hitbox.shape(Hitbox.bounds(game.car), game.heading)
+		game.injuries.vehicle_sweep(previous, next, game.vehicle_motion.velocity, game.injuries.PLAYER_CAR_SPEED, car_shape)
+		var rock_hit = Hitbox.rocks(game.stage, previous, next, car_shape)
 		if not rock_hit.is_empty():
 			next = rock_hit.position
 			var closing = game.vehicle_motion.rock_impulse(rock_hit.normal, game.heading)
+			if float(rock_hit.get("radius", 0)) >= 1.0: game.vehicle_motion.velocity = Vector3.ZERO
 			game.speed = game.vehicle_motion.velocity.dot(forward)
 			if closing > 1.0 and game.rock_impact_timer <= 0:
 				game.condition = maxf(0, game.condition - minf(14.0, closing * 0.65))
 				game.impact_shake = minf(0.8, closing * 0.055)
 				game.rock_impact_timer = 0.4
 				game.toast("Удар о камень! Можно отъехать назад.")
-		var solid_hit = game.stage.solids.hit(previous, next, 0.85)
-		if not solid_hit.is_empty():
-			next = solid_hit.position
-			var impact_speed = game.vehicle_motion.velocity.length()
-			game.knock_solid(solid_hit, game.vehicle_motion.velocity)
-			var closing = game.vehicle_motion.rock_impulse(solid_hit.normal, game.heading)
-			game.speed = game.vehicle_motion.velocity.dot(forward)
-			if closing > 1 and game.rock_impact_timer <= 0:
-				game.condition = maxf(0, game.condition - minf(20.0, closing * 0.85))
-				game.impact_shake = minf(0.8, impact_speed * 0.055)
-				game.rock_impact_timer = 0.4
-				game.toast("Столкновение с препятствием!")
-		var tree_index = game.stage.obstacle_hit(previous, next, 0.95, true)
+		var solid = PropContact.resolve(game.stage, game.vehicle_motion, previous, next, dt, car_shape)
+		next = solid.position
+		for impact in solid.hits:
+			game.knock_solid(impact.hit, impact.velocity)
+		game.speed = game.vehicle_motion.velocity.dot(forward)
+		if solid.closing > 1 and game.rock_impact_timer <= 0:
+			game.condition = maxf(0, game.condition - minf(20.0, solid.closing * 0.85))
+			game.impact_shake = minf(0.8, solid.closing * 0.055)
+			game.rock_impact_timer = 0.4
+			game.toast("Столкновение с препятствием!")
+		var tree_index = Hitbox.tree(game.stage, previous, next, car_shape)
 		var hit = tree_index >= 0
 		if hit and game.vehicle_motion.velocity.length() > 5 and not game.stage.fallen.has(tree_index):
 			knock_tree(tree_index, game.vehicle_motion.velocity)
@@ -82,7 +84,7 @@ func drive(delta: float) -> void:
 			hit = true
 		if hit:
 			game.condition = maxf(0, game.condition - game.vehicle_motion.velocity.length() * 1.4)
-			game.vehicle_motion.velocity *= -0.25
+			game.vehicle_motion.velocity = Vector3.ZERO if tree_index >= 0 else game.vehicle_motion.velocity * -0.25
 			game.speed = game.vehicle_motion.velocity.dot(forward)
 			game.toast("Удар! Сбавь скорость.")
 		else:
@@ -110,7 +112,7 @@ func knock_tree(index: int, direction_hint: Vector3) -> void:
 		game.toast("Дерево падает!")
 
 # A walker meets cars as perches (perches.gd: climbed onto or walked into),
-# a driver as round volumes. `limit` is the highest top the walker's feet can
+# a driver as model-sized oriented boxes. `limit` is the highest top the walker's feet can
 # take (default: a step up from `start`).
 func contact_blocked(start: Vector3, end: Vector3, driving: bool, limit: float = NAN) -> bool:
 	var cars = []
@@ -125,30 +127,31 @@ func contact_blocked(start: Vector3, end: Vector3, driving: bool, limit: float =
 			people.append(person.avatar.position)
 	if driving:
 		for group in game.spectators.groups:
-			cars.append(group.car.position)
+			cars.append(Hitbox.contact(group.car))
 		for racer in game.racers:
-			cars.append(racer.node.position)
-		cars.append_array(game.park_traffic.car_positions())
+			cars.append(Hitbox.contact(racer.node))
+		for park in game.park_traffic.parked:
+			for node in park.values():
+				if is_instance_valid(node): cars.append(Hitbox.contact(node))
+		for entry in game.park_traffic.movers:
+			if is_instance_valid(entry.node): cars.append(Hitbox.contact(entry.node))
 	for peer in game.room.peers.values():
 		if peer.state == null:
 			continue
 		if driving:
-			cars.append(game.room.v(peer.state.car))
+			cars.append({"position": game.room.v(peer.state.car), "yaw": peer.state.get("heading", 0), "box": Hitbox.bounds(peer.car)})
 		var feet = game.room.v(peer.state.pos)
 		# Somebody standing on a car rides over the road, not in the way.
 		if not peer.state.in_car and not game.injuries.is_down("player:%s" % peer.id) and not (driving and perches.riding_above(feet, start)):
 			people.append(feet)
+	var car_shape = Hitbox.shape(Hitbox.bounds(game.car), game.heading) if driving else {}
 	for other in cars:
-		if Motion.swept_hit(start + Vector3(0, 0.65, 0), end + Vector3(0, 0.65, 0), other + Vector3(0, 0.65, 0), 2.5 if driving else 1.75):
-			# Let an initially overlapping walker move out of the volume.
-			if end.distance_to(other) <= start.distance_to(other):
-				return true
+		if Hitbox.blocked(start, end, car_shape, other): return true
 	for person in people:
-		if not driving and minf(start.y, end.y) >= person.y + 1.5:
-			continue
-		if Motion.swept_hit(start + Vector3(0, 0.7, 0), end + Vector3(0, 0.7, 0), person + Vector3(0, 0.7, 0), 1.55 if driving else 0.6):
-			if end.distance_to(person) <= start.distance_to(person):
-				return true
+		if driving:
+			if Hitbox.blocked(start, end, car_shape, {"position": person, "person": true}): return true
+		elif minf(start.y, end.y) < person.y + 1.5 and Motion.swept_hit(start + Vector3(0, 0.7, 0), end + Vector3(0, 0.7, 0), person + Vector3(0, 0.7, 0), 0.6):
+			if end.distance_to(person) <= start.distance_to(person): return true
 	return false
 
 func walk(delta: float) -> void:

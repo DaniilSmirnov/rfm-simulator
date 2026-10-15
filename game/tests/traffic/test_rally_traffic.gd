@@ -30,6 +30,10 @@ func pair(game, moving: bool = false, start: float = 150.0) -> Array:
 	follower.slide = 0.0
 	follower.pace = 1.15
 	follower.drive_speed = 27.6
+	for racer in [lead, follower]:
+		var direction: Vector3 = game.race_direction(racer.s)
+		racer.node.rotation.y = atan2(-direction.x, -direction.z)
+		racer.previous = racer.node.position
 	return [lead, follower]
 func run() -> void:
 	var game = load("res://main.tscn").instantiate()
@@ -60,8 +64,8 @@ func run() -> void:
 		avoided = avoided or absf(follower.line) > 2.7
 		safe = safe and follower.state == "racing" and follower.node.position.distance_to(lead.node.position) > 2.5
 	check(avoided and safe and follower.s > lead.s + 12, "crew safely steers around a stranded car and continues")
-	# Overtake on the open plateau, clear of the narrow Grand-Rue entry.
-	cars = pair(game, true, 175.0)
+	# Overtake on the open approach, before parked village cars require braking.
+	cars = pair(game, true, 80.0)
 	lead = cars[0]
 	follower = cars[1]
 	var overtook = false
@@ -74,6 +78,8 @@ func run() -> void:
 			logged = true
 			print("OVERTAKE COLLISION: frame=%d lead=%.2f/%s/line%.2f/speed%.2f follower=%.2f/%s/line%.2f/speed%.2f distance=%.2f" % [i, lead.s, lead.state, lead.line, lead.drive_speed, follower.s, follower.state, follower.line, follower.drive_speed, lead.node.position.distance_to(follower.node.position)])
 		safe = safe and follower.state == "racing" and lead.state == "racing"
+	if not (overtook and safe):
+		print("OVERTAKE RESULT: lead=%.2f/%s/line%.2f follower=%.2f/%s/line%.2f speed=%.2f safe=%s" % [lead.s, lead.state, lead.line, follower.s, follower.state, follower.line, follower.drive_speed, safe])
 	check(overtook and safe, "faster moving crew overtakes a slower moving crew without collision")
 	cars = pair(game)
 	lead = cars[0]

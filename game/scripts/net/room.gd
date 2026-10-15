@@ -8,6 +8,7 @@ extends Node
 #   room_lobby.gd      the menu panel and the in-game room line
 #   direct_link.gd     WebRTC data channels host <-> guest (browser builds)
 #   drive_prediction.gd  guest car prediction / host-side simulation
+const Hitbox = preload("res://scripts/cars/car_hitbox.gd")
 const Prediction = preload("res://scripts/net/drive_prediction.gd")
 const SnapshotMotion = preload("res://scripts/net/snapshot_motion.gd")
 const Props = preload("res://scripts/core/props.gd")
@@ -552,7 +553,7 @@ func check_remote_collisions() -> void:
 		# A friend's car (not simulated here) throws people it runs into.
 		var speed = absf(float(peer.state.get("speed", 0)))
 		if speed > game.injuries.PLAYER_CAR_SPEED and current.distance_to(previous) > 0.001:
-			game.injuries.vehicle_sweep(previous, current, (current - previous).normalized() * speed, game.injuries.PLAYER_CAR_SPEED)
+			game.injuries.vehicle_sweep(previous, current, (current - previous).normalized() * speed, game.injuries.PLAYER_CAR_SPEED, Hitbox.shape(Hitbox.bounds(peer.car), float(peer.state.get("heading", 0))))
 		peer.last_car = current
 
 # ---------------------------------------------------------------- leaving
@@ -605,14 +606,19 @@ func predict_drive(delta: float) -> bool:
 func drive_context(owner: String) -> Dictionary:
 	var contacts: Array = []
 	for group in game.spectators.groups:
-		contacts.append({"position": group.car.position})
+		contacts.append(Hitbox.contact(group.car))
 	for racer in game.racers:
-		contacts.append({"position": racer.node.position})
+		contacts.append(Hitbox.contact(racer.node))
+	for park in game.park_traffic.parked:
+		for node in park.values():
+			if is_instance_valid(node): contacts.append(Hitbox.contact(node))
+	for entry in game.park_traffic.movers:
+		if is_instance_valid(entry.node): contacts.append(Hitbox.contact(entry.node))
 	if owner != player_id:
-		contacts.append({"position": game.car.position})
+		contacts.append(Hitbox.contact(game.car))
 	for id in peers:
 		if id != owner and peers[id].state != null:
-			contacts.append({"position": v(peers[id].state.car)})
+			contacts.append({"position": v(peers[id].state.car), "yaw": peers[id].state.get("heading", 0), "box": Hitbox.bounds(peers[id].car)})
 	# Everybody on foot except the driver; people lying after a hit are passed.
 	for person in game.injuries.people():
 		if person.key != "player:" + owner and not game.injuries.is_down(person.key) and not person.get("riding", false):

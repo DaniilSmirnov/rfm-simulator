@@ -66,6 +66,7 @@ func knock(key: String, velocity: Vector3) -> bool:
 	if velocity.length() < (5.0 if r.anchored else 0.8):
 		return false
 	r.anchored = false
+	r.node.set_meta("prop_anchored", false)
 	r.changed = true
 	r.velocity = (r.velocity + velocity * clampf(30.0 / r.mass, 0.08, 0.8)).limit_length(12.0)
 	if r.mass < 300.0:
@@ -174,6 +175,7 @@ func apply_pending() -> void:
 		r.node.global_position = game.room.v(item.pos)
 		r.node.global_rotation = game.room.v(item.rot)
 		r.anchored = bool(item.get("anchored", false))
+		r.node.set_meta("prop_anchored", r.anchored)
 		r.changed = true
 	pending = waiting
 

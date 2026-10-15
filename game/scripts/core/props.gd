@@ -466,13 +466,13 @@ static func player_car(variant: int = 0, bake: bool = true) -> Node3D:
 # One mesh for the static body and one for the trunk lid; wheels, cargo and
 # lights that flash stay separate. Identical cars share the baked meshes.
 static func bake_car(car: Node3D, cache_key: String) -> Node3D:
+	load("res://scripts/cars/car_hitbox.gd").bounds(car)
 	MeshMerge.bake(car, cache_key)
 	var hinge = car.get_node_or_null("TrunkHinge")
 	if hinge != null:
 		MeshMerge.bake(hinge, cache_key + ":lid", [], "BakedLid")
 	return load("res://scripts/player/perches.gd").mark(car)
 
-# The generic faceted car of cars.json, built by the shared car_body.gd.
 static func player_car_shell(variant: int) -> Node3D:
 	var p: Dictionary = PLAYER_MODELS[variant]
 	var root = Node3D.new()

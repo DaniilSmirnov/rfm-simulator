@@ -119,12 +119,14 @@ func run() -> void:
 	root.add_child(village)
 	village.build()
 	var lamp = village.solids.lamps[0].body
+	# Isolate the lamp contact from neighbouring facades for the full car body.
+	lamp.position = village.at(12)
 	var center = village.solids.relative_pose(lamp).origin
-	var start = center + Vector3(1.05, 0, 0)
+	var start = center + Vector3(3.0, 0, 0)
 	start.y = village.ground(start)
 	client.reset(start, PI / 2)
 	client.motion.velocity = Vector3(-20, 0, 0)
-	client.predict(2, 1, 0, false, village, 0)
+	client.predict(8, 1, 0, false, village, 0)
 	check(client.events.any(func(e): return e.kind == "city" and e.hit.kind == "lamp") and client.condition < 100, "village lamp contact emits destruction and applies damage")
 	var blocked_recovery = client.node.position
 	client.context = {"racing": true}

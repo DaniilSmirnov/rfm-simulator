@@ -27,6 +27,7 @@ static func register(solids, node: Node3D, mass: float = 15.0, anchored: bool = 
 		return {}
 	node.set_meta("unbatched", true)
 	node.set_meta("prop_key", key)
+	node.set_meta("prop_anchored", anchored)
 	var record = {"node": node, "key": key, "mass": mass, "anchored": anchored, "box": box}
 	solids.movables.append(record)
 	var found = false

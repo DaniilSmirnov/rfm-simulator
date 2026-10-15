@@ -2,6 +2,7 @@ extends RefCounted
 # Small deterministic solver: tyre friction, inertia and unilateral spring contact.
 var handling = preload("res://scripts/cars/player_handling.gd").new()
 var drive_clock = 0.0
+var prop_contacts: Dictionary = {}
 var velocity = Vector3.ZERO
 var vertical_speed = 0.0
 var grounded = true
