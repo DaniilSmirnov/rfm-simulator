@@ -959,7 +959,6 @@ func die(reason: String) -> void:
 
 func _show_result(title: String, body: String) -> void:
 	hud.show_result(title, body)
-
 func _prepare_capture() -> void:
 	car.position = stage.clearings[1] + Vector3(5, 0, 2)
 	car.position.y = stage.ground(car.position)
