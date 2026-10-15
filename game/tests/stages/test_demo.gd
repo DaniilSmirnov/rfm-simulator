@@ -109,7 +109,9 @@ func run() -> void:
 		if r.state == "stranded":
 			break
 	check(r.state == "stranded", "car stranded off road")
-	scene.car.position = r.node.position + Vector3(8, 0, 0)
+	# Keep the player car outside rope range: the helper must select the crew,
+	# even when its new stopping point makes the road direction exactly +X.
+	scene.car.position = r.node.position + Vector3(20, 0, 20)
 	scene.walker = r.node.position + scene.Recovery.road_direction(scene, r) * 3
 	scene.stage.trees.clear()
 	scene.stage.rocks.clear()
