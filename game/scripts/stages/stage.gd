@@ -773,7 +773,7 @@ func rock_hit(start: Vector3, end: Vector3, radius: float, allow_escape: bool = 
 		position.x = point.x
 		position.z = point.y
 		earliest = t
-		best = {"position": position, "normal": Vector3(normal.x, 0, normal.y), "time": t}
+		best = {"position": position, "normal": Vector3(normal.x, 0, normal.y), "time": t, "radius": rock.radius}
 	return best
 
 func woodland_spot(pos: Vector3, padding: float = 0.0) -> bool:

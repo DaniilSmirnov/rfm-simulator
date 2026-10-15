@@ -4,6 +4,7 @@ extends RefCounted
 # solo player) simulates them; guests see them through the room snapshot.
 # State lives on game (racers, stones, tow) where the room and HUD read it.
 const CarRegistry = preload("res://scripts/cars/car_registry.gd")
+const PropContact = preload("res://scripts/cars/prop_contact.gd")
 const Motion = preload("res://scripts/cars/vehicle_motion.gd")
 const Props = preload("res://scripts/core/props.gd")
 const RallyHandling = preload("res://scripts/traffic/rally_handling.gd")
@@ -101,6 +102,21 @@ func spawn_racer(forced: String = "") -> void:
 	# A standing start from the line; a car placed straight on the road flies.
 	racer.drive_speed = 0.0 if waiting != null else Traffic.speed_limit(game, racer, 0.0)
 	game.toast(Loc.t("Приближается %s, номер %d!") % [Loc.t(node.get_meta("model")), node.get_meta("number")])
+
+func prop_collision(racer: Dictionary, start: Vector3, end: Vector3, delta: float) -> Dictionary:
+	var result = PropContact.resolve(game.stage, racer.motion, start, end, delta)
+	for impact in result.hits:
+		game.knock_solid(impact.hit, impact.velocity)
+	if result.blocked:
+		stop_at_obstacle(racer)
+	return result
+
+func stop_at_obstacle(racer: Dictionary) -> void:
+	racer.motion.velocity = Vector3.ZERO
+	racer.drive_speed = 0.0
+	racer.self_rejoin = false
+	racer.state = "stranded" if racer.kind in ["stuck", "crash"] else "stopped"
+	racer.age = 0.0
 
 # Every client rolls the wheels of the crews, course cars and park convoy it
 # sees, whoever moves them: the host's simulation or a guest's snapshots.
@@ -236,18 +252,15 @@ func update_racers_step(delta: float) -> void:
 				if not driving:
 					RallyHandling.free_step(racer, game.stage, dt, red_hold)
 				var contact = game.stage.rock_hit(previous, node.position, 0.85)
-				var city_contact = game.stage.solids.hit(previous, node.position, 0.85)
-				if not city_contact.is_empty() and (contact.is_empty() or previous.distance_squared_to(city_contact.position) < previous.distance_squared_to(contact.position)):
-					contact = city_contact
-				if not contact.is_empty():
-					if contact.has("kind"):
-						game.knock_solid(contact, racer.motion.velocity)
-					node.position = contact.position
+				var solid = prop_collision(racer, previous, contact.position if not contact.is_empty() else node.position, dt)
+				node.position = solid.position
+				if not solid.blocked and not contact.is_empty():
 					var impact: float = racer.motion.rock_impulse(contact.normal, node.rotation.y)
+					if float(contact.get("radius", 0)) >= 1.0: stop_at_obstacle(racer)
 					if impact > 9.0: racer.self_rejoin = false
-					racer.state = "rock_bounce"
+					if float(contact.get("radius", 0)) < 1.0: racer.state = "rock_bounce"
 					count_racer(racer)
-				if racer.state == "racing":
+				if racer.state in ["racing", "stopped", "stranded"]:
 					break
 			if racer.state != "racing" and not racer.get("self_rejoin", false) and racer.motion.grounded and racer.motion.velocity.length() < 0.65:
 				racer.motion.velocity = Vector3.ZERO
@@ -270,31 +283,25 @@ func update_racers_step(delta: float) -> void:
 				racer.rejoin_time = 0.0
 				racer.rejoin_plan = 0.0
 				racer.state = "rock_bounce"
+				if float(contact.get("radius", 0)) >= 1.0: stop_at_obstacle(racer)
 				racer.age = 0.0
 				count_racer(racer)
-		if was_racing and not ServiceTraffic.priority(racer):
-			var city_hit = game.stage.solids.hit(racer.previous, node.position, 0.85)
-			if not city_hit.is_empty():
-				var velocity: Vector3 = (node.position - racer.previous) / maxf(delta, 0.001)
-				game.knock_solid(city_hit, velocity)
-				node.position = city_hit.position
-				racer.motion.velocity = velocity
-				racer.motion.velocity.y = 0
-				var impact: float = racer.motion.rock_impulse(city_hit.normal, node.rotation.y)
-				racer.self_rejoin = RallyRejoin.eligible(racer) and impact <= 9.0
-				racer.rejoin_time = 0.0
-				racer.rejoin_plan = 0.0
-				racer.state = "rock_bounce"
-				racer.age = 0.0
-				count_racer(racer)
+		if was_racing and racer.state in ["racing", "offroad"] and not ServiceTraffic.priority(racer):
+			var velocity: Vector3 = (node.position - racer.previous) / maxf(delta, 0.001)
+			velocity.y = 0
+			racer.motion.velocity = velocity
+			var solid = prop_collision(racer, racer.previous, node.position, delta)
+			node.position = solid.position
+			if not solid.blocked and velocity.length() > 0.001:
+				racer.drive_speed *= racer.motion.velocity.length() / velocity.length()
 		if racer.state in ["racing", "offroad", "rock_bounce"]:
 			var tree_hit = game.stage.obstacle_hit(racer.previous, node.position, 0.95)
 			if tree_hit >= 0 and not ServiceTraffic.priority(racer):
 				if not game.stage.fallen.has(tree_hit):
 					game.knock_tree(tree_hit, node.position - racer.previous)
-				else:
-					racer.state = "stranded" if racer.kind in ["stuck", "crash"] else "stopped"
-					racer.age = 0
+				node.position = racer.previous
+				stop_at_obstacle(racer)
+
 			# Competitors can hit people; police and ambulances yield and use the safety guard.
 			if not ServiceTraffic.applies(racer):
 				game.injuries.vehicle_sweep(racer.previous, node.position, (node.position - racer.previous) / maxf(delta, 0.001), game.injuries.CREW_SPEED)

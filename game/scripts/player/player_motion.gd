@@ -4,6 +4,7 @@ extends RefCounted
 # State lives on game (walker, car, heading, speed, ...) where the room,
 # subsystems and tests read it.
 const DeepSnowRules = preload("res://scripts/stages/winter/deep_snow.gd")
+const PropContact = preload("res://scripts/cars/prop_contact.gd")
 const Motion = preload("res://scripts/cars/vehicle_motion.gd")
 const CarRegistry = preload("res://scripts/cars/car_registry.gd")
 const Stage = preload("res://scripts/stages/stage.gd")
@@ -56,24 +57,23 @@ func drive(delta: float) -> void:
 		if not rock_hit.is_empty():
 			next = rock_hit.position
 			var closing = game.vehicle_motion.rock_impulse(rock_hit.normal, game.heading)
+			if float(rock_hit.get("radius", 0)) >= 1.0: game.vehicle_motion.velocity = Vector3.ZERO
 			game.speed = game.vehicle_motion.velocity.dot(forward)
 			if closing > 1.0 and game.rock_impact_timer <= 0:
 				game.condition = maxf(0, game.condition - minf(14.0, closing * 0.65))
 				game.impact_shake = minf(0.8, closing * 0.055)
 				game.rock_impact_timer = 0.4
 				game.toast("Удар о камень! Можно отъехать назад.")
-		var solid_hit = game.stage.solids.hit(previous, next, 0.85)
-		if not solid_hit.is_empty():
-			next = solid_hit.position
-			var impact_speed = game.vehicle_motion.velocity.length()
-			game.knock_solid(solid_hit, game.vehicle_motion.velocity)
-			var closing = game.vehicle_motion.rock_impulse(solid_hit.normal, game.heading)
-			game.speed = game.vehicle_motion.velocity.dot(forward)
-			if closing > 1 and game.rock_impact_timer <= 0:
-				game.condition = maxf(0, game.condition - minf(20.0, closing * 0.85))
-				game.impact_shake = minf(0.8, impact_speed * 0.055)
-				game.rock_impact_timer = 0.4
-				game.toast("Столкновение с препятствием!")
+		var solid = PropContact.resolve(game.stage, game.vehicle_motion, previous, next, dt)
+		next = solid.position
+		for impact in solid.hits:
+			game.knock_solid(impact.hit, impact.velocity)
+		game.speed = game.vehicle_motion.velocity.dot(forward)
+		if solid.closing > 1 and game.rock_impact_timer <= 0:
+			game.condition = maxf(0, game.condition - minf(20.0, solid.closing * 0.85))
+			game.impact_shake = minf(0.8, solid.closing * 0.055)
+			game.rock_impact_timer = 0.4
+			game.toast("Столкновение с препятствием!")
 		var tree_index = game.stage.obstacle_hit(previous, next, 0.95, true)
 		var hit = tree_index >= 0
 		if hit and game.vehicle_motion.velocity.length() > 5 and not game.stage.fallen.has(tree_index):
@@ -82,7 +82,7 @@ func drive(delta: float) -> void:
 			hit = true
 		if hit:
 			game.condition = maxf(0, game.condition - game.vehicle_motion.velocity.length() * 1.4)
-			game.vehicle_motion.velocity *= -0.25
+			game.vehicle_motion.velocity = Vector3.ZERO if tree_index >= 0 else game.vehicle_motion.velocity * -0.25
 			game.speed = game.vehicle_motion.velocity.dot(forward)
 			game.toast("Удар! Сбавь скорость.")
 		else:

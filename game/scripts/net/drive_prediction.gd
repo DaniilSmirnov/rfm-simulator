@@ -1,4 +1,5 @@
 extends RefCounted
+const PropContact = preload("res://scripts/cars/prop_contact.gd")
 const Motion = preload("res://scripts/cars/vehicle_motion.gd")
 const CarRegistry = preload("res://scripts/cars/car_registry.gd")
 # Commands sent per sync. The backlog itself is bounded by simulated time so
@@ -51,7 +52,7 @@ func reset(position: Vector3, heading: float) -> void:
 	replaying = false
 
 func snapshot() -> Dictionary:
-	return {"recovery_ack": recovery_ack, "condition": condition, "impact_timer": impact_timer, "ack": ack, "pos": [node.position.x, node.position.y, node.position.z], "yaw": yaw, "velocity": [motion.velocity.x, motion.velocity.y, motion.velocity.z], "vertical": motion.vertical_speed, "initialized": motion.initialized, "grounded": motion.grounded, "pitch": motion.pitch, "roll": motion.roll, "steering": motion.handling.steering, "yaw_rate": motion.handling.yaw_rate, "longitudinal": motion.handling.longitudinal_accel}
+	return {"prop_contacts": motion.prop_contacts.duplicate(), "recovery_ack": recovery_ack, "condition": condition, "impact_timer": impact_timer, "ack": ack, "pos": [node.position.x, node.position.y, node.position.z], "yaw": yaw, "velocity": [motion.velocity.x, motion.velocity.y, motion.velocity.z], "vertical": motion.vertical_speed, "initialized": motion.initialized, "grounded": motion.grounded, "pitch": motion.pitch, "roll": motion.roll, "steering": motion.handling.steering, "yaw_rate": motion.handling.yaw_rate, "longitudinal": motion.handling.longitudinal_accel}
 
 # The snapshot as it travels: rounded to a millimetre (a hundredth of a
 # milliradian for angles) and without the fields that sit at the value restore()
@@ -68,6 +69,8 @@ func wire_snapshot() -> Dictionary:
 		wire.impact_timer = snappedf(s.impact_timer, 0.01)
 	if s.recovery_ack != 0:
 		wire.recovery_ack = s.recovery_ack
+	if not s.prop_contacts.is_empty():
+		wire.prop_contacts = s.prop_contacts
 	return wire
 
 static func _round_vec(v: Array, step: float) -> Array:
@@ -77,6 +80,7 @@ func restore(s: Dictionary) -> void:
 	node.position = Vector3(s.pos[0], s.pos[1], s.pos[2])
 	yaw = s.yaw
 	motion.velocity = Vector3(s.velocity[0], s.velocity[1], s.velocity[2])
+	motion.prop_contacts = s.get("prop_contacts", {}).duplicate()
 	motion.vertical_speed = s.vertical
 	motion.grounded = s.grounded
 	motion.initialized = bool(s.get("initialized", true))
@@ -122,20 +126,20 @@ func step(c: Dictionary, stage, model: int) -> void:
 		if not rock.is_empty():
 			next = rock.position
 			var closing = motion.rock_impulse(rock.normal, yaw)
+			if float(rock.get("radius", 0)) >= 1.0: motion.velocity = Vector3.ZERO
 			if closing > 1 and impact_timer <= 0:
 				condition = maxf(0, condition - minf(14, closing * 0.65))
 				impact_timer = 0.4
 				emit_event({"kind": "impact", "speed": closing})
-		var solid = stage.solids.hit(previous, next, 0.85)
-		if not solid.is_empty():
-			next = solid.position
+		var solid = PropContact.resolve(stage, motion, previous, next, dt)
+		next = solid.position
+		for impact in solid.hits:
 			# Event kind "city" is the room protocol name for solid scenery hits.
-			emit_event({"kind": "city", "hit": solid, "velocity": motion.velocity})
-			var closing = motion.rock_impulse(solid.normal, yaw)
-			if closing > 1 and impact_timer <= 0:
-				condition = maxf(0, condition - minf(20, closing * 0.85))
-				impact_timer = 0.4
-				emit_event({"kind": "impact", "speed": closing})
+			emit_event({"kind": "city", "hit": impact.hit, "velocity": impact.velocity})
+		if solid.closing > 1 and impact_timer <= 0:
+			condition = maxf(0, condition - minf(20, solid.closing * 0.85))
+			impact_timer = 0.4
+			emit_event({"kind": "impact", "speed": solid.closing})
 		var tree = stage.obstacle_hit(previous, next, 0.95, true)
 		var blocked = tree >= 0
 		if blocked and motion.velocity.length() > 5 and not stage.fallen.has(tree):
@@ -150,7 +154,7 @@ func step(c: Dictionary, stage, model: int) -> void:
 		if blocked:
 			condition = maxf(0, condition - motion.velocity.length() * 1.4)
 			emit_event({"kind": "impact", "speed": motion.velocity.length()})
-			motion.velocity *= -0.25
+			motion.velocity = Vector3.ZERO if tree >= 0 else motion.velocity * -0.25
 		else:
 			node.position = next
 		var speed = motion.velocity.dot(forward)
