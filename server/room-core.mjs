@@ -203,10 +203,15 @@ export class RoomState {
   signal(token, to, data, now) {
     if (this.data.closed) throw new RoomError(410, 'Создатель вышел. Комната закрыта.');
     const p = this.member(token);
-    this.rateLimit(p, 'signal', now, protocol.direct.signals_per_10s, 10000);
+    const voice = data && data.space === 'voice';
+    this.rateLimit(p, voice ? 'voice_signal' : 'signal', now, voice ? protocol.voice.signals_per_10s : protocol.direct.signals_per_10s, 10000);
     const target = typeof to === 'string' ? this.data.players[to] : undefined;
-    if (!target || target.id === p.id || (p.id !== this.data.host && target.id !== this.data.host)) throw new RoomError(404, 'Участник не найден.');
-    if (!data || typeof data !== 'object' || Array.isArray(data) || JSON.stringify(data).length > protocol.direct.max_signal_bytes) throw new RoomError(400, 'Некорректное сообщение.');
+    if (!target || target.id === p.id || (!voice && p.id !== this.data.host && target.id !== this.data.host)) throw new RoomError(404, 'Участник не найден.');
+    const maxBytes = voice ? protocol.voice.max_signal_bytes : protocol.direct.max_signal_bytes;
+    if (!data || typeof data !== 'object' || Array.isArray(data) || JSON.stringify(data).length > maxBytes) throw new RoomError(400, 'Некорректное сообщение.');
+    if (voice && (typeof data.kind !== 'string' || !['offer', 'answer', 'candidate', 'bye'].includes(data.kind) || typeof data.session !== 'string' || data.session.length < 8 || data.session.length > 96)) {
+      throw new RoomError(400, 'Некорректное голосовое сообщение.');
+    }
     p.seen = now;
     return { from: p.id, to: target.id };
   }
