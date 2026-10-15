@@ -17,7 +17,8 @@ func run() -> void:
 	host.room.is_host = true
 	host.room.player_id = "host"
 	guest.room.player_id = "guest"
-	var origin = host.stage.clearings[0]
+	# The clearing sign now has collision; use the open ground beside it.
+	var origin = host.stage.clearings[0] + Vector3(0, 0, -2.5)
 	host.walker = origin
 	check(host.place_table(origin, 0.5), "table can be positioned and rotated freely")
 	var chair_pos = origin + Vector3(3, 0, 0)

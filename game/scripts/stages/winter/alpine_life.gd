@@ -140,6 +140,7 @@ func _build_flag(spot: Dictionary) -> void:
 				Props.box(hinge, Vector3(0.1, 0.26 - band * 0.26, 0), Vector3(0.2, 0.26, 0.02), colors[band])
 		strips.append(hinge)
 		parent = hinge
+	preload("res://scripts/core/prop_registry.gd").register(stage.solids, pole, 5, true)
 	flags.append({"node": pole, "strips": strips, "phase": rng.randf() * TAU})
 
 func _build_flare(at: Vector3) -> void:

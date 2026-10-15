@@ -9,6 +9,8 @@ const COLLISION_CELL = 16.0
 var stage: Node3D
 var obstacles: Array[Dictionary] = []
 var lamps: Array[Dictionary] = []
+var movables: Array[Dictionary] = []
+var next_prop_id = 0
 var lamp_targets: Dictionary = {}
 # Floors, stairs and roof terraces people can walk on (never car contact).
 var walk_surfaces: Array[Dictionary] = []
@@ -82,12 +84,13 @@ func relative_pose(node: Node3D) -> Transform3D:
 
 # Static solids are indexed once into a coarse grid; lamps keep live transforms.
 func index() -> void:
+	obstacles.assign(obstacles.filter(func(o): return is_instance_valid(o.body)))
 	collision_cells.clear()
 	moving_obstacle_ids.clear()
 	collision_radius_factor = 1.0
 	for id in range(obstacles.size()):
 		var object: Dictionary = obstacles[id]
-		if object.body is RigidBody3D:
+		if object.body is RigidBody3D or object.get("movable", false):
 			moving_obstacle_ids.append(id)
 			continue
 		var pose = relative_pose(object.body)
@@ -116,21 +119,30 @@ func candidates(start: Vector3, end: Vector3, radius: float) -> Array:
 			for id in collision_cells.get(Vector2i(x, z), []):
 				seen[id] = true
 	for id in moving_obstacle_ids:
-		seen[id] = true
+		var object: Dictionary = obstacles[id]
+		if not is_instance_valid(object.body): continue
+		var expanded: Vector3 = object.half + Vector3.ONE * radius
+		var bounds = relative_pose(object.body) * AABB(-expanded, expanded * 2.0)
+		if bounds.end.x >= low.x and bounds.position.x <= high.x and bounds.end.z >= low.z and bounds.position.z <= high.z:
+			seen[id] = true
 	var ids = seen.keys()
 	ids.sort()
 	return ids
 
 # Earliest swept-sphere contact against every solid box, in world space.
-func hit(start: Vector3, end: Vector3, radius: float, escape: bool = true, center_offset: Vector3 = Vector3(0, 0.35, 0)) -> Dictionary:
+func hit(start: Vector3, end: Vector3, radius: float, escape: bool = true, center_offset: Vector3 = Vector3(0, 0.35, 0), ignored: Node3D = null, ignored_roots: Array = []) -> Dictionary:
 	if obstacles.is_empty():
 		return {}
 	var result = {}
 	var earliest = INF
 	for id in candidates(start + center_offset, end + center_offset, radius):
 		var object: Dictionary = obstacles[id]
-		var pose: Transform3D = relative_pose(object.body) if object.body is RigidBody3D else object.collision_pose
-		var inverse: Transform3D = pose.affine_inverse() if object.body is RigidBody3D else object.collision_inverse
+		if not is_instance_valid(object.body) or (ignored != null and (object.body == ignored or ignored.is_ancestor_of(object.body))):
+			continue
+		if ignored_roots.any(func(node): return node == object.body or node.is_ancestor_of(object.body)):
+			continue
+		var pose: Transform3D = relative_pose(object.body) if object.body is RigidBody3D or object.get("movable", false) else object.collision_pose
+		var inverse: Transform3D = pose.affine_inverse() if object.body is RigidBody3D or object.get("movable", false) else object.collision_inverse
 		var a: Vector3 = inverse * (start + center_offset)
 		var b: Vector3 = inverse * (end + center_offset)
 		var half: Vector3 = object.half + Vector3.ONE * radius
@@ -169,7 +181,7 @@ func hit(start: Vector3, end: Vector3, radius: float, escape: bool = true, cente
 			normal = -travel.normalized() if travel.length_squared() > 0.000001 else Vector3.RIGHT
 		normal = (pose.basis * normal).normalized()
 		earliest = near
-		result = {"position": start.lerp(end, near) + normal * 0.035, "normal": normal, "kind": object.kind, "id": object.id}
+		result = {"position": start.lerp(end, near) + normal * 0.035, "normal": normal, "kind": object.kind, "id": object.id, "prop": object.get("prop", "")}
 	return result
 
 # True when the ground footprint around p (padded) is outside every solid and
@@ -182,7 +194,9 @@ func clear(p: Vector3, padding: float = 0.0) -> bool:
 			return false
 	for id in candidates(Vector3(p.x, 0, p.z), Vector3(p.x, 0, p.z), padding + 0.5):
 		var object: Dictionary = obstacles[id]
-		var pose: Transform3D = relative_pose(object.body) if object.body is RigidBody3D else object.collision_pose
+		if not is_instance_valid(object.body):
+			continue
+		var pose: Transform3D = relative_pose(object.body) if object.body is RigidBody3D or object.get("movable", false) else object.collision_pose
 		var local = pose.affine_inverse() * p
 		if absf(local.x) <= object.half.x + padding and absf(local.z) <= object.half.z + padding:
 			return false
@@ -208,7 +222,9 @@ const GROUND_PATCH = 13
 
 func _ground_under(lamp_state: Dictionary, at: Vector3) -> void:
 	if lamp_state.has("ground"):
-		return
+		if lamp_state.ground.position.distance_to(Vector3(at.x, 0, at.z)) < 3.0: return
+		lamp_state.ground.queue_free()
+		lamp_state.erase("ground")
 	var origin = Vector3(roundf(at.x), 0, roundf(at.z))
 	var half = (GROUND_PATCH - 1) / 2
 	var heights = PackedFloat32Array()
@@ -239,6 +255,8 @@ func _physics_process(delta: float) -> void:
 	for i in range(lamps.size()):
 		var lamp_state = lamps[i]
 		lamp_state.body.freeze = not (simulate and lamp_state.fallen)
+		if simulate and lamp_state.fallen:
+			_ground_under(lamp_state, lamp_state.body.position)
 		if not simulate and lamp_targets.has(i):
 			var target = lamp_targets[i]
 			var weight = 1.0 - exp(-delta * 16.0)

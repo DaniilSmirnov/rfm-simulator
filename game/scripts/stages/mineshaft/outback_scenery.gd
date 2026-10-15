@@ -1,4 +1,5 @@
 extends RefCounted
+const Movable = preload("res://scripts/core/prop_registry.gd")
 # Scenery of «Майншафт» (mineshaft.gd): open eucalyptus woodland on red earth
 # and golden tussock grass, granite tors and termite mounds, the old mine
 # headframe at the giant jump, a homestead with a windmill and water tank, and
@@ -276,7 +277,9 @@ func _kangaroo_signs() -> void:
 	signs.name = "KangarooSigns"
 	stage.add_child(signs)
 	for item in KANGAROO_SIGNS:
-		_kangaroo_sign(_roadside_post(signs, item[0], item[1]))
+		var post = _roadside_post(signs, item[0], item[1])
+		_kangaroo_sign(post)
+		MeshMerge.bake(post)
 
 # A sign post on the verge facing oncoming crews at station `s`.
 func _roadside_post(signs: Node3D, s: float, side: float) -> Node3D:
@@ -287,7 +290,7 @@ func _roadside_post(signs: Node3D, s: float, side: float) -> Node3D:
 	post.position = p
 	var direction = stage.direction(s)
 	post.rotation.y = atan2(-direction.x, -direction.z)
-	stage.rocks.append(Records.rock(p, 0.15, 2.4, Records.BARRIER))
+
 	return post
 
 func _kangaroo_sign(post: Node3D) -> void:
@@ -311,6 +314,8 @@ func _kangaroo_sign(post: Node3D) -> void:
 	Props.box(post, Vector3(0, 1.4, 0.06), Vector3(KANGAROO_PLATE.x, KANGAROO_PLATE.y, 0.04), SIGN_YELLOW)
 	BlockText.fit(Props.label_3d(post, Vector3(0, 1.4, 0.085), "NEXT 14 km", 40, 0.004, SIGN_BLACK), KANGAROO_CAPTION)
 
+	Movable.register(stage.solids, post, 20, true)
+
 # White "DRIVE ON LEFT IN AUSTRALIA" signs like the ones at Australian tourist
 # spots: a black-framed plate, keep-left pictogram on top, lettering below.
 func _drive_left_signs() -> void:
@@ -318,7 +323,9 @@ func _drive_left_signs() -> void:
 	signs.name = "DriveLeftSigns"
 	stage.add_child(signs)
 	for item in DRIVE_LEFT_SIGNS:
-		_drive_left_sign(_roadside_post(signs, item[0], item[1]))
+		var post = _roadside_post(signs, item[0], item[1])
+		_drive_left_sign(post)
+		MeshMerge.bake(post)
 
 func _drive_left_sign(post: Node3D) -> void:
 	var y0 = 1.9
@@ -340,6 +347,8 @@ func _drive_left_sign(post: Node3D) -> void:
 	var left = BlockText.fit(Props.label_3d(post, Vector3(0, y0 - 0.33, front_text), "ON LEFT", 64, 0.004, SIGN_BLACK), DRIVE_LEFT_CAPTION)
 	drive.pixel_size = minf(drive.pixel_size, left.pixel_size)
 	BlockText.fit(Props.label_3d(post, Vector3(0, y0 - 0.55, front_text), "IN AUSTRALIA", 40, 0.004, SIGN_BLACK), Vector2(DRIVE_LEFT_CAPTION.x, 0.1))
+
+	Movable.register(stage.solids, post, 20, true)
 
 # Arrow pointing up (`way` 1) or down (-1) along the lane.
 func _sign_arrow(post: Node3D, at: Vector3, way: float) -> void:
@@ -366,11 +375,13 @@ func _jump_sign() -> void:
 	var sign = _anchor("MineshaftSign", p, -stage.direction(s))
 	for x in [-1.6, 1.6]:
 		Props.cylinder(sign, Vector3(x, 1.3, 0), 0.12, 0.12, 2.6, TIMBER, 6)
-		stage.rocks.append(Records.rock(sign.to_global(Vector3(x, 0, 0)), 0.2, 2.6, Records.BARRIER))
+
 	Props.box(sign, Vector3(0, 2.2, 0), Vector3(4.2, 0.9, 0.12), Color("6b4b30"))
 	Props.label_3d(sign, Vector3(0, 2.25, 0.07), "MINESHAFT", 96, 0.006, Color("f0dcae"))
 	Props.label_3d(sign, Vector3(0, 1.92, 0.07), "ТРАМПЛИН 120 м", 48, 0.005, Color("f0dcae"))
 	Props.label_3d(sign, Vector3(0, 2.25, -0.07), "MINESHAFT", 96, 0.006, Color("f0dcae"), PI)
+
+	Movable.register(stage.solids, sign, 20, true)
 
 # Fans traditionally score every crew over the Mineshaft on big cards.
 func _scorecards() -> void:
@@ -387,6 +398,7 @@ func _scorecards() -> void:
 		Props.cylinder(card, Vector3(0, 0.75, 0), 0.03, 0.03, 1.5, TIMBER, 5)
 		Props.box(card, Vector3(0, 1.6, 0), Vector3(0.75, 0.55, 0.04), Color("f4f1e6"))
 		Props.label_3d(card, Vector3(0, 1.6, 0.025), scores[i], 96, 0.005, Color("b0322a"))
+		Movable.register(stage.solids, card, 3, true)
 
 # A shallow creek crosses the road at the bottom of the plunge: a strip of
 # water draped over the gully floor, edged with river stones.

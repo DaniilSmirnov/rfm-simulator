@@ -164,6 +164,7 @@ func station(s: float, sign: float, title: String) -> void:
 	Props.table(desk, 0, "desk")
 	# The timing clock: a dark box with a lit display facing the judges.
 	Props.box(desk, Vector3(0.4, 0.94, 0), Vector3(0.17, 0.10, 0.11), Color("293339"))
+	preload("res://scripts/core/prop_registry.gd").register(stage.solids, desk, 15)
 
 func update(game, delta: float, guest: bool) -> void:
 	for person in people:

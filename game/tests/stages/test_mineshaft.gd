@@ -131,13 +131,13 @@ func run() -> void:
 	for tree in stage.trees:
 		clear_road = clear_road and stage.road_distance(tree) > 9.0
 	check(clear_road, "no tree grows on the road")
-	for structure in ["MineHeadframe", "Homestead", "KangarooSigns", "DriveLeftSigns", "MineshaftSign"]:
+	for structure in ["MineHeadframe", "Homestead", "MineshaftSign"]:
 		var node = stage.get_node_or_null(structure)
 		check(node != null and node.has_meta("baked_parts"), "%s is built as a merged mesh" % structure)
 	var drive_left = stage.get_node("DriveLeftSigns")
 	var posts = drive_left.get_children().filter(func(n): return not n is MeshInstance3D)
 	check(posts.size() == 2, "two Drive On Left signs")
-	check(drive_left.get_meta("baked_text", []).has("DRIVE") and drive_left.get_meta("baked_text", []).has("IN AUSTRALIA"), "Drive On Left signs carry their lettering")
+	check(posts.all(func(post): return post.has_meta("prop_key") and post.get_meta("baked_text", []).has("DRIVE") and post.get_meta("baked_text", []).has("IN AUSTRALIA")), "independent movable Drive On Left signs carry their lettering")
 	var verge = true
 	for sign in posts:
 		verge = verge and stage.road_distance(sign.global_position) > stage.road_width(0.0) * 0.5 + 1.0

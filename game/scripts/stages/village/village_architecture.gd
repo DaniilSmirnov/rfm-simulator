@@ -1,4 +1,5 @@
 extends RefCounted
+const Movable = preload("res://scripts/core/prop_registry.gd")
 # Built scenery of the Provençal village: terraced stone houses with shutters,
 # génoise eaves and canal-tile roofs, shops, the square with plane trees and a
 # fountain, the church, mairie, café, lavoir, cemetery, pavements and lamps,
@@ -73,8 +74,6 @@ func build(cooperative: bool = false) -> void:
 	_cooperative()
 	await village.pause(cooperative)
 
-# ---------------------------------------------------------------- helpers
-
 func node(name: String, p: Vector3, yaw: float) -> Node3D:
 	var root = Node3D.new()
 	root.name = name
@@ -88,7 +87,8 @@ func grounded(p: Vector3) -> Vector3:
 	return p
 
 func finish(root: Node3D) -> void:
-	batcher.collect(root, root.transform)
+	if not root.has_meta("prop_key"):
+		batcher.collect(root, root.transform)
 
 func color(list: Array, index: int) -> Color:
 	return Color(list[posmod(index, list.size())])
@@ -224,8 +224,6 @@ func climber(parent: Node3D, x: float, height: float, bloom: Color) -> void:
 		var y = height * (0.35 + i * 0.1)
 		var spread = 0.4 + sin(i * 1.7) * 0.25
 		Props.box(parent, Vector3(x + spread * (1.0 if i % 2 else -1.0), y, -0.1), Vector3(0.9, 0.55, 0.16), Color("4e7436") if i % 2 else bloom)
-
-# ---------------------------------------------------------------- houses
 
 # A terraced house: origin at the foot of the facade, local -Z toward the street.
 func house(p: Vector3, yaw: float, width: float, depth: float, floors: int, seed_value: int, shop: Dictionary = {}, gable_ends: bool = true, annex: bool = false) -> Node3D:
@@ -434,8 +432,6 @@ func _roof_terrace_house(s: float, side_sign: float) -> void:
 	reserve(p, root.rotation.y, Vector2(4.4, 4.4))
 	finish(root)
 
-# ---------------------------------------------------------------- streets
-
 # Raised limestone pavements and kerbs on both sides of the village streets.
 func _pavements() -> void:
 	var root = node("VillagePavements", Vector3.ZERO, 0.0)
@@ -473,6 +469,7 @@ func _gates() -> void:
 			var label = Props.label_3d(root, Vector3(0, 2.0, face * 0.05), "Ля Газ в Польен", 44, 0.0045, Color("1f2326"), 0.0 if face > 0 else PI)
 			label.double_sided = false
 		solids.solid(root, Vector3(0, 1.6, 0), Vector3(2.9, 1.0, 0.12), "sign")
+		Movable.register(solids, root, 25, true)
 		finish(root)
 
 func _lamps() -> void:
@@ -499,7 +496,7 @@ func _parked_vehicles() -> void:
 			"moped":
 				_moped(root, Vector3.ZERO)
 				_moped(root, Vector3(0, 0, 1.1))
-				solids.solid(root, Vector3(0, 0.5, 0.55), Vector3(0.6, 1.0, 2.6), "street_furniture")
+
 			_:
 				_small_car(root, spot[2] == "van", Color("8fb3c4") if int(s) % 3 else Color("d9c46a"))
 		finish(root)
@@ -531,16 +528,17 @@ func _small_car(root: Node3D, van: bool, paint: Color) -> void:
 			var wheel = Props.cylinder(body, Vector3(x, 0.3, z), 0.3, 0.3, 0.2, Color("222524"), 10)
 			wheel.rotation.z = PI / 2
 	solids.solid(root, Vector3(0, 0.85, 0), Vector3(1.5, 1.7, length), "parked_car")
+	Movable.register(solids, root, 900, false)
 
 func _moped(root: Node3D, p: Vector3) -> void:
+	var first = root.get_child_count()
 	for z in [-0.55, 0.55]:
 		var wheel = Props.cylinder(root, p + Vector3(0, 0.25, z), 0.25, 0.25, 0.06, Color("222524"), 10)
 		wheel.rotation.z = PI / 2
 	Props.box(root, p + Vector3(0, 0.45, 0), Vector3(0.14, 0.12, 1.1), Color("3b6b8c"))
 	Props.box(root, p + Vector3(0, 0.62, 0.2), Vector3(0.3, 0.1, 0.5), Color("2e2a26"))
 	Props.box(root, p + Vector3(0, 0.85, -0.5), Vector3(0.6, 0.04, 0.04), IRON)
-
-# ---------------------------------------------------------------- square
+	Movable.group(solids, root, first, 65)
 
 func square_point(x: float, z: float) -> Vector3:
 	var sq: Dictionary = village.square
@@ -640,6 +638,7 @@ func bench(parent: Node3D, p: Vector3, yaw: float) -> void:
 	for x in [-0.75, 0.75]:
 		Props.box(root, Vector3(x, 0.24, 0.02), Vector3(0.06, 0.48, 0.5), IRON)
 	solids.solid(root, Vector3(0, 0.45, 0.05), Vector3(1.8, 0.9, 0.6), "street_furniture")
+	Movable.register(solids, root, 35, false)
 
 func _fountain(parent: Node3D, p: Vector3) -> void:
 	var root = Node3D.new()
@@ -671,6 +670,7 @@ func _stall(parent: Node3D, p: Vector3, goods: Array, index: int) -> void:
 	for i in range(8):
 		Props.box(root, Vector3(-0.95 + (i % 4) * 0.63, 0.92 + (i / 4) * 0.02, -0.25 + (i / 4) * 0.5), Vector3(0.5, 0.12, 0.38), goods[i % 2])
 	solids.solid(root, Vector3(0, 0.6, 0), Vector3(2.4, 1.2, 1.1), "street_furniture")
+	Movable.register(solids, root, 45, false)
 
 # Monument aux morts: a stone obelisk on a stepped base inside a little railing.
 func _memorial(parent: Node3D, p: Vector3) -> void:
@@ -686,8 +686,6 @@ func _memorial(parent: Node3D, p: Vector3) -> void:
 		var angle = i * TAU / 12.0
 		Props.cylinder(root, Vector3(cos(angle) * 1.6, 0.4, sin(angle) * 1.6), 0.03, 0.03, 0.8, IRON, 5)
 	solids.solid(root, Vector3(0, 1.0, 0), Vector3(3.3, 2.0, 3.3), "monument")
-
-# ---------------------------------------------------------------- landmarks
 
 func _church() -> void:
 	var pose = Interiors.church_pose(self)
@@ -782,15 +780,16 @@ func _cafe_table(parent: Node3D, p: Vector3, index: int) -> void:
 	Props.cylinder(table, Vector3(-0.15, 0.85, -0.08), 0.03, 0.03, 0.18, Color("5b8a5a"), 8)
 	for side_sign in [-1.0, 1.0]:
 		var chair = Node3D.new()
-		table.add_child(chair)
-		chair.position = Vector3(side_sign * 0.72, 0, 0)
+		parent.add_child(chair)
+		chair.position = p + Vector3(side_sign * 0.72, 0, 0)
 		chair.rotation.y = side_sign * PI * 0.5
 		Props.box(chair, Vector3(0, 0.45, 0), Vector3(0.42, 0.04, 0.42), Color("b8743d"))
 		Props.box(chair, Vector3(0, 0.7, 0.2), Vector3(0.42, 0.45, 0.04), Color("b8743d"))
 		for x in [-0.18, 0.18]:
 			for z in [-0.18, 0.18]:
 				Props.cylinder(chair, Vector3(x, 0.22, z), 0.015, 0.015, 0.45, IRON, 4)
-	solids.solid(table, Vector3(0, 0.45, 0), Vector3(2.0, 0.9, 0.8), "street_furniture")
+		Movable.register(solids, chair, 5)
+	Movable.register(solids, table, 12)
 
 # Lavoir: the open washhouse with a long stone basin under a tiled roof.
 func _lavoir() -> void:
@@ -870,8 +869,9 @@ func _distillery() -> void:
 	Props.cylinder(shed, Vector3(1.4, 1.2, 2.5), 0.7, 0.7, 1.8, Color("8a8f8a"), 10)
 	solids.solid(shed, Vector3(0, 1.0, 2.5), Vector3(4.6, 2.0, 2.0), "landmark")
 	for i in range(6):
+		var first = shed.get_child_count()
 		Props.box(shed, Vector3(-4.6 + (i % 3) * 1.15, 0.35 + (i / 3) * 0.7, -2.0), Vector3(1.1, 0.68, 0.8), Color("9077b0"))
-	solids.solid(shed, Vector3(-3.45, 0.7, -2.0), Vector3(3.5, 1.4, 0.8), "landmark")
+		Movable.group(solids, shed, first, 18)
 	var chimney = Props.box(shed, Vector3(2.5, 4.6, 5.0), Vector3(0.6, 3.0, 0.6), Color("b9a582"))
 	village.add_anchor("smoke", shed.transform * Vector3(2.5, 6.2, 5.0))
 	reserve(shed.position, yaw, Vector2(4.0, 4.0))

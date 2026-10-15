@@ -171,7 +171,6 @@ func road_distance(pos: Vector3) -> float:
 func grip(pos: Vector3) -> float:
 	return biome.grip(pos)
 
-# Walking floor: jetty decks, wading and floating swimmers on lake stages.
 func walk_floor(pos: Vector3, ground_height: float) -> float:
 	return biome.walk_floor(pos, ground_height)
 
@@ -573,7 +572,7 @@ func fell(index: int, direction_hint: Vector3) -> bool:
 	var dir = Vector3(direction_hint.x, 0, direction_hint.z).normalized()
 	if dir.length_squared() < 0.5:
 		dir = Vector3.FORWARD
-	fallen[index] = {"direction": dir, "age": 0.0}
+	fallen[index] = {"direction": dir, "age": 0.0, "origin": trees[index]}
 	return true
 
 func update_fallen(delta: float) -> void:
@@ -591,7 +590,7 @@ func update_fallen(delta: float) -> void:
 		if detail_tree_visuals.has(index):
 			for part in detail_tree_visuals[index]:
 				var pose: Transform3D = part.pose
-				pose.origin = trees[index] + basis * (pose.origin - trees[index]) - part.center
+				pose.origin = trees[index] + basis * (pose.origin - f.origin) - part.center
 				pose.basis = basis * pose.basis
 				part.mesh.set_instance_transform(part.instance, pose)
 			continue
@@ -603,9 +602,6 @@ func update_fallen(delta: float) -> void:
 			var slot: Vector2i = forest_chunk_slots[index]
 			forest_layers[layer][slot.x].set_instance_transform(slot.y, Transform3D(basis * Basis.from_scale(Vector3(radius, height, radius)), trees[index] - forest_chunk_centers[slot.x] + Vector3(0, 0.2, 0) + basis * Vector3(0, y, 0)))
 
-# Shared-world providers this stage contributes to the room snapshot
-# (see world_sync.gd). Collision-relevant parts are applied before a guest
-# replays its own driving input.
 func sync_providers(game) -> Array:
 	var list: Array = []
 	var lamps_snapshot = func() -> Dictionary:
@@ -633,7 +629,7 @@ func tree_snapshot() -> Array:
 	var result = []
 	for index in fallen:
 		var f: Dictionary = fallen[index]
-		result.append({"id": index, "dir": [f.direction.x, 0, f.direction.z], "age": f.age})
+		result.append({"id": index, "dir": [f.direction.x, 0, f.direction.z], "age": f.age, "pos": [trees[index].x, trees[index].y, trees[index].z]})
 	return result
 
 func apply_trees(snapshot: Array) -> void:
@@ -644,17 +640,20 @@ func apply_trees(snapshot: Array) -> void:
 		fell(index, Vector3(f.dir[0], 0, f.dir[2]))
 		fallen[index].direction = Vector3(f.dir[0], 0, f.dir[2]).normalized()
 		fallen[index].age = maxf(fallen[index].age, float(f.age))
+		if f.has("pos"):
+			trees[index] = Vector3(f.pos[0], f.pos[1], f.pos[2])
+			fallen[index].erase("rendered_age")
+	_rebuild_tree_index()
 	update_fallen(0)
 
 static func flat(pos: Vector3) -> Vector2:
 	return Vector2(pos.x, pos.z)
 
-func obstacle_hit(start: Vector3, end: Vector3, radius: float, allow_escape: bool = false) -> int:
+func obstacle_hit(start: Vector3, end: Vector3, radius: float, allow_escape: bool = false, ignored: int = -1) -> int:
 	var a = flat(start)
 	var b = flat(end)
 	var candidates: Array = []
 	if tree_cells.is_empty() or indexed_tree_count != trees.size():
-		# Tests and external callers may append a temporary tree directly.
 		for index in range(trees.size()):
 			candidates.append(index)
 	else:
@@ -669,6 +668,7 @@ func obstacle_hit(start: Vector3, end: Vector3, radius: float, allow_escape: boo
 				for index in nearby:
 					candidates.append(index)
 	for index in candidates:
+		if index == ignored: continue
 		var c = flat(trees[index])
 		var d = c
 		var width = 0.2

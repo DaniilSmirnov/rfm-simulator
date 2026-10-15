@@ -151,7 +151,7 @@ func add_floater(node: Node3D, offset: float, length: float = 1.0) -> void:
 
 func _float(f: Dictionary, delta: float) -> void:
 	var node: Node3D = f.node
-	if not is_instance_valid(node):
+	if not is_instance_valid(node) or not is_water(node.position, 0.2):
 		return
 	var t = now()
 	var target = level(node.position) + wave(node.position.x, node.position.z, t) + float(f.offset)

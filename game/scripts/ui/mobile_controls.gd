@@ -95,7 +95,7 @@ func tow_caption() -> String:
 	game.injuries.play.injuries = game.injuries
 	var owner = str(game.room.player_id) if game.room.connected else "local"
 	var person = game.injuries.play.grips.has(owner) or game.injuries.play.nearest(game.walker, game.injuries.local_key()) != ""
-	return "Тащить" if not game.in_car and person else "Трос"
+	return "Тащить" if not game.in_car and (person or game.movable_props.nearby()) else "Трос"
 
 func _layout() -> void:
 	if not _has_role("stick"):

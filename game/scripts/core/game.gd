@@ -3,6 +3,7 @@ const NetProtocol = preload("res://scripts/net/net_protocol.gd")
 
 var cargo = preload("res://scripts/cars/car_cargo.gd").new()
 var camp_cooking = preload("res://scripts/camp/camp_cooking.gd").new()
+var movable_props = preload("res://scripts/core/movable_props.gd").new()
 var packing = preload("res://scripts/camp/camp_packing.gd").new()
 var interaction = preload("res://scripts/player/interaction.gd").new()
 # Game systems; game.gd keeps the shared state and one-line entry points.
@@ -281,6 +282,7 @@ func _ready() -> void:
 	foraging.game = self
 	interaction.game = self
 	packing.game = self
+	movable_props.game = self
 	cargo.game = self
 	camp_cooking.game = self
 	rng.randomize()
@@ -710,6 +712,8 @@ func _process(delta: float) -> void:
 	camp_actions.update_placement()
 	Props.animate_wheels(car)
 	cargo.update(delta)
+	movable_props.refresh()
+	if room.is_guest(): movable_props.apply_pending()
 	camp_cooking.update(delta, room.is_guest())
 	injuries.update(delta)
 	spectators.update(elapsed, delta, room.is_guest())
@@ -1003,7 +1007,7 @@ func can_tow_racer(racer: Dictionary) -> bool:
 	return crews.can_tow_racer(racer)
 
 func nearby_tow_target() -> bool:
-	return crews.nearby_tow_target() or injuries.nearby_person()
+	return crews.nearby_tow_target() or injuries.nearby_person() or movable_props.nearby()
 
 func recover_racer(racer: Dictionary) -> void:
 	crews.recover_racer(racer)
@@ -1012,12 +1016,7 @@ func count_racer(racer: Dictionary) -> void:
 	crews.count_racer(racer)
 
 func knock_solid(contact: Dictionary, velocity: Vector3) -> void:
-	if contact.get("kind", "") != "lamp" or velocity.length() <= 5:
-		return
-	if room.is_guest():
-		lamp_requests[int(contact.id)] = velocity
-	else:
-		stage.solids.knock_lamp(int(contact.id), velocity)
+	movable_props.solid_hit(contact, velocity)
 
 func sit_down() -> void:
 	player.sit_down()

@@ -1,4 +1,5 @@
 extends RefCounted
+const Movable = preload("res://scripts/core/prop_registry.gd")
 # Static scenery of the winter stage: everything that makes the road read as a
 # Monte-Carlo col in the Alpes-Maritimes rather than a generic snowy track.
 # Armco and low stone parapets above the drops, red-and-white snow poles,
@@ -160,7 +161,10 @@ static func build(stage) -> void:
 	root.name = "AlpineScenery"
 	stage.add_child(root)
 	_build_barriers(stage, root)
-	_build_snow_poles(stage, root)
+	var poles = Node3D.new()
+	poles.name = "SnowPoles"
+	root.add_child(poles)
+	_build_snow_poles(stage, poles)
 	_build_bend_signs(stage, root)
 	_build_road_signs(stage, root)
 	_build_rock_cut(stage, root)
@@ -241,25 +245,27 @@ static func _build_barriers(stage, root: Node3D) -> void:
 
 # Red-and-white poles mark the road edge for the snow plough.
 static func _build_snow_poles(stage, root: Node3D) -> void:
-	var poses: Array = []
-	var colors: Array = []
-	var pole = unit_cylinder(0.5, 0.5, 6)
 	for station in range(8, int(stage.LENGTH) - 8, 17):
-		for sign in [-1.0, 1.0]:
-			var s = float(station) + (4.0 if sign > 0 else 0.0)
-			var p: Vector3 = stage.at(s) + stage.side(s) * sign * (stage.road_width(s) * 0.5 + Banks.ROAD_MARGIN + Banks.WIDTH * 0.82)
-			if keeps_clear(stage, p, 0.0):
-				continue
-			p.y = stage.ground(p) - 0.25
+		for side in [-1.0, 1.0]:
+			var s = float(station) + (4.0 if side > 0 else 0.0)
+			var point: Vector3 = stage.at(s) + stage.side(s) * side * (stage.road_width(s) * 0.5 + Banks.ROAD_MARGIN + Banks.WIDTH * 0.82)
+			if keeps_clear(stage, point, 0.0): continue
+			point.y = stage.ground(point) - 0.25
+			var first = root.get_child_count()
 			for band in range(4):
-				poses.append(Transform3D(Basis.from_scale(Vector3(0.07, 0.6, 0.07)), p + Vector3.UP * (0.3 + band * 0.6)))
-				colors.append(Color("d23b2a") if band % 2 == 0 else Color("f3f1ea"))
-	batch(root, "SnowPoles", pole, poses, colors, 180.0)
+				Props.cylinder(root, point + Vector3.UP * (0.3 + band * 0.6), 0.035, 0.035, 0.6, Color("d23b2a") if band % 2 == 0 else Color("f3f1ea"), 6)
+			Movable.group(stage.solids, root, first, 3, true)
 
-static func _board(root: Node3D, p: Vector3, yaw: float, size: Vector2, color: Color, height: float) -> MeshInstance3D:
+static func _board(stage, root: Node3D, p: Vector3, yaw: float, size: Vector2, color: Color, height: float) -> MeshInstance3D:
+	var first = root.get_child_count()
 	Props.cylinder(root, p + Vector3.UP * height * 0.5, 0.045, 0.045, height, Color("8e969b"), 6)
 	var board = Props.box(root, p + Vector3.UP * (height + size.y * 0.5 - 0.1), Vector3(size.x, size.y, 0.05), color)
 	board.rotation.y = yaw
+	var holder = Node3D.new()
+	root.add_child(holder)
+	for child in root.get_children().slice(first, root.get_child_count() - 1):
+		child.reparent(holder, false)
+	Movable.register(stage.solids, holder, 15, true)
 	return board
 
 # Chevron boards on the outside of every tight bend.
@@ -274,7 +280,7 @@ static func _build_bend_signs(stage, root: Node3D) -> void:
 			var p = edge_point(stage, station, -inside, 1.3)
 			if keeps_clear(stage, p, 0.5):
 				continue
-			var board = _board(root, p, facing_traffic(stage, station), Vector2(0.95, 0.52), Color("c8352c"), 1.05)
+			var board = _board(stage, root, p, facing_traffic(stage, station), Vector2(0.95, 0.52), Color("c8352c"), 1.05)
 			var arrows = ">>>" if inside > 0.0 else "<<<"
 			Props.label_3d(board, Vector3(0, 0, 0.03), arrows, 110, 0.006, Color("f7f4ee"))
 
@@ -290,13 +296,13 @@ static func _build_road_signs(stage, root: Node3D) -> void:
 		stone.rotation.y = yaw
 		Props.box(stone, Vector3(0, 0.39, 0), Vector3(0.46, 0.12, 0.26), Color("c43a2d"))
 		Props.label_3d(stone, Vector3(0, 0.05, 0.125), "%d" % i, 64, 0.004, Color("2b2b2b"))
-		stage.rocks.append(Records.rock(p, 0.3, 0.6, Records.BARRIER))
+		Movable.group(stage.solids, root, root.get_child_count() - 1, 20, true)
 	var start = edge_point(stage, 16.0, 1.0, 1.4)
-	var arrow = _board(root, start, facing_traffic(stage, 16.0), Vector2(2.3, 0.95), Color("f4f2ec"), 1.6)
+	var arrow = _board(stage, root, start, facing_traffic(stage, 16.0), Vector2(2.3, 0.95), Color("f4f2ec"), 1.6)
 	Props.label_3d(arrow, Vector3(0, 0.17, 0.03), "COL DE TURINI  ↑", 64, 0.0032, Color("23272a"))
 	Props.label_3d(arrow, Vector3(0, -0.17, 0.03), "MONACO  ↓", 64, 0.0032, Color("23272a"))
 	var col_sign = edge_point(stage, 432.0, -1.0, 1.6)
-	var board = _board(root, col_sign, facing_traffic(stage, 432.0), Vector2(2.6, 1.15), Color("6a4a2e"), 1.7)
+	var board = _board(stage, root, col_sign, facing_traffic(stage, 432.0), Vector2(2.6, 1.15), Color("6a4a2e"), 1.7)
 	Props.label_3d(board, Vector3(0, 0.2, 0.03), "COL DE TURINI", 72, 0.0036, Color("f3ead7"))
 	Props.label_3d(board, Vector3(0, -0.22, 0.03), "ALT. 1607 m", 64, 0.0032, Color("f3ead7"))
 
@@ -551,7 +557,7 @@ static func _build_fans(stage, root: Node3D) -> void:
 		along = along.normalized()
 		var snowman = clearing + along * (5.2 if i % 2 == 0 else -5.2)
 		snowman.y = stage.ground(snowman)
-		_snowman(root, snowman, atan2(-along.x, -along.z) + (0.6 if i % 2 == 0 else -0.6), i)
+		_snowman(stage, root, snowman, atan2(-along.x, -along.z) + (0.6 if i % 2 == 0 else -0.6), i)
 		var flag = clearing - along * (4.0 if i % 2 == 0 else -4.0)
 		flag.y = stage.ground(flag)
 		var palette: Array = palettes[i % palettes.size()]
@@ -576,7 +582,7 @@ static func _build_fans(stage, root: Node3D) -> void:
 	flare_spot.y = stage.ground(flare_spot)
 	alpine.flare_spots.append(flare_spot)
 
-static func _snowman(root: Node3D, p: Vector3, yaw: float, index: int) -> void:
+static func _snowman(stage, root: Node3D, p: Vector3, yaw: float, index: int) -> void:
 	var man = Node3D.new()
 	man.name = "Snowman"
 	root.add_child(man)
@@ -601,6 +607,7 @@ static func _snowman(root: Node3D, p: Vector3, yaw: float, index: int) -> void:
 	# Rally fan's cap, of course.
 	Props.cylinder(man, Vector3(0, 1.66, 0), 0.19, 0.19, 0.08, Color("ce4830"), 10)
 	Props.box(man, Vector3(0, 1.63, 0.18), Vector3(0.26, 0.02, 0.16), Color("ce4830"))
+	Movable.register(stage.solids, man, 30)
 
 # ---------------------------------------------------------------- distant Alps
 

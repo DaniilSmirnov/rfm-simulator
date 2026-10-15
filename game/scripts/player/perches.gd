@@ -204,6 +204,11 @@ func gather(center: Vector3) -> void:
 	if not solids.obstacles.is_empty():
 		for id in solids.candidates(center, center, REACH):
 			var object: Dictionary = solids.obstacles[id]
+			if not is_instance_valid(object.body): continue
+			if object.get("movable", false):
+				var pose: Transform3D = solids.relative_pose(object.body)
+				nearby.append({"frame": pose, "inverse": pose.affine_inverse(), "box": object.half, "solid": true})
+				continue
 			if object.body is RigidBody3D:
 				_add_node(object.body, flat, true)
 				continue
