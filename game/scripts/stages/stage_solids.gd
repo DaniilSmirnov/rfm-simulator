@@ -4,6 +4,7 @@ extends Node3D
 # church bell. Cars, walkers, gravel, NPCs and course officials all query the
 # same swept-box collision through hit(); a stage without solids answers {}.
 const Props = preload("res://scripts/core/props.gd")
+const RigidSettler = preload("res://scripts/stages/rigid_settler.gd")
 const COLLISION_CELL = 16.0
 
 var stage: Node3D
@@ -52,6 +53,7 @@ func lamp(p: Vector3, yaw: float) -> RigidBody3D:
 	material.friction = 0.75
 	material.bounce = 0.08
 	body.physics_material_override = material
+	RigidSettler.configure(body, false)
 	var shape = CollisionShape3D.new()
 	var box = BoxShape3D.new()
 	box.size = Vector3(0.34, 4.0, 0.34)
@@ -290,6 +292,7 @@ func _physics_process(delta: float) -> void:
 		lamp_state.body.freeze = not (simulate and lamp_state.fallen)
 		if simulate and lamp_state.fallen:
 			_ground_under(lamp_state, lamp_state.body.position)
+			RigidSettler.update(lamp_state.body, stage.ground(lamp_state.body.global_position), delta)
 		if not simulate and lamp_targets.has(i):
 			var target = lamp_targets[i]
 			var weight = 1.0 - exp(-delta * 16.0)
