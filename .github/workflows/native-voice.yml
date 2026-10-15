@@ -2,6 +2,10 @@ name: Build native voice extension
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - 'native/voice/**'
+      - '.github/workflows/native-voice.yml'
   push:
     branches: [main]
     paths:
