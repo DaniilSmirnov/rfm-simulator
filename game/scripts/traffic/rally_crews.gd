@@ -4,6 +4,7 @@ extends RefCounted
 # solo player) simulates them; guests see them through the room snapshot.
 # State lives on game (racers, stones, tow) where the room and HUD read it.
 const CarRegistry = preload("res://scripts/cars/car_registry.gd")
+const Hitbox = preload("res://scripts/cars/car_hitbox.gd")
 const PropContact = preload("res://scripts/cars/prop_contact.gd")
 const Motion = preload("res://scripts/cars/vehicle_motion.gd")
 const Props = preload("res://scripts/core/props.gd")
@@ -104,7 +105,7 @@ func spawn_racer(forced: String = "") -> void:
 	game.toast(Loc.t("Приближается %s, номер %d!") % [Loc.t(node.get_meta("model")), node.get_meta("number")])
 
 func prop_collision(racer: Dictionary, start: Vector3, end: Vector3, delta: float) -> Dictionary:
-	var result = PropContact.resolve(game.stage, racer.motion, start, end, delta)
+	var result = PropContact.resolve(game.stage, racer.motion, start, end, delta, Hitbox.shape(Hitbox.bounds(racer.node), racer.node.rotation.y))
 	for impact in result.hits:
 		game.knock_solid(impact.hit, impact.velocity)
 	if result.blocked:
@@ -251,7 +252,7 @@ func update_racers_step(delta: float) -> void:
 				var driving = not red_hold and racer.get("self_rejoin", false) and racer.age > 0.6 and RallyRejoin.step(game, racer, dt)
 				if not driving:
 					RallyHandling.free_step(racer, game.stage, dt, red_hold)
-				var contact = game.stage.rock_hit(previous, node.position, 0.85)
+				var contact = Hitbox.rocks(game.stage, previous, node.position, Hitbox.shape(Hitbox.bounds(node), node.rotation.y))
 				var solid = prop_collision(racer, previous, contact.position if not contact.is_empty() else node.position, dt)
 				node.position = solid.position
 				if not solid.blocked and not contact.is_empty():
@@ -273,7 +274,7 @@ func update_racers_step(delta: float) -> void:
 			if racer.state == "stopped" and not red_hold and not service and racer.age > 18 and racer.node != game.tow_target and not racer.get("towed", false) and int(racer.get("recovery_helpers", 0)) == 0:
 				to_remove.append(racer)
 		if was_racing and not ServiceTraffic.priority(racer):
-			var contact = game.stage.rock_hit(racer.previous, node.position, 0.85)
+			var contact = Hitbox.rocks(game.stage, racer.previous, node.position, Hitbox.shape(Hitbox.bounds(node), node.rotation.y))
 			if not contact.is_empty():
 				racer.motion.velocity = (node.position - racer.previous) / maxf(delta, 0.001)
 				racer.motion.velocity.y = 0
@@ -295,7 +296,7 @@ func update_racers_step(delta: float) -> void:
 			if not solid.blocked and velocity.length() > 0.001:
 				racer.drive_speed *= racer.motion.velocity.length() / velocity.length()
 		if racer.state in ["racing", "offroad", "rock_bounce"]:
-			var tree_hit = game.stage.obstacle_hit(racer.previous, node.position, 0.95)
+			var tree_hit = Hitbox.tree(game.stage, racer.previous, node.position, Hitbox.shape(Hitbox.bounds(node), node.rotation.y))
 			if tree_hit >= 0 and not ServiceTraffic.priority(racer):
 				if not game.stage.fallen.has(tree_hit):
 					game.knock_tree(tree_hit, node.position - racer.previous)
@@ -304,7 +305,7 @@ func update_racers_step(delta: float) -> void:
 
 			# Competitors can hit people; police and ambulances yield and use the safety guard.
 			if not ServiceTraffic.applies(racer):
-				game.injuries.vehicle_sweep(racer.previous, node.position, (node.position - racer.previous) / maxf(delta, 0.001), game.injuries.CREW_SPEED)
+				game.injuries.vehicle_sweep(racer.previous, node.position, (node.position - racer.previous) / maxf(delta, 0.001), game.injuries.CREW_SPEED, Hitbox.shape(Hitbox.bounds(node), node.rotation.y))
 		if racer.state in ["racing", "offroad", "rock_bounce"] and not ServiceTraffic.applies(racer):
 			car_contact(racer, delta)
 		if racer.state in ["stranded", "stopped"]:
@@ -333,21 +334,21 @@ func update_racers_step(delta: float) -> void:
 # A crew running into a car stops; the local player's car takes the damage.
 func car_contact(racer: Dictionary, delta: float) -> void:
 	var node: Node3D = racer.node
-	var blockers = [game.car.position]
+	var blockers = [Hitbox.contact(game.car)]
 	for peer in game.room.peers.values():
 		if peer.state != null:
-			blockers.append(game.room.v(peer.state.car))
+			blockers.append({"position": game.room.v(peer.state.car), "yaw": peer.state.get("heading", 0), "box": Hitbox.bounds(peer.car)})
 	for other in game.racers:
 		if other.id < racer.id or other.state in ["stopped", "stranded", "parked"]:
-			blockers.append(other.node.position)
+			blockers.append(Hitbox.contact(other.node))
 	for blocker in blockers:
-		if Motion.swept_hit(racer.previous + Vector3(0, 0.65, 0), node.position + Vector3(0, 0.65, 0), blocker + Vector3(0, 0.65, 0), 2.5):
+		if Hitbox.blocked(racer.previous, node.position, Hitbox.shape(Hitbox.bounds(node), node.rotation.y), blocker):
 			var collision_speed = racer.motion.velocity.length() if racer.state in ["offroad", "rock_bounce"] else racer.previous.distance_to(node.position) / maxf(delta, 0.001)
 			node.position = racer.previous
 			racer.state = "stranded" if racer.kind in ["stuck", "crash"] else "stopped"
 			racer.age = 0
 			game.toast("Столкновение машин! Экипаж остановился.")
-			if blocker == game.car.position:
+			if blocker.position == game.car.position:
 				var damage = car_ram_damage(collision_speed)
 				if damage > 0.0:
 					game.condition = maxf(0.0, game.condition - damage)

@@ -1,0 +1,58 @@
+extends "res://tests/harness.gd"
+const Hitbox = preload("res://scripts/cars/car_hitbox.gd")
+const Props = preload("res://scripts/core/props.gd")
+const Cars = preload("res://scripts/cars/car_registry.gd")
+const Stage = preload("res://scripts/stages/stage.gd")
+
+func _initialize() -> void:
+	call_deferred("run")
+
+func run() -> void:
+	for model in range(Cars.count()):
+		var node = Props.player_car(model, false)
+		var box = Hitbox.bounds(node)
+		check(box == Hitbox.measure(node) and box == Hitbox.player(model), "model %d uses its closed visible mesh bounds in prediction" % model)
+		check(box.size.z > 3 and box.size.x > 1 and box.size.y > 1, "model %d has a full car-sized hitbox" % model)
+		for yaw in [0.0, PI / 2, 0.73]:
+			var shape = Hitbox.shape(box, yaw)
+			var basis: Basis = shape.basis
+			var front: Vector3 = basis * Vector3(0, 0, box.position.z)
+			var rear: Vector3 = basis * Vector3(0, 0, box.end.z)
+			for bumper in [front, rear]:
+				var direction: Vector3 = bumper.normalized()
+				var center: Vector3 = bumper + direction * 0.5
+				var hit = Hitbox.circle(Vector3.ZERO, direction, shape, center, 0.1)
+				check(not hit.is_empty() and hit.time > 0.2 and hit.time < 0.6, "model %d bumper contact follows yaw %.2f" % [model, yaw])
+			var beside: Vector3 = basis * Vector3(box.end.x + 0.15, 0, 0)
+			check(Hitbox.circle(Vector3.ZERO, basis * Vector3.FORWARD * 10, shape, beside, 0.1).is_empty(), "model %d clears objects outside its side at yaw %.2f" % [model, yaw])
+			var wall_pose = Transform3D(basis, basis * Vector3(0, box.get_center().y, -10))
+			var hit = Hitbox.sweep(Vector3.ZERO, basis * Vector3.FORWARD * 30, shape, wall_pose, Vector3(5, 2, 0.05))
+			check(not hit.is_empty() and hit.time < 0.3, "model %d swept bumper cannot tunnel through a thin wall" % model)
+		var cached = Hitbox.bounds(node)
+		node.get_node("TrunkHinge").rotation.x = -1.5
+		check(Hitbox.bounds(node) == cached, "opening the trunk does not resize the car collider")
+		node.free()
+	var box = Hitbox.player(0)
+	var shape = Hitbox.shape(box, 0)
+	check(not Hitbox.blocked(Vector3.ZERO, Vector3.FORWARD, shape, {"position": Vector3(box.size.x + 0.1, 0, 0), "box": box}), "parallel cars do not collide across the old oversized round side zone")
+	check(Hitbox.blocked(Vector3.ZERO, Vector3.FORWARD * 10, shape, {"position": Vector3(0, 0, -7), "box": box}), "car-to-car collisions use both bodies and their bumpers")
+	var stage = Stage.new()
+	root.add_child(stage)
+	stage.trees.append(Vector3(0, 0, box.position.z - 0.4))
+	check(Hitbox.tree(stage, Vector3.ZERO, Vector3.FORWARD, shape) == 0, "front bumper reaches a tree before the car center")
+	stage.rocks.append({"pos": Vector3(0, 0, box.position.z - 1.4), "radius": 1.0, "height": 3.0})
+	check(not Hitbox.rocks(stage, Vector3.ZERO, Vector3.FORWARD, shape).is_empty(), "front bumper reaches a boulder before the car center")
+	var wall = Node3D.new()
+	stage.add_child(wall)
+	stage.solids.solid(wall, Vector3(0, 1, box.position.z - 0.5), Vector3(0.2, 2, 0.2), "wall")
+	var solid = Hitbox.solids(stage.solids, Vector3.ZERO, Vector3.FORWARD, shape, [])
+	check(not solid.is_empty() and solid.position.z > -0.5, "solid scenery clips movement at the visible front bumper")
+	check(Hitbox.solids(stage.solids, Vector3.ZERO, Vector3.BACK, shape, []).is_empty(), "reversing away from an obstacle remains possible")
+	wall.position = Vector3(box.end.x + 0.3, 0, 0)
+	stage.solids.index()
+	check(Hitbox.solids(stage.solids, Vector3.ZERO, Vector3.FORWARD * 10, shape, []).is_empty(), "solid scenery outside the visible side leaves a passable gap")
+	wall.position = Vector3(0, box.size.y + 5, 0)
+	stage.solids.index()
+	check(Hitbox.solids(stage.solids, Vector3.ZERO, Vector3.FORWARD * 10, shape, []).is_empty(), "scenery above the car does not block its path")
+	stage.free()
+	finish()

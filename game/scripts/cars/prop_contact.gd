@@ -1,10 +1,12 @@
 extends RefCounted
+const Hitbox = preload("res://scripts/cars/car_hitbox.gd")
 # A prop is hit once per contact episode, even while a car crosses its collider.
 const SMALL_MASS = 15.0
 const BLOCKING_MASS = 500.0
 const RELEASE_TIME = 0.25
 
-static func resolve(stage, motion, start: Vector3, end: Vector3, delta: float) -> Dictionary:
+static func resolve(stage, motion, start: Vector3, end: Vector3, delta: float, car: Dictionary = {}) -> Dictionary:
+	if car.is_empty(): car = Hitbox.shape(Hitbox.player(0), 0)
 	for key in motion.prop_contacts.keys():
 		motion.prop_contacts[key] -= delta
 		if motion.prop_contacts[key] <= 0:
@@ -12,7 +14,7 @@ static func resolve(stage, motion, start: Vector3, end: Vector3, delta: float) -
 	var result = {"position": end, "hits": [], "closing": 0.0, "blocked": false}
 	var ignored: Array = []
 	while true:
-		var hit: Dictionary = stage.solids.hit(start, end, 0.85, true, Vector3(0, 0.35, 0), null, ignored)
+		var hit: Dictionary = Hitbox.solids(stage.solids, start, end, car, ignored)
 		if hit.is_empty():
 			return result
 		var prop: Dictionary = {}

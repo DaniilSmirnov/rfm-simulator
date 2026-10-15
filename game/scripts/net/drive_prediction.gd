@@ -1,4 +1,5 @@
 extends RefCounted
+const Hitbox = preload("res://scripts/cars/car_hitbox.gd")
 const PropContact = preload("res://scripts/cars/prop_contact.gd")
 const Motion = preload("res://scripts/cars/vehicle_motion.gd")
 const CarRegistry = preload("res://scripts/cars/car_registry.gd")
@@ -122,7 +123,8 @@ func step(c: Dictionary, stage, model: int) -> void:
 		next.x = clampf(next.x, -185, 185)
 		next.z = clampf(next.z, stage.parks.z_limits.x, stage.parks.z_limits.y)
 		impact_timer = maxf(0, impact_timer - dt)
-		var rock = stage.rock_hit(previous, next, 0.85)
+		var car_shape = Hitbox.shape(Hitbox.player(model), yaw)
+		var rock = Hitbox.rocks(stage, previous, next, car_shape)
 		if not rock.is_empty():
 			next = rock.position
 			var closing = motion.rock_impulse(rock.normal, yaw)
@@ -131,7 +133,7 @@ func step(c: Dictionary, stage, model: int) -> void:
 				condition = maxf(0, condition - minf(14, closing * 0.65))
 				impact_timer = 0.4
 				emit_event({"kind": "impact", "speed": closing})
-		var solid = PropContact.resolve(stage, motion, previous, next, dt)
+		var solid = PropContact.resolve(stage, motion, previous, next, dt, car_shape)
 		next = solid.position
 		for impact in solid.hits:
 			# Event kind "city" is the room protocol name for solid scenery hits.
@@ -140,14 +142,13 @@ func step(c: Dictionary, stage, model: int) -> void:
 			condition = maxf(0, condition - minf(20, solid.closing * 0.85))
 			impact_timer = 0.4
 			emit_event({"kind": "impact", "speed": solid.closing})
-		var tree = stage.obstacle_hit(previous, next, 0.95, true)
+		var tree = Hitbox.tree(stage, previous, next, car_shape)
 		var blocked = tree >= 0
 		if blocked and motion.velocity.length() > 5 and not stage.fallen.has(tree):
 			emit_event({"kind": "tree", "index": tree, "velocity": motion.velocity})
 		for contact in context.get("contacts", []):
 			var other: Vector3 = contact.position
-			var radius = 1.55 if contact.get("person", false) else 2.5
-			if Motion.swept_hit(previous + Vector3(0, 0.7, 0), next + Vector3(0, 0.7, 0), other + Vector3(0, 0.7, 0), radius) and next.distance_to(other) <= previous.distance_to(other):
+			if Hitbox.blocked(previous, next, car_shape, contact):
 				blocked = true
 				if contact.get("person", false) and absf(motion.velocity.dot(forward)) > 5:
 					emit_event({"kind": "person", "position": other, "velocity": motion.velocity})

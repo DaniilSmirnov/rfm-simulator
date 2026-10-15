@@ -15,6 +15,7 @@ extends RefCounted
 # Keys: "player:<id>" ("player:local" solo), "npc:<id>", "villager:<id>",
 # "marshal:<id>", "judge:<index>".
 const Props = preload("res://scripts/core/props.gd")
+const Hitbox = preload("res://scripts/cars/car_hitbox.gd")
 const Motion = preload("res://scripts/cars/vehicle_motion.gd")
 # Reach (m) from a car centre: a little over the 1.55 m at which cars stop for people.
 const HIT_RADIUS = 1.65
@@ -142,7 +143,7 @@ func avatar_of(key: String) -> Node3D:
 
 # A car swept from previous to next: knock everyone in its way. Returns true
 # when somebody was hit. Only the host decides.
-func vehicle_sweep(previous: Vector3, next: Vector3, velocity: Vector3, min_speed: float) -> bool:
+func vehicle_sweep(previous: Vector3, next: Vector3, velocity: Vector3, min_speed: float, car_shape: Dictionary = {}) -> bool:
 	if not authority() or Vector2(velocity.x, velocity.z).length() < min_speed:
 		return false
 	var hit = false
@@ -151,7 +152,8 @@ func vehicle_sweep(previous: Vector3, next: Vector3, velocity: Vector3, min_spee
 		if is_down(person.key) or Perches.riding_above(feet, previous):
 			continue
 		var radius = VILLAGER_HIT_RADIUS if str(person.key).begins_with("villager:") else HIT_RADIUS
-		if Motion.swept_hit(previous + Vector3(0, 0.7, 0), next + Vector3(0, 0.7, 0), feet + Vector3(0, 0.7, 0), radius):
+		var contact = Motion.swept_hit(previous + Vector3(0, 0.7, 0), next + Vector3(0, 0.7, 0), feet + Vector3(0, 0.7, 0), radius) if car_shape.is_empty() else Hitbox.blocked(previous, next, car_shape, {"position": feet, "person": true})
+		if contact:
 			hit = knock(person.key, feet, velocity, previous) or hit
 	return hit
 
