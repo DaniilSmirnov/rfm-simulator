@@ -34,4 +34,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: rally-voice-linux-x86_64
-          path: native/voice/build/librally_voice.so
+          path: native/voice/build/rally_voice.so

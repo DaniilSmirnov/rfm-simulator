@@ -14,9 +14,11 @@ FetchContent_Declare(libdatachannel
   GIT_REPOSITORY https://github.com/paullouisageneau/libdatachannel.git
   GIT_TAG v0.22.2)
 set(NO_MEDIA OFF CACHE BOOL "" FORCE)
+set(NO_EXAMPLES ON CACHE BOOL "" FORCE)
+set(NO_TESTS ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(libdatachannel)
 
 add_library(rally_voice SHARED src/register_types.cpp src/voice_peer.cpp)
 target_include_directories(rally_voice PRIVATE src)
-target_link_libraries(rally_voice PRIVATE godot-cpp libdatachannel)
+target_link_libraries(rally_voice PRIVATE godot-cpp LibDataChannel::LibDataChannel)
 set_target_properties(rally_voice PROPERTIES PREFIX "" OUTPUT_NAME "rally_voice")
