@@ -455,7 +455,7 @@ func tree_layers(name: String, trees: Array, layers: Array) -> void:
 func clearing_signs() -> void:
 	for i in range(stage.clearings.size()):
 		var first = stage.get_child_count()
-		var c: Vector3 = stage.clearings[i] + stage.direction(stage.road_s(stage.clearings[i])) * 5.0
+		var c: Vector3 = stage.clearings[i] + stage.direction(stage.road_s(stage.clearings[i])) * 8.0
 		c.y = stage.ground(c)
 		RallyProps.cylinder(stage, c + Vector3(0, 1.2, 0), 0.07, 0.07, 2.4, Color("d5bc8e"), 5)
 		var sign = RallyProps.box(stage, c + Vector3(0, 2.15, 0), Vector3(2, 0.65, 0.12), Color("e5d9b9"))

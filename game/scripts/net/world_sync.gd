@@ -370,6 +370,7 @@ func _camp_apply(f: Dictionary, _t: float) -> void:
 		Props.set_grill_servings(game.grill, game.camp_grill.servings)
 	game.spectators.apply_snapshot(f.get("npc_servings", []))
 	game.eaten = bool(f.get("eaten", false))
+	game.stage.solids.indexed_obstacle_count = -1
 
 func _racers_snapshot() -> Dictionary:
 	var racers = []

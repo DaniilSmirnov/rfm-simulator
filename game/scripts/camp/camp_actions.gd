@@ -162,6 +162,7 @@ func place_table(spot: Vector3 = Vector3.INF, yaw: float = 0.0) -> bool:
 	game.camp.position = spot
 	game.camp.position.y = game.stage.ground(spot)
 	game.camp.rotation.y = yaw
+	game.stage.solids.indexed_obstacle_count = -1
 	game.toast("Стол установлен.")
 	return true
 
@@ -189,6 +190,7 @@ func apply_chair(owner: String, spot: Vector3, yaw: float) -> void:
 	game.personal_chairs[owner].position = spot
 	game.personal_chairs[owner].position.y = game.stage.ground(spot)
 	game.personal_chairs[owner].rotation.y = yaw
+	game.stage.solids.indexed_obstacle_count = -1
 	game.has_chairs = not game.personal_chairs.is_empty()
 
 func place_flag(spot: Vector3 = Vector3.INF, yaw: float = 0.0, owner: String = "", replicated: bool = false) -> bool:
@@ -220,6 +222,7 @@ func start_grill(spot: Vector3 = Vector3.INF, yaw: float = 0.0, replicated: bool
 		game.grill.position = spot
 		game.grill.position.y = game.stage.ground(spot)
 		game.grill.rotation.y = yaw
+		game.stage.solids.indexed_obstacle_count = -1
 		game.fire_audio.position = game.grill.position
 		return true
 	game.grill = Props.grill(game)

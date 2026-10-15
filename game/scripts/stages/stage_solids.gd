@@ -20,6 +20,8 @@ var viewpoints: Array[Dictionary] = []
 var bell: Node3D
 var collision_cells: Dictionary = {}
 var moving_obstacle_ids: Array[int] = []
+var movable_obstacle_ids: Array[int] = []
+var prop_index_frame = -1
 var indexed_obstacle_count = -1
 var collision_radius_factor = 1.0
 
@@ -87,12 +89,18 @@ func index() -> void:
 	obstacles.assign(obstacles.filter(func(o): return is_instance_valid(o.body)))
 	collision_cells.clear()
 	moving_obstacle_ids.clear()
+	movable_obstacle_ids.clear()
+	prop_index_frame = Engine.get_process_frames()
 	collision_radius_factor = 1.0
 	for id in range(obstacles.size()):
 		var object: Dictionary = obstacles[id]
-		if object.body is RigidBody3D or object.get("movable", false):
+		if object.body is RigidBody3D:
 			moving_obstacle_ids.append(id)
 			continue
+		if object.get("movable", false):
+			movable_obstacle_ids.append(id)
+			_cache_live_pose(object)
+			object.indexed_global_pose = object.live_global_pose
 		var pose = relative_pose(object.body)
 		object["collision_pose"] = pose
 		object["collision_inverse"] = pose.affine_inverse()
@@ -110,6 +118,15 @@ func index() -> void:
 func candidates(start: Vector3, end: Vector3, radius: float) -> Array:
 	if indexed_obstacle_count != obstacles.size():
 		index()
+	# Most draggable props are stationary: keep them in spatial cells.
+	# External animation/placement changes are picked up once per frame.
+	if prop_index_frame != Engine.get_process_frames():
+		prop_index_frame = Engine.get_process_frames()
+		for id in movable_obstacle_ids:
+			var object: Dictionary = obstacles[id]
+			if not is_instance_valid(object.body) or object.body.global_transform != object.indexed_global_pose:
+				index()
+				break
 	var padding = radius * collision_radius_factor
 	var low = start.min(end) - Vector3.ONE * padding
 	var high = start.max(end) + Vector3.ONE * padding
@@ -121,13 +138,27 @@ func candidates(start: Vector3, end: Vector3, radius: float) -> Array:
 	for id in moving_obstacle_ids:
 		var object: Dictionary = obstacles[id]
 		if not is_instance_valid(object.body): continue
-		var expanded: Vector3 = object.half + Vector3.ONE * radius
-		var bounds = relative_pose(object.body) * AABB(-expanded, expanded * 2.0)
+		_cache_live_pose(object)
+		var bounds: AABB = object.live_bounds.grow(radius * float(object.live_expansion))
 		if bounds.end.x >= low.x and bounds.position.x <= high.x and bounds.end.z >= low.z and bounds.position.z <= high.z:
 			seen[id] = true
 	var ids = seen.keys()
 	ids.sort()
 	return ids
+
+# Hundreds of props stand still during NPC pathfinding. Reuse their geometry
+# until the actual transform changes, including edits outside the drag system.
+func _cache_live_pose(object: Dictionary) -> void:
+	var current: Transform3D = object.body.global_transform if object.body.is_inside_tree() else relative_pose(object.body)
+	if object.get("live_global_pose") == current:
+		return
+	var pose = relative_pose(object.body)
+	object.live_global_pose = current
+	object.live_pose = pose
+	object.live_inverse = pose.affine_inverse()
+	object.live_bounds = pose * AABB(-object.half, object.half * 2.0)
+	var expansion = pose.basis.x.abs() + pose.basis.y.abs() + pose.basis.z.abs()
+	object.live_expansion = maxf(expansion.x, maxf(expansion.y, expansion.z))
 
 # Earliest swept-sphere contact against every solid box, in world space.
 func hit(start: Vector3, end: Vector3, radius: float, escape: bool = true, center_offset: Vector3 = Vector3(0, 0.35, 0), ignored: Node3D = null, ignored_roots: Array = []) -> Dictionary:
@@ -141,8 +172,10 @@ func hit(start: Vector3, end: Vector3, radius: float, escape: bool = true, cente
 			continue
 		if ignored_roots.any(func(node): return node == object.body or node.is_ancestor_of(object.body)):
 			continue
-		var pose: Transform3D = relative_pose(object.body) if object.body is RigidBody3D or object.get("movable", false) else object.collision_pose
-		var inverse: Transform3D = pose.affine_inverse() if object.body is RigidBody3D or object.get("movable", false) else object.collision_inverse
+		var live = object.body is RigidBody3D or object.get("movable", false)
+		if live: _cache_live_pose(object)
+		var pose: Transform3D = object.live_pose if live else object.collision_pose
+		var inverse: Transform3D = object.live_inverse if live else object.collision_inverse
 		var a: Vector3 = inverse * (start + center_offset)
 		var b: Vector3 = inverse * (end + center_offset)
 		var half: Vector3 = object.half + Vector3.ONE * radius

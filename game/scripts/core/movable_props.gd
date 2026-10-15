@@ -141,6 +141,7 @@ func _move(r: Dictionary, delta: float) -> void:
 	var origin = next - basis * r.box.get_center()
 	origin.y = floor_y - bounds.position.y
 	r.node.global_transform = Transform3D(basis, origin)
+	game.stage.solids.indexed_obstacle_count = -1
 	r.velocity = r.velocity.move_toward(Vector3.ZERO, delta * 4.0)
 	r.spin = r.spin.move_toward(Vector3.ZERO, delta * 3.0)
 	if r.has("tree"): Specials.move_tree(game.stage, r)
@@ -168,6 +169,8 @@ func apply_pending() -> void:
 			continue
 		var r: Dictionary = records[str(item.key)]
 		if r.node.global_position.distance_to(game.room.v(item.pos)) > 0.02: _unseat(r)
+		if not r.node.global_position.is_equal_approx(game.room.v(item.pos)) or not r.node.global_rotation.is_equal_approx(game.room.v(item.rot)):
+			game.stage.solids.indexed_obstacle_count = -1
 		r.node.global_position = game.room.v(item.pos)
 		r.node.global_rotation = game.room.v(item.rot)
 		r.anchored = bool(item.get("anchored", false))

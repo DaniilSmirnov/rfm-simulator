@@ -40,7 +40,13 @@ func run() -> void:
 	check(hit.get("prop", "") == "test:prop", "collision follows the moving prop")
 	var data = props.snapshot()
 	var saved = node.global_position
-	node.position += Vector3(10, 0, 0)
+	var shifted: Array = data.duplicate(true)
+	for item in shifted:
+		if item.key == "test:prop": item.pos[0] += 40
+	props.apply_snapshot(shifted)
+	var moved: Vector3 = node.position + Vector3.UP * 0.4
+	check(game.stage.solids.hit(moved - Vector3.RIGHT * 2, moved + Vector3.RIGHT * 2, 0.1).get("prop", "") == "test:prop", "replication updates collision across spatial cells in the same frame")
+	check(game.stage.solids.hit(saved - Vector3.RIGHT * 2, saved + Vector3.RIGHT * 2, 0.1).get("prop", "") != "test:prop", "moving an indexed prop leaves no collision at its former position")
 	props.apply_snapshot(data)
 	check(node.global_position.distance_to(saved) < 0.01, "network snapshot restores prop transform")
 	props.records["test:prop"].anchored = true
