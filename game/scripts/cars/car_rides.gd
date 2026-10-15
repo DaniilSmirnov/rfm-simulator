@@ -49,12 +49,19 @@ func name_of(owner: String) -> String:
 func car_node(owner: String) -> Node3D:
 	if owner == "":
 		return null
+	if owner.begins_with("spectator:"):
+		var group_id = int(owner.trim_prefix("spectator:"))
+		if group_id >= 0 and group_id < game.spectators.groups.size():
+			return game.spectators.groups[group_id].car
+		return null
 	if owner == me():
 		return game.car
 	var peer = game.room.peers.get(owner)
 	return peer.car if peer != null and peer.has("car") else null
 
 func speed_of(owner: String) -> float:
+	if owner.begins_with("spectator:"):
+		return 0.0
 	var state = state_of(owner)
 	return float(state.get("speed", 0.0)) if state != null else 0.0
 
@@ -115,13 +122,15 @@ func seat_of(state: Dictionary) -> Vector3:
 	return game.room.v(state.car)
 
 func offers(items: Array, interaction) -> void:
-	if not game.room.connected:
-		return
-	for id in game.room.peers:
-		var node = car_node(str(id))
-		if node == null or game.room.peers[id].state == null or absf(speed_of(str(id))) > 1:
-			continue
-		interaction.offer(items, node.position + Vector3(0, 0.9, 0), 1.4, 4, "ride", Loc.t("Сесть к другу (%d/%d)") % [occupants(str(id)), SEATS], str(id))
+	if game.room.connected:
+		for id in game.room.peers:
+			var node = car_node(str(id))
+			if node == null or game.room.peers[id].state == null or absf(speed_of(str(id))) > 1:
+				continue
+			interaction.offer(items, node.position + Vector3(0, 0.9, 0), 1.4, 4, "ride", Loc.t("Сесть к другу (%d/%d)") % [occupants(str(id)), SEATS], str(id))
+	for i in range(game.spectators.groups.size()):
+		var node: Node3D = game.spectators.groups[i].car
+		interaction.offer(items, node.position + Vector3(0, 0.9, 0), 1.4, 4, "ride_npc", Loc.t("Сесть в машину зрителей"), "spectator:%d" % i)
 
 func board(owner: String) -> void:
 	var node = car_node(owner)
@@ -141,6 +150,23 @@ func board(owner: String) -> void:
 		game.vehicle_motion.velocity = Vector3.ZERO
 		game.view_yaw = node.rotation.y
 		game.toast(Loc.t("Ты в машине: %s. F — выйти, когда машина стоит.") % name_of(owner))
+
+func board_npc(owner: String) -> void:
+	var node = car_node(owner)
+	if node == null or game.in_car or not game.player.can_change_seat():
+		return
+	if game.walker.distance_to(node.position) > 4:
+		game.toast("Подойди к машине зрителей.")
+	elif absf(speed_of(owner)) > 1:
+		game.toast("Дождись, пока машина остановится.")
+	else:
+		ride = owner
+		hitch = ""
+		game.in_car = true
+		game.speed = 0
+		game.vehicle_motion.velocity = Vector3.ZERO
+		game.view_yaw = node.rotation.y
+		game.toast("Ты в машине зрителей. F — выйти, когда машина остановится.")
 
 func leave(force: bool = false) -> void:
 	var node = car_node(ride)
