@@ -1,10 +1,9 @@
 extends RefCounted
-# Host-owned movement over sampled terrain. Nodes keep their gameplay state.
+# Host-owned rigid-body motion. Nodes keep their gameplay state.
 const Specials = preload("res://scripts/core/prop_specials.gd")
 const Registry = preload("res://scripts/core/prop_registry.gd")
 const REACH = 2.5
-const SETTLE_SPEED = 5.0
-const SETTLE_EPSILON = 0.02
+const Body = preload("res://scripts/core/prop_body.gd")
 var game
 var stage_id = 0
 var records: Dictionary = {}
@@ -35,7 +34,11 @@ func refresh() -> void:
 			state.spin = Vector3.ZERO
 			state.changed = false
 			records[record.key] = state
+			state.body = Body.create(state, game.stage.solids, game)
 	Specials.refresh(game, records)
+	for r in records.values():
+		if r.has("tree") and not r.has("body"):
+			r.body = Body.create(r, game.stage.solids, game)
 	var removed = false
 	for key in records.keys():
 		if not is_instance_valid(records[key].node) or records[key].node.is_queued_for_deletion():
@@ -70,16 +73,18 @@ func knock(key: String, velocity: Vector3) -> bool:
 	r.anchored = false
 	r.node.set_meta("prop_anchored", false)
 	r.changed = true
-	r.settling = true
 	r.velocity = (r.velocity + velocity * clampf(30.0 / r.mass, 0.08, 0.8)).limit_length(12.0)
 	if r.mass < 300.0:
 		r.spin = Vector3(velocity.z, 0, -velocity.x).limit_length(3.0)
+	_move(r, 0)
 	return true
 
 func update(players: Dictionary, occupied: Dictionary, delta: float) -> Dictionary:
 	refresh()
 	if not game.room.is_authority():
 		return occupied
+	for r in records.values():
+		if r.has("body"): r.body.pull_velocity = Vector3.ZERO
 	var used: Dictionary = {}
 	for id in grips.keys():
 		if not players.has(id) or occupied.has(str(id)) or not _eligible(str(id), players[id]):
@@ -109,11 +114,31 @@ func update(players: Dictionary, occupied: Dictionary, delta: float) -> Dictiona
 		var speed = clampf(35.0 / r.mass, 0.25, 3.0)
 		r.velocity = offset.normalized() * minf(speed, maxf(0.0, offset.length() - slack) / maxf(delta, 0.001))
 		r.spin = Vector3.ZERO
+		if r.has("body"):
+			_unseat(r)
+			r.body.wake()
+			r.body.pull_velocity = r.velocity
+			r.velocity = Vector3.ZERO
 		r.changed = true
+	_push_walkers(players, occupied, delta)
 	for r in records.values():
 		if r.changed and not r.anchored:
 			_move(r, delta)
 	return occupied
+
+# Walkers use swept collision rather than native bodies; transmit the same contact.
+func _push_walkers(players: Dictionary, occupied: Dictionary, delta: float) -> void:
+	for id in players:
+		var p: Dictionary = players[id]
+		if occupied.has(str(id)) or p.get("in_car", true) or p.get("seated", false) or p.get("airborne", false) or int(p.get("beers", 0)) >= 30: continue
+		var intent: Vector3 = game.room.v(p.get("push", [0, 0, 0]))
+		if intent.length_squared() < 0.01 or game.injuries.is_down("player:" + str(id)): continue
+		var pos: Vector3 = game.room.v(p.pos)
+		var hit: Dictionary = game.stage.solids.hit(pos, pos + intent * game.WALK_SPEED * minf(delta, 0.05), 0.3)
+		var r: Dictionary = records.get(hit.get("prop", ""), {})
+		if r.is_empty() or r.anchored or not r.has("body"): continue
+		r.body.wake()
+		r.body.apply_central_impulse(intent.limit_length(1.0) * minf(350.0, r.mass * 8.0) * delta)
 
 func _eligible(id: String, p: Dictionary) -> bool:
 	return p.get("tow", false) and not p.get("in_car", true) and not p.get("seated", false) and not p.get("airborne", false) and int(p.get("beers", 0)) < 30 and not game.injuries.is_down("player:" + id) and not game.cargo.held.has(id)
@@ -130,44 +155,21 @@ func _move(r: Dictionary, delta: float) -> void:
 		Specials.move_lamp(game, r)
 		return
 	_unseat(r)
-	var start = center(r)
-	var step: Vector3 = r.velocity * minf(delta, 0.05)
-	var radius = clampf(minf(r.box.size.x, r.box.size.z) * 0.45, 0.12, 1.2)
-	var next = start + step
-	var hit: Dictionary = game.stage.solids.hit(start, next, radius, true, Vector3.ZERO, r.node)
-	if not hit.is_empty() or _corners_blocked(r, step) or not game.stage.rock_hit(start, next, radius).is_empty() or game.stage.obstacle_hit(start, next, radius, true, int(r.get("tree", -1))) >= 0:
+	var body: RigidBody3D = r.body
+	if r.velocity.length_squared() > 0.00001 or r.spin.length_squared() > 0.00001:
+		body.wake()
+		body.apply_central_impulse(r.velocity * r.mass)
+		body.apply_torque_impulse(r.spin * r.mass * 0.15)
 		r.velocity = Vector3.ZERO
-		next = start
-	var rotation: Vector3 = r.node.global_rotation + r.spin * minf(delta, 0.05)
-	var can_settle = r.get("settling", false) and r.velocity.length_squared() < 0.25 and r.spin.length_squared() < 0.16
-	if can_settle:
-		# A custom movable prop is not a full rigid body. Once impact energy is
-		# gone, bring its pitch and roll back to the stable upright pose instead
-		# of leaving a table or chair balanced on an edge forever. Yaw is retained.
-		var weight = 1.0 - exp(-SETTLE_SPEED * minf(delta, 0.05))
-		rotation.x = lerp_angle(rotation.x, 0.0, weight)
-		rotation.z = lerp_angle(rotation.z, 0.0, weight)
-		if absf(rotation.x) < SETTLE_EPSILON and absf(rotation.z) < SETTLE_EPSILON:
-			rotation.x = 0.0
-			rotation.z = 0.0
-			r.settling = false
-	var basis = Basis.from_euler(rotation)
-	var bounds: AABB = Transform3D(basis, Vector3.ZERO) * r.box
-	var floor_y: float = game.stage.solids.walking_floor(next, start.y)
-	var origin = next - basis * r.box.get_center()
-	origin.y = floor_y - bounds.position.y
-	r.node.global_transform = Transform3D(basis, origin)
-	game.stage.solids.indexed_obstacle_count = -1
-	r.velocity = r.velocity.move_toward(Vector3.ZERO, delta * 4.0)
-	r.spin = r.spin.move_toward(Vector3.ZERO, delta * 3.0)
-	if r.has("tree"): Specials.move_tree(game.stage, r)
+		r.spin = Vector3.ZERO
 
 func snapshot() -> Array:
 	refresh()
 	var result: Array = []
 	for r in records.values():
-		if r.changed and not r.has("lamp") and not r.has("tree"):
-			result.append({"key": r.key, "pos": game.room.a(r.node.global_position), "rot": game.room.a(r.node.global_rotation), "anchored": r.anchored})
+		if r.changed and not r.has("lamp"):
+			var rotation: Vector3 = r.node.global_rotation
+			result.append({"key": r.key, "pos": game.room.a(r.node.global_position), "rot": [rotation.x, rotation.y, rotation.z], "anchored": r.anchored})
 	return result
 
 func apply_snapshot(data: Array) -> void:
@@ -187,11 +189,16 @@ func apply_pending() -> void:
 		if r.node.global_position.distance_to(game.room.v(item.pos)) > 0.02: _unseat(r)
 		if not r.node.global_position.is_equal_approx(game.room.v(item.pos)) or not r.node.global_rotation.is_equal_approx(game.room.v(item.rot)):
 			game.stage.solids.indexed_obstacle_count = -1
+		if r.has("body"):
+			r.body.freeze = true
+			r.body.global_transform = Transform3D(Basis.from_euler(game.room.v(item.rot)), game.room.v(item.pos))
 		r.node.global_position = game.room.v(item.pos)
 		r.node.global_rotation = game.room.v(item.rot)
+		r.node.set_meta("prop_dynamic", true)
 		r.anchored = bool(item.get("anchored", false))
 		r.node.set_meta("prop_anchored", r.anchored)
 		r.changed = true
+		if r.has("tree"): Specials.move_tree(game.stage, r)
 	pending = waiting
 
 func solid_hit(contact: Dictionary, velocity: Vector3) -> void:
@@ -209,15 +216,6 @@ func solid_hit(contact: Dictionary, velocity: Vector3) -> void:
 func _unseat(r: Dictionary) -> void:
 	if game.seated and game.personal_chairs.get(game.chair_owner()) == r.node:
 		game.stand_up()
-
-# Sweep the footprint too: a long table must not drag its far end through a wall.
-func _corners_blocked(r: Dictionary, step: Vector3) -> bool:
-	for x in [r.box.position.x, r.box.end.x]:
-		for z in [r.box.position.z, r.box.end.z]:
-			var point: Vector3 = r.node.global_transform * Vector3(x, r.box.get_center().y, z)
-			if not game.stage.solids.hit(point, point + step, 0.05, true, Vector3.ZERO, r.node).is_empty():
-				return true
-	return false
 
 func _rekey(node: Node3D, key: String) -> void:
 	var old = str(node.get_meta("prop_key", key))

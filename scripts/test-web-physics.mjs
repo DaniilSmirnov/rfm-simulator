@@ -55,10 +55,12 @@ try {
   await mobileContext.close();
   const page = await browser.newPage({ locale: 'ru-RU' });
   let pass = false;
+  let propPass = false;
   let fail = '';
   page.on('console', message => {
     const text = message.text();
     if (text.includes('WEB_PHYSICS_PASS')) pass = true;
+    if (text.includes('WEB_PROP_PHYSICS_PASS')) propPass = true;
     if (text.includes('WEB_PHYSICS_FAIL') || text.includes('SCRIPT ERROR') || text.includes('Parse Error')) fail = text;
     console.log('[browser]', text);
   });
@@ -125,7 +127,7 @@ try {
   }
   const until = Date.now() + 90000;
   while (!pass && !fail && Date.now() < until) await page.waitForTimeout(250);
-  if (fail || !pass) throw new Error(fail || 'Exported Web physics check timed out');
+  if (fail || !pass || !propPass) throw new Error(fail || 'Exported Web physics check timed out or prop checks did not run');
   if (await page.locator('#status').count() !== 0) throw new Error('Loading overlay still covers the started game');
   console.log('WebAssembly 3D physics verified in Chromium.');
 } finally {

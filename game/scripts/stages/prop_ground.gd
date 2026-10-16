@@ -1,0 +1,90 @@
+extends Node3D
+# Shared collision tiles for the sampled terrain, rocks and instanced trunks.
+const TILE = 16
+const STEP = 0.5
+var stage
+var tiles: Dictionary = {}
+var trunks: Dictionary = {}
+var rock_bodies: Dictionary = {}
+var floors: Dictionary = {}
+
+func ensure_at(at: Vector3, reach: float) -> void:
+	var low = Vector2i(floori((at.x - reach) / TILE), floori((at.z - reach) / TILE))
+	var high = Vector2i(floori((at.x + reach) / TILE), floori((at.z + reach) / TILE))
+	for x in range(low.x, high.x + 1):
+		for z in range(low.y, high.y + 1):
+			var key = Vector2i(x, z)
+			if not tiles.has(key): _tile(key)
+	for index in trunks.keys():
+		if index >= stage.trees.size() or stage.fallen.get(index, {}).get("dynamic", false):
+			trunks[index].queue_free()
+			trunks.erase(index)
+			continue
+		var trunk: StaticBody3D = trunks[index]
+		var base: Vector3 = stage.trees[index]
+		var length = float(stage.forest_data[index].height) * 0.64 if index < stage.forest_data.size() else 8.0
+		var fallen: Dictionary = stage.fallen.get(index, {})
+		var direction: Vector3 = fallen.get("direction", Vector3.UP)
+		var angle = smoothstep(0, 1.3, float(fallen.get("age", 0))) * PI * 0.5
+		var axis = Vector3.UP.lerp(direction, sin(angle)).normalized()
+		trunk.global_position = base + axis * length * 0.5
+		trunk.global_basis = Basis(Quaternion(Vector3.UP, axis))
+
+func _tile(key: Vector2i) -> void:
+	var origin = Vector3(key.x * TILE + TILE / 2, 0, key.y * TILE + TILE / 2)
+	var count = int(TILE / STEP) + 1
+	var heights = PackedFloat32Array()
+	for z in range(count):
+		for x in range(count):
+			heights.append(stage.ground(origin + Vector3(x * STEP - TILE / 2, 0, z * STEP - TILE / 2)))
+	var shape = HeightMapShape3D.new()
+	shape.map_width = count
+	shape.map_depth = count
+	shape.map_data = heights
+	var tile = _collider(shape, Vector3.ZERO)
+	tile.scale = Vector3(STEP, 1, STEP)
+	tile.global_position = origin
+	tiles[key] = tile
+	var tile_bounds = AABB(origin - Vector3(TILE / 2, 10000, TILE / 2), Vector3(TILE, 20000, TILE))
+	for index in range(stage.rocks.size()):
+		var rock: Dictionary = stage.rocks[index]
+		if rock_bodies.has(index) or rock.has("actor"): continue
+		var p: Vector3 = rock.pos
+		var radius = float(rock.radius)
+		if not tile_bounds.intersects(AABB(p - Vector3(radius, 0, radius), Vector3(radius * 2, rock.height, radius * 2))): continue
+		var cylinder = CylinderShape3D.new()
+		cylinder.radius = radius
+		cylinder.height = maxf(0.03, rock.height)
+		rock_bodies[index] = _collider(cylinder, p + Vector3.UP * float(rock.height) * 0.5)
+	for index in range(stage.solids.walk_surfaces.size()):
+		var surface: Dictionary = stage.solids.walk_surfaces[index]
+		if floors.has(index): continue
+		var half: Vector2 = surface.half
+		var bounds: AABB = surface.pose * AABB(Vector3(-half.x, -0.16, -half.y), Vector3(half.x * 2, maxf(0.16, surface.rise), half.y * 2))
+		if not tile_bounds.intersects(bounds): continue
+		floors[index] = true
+		var steps = maxi(1, int(surface.get("steps", 0)))
+		for i in range(steps):
+			var box = BoxShape3D.new()
+			box.size = Vector3(half.x * 2, 0.16, half.y * 2 / steps)
+			var offset = Vector3(0, surface.rise * float(i + 1) / steps - 0.08, -half.y + half.y * (2 * i + 1) / steps)
+			var floor_body = _collider(box, Vector3.ZERO)
+			floor_body.global_transform = surface.pose * Transform3D(Basis.IDENTITY, offset)
+	for index in range(stage.trees.size()):
+		var p: Vector3 = stage.trees[index]
+		if trunks.has(index) or stage.fallen.get(index, {}).get("dynamic", false) or Vector2i(floori(p.x / TILE), floori(p.z / TILE)) != key: continue
+		var shape_tree = CapsuleShape3D.new()
+		shape_tree.radius = 0.2
+		shape_tree.height = float(stage.forest_data[index].height) * 0.64 if index < stage.forest_data.size() else 8.0
+		trunks[index] = _collider(shape_tree, p + Vector3.UP * shape_tree.height * 0.5)
+
+func _collider(shape: Shape3D, at: Vector3) -> StaticBody3D:
+	var body = StaticBody3D.new()
+	body.collision_layer = 1 << 12
+	body.collision_mask = 1
+	var collider = CollisionShape3D.new()
+	collider.shape = shape
+	body.add_child(collider)
+	add_child(body)
+	body.global_position = at
+	return body

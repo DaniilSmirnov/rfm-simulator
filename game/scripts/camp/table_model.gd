@@ -71,15 +71,18 @@ static func _frame(parent: Node3D) -> void:
 	for x in [-HALF_X + 0.03, HALF_X - 0.03]:
 		P.box(parent, Vector3(x, TOP - 0.045, 0), Vector3(0.025, 0.04, HALF_Z * 2 - 0.02), FRAME)
 	# Tube legs, a stretcher between each pair and plastic feet.
+	var shapes: Array[AABB] = [AABB(Vector3(-HALF_X, TOP - 0.065, -HALF_Z), Vector3(HALF_X * 2, 0.065, HALF_Z * 2))]
 	var leg_height = TOP - 0.065
 	for x in [-0.88, 0.88]:
 		for z in [-0.4, 0.4]:
+			shapes.append(AABB(Vector3(x - 0.024, 0, z - 0.024), Vector3(0.048, leg_height, 0.048)))
 			P.cylinder(parent, Vector3(x, leg_height * 0.5, z), 0.016, 0.016, leg_height, FRAME, 8)
 			P.cylinder(parent, Vector3(x, 0.012, z), 0.024, 0.024, 0.024, Color("2b2e30"), 8)
 		var stretcher = P.cylinder(parent, Vector3(x, 0.2, 0), 0.012, 0.012, 0.8, FRAME, 6)
 		stretcher.rotation.x = PI / 2
 	var spine = P.cylinder(parent, Vector3(0, 0.2, 0), 0.012, 0.012, 1.76, FRAME, 6)
 	spine.rotation.z = PI / 2
+	parent.set_meta("prop_shapes", shapes)
 
 # One thing (or one small group of things) on the table, standing at `spot`.
 static func _item(parent: Node3D, kind: String, spot: Vector3, yaw: float, rng: RandomNumberGenerator) -> Node3D:

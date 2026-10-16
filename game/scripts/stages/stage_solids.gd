@@ -7,6 +7,9 @@ const Props = preload("res://scripts/core/props.gd")
 const RigidSettler = preload("res://scripts/stages/rigid_settler.gd")
 const COLLISION_CELL = 16.0
 
+const Ground = preload("res://scripts/stages/prop_ground.gd")
+var prop_ground
+
 var stage: Node3D
 var obstacles: Array[Dictionary] = []
 var lamps: Array[Dictionary] = []
@@ -79,6 +82,8 @@ func lamp(p: Vector3, yaw: float) -> RigidBody3D:
 	return body
 
 func relative_pose(node: Node3D) -> Transform3D:
+	if node.is_inside_tree():
+		return stage.global_transform.affine_inverse() * node.global_transform
 	var pose = node.transform
 	var parent = node.get_parent()
 	while parent != stage and parent is Node3D:
@@ -96,7 +101,7 @@ func index() -> void:
 	collision_radius_factor = 1.0
 	for id in range(obstacles.size()):
 		var object: Dictionary = obstacles[id]
-		if object.body is RigidBody3D:
+		if object.body is RigidBody3D or object.get("dynamic", false):
 			moving_obstacle_ids.append(id)
 			continue
 		if object.get("movable", false):
@@ -343,3 +348,11 @@ func walking_floor(pos: Vector3, feet_height: float) -> float:
 		if height <= feet_height + 0.45:
 			result = maxf(result, height)
 	return result if is_finite(result) else stage.walking_ground(pos)
+
+# Terrain collision is shared by active props instead of one overlapping patch per body.
+func physics_ground(at: Vector3, reach: float) -> void:
+	if prop_ground == null:
+		prop_ground = Ground.new()
+		prop_ground.stage = stage
+		add_child(prop_ground)
+	prop_ground.ensure_at(at, reach)

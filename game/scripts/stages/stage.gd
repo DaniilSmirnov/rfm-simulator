@@ -580,12 +580,11 @@ func update_fallen(delta: float) -> void:
 		var tree_data: Dictionary = forest_data[index]
 		var f: Dictionary = fallen[index]
 		f.age = minf(1.3, f.age + delta)
-		if f.get("rendered_age", -1.0) == f.age and f.get("rendered_direction", Vector3.ZERO) == f.direction:
+		var angle = smoothstep(0, 1.3, f.age) * PI * 0.5
+		var basis = Basis.from_euler(f.get("prop_rotation", Vector3.ZERO)) * Basis(Vector3.UP.cross(f.direction).normalized(), angle)
+		if f.get("rendered_age", -1.0) == f.age and f.get("basis", Basis.IDENTITY).is_equal_approx(basis):
 			continue
 		f.rendered_age = f.age
-		f.rendered_direction = f.direction
-		var angle = smoothstep(0, 1.3, f.age) * PI * 0.5
-		var basis = Basis(Vector3.UP.cross(f.direction).normalized(), angle)
 		f.basis = basis
 		if detail_tree_visuals.has(index):
 			for part in detail_tree_visuals[index]:
@@ -674,7 +673,8 @@ func obstacle_hit(start: Vector3, end: Vector3, radius: float, allow_escape: boo
 		var width = 0.2
 		if fallen.has(index):
 			var f: Dictionary = fallen[index]
-			d += flat(f.direction) * forest_data[index].height * 0.64 * sin(smoothstep(0, 1.3, f.age) * PI * 0.5)
+			var axis = Vector3.UP.rotated(Vector3.UP.cross(f.direction).normalized(), smoothstep(0, 1.3, f.age) * PI * 0.5)
+			d += flat(Basis.from_euler(f.get("prop_rotation", Vector3.ZERO)) * axis) * forest_data[index].height * 0.64
 			width = 0.35
 		var padding = radius + width
 		# A growing fallen trunk can overlap a parked car. Permit motion out of
