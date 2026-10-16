@@ -14,7 +14,7 @@
     "medic": {"fields": {"id": "int", "pos": "vec", "yaw": "number", "state": "string", "moving": "bool", "clock": "number", "time": "number"}, "required": ["id", "pos", "yaw", "state"]},
     "link": {"one": [{"fields": {"player": "string", "racer": "int", "pos": "vec", "car": "string", "hitch": "bool"}, "required": ["player", "racer", "pos"]}, {"fields": {"player": "string", "racer": "int", "pos": "vec", "car": "string", "hitch": "bool"}, "required": ["player", "car", "pos"]}]},
     "carry": {"fields": {"kind": "string", "owner": "string", "returning": "bool", "movable": "bool"}, "required": ["kind", "owner", "returning"]},
-    "stock": {"fields": {"mushrooms": "int", "berries": "int", "mushroom_types": {"array": "string", "max": 10000}}},
+    "stock": {"fields": {"mushrooms": "int", "berries": "int", "mushroom_types": {"array": "string", "max": 10000}}, "required": ["mushrooms", "berries"]},
     "skewer": {"fields": {"species": "string", "ready_at": "number"}, "required": ["species", "ready_at"]},
     "effect": {"fields": {"serial": "int", "until": "number", "remaining": "number"}},
     "foraging": {"fields": {"harvested": {"array": "int", "max": 20000}, "inventories": {"map": "stock", "max": 16}, "skewers": {"map": {"array": "skewer", "max": 10}, "max": 2048}, "effects": {"map": "effect", "max": 16}}},

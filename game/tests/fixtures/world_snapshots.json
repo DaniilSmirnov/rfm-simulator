@@ -329,6 +329,16 @@
       "world": {
         "notice_time": 1
       }
+    },
+    {
+      "name": "inventory lacks counters",
+      "world": {
+        "foraging": {
+          "inventories": {
+            "guest": {}
+          }
+        }
+      }
     }
   ]
 }
