@@ -571,8 +571,8 @@
   "Предмет в руках. F — выбрать новое место или вернуть в багажник владельца.": "Item picked up. Use action to choose a new spot or return it to its owner's trunk.",
   "Удерживай — забрать": "Hold to pick up",
   "   ·   Удерживай T и иди — тащить предмет": "   ·   Hold T and walk to drag the object",
-"Сесть в машину зрителей": "Get in the spectators’ car",
-"Подойди к машине зрителей.": "Approach the spectators’ car.",
-"Дождись, пока машина остановится.": "Wait until the car stops.",
-"Ты в машине зрителей. F — выйти, когда машина остановится.": "You are in the spectators’ car. F — get out once the car stops."
+  "Сесть в машину зрителей": "Get into the spectators' car",
+  "Подойди к машине зрителей.": "Go to the spectators' car.",
+  "Дождись, пока машина остановится.": "Wait for the car to stop.",
+  "Ты в машине зрителей. F — выйти, когда машина остановится.": "You're in the spectators' car. F to get out once the car stops."
 }

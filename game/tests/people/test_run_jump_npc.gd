@@ -86,7 +86,9 @@ func run() -> void:
 	check(person.action == "push" and crowd.push_helpers().size() == 1, "NPC contributes only after reaching pushing position")
 	var pushed_from: Vector3 = racer.node.position
 	game.Recovery.update(game, {}, 0.5)
-	var solo: float = racer.node.position.distance_to(pushed_from)
+	# Recovery also seats the wheels on terrain; compare horizontal progress,
+	# so an initial height correction is not counted as extra pushing speed.
+	var solo = Vector2(racer.node.position.x - pushed_from.x, racer.node.position.z - pushed_from.z).length()
 	check(solo > 0.05 and racer.recovery_helpers == 1, "NPC effort physically moves car")
 	racer.node.position = pushed_from
 	person.avatar.position = racer.node.position - road * 2
@@ -95,7 +97,8 @@ func run() -> void:
 	var player = {"pos": game.room.a(racer.node.position + road * 5), "in_car": false, "tow": true, "push": [0, 0, 0], "beers": 0}
 	var both_from: Vector3 = racer.node.position
 	game.Recovery.update(game, {"player": player}, 0.5)
-	check(racer.node.position.distance_to(both_from) > solo * 1.8 and racer.recovery_helpers == 2, "player and NPC recovery efforts stack")
+	var together = Vector2(racer.node.position.x - both_from.x, racer.node.position.z - both_from.z).length()
+	check(together > solo * 1.8 and racer.recovery_helpers == 2, "player and NPC recovery efforts stack")
 	var snapshot = crowd.actor_snapshot()
 	crowd.apply_actor_snapshot(snapshot)
 	person.avatar.position += Vector3(3, 0, 0)

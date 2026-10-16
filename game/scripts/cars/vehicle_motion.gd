@@ -13,6 +13,36 @@ var roll = 0.0
 var submerged = 0.0
 var flood = 0.0
 
+# Recovery is kinematic and slow: keep wheel contact without resetting the
+# spring to an unrelated centre height on every shove. The same motion object
+# retains the resulting pose when the owner gets back behind the wheel.
+func follow_ground(node: Node3D, stage, yaw: float) -> void:
+	var surface: Callable = stage.vehicle_ground if stage.has_method("vehicle_ground") else stage.ground
+	var forward = Vector3(-sin(yaw), 0, -cos(yaw))
+	var right = forward.cross(Vector3.UP)
+	var front: float = surface.call(node.position + forward * 1.15)
+	var rear: float = surface.call(node.position - forward * 1.15)
+	var left: float = surface.call(node.position - right * 0.7)
+	var opposite: float = surface.call(node.position + right * 0.7)
+	pitch = atan2(front - rear, 2.3)
+	roll = atan2(opposite - left, 1.4)
+	node.rotation = Vector3(pitch, yaw, roll)
+	# Support every wheel, including diagonal ridges; averaging heights alone
+	# can bury the uphill wheels. Rotating the footprint accounts for body tilt.
+	var height: float = surface.call(node.position) + 0.06
+	for x in [-0.7, 0.7]:
+		for z in [-1.15, 1.15]:
+			var offset: Vector3 = node.basis * Vector3(x, 0, z)
+			var wheel = node.position + offset
+			var ground_height: float = surface.call(wheel)
+			if "has_snow" in stage and stage.has_snow:
+				ground_height = maxf(ground_height, stage.Snowbanks.surface_height(stage, wheel))
+			height = maxf(height, ground_height - offset.y + 0.06)
+	node.position.y = height
+	vertical_speed = 0.0
+	grounded = true
+	initialized = true
+
 func suspension(node: Node3D, stage, delta: float, yaw: float, lateral_accel: float = 0.0) -> void:
 	var forward = Vector3(-sin(yaw), 0, -cos(yaw))
 	var right = forward.cross(Vector3.UP)

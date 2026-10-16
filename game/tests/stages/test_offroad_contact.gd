@@ -15,6 +15,25 @@ func settle(game, p: Vector3) -> float:
 		game.vehicle_motion.suspension(game.car, game.stage, 1.0 / 60.0, 0.0)
 	return game.car.position.y
 
+func recovery_contact(game, p: Vector3) -> bool:
+	for yaw in [0.0, 0.73, PI / 2]:
+		game.heading = yaw
+		# Wrong old height and a moving spring must not survive recovery.
+		game.vehicle_motion.vertical_speed = -4.0
+		game.Recovery.move_car(game, "local", p - Vector3.UP * 3, NAN, 1.0 / 60)
+		var forward = Vector3(-sin(yaw), 0, -cos(yaw))
+		var expected_pitch = atan2(game.stage.vehicle_ground(p + forward * 1.15) - game.stage.vehicle_ground(p - forward * 1.15), 2.3)
+		if absf(game.car.rotation.x - expected_pitch) > 0.00001:
+			return false
+		for x in [-0.7, 0.7]:
+			for z in [-1.15, 1.15]:
+				var wheel: Vector3 = game.car.position + game.car.basis * Vector3(x, 0, z)
+				if wheel.y < game.stage.vehicle_ground(wheel) + 0.055:
+					return false
+		if game.vehicle_motion.vertical_speed != 0 or absf(game.vehicle_motion.pitch - game.car.rotation.x) > 0.00001 or absf(game.vehicle_motion.roll - game.car.rotation.z) > 0.00001:
+			return false
+	return true
+
 func run() -> void:
 	for stage_index in range(Stage.STAGES.size()):
 		var game = load("res://main.tscn").instantiate()
@@ -29,6 +48,7 @@ func run() -> void:
 		var winter = "has_snow" in st and st.has_snow
 		var worst = 0.0
 		var samples = 0
+		var recovery_supported = true
 		for s in range(60, int(st.LENGTH) - 60, 60):
 			for side in [-1.0, 1.0]:
 				var p: Vector3 = st.at(s) + st.side(s) * side * (st.road_width(s) * 0.5 + 6.0)
@@ -39,11 +59,13 @@ func run() -> void:
 				if st.biome.has_method("in_village") and st.biome.in_village(st.road_s(p)):
 					continue
 				var y = settle(game, p)
+				recovery_supported = recovery_contact(game, p) and recovery_supported
 				# The car origin sits 0.06 m above the four tyre contact points.
 				worst = maxf(worst, y - 0.06 - st.terrain_surface_height(p))
 				samples += 1
 		if not winter:
 			check(samples > 3 and worst < 0.12, "%s: an off-road car touches the drawn land (worst gap %.2f m over %d spots)" % [Stage.STAGES[stage_index], worst, samples])
+		check(samples > 3 and recovery_supported, "%s: pushed/towed wheels stay above the rendered terrain at every heading" % Stage.STAGES[stage_index])
 		var road: Vector3 = st.at(300.0)
 		var settled = settle(game, road)
 		# The suspension averages four contact points, so a bumpy road is
