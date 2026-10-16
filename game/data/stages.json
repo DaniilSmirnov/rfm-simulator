@@ -38,14 +38,15 @@
       }
     },
     {
-      "id": "canyon", "title": "Красный каньон", "subtitle": "пустынный грунт",
+      "id": "canyon", "title": "Чарынский каньон", "subtitle": "степь и красные скалы",
       "biome": "res://scripts/stages/canyon/canyon.gd",
-      "loading": "Скалы и окружение",
+      "loading": "Степь и Долина замков",
       "minimap": "613b2ae8",
       "environment": {
-        "sky_top": "5987ab", "sky_horizon": "e9c69a", "ground_bottom": "a95c3a", "ground_horizon": "e9c69a",
-        "ambient": "efccaa", "ambient_energy": 0.42, "fog": "d6a479", "fog_density": 0.0008
-      }
+        "sky_top": "2f6fae", "sky_curve": 0.1, "sky_horizon": "dbd4c0", "ground_bottom": "9c6540", "ground_horizon": "dbd4c0",
+        "ambient": "dcd5c2", "ambient_energy": 0.36, "fog": "c9bda6", "fog_density": 0.0006
+      },
+      "sun": {"rotation": [-42, -30, 0], "color": "fff2dc", "energy": 0.9}
     },
     {
       "id": "lakes", "title": "Финский лес", "subtitle": "гравий и озёра",
