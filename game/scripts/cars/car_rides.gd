@@ -272,7 +272,7 @@ func pull(players: Dictionary, delta: float) -> void:
 		if distance <= TOW_LENGTH:
 			continue
 		var next: Vector3 = lead + offset / distance * TOW_LENGTH
-		next.y = game.stage.ground(next)
+		next.y = towed.y
 		Recovery.move_car(game, owner, next, atan2(offset.x, offset.z), delta, TOW_TURN_RATE)
 
 func hud_state() -> Array:

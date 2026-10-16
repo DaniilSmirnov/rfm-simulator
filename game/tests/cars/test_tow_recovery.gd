@@ -18,6 +18,47 @@ func strand(game, racer, station: float = 300, side: float = 8.0) -> void:
 func flat_distance(a: Vector3, b: Vector3) -> float:
 	return Vector2(a.x - b.x, a.z - b.z).length()
 
+# Exercise the actual walker collision and recovery together, rather than
+# teleporting a helper to a fixed centre radius on every frame.
+func continuous_push(game) -> void:
+	strand(game, game.racers[0], 600)
+	var box = game.Recovery.Hitbox.bounds(game.car)
+	for yaw in [0.0, 0.73]:
+		for side in [Vector3.RIGHT, Vector3.LEFT, Vector3.FORWARD, Vector3.BACK]:
+			var distances = []
+			for fps in [24, 60]:
+				game.car.position = game.stage.at(180)
+				game.heading = yaw
+				game.vehicle_motion.follow_ground(game.car, game.stage, yaw)
+				var center = box.get_center()
+				var edge = center + side * (box.size.x * 0.5 + 0.4 if side.x != 0 else box.size.z * 0.5 + 0.4)
+				# Off-centre contact must push into the flank/bumper, even when
+				# the car centre lies diagonally away from the walking direction.
+				if side.x != 0: edge.z += box.size.z * 0.35
+				edge.y = 0
+				game.walker = game.car.position + edge.rotated(Vector3.UP, yaw)
+				game.walker.y = game.stage.walking_ground(game.walker)
+				game.jump_height = 0.0
+				game.jump_velocity = 0.0
+				game.player.perches.stand = {}
+				var direction = -side.rotated(Vector3.UP, yaw)
+				game.view_yaw = atan2(-direction.x, -direction.z)
+				var start: Vector3 = game.car.position
+				var uninterrupted = true
+				Input.action_press("forward")
+				for frame in range(fps * 2):
+					var before: Vector3 = game.car.position
+					game._walk(1.0 / fps)
+					game._update_tow(1.0 / fps)
+					var travel: float = (game.car.position - before).dot(direction)
+					if frame > fps / 2:
+						uninterrupted = uninterrupted and absf(travel - game.Recovery.HELPER_SPEED / fps) < 0.002
+				Input.action_release("forward")
+				distances.append(flat_distance(start, game.car.position))
+				check(uninterrupted and distances[-1] > 1.5, "continuous push from %s at yaw %.2f / %d FPS does not lose contact" % [side, yaw, fps])
+				check(absf(angle_difference(yaw, game.heading)) < 0.0001, "a body push preserves the car heading")
+			check(absf(distances[0] - distances[1]) < 0.08, "24 and 60 FPS move a pushed car the same distance")
+
 # A helper `reach` metres from the crew towards (or away from) the road.
 func person(game, racer, pull: bool, push: bool = false, reach: float = 4.0, toward_road: bool = true) -> Dictionary:
 	var road = game.Recovery.road_direction(game, racer) * (1.0 if toward_road else -1.0)
@@ -96,7 +137,11 @@ func run() -> void:
 	# Walking into the body pushes it without a rope.
 	strand(game, racer)
 	var direction = game.Recovery.road_direction(game, racer)
-	game.walker = racer.node.position - direction * 2
+	var box = game.Recovery.Hitbox.bounds(racer.node)
+	var from_car = -direction.rotated(Vector3.UP, -racer.node.rotation.y)
+	var reach = minf(box.size.x * 0.5 / maxf(absf(from_car.x), 0.0001), box.size.z * 0.5 / maxf(absf(from_car.z), 0.0001))
+	game.walker = racer.node.position + (box.get_center() + from_car * (reach + 0.4)).rotated(Vector3.UP, racer.node.rotation.y)
+	game.walker.y = game.stage.walking_ground(game.walker)
 	game.view_yaw = atan2(-direction.x, -direction.z)
 	start = racer.node.position
 	Input.action_press("forward")
@@ -143,6 +188,7 @@ func run() -> void:
 	game.Recovery.update(game, {"a": person(game, racer, true)}, 10)
 	check(racer.node.position == start, "pause freezes towing")
 	game.paused = false
+	continuous_push(game)
 
 	# Players tow each other's cars and their own.
 	strand(game, racer, 600)
@@ -180,6 +226,29 @@ func run() -> void:
 	game.room.update_tow(0.5)
 	check(flat_distance(game.room.v(game.room.peers.friend.state.car), parked) > 0.3, "guest tows their own car on the host")
 	check(game.recovery_links.any(func(link): return link.get("car", "") == "friend" and link.player == "friend"), "own-car rope identifies the guest as both owner and puller")
+	# The authoritative prediction solver must retain the recovered pose; a
+	# later driving snapshot must not restore its old height or spring state.
+	var solver = preload("res://scripts/net/drive_prediction.gd").new()
+	solver.reset(game.room.v(game.room.peers.friend.state.car), 0.0)
+	game.room.host_drives.friend = solver
+	game.Recovery.move_car(game, "friend", solver.node.position + Vector3(1, -5, 0), 0.7, 0.25)
+	check(solver.node.position.distance_to(game.room.v(game.room.peers.friend.state.car)) < 0.01, "guest solver and peer state share the recovered position")
+	check(game.room.peers.friend.state.tilt == game.room.a(solver.node.rotation) and absf(solver.yaw - solver.node.rotation.y) < 0.00001, "guest recovery shares heading and terrain tilt")
+	check(solver.motion.initialized and solver.motion.grounded and solver.motion.vertical_speed == 0.0, "recovery resets the guest spring before driving resumes")
+	var side = Vector3.RIGHT.rotated(Vector3.UP, solver.yaw)
+	var peer_box = game.Recovery.Hitbox.bounds(game.room.peers.friend.car)
+	var pushing = helper.duplicate()
+	pushing.tow = false
+	pushing.push = game.room.a(-side)
+	pushing.pos = game.room.a(solver.node.position + Vector3(peer_box.end.x + 0.4, 0, peer_box.get_center().z).rotated(Vector3.UP, solver.yaw))
+	var passive = friend.duplicate()
+	passive.tow = false
+	passive.pos = game.room.a(solver.node.position + Vector3(0, 0, 30))
+	var before_push: Vector3 = solver.node.position
+	var before_yaw: float = solver.yaw
+	game.Recovery.update(game, {"friend": passive, "helper": pushing}, 1.0 / 60)
+	check((before_push - solver.node.position).dot(side) > 0.01 and solver.yaw == before_yaw, "pushing a predicted guest uses the visible car bounds and preserves heading")
+	game.room.host_drives.clear()
 	game.room.peers.clear()
 
 	# The local car works both in a room and offline (where the owner is "local").
