@@ -7,6 +7,15 @@ const Loc = preload("res://scripts/ui/loc.gd")
 
 var game
 
+# Use the same surface sampler for the ghost, deployed gear and room snapshots.
+func ground_item(node: Node3D, spot: Vector3, yaw: float) -> void:
+	node.position = Vector3(spot.x, game.stage.ground(spot), spot.z)
+	node.basis = game.stage.terrain_basis(spot, yaw, game.stage.ground)
+	node.set_meta("placement_yaw", yaw)
+
+func item_yaw(node: Node3D) -> float:
+	return float(node.get_meta("placement_yaw", node.rotation.y))
+
 func valid_furniture_spot(spot: Vector3, kind: String, ignored_owner: String = "") -> bool:
 	# Dug out of the snow, level on terraces, dry by the lakes: the stage decides.
 	if not game.stage.biome.camp_allowed(spot, kind):
@@ -100,8 +109,7 @@ func update_placement() -> void:
 	if game.placement_kind == "firewood" and game.camp_cooking.pot != null and spot.distance_to(game.camp_cooking.pot.position) < 1.5:
 		spot = game.camp_cooking.pot.position
 	spot.y = game.stage.ground(spot)
-	game.placement_preview.position = spot
-	game.placement_preview.rotation.y = game.placement_yaw
+	ground_item(game.placement_preview, spot, game.placement_yaw)
 	game.placement_valid = spot.distance_to(game.walker) <= 5.0 and valid_furniture_spot(spot, game.placement_kind)
 	game.placement_material.albedo_color = Color("82c991") if game.placement_valid else Color("d75e53")
 
@@ -159,9 +167,7 @@ func place_table(spot: Vector3 = Vector3.INF, yaw: float = 0.0) -> bool:
 		game.camp.set_meta("gear_owner", game.cargo.actor())
 		game.add_child(game.camp)
 		Props.table(game.camp)
-	game.camp.position = spot
-	game.camp.position.y = game.stage.ground(spot)
-	game.camp.rotation.y = yaw
+	ground_item(game.camp, spot, yaw)
 	game.stage.solids.indexed_obstacle_count = -1
 	game.toast("Стол установлен.")
 	return true
@@ -187,9 +193,7 @@ func apply_chair(owner: String, spot: Vector3, yaw: float) -> void:
 		game.add_child(chair)
 		Props.chair(chair, Vector3.ZERO)
 		game.personal_chairs[owner] = chair
-	game.personal_chairs[owner].position = spot
-	game.personal_chairs[owner].position.y = game.stage.ground(spot)
-	game.personal_chairs[owner].rotation.y = yaw
+	ground_item(game.personal_chairs[owner], spot, yaw)
 	game.stage.solids.indexed_obstacle_count = -1
 	game.has_chairs = not game.personal_chairs.is_empty()
 
@@ -203,7 +207,7 @@ func place_flag(spot: Vector3 = Vector3.INF, yaw: float = 0.0, owner: String = "
 		return false
 	var flags: Array = game.personal_flags.get(owner, [])
 	var node = Props.rally_fans_map_flag(game, spot, yaw, flags.size())
-	node.position.y = game.stage.ground(spot)
+	ground_item(node, spot, yaw)
 	flags.append(node)
 	game.personal_flags[owner] = flags
 	return true
@@ -219,18 +223,14 @@ func start_grill(spot: Vector3 = Vector3.INF, yaw: float = 0.0, replicated: bool
 	if not replicated and not valid_furniture_spot(spot, "grill"):
 		return false
 	if game.grill != null:
-		game.grill.position = spot
-		game.grill.position.y = game.stage.ground(spot)
-		game.grill.rotation.y = yaw
+		ground_item(game.grill, spot, yaw)
 		game.stage.solids.indexed_obstacle_count = -1
 		game.fire_audio.position = game.grill.position
 		return true
 	game.grill = Props.grill(game)
 	game.grill.set_meta("gear_owner", game.cargo.actor())
 	game.camp_grill.reset()
-	game.grill.position = spot
-	game.grill.position.y = game.stage.ground(spot)
-	game.grill.rotation.y = yaw
+	ground_item(game.grill, spot, yaw)
 	game.cooking = true
 	game.smoke = GPUParticles3D.new()
 	game.grill.add_child(game.smoke)

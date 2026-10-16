@@ -19,9 +19,7 @@ func deploy_fire(spot: Vector3, yaw: float) -> bool:
 		return false
 	if fire == null:
 		fire = Props.campfire(game)
-	fire.position = spot
-	fire.position.y = game.stage.ground(spot)
-	fire.rotation.y = yaw
+	game.camp_actions.ground_item(fire, spot, yaw)
 	game.toast("Костёр разожжён. Принеси казан из багажника.")
 	return true
 
@@ -38,18 +36,16 @@ func place_pot(spot: Vector3, yaw: float = 0) -> bool:
 		phase = "empty"
 		cook_time = 0
 		servings = 0
-	pot.position = spot
-	pot.position.y = game.stage.ground(spot)
-	pot.rotation.y = yaw
+	game.camp_actions.ground_item(pot, spot, yaw)
 	game.toast("Казан установлен. F — готовить плов." if heated() else "Казан установлен. Принеси дрова и разожги костёр под ним.")
 	return true
 
 func light_under_pot() -> bool:
 	if pot == null:
 		return false
-	if game.room.submit("firewood", {"pos": game.room.a(pot.position), "yaw": pot.rotation.y}):
+	if game.room.submit("firewood", {"pos": game.room.a(pot.position), "yaw": game.camp_actions.item_yaw(pot)}):
 		return true
-	return game.cargo.deploy("firewood", pot.position, pot.rotation.y)
+	return game.cargo.deploy("firewood", pot.position, game.camp_actions.item_yaw(pot))
 
 func mount() -> bool:
 	if fire == null:
@@ -136,7 +132,7 @@ func remove_fire() -> void:
 func snapshot() -> Dictionary:
 	if fire == null and pot == null:
 		return {}
-	return {"fire": fire != null, "pos": game.room.a(fire.position if fire != null else pot.position), "yaw": fire.rotation.y if fire != null else 0, "fire_owner": str(fire.get_meta("gear_owner", game.chair_owner())) if fire != null else "", "pot": pot != null, "pot_pos": game.room.a(pot.position) if pot != null else [], "pot_yaw": pot.rotation.y if pot != null else 0, "pot_owner": str(pot.get_meta("gear_owner", game.chair_owner())) if pot != null else "", "phase": phase, "cook_time": cook_time, "servings": servings}
+	return {"fire": fire != null, "pos": game.room.a(fire.position if fire != null else pot.position), "yaw": game.camp_actions.item_yaw(fire) if fire != null else 0, "fire_owner": str(fire.get_meta("gear_owner", game.chair_owner())) if fire != null else "", "pot": pot != null, "pot_pos": game.room.a(pot.position) if pot != null else [], "pot_yaw": game.camp_actions.item_yaw(pot) if pot != null else 0, "pot_owner": str(pot.get_meta("gear_owner", game.chair_owner())) if pot != null else "", "phase": phase, "cook_time": cook_time, "servings": servings}
 
 func apply_snapshot(data: Dictionary) -> void:
 	if data.is_empty():
@@ -146,16 +142,14 @@ func apply_snapshot(data: Dictionary) -> void:
 	if data.get("fire", true):
 		if fire == null:
 			fire = Props.campfire(game)
-		fire.position = game.room.v(data.pos)
-		fire.rotation.y = float(data.get("yaw", 0))
+		game.camp_actions.ground_item(fire, game.room.v(data.pos), float(data.get("yaw", 0)))
 		fire.set_meta("gear_owner", str(data.get("fire_owner", "")))
 	else:
 		remove_fire()
 	if data.get("pot", false):
 		if pot == null:
 			pot = Props.cauldron(game)
-		pot.position = game.room.v(data.get("pot_pos", data.pos))
-		pot.rotation.y = float(data.get("pot_yaw", 0))
+		game.camp_actions.ground_item(pot, game.room.v(data.get("pot_pos", data.pos)), float(data.get("pot_yaw", 0)))
 		pot.set_meta("gear_owner", str(data.get("pot_owner", "")))
 	else:
 		remove_pot()

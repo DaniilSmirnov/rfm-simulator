@@ -77,6 +77,53 @@ func run() -> void:
 	check(flags_visible, "replicated flag poles and cloth belong to the guest scene")
 	guest.room.apply_world(host.room.world_state())
 	check(guest.personal_flags.get("host", []).size() == 3, "repeated snapshots do not duplicate flags")
+	# Find an actual permitted hillside rather than a flattened camp clearing.
+	var slope = Vector3.INF
+	for x in range(-180, 181, 6):
+		for z in range(-180, 181, 6):
+			var candidate = Vector3(x, 0, z)
+			candidate.y = host.stage.ground(candidate)
+			var up = host.stage.terrain_basis(candidate, 0.0, host.stage.ground).y
+			if up.dot(Vector3.UP) < 0.98 and up.dot(Vector3.UP) > 0.85 and host.valid_furniture_spot(candidate, "table"):
+				slope = candidate
+				break
+		if slope != Vector3.INF:
+			break
+	check(slope != Vector3.INF, "a permitted sloping campsite exists")
+	if slope != Vector3.INF:
+		host.walker = slope
+		var yaw = 0.7
+		var expected = host.stage.terrain_basis(slope, yaw, host.stage.ground)
+		check(host.place_table(slope, yaw), "table can be moved onto a hillside")
+		check(host.camp.basis.is_equal_approx(expected), "placed table follows both slope axes")
+		host.walker = slope + Vector3(sin(host.view_yaw), 0, cos(host.view_yaw)) * 2.5
+		host.placement_preview = Node3D.new()
+		host.add_child(host.placement_preview)
+		host.placement_kind = "flag"
+		host.placement_yaw = yaw
+		host.camp_actions.update_placement()
+		check(host.placement_preview.basis.is_equal_approx(expected), "preview uses the same terrain tilt as installed gear")
+		host.cancel_placement()
+		# Exercise all models through the common pose operation, including reset
+		# from a slope to a level clearing and repeated snapshot reconstruction.
+		for node in [host.camp, host.personal_chairs["host"], host.grill, placed_flag]:
+			host.camp_actions.ground_item(node, slope, yaw)
+			host.camp_actions.ground_item(node, origin, -0.4)
+			check(node.basis.is_equal_approx(host.stage.terrain_basis(origin, -0.4, host.stage.ground)), "returning to the clearing replaces the previous hillside tilt")
+			host.camp_actions.ground_item(node, slope, yaw)
+		host.walker = slope
+		check(host.camp_cooking.deploy_fire(slope + Vector3(4, 0, 0), yaw), "fire can be deployed beside a hillside camp")
+		var fire = host.camp_cooking.fire
+		if fire != null:
+			host.walker = fire.position
+			check(host.camp_cooking.place_pot(fire.position, yaw), "pot can be placed over a hillside fire")
+			check(fire.basis.is_equal_approx(host.camp_cooking.pot.basis), "pot and fire share the slope")
+		var sloped_snapshot = host.room.world_state()
+		for repeat in range(2):
+			guest.room.apply_world(sloped_snapshot)
+			for pair in [[host.camp, guest.camp], [host.personal_chairs["host"], guest.personal_chairs["host"]], [host.grill, guest.grill], [placed_flag, guest.personal_flags["host"][0]], [fire, guest.camp_cooking.fire], [host.camp_cooking.pot, guest.camp_cooking.pot]]:
+				if pair[0] != null and pair[1] != null:
+					check(pair[0].basis.is_equal_approx(pair[1].basis), "repeated room snapshots preserve slope and heading")
 	for game in [host, guest]:
 		await game._shutdown_audio()
 		game.queue_free()
