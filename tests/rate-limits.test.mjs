@@ -1,8 +1,8 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {enforceLimit, LimitError, limitResponse} from '../server/rate-limits.mjs';
-import worker from '../server/worker.mjs';
-import {RoomState} from '../server/room-core.mjs';
+import worker, {RallyRoom} from '../server/worker.mjs';
+import {RoomState, protocol} from '../server/room-core.mjs';
 import {authenticateLaunch} from '../server/auth-vk.mjs';
 import {createHmac} from 'node:crypto';
 
@@ -69,5 +69,57 @@ test('store and purchase use verified account ID even when launch sessions are r
     const response = await worker.fetch(new Request('https://game.test/api/vk/'+path,{method:'POST',headers:{Authorization:'Bearer '+session.token},body:'{}'}),env);
     assert.equal(response.status,429);
     assert.equal(key,'user:42');
+  }
+});
+
+const request = (path, body, headers = {}) => new Request('https://game.test'+path,{method:'POST',body,headers,duplex:'half'});
+const room = () => { const r = new RallyRoom({blockConcurrencyWhile:()=>{}, storage:{put:async()=>{},setAlarm:async()=>{}},getWebSockets:()=>[]}); r.room = new RoomState(); return r; };
+const padded = (limit, character) => { const prefix = JSON.stringify({name:'Host',padding:''}); const count = Math.floor((limit-prefix.length)/Buffer.byteLength(character)); return prefix.slice(0,-2)+character.repeat(count)+'x'.repeat(limit-prefix.length-count*Buffer.byteLength(character))+'"}'; };
+
+test('room HTTP and WebSocket limits count UTF-8 bytes at ASCII, Cyrillic and emoji boundaries',async()=>{
+  for (const character of ['x','я','😀']) {
+    const raw = padded(protocol.max_message_bytes,character);
+    assert.equal(Buffer.byteLength(raw),protocol.max_message_bytes);
+    assert.equal((await room().fetch(request('/create',raw))).status,200);
+    assert.equal((await room().fetch(request('/create',raw+' '))).status,413);
+    const sent=[];
+    await room().webSocketMessage({send:value=>sent.push(JSON.parse(value))},raw+' ');
+    assert.equal(sent[0].status,413);
+  }
+});
+
+test('room creation cancels oversized streams with missing or false Content-Length',async()=>{
+  for (const headers of [{},{'Content-Length':'1'},{'Content-Length':'999999'}]) {
+    let pulled=0, cancelled=false;
+    const body = new ReadableStream({pull(controller){pulled++; controller.enqueue(new Uint8Array(512)); if(pulled===100)controller.close();},cancel(){cancelled=true;}});
+    const response=await worker.fetch(request('/api/rooms',body,headers),{});
+    assert.equal(response.status,413);
+    assert.equal(cancelled,true);
+    assert.ok(pulled<=4,`read ${pulled} chunks`);
+  }
+});
+
+test('session and callback enforce byte limits while preserving callback error protocol',async()=>{
+  assert.equal((await worker.fetch(request('/api/vk/session','я'.repeat(8193)),{})).status,413);
+  const response=await worker.fetch(request('/api/vk/payments/callback','я'.repeat(8193)),{VK_APP_ID:'123',VK_APP_SECRET:'test'});
+  assert.equal(response.status,200);
+  assert.deepEqual((await response.json()).error,{error_code:20,error_msg:'Слишком большое уведомление.',critical:true});
+});
+
+test('direct signal limit counts serialized UTF-8 bytes',()=>{
+  const r=new RoomState(); const h=r.add('Host',0,true); const g=r.add('Guest',0);
+  const data={sdp:'я'.repeat(Math.floor(protocol.direct.max_signal_bytes/2))};
+  assert.throws(()=>r.signal(h.token,g.player,data,1),error=>error.status===400);
+});
+
+test('room creation accepts byte boundary across split UTF-8 chunks and rejects one more byte',async()=>{
+  const env={ROOMS:{idFromName:id=>id,get:()=>({fetch:async req=>{assert.equal(Buffer.byteLength(await req.text()),1024); return Response.json({token:'ok'});}})}};
+  for (const character of ['x','я','😀']) {
+    const raw=padded(1024,character);
+    const bytes=new TextEncoder().encode(raw);
+    let offset=0;
+    const body=new ReadableStream({pull(controller){if(offset===bytes.length){controller.close();return;}controller.enqueue(bytes.subarray(offset,++offset));}});
+    assert.equal((await worker.fetch(request('/api/rooms',body),env)).status,200);
+    assert.equal((await worker.fetch(request('/api/rooms',raw+' '),env)).status,413);
   }
 });

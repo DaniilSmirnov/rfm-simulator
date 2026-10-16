@@ -206,7 +206,7 @@ export class RoomState {
     this.rateLimit(p, 'signal', now, protocol.direct.signals_per_10s, 10000);
     const target = typeof to === 'string' ? this.data.players[to] : undefined;
     if (!target || target.id === p.id || (p.id !== this.data.host && target.id !== this.data.host)) throw new RoomError(404, 'Участник не найден.');
-    if (!data || typeof data !== 'object' || Array.isArray(data) || JSON.stringify(data).length > protocol.direct.max_signal_bytes) throw new RoomError(400, 'Некорректное сообщение.');
+    if (!data || typeof data !== 'object' || Array.isArray(data) || new TextEncoder().encode(JSON.stringify(data)).byteLength > protocol.direct.max_signal_bytes) throw new RoomError(400, 'Некорректное сообщение.');
     p.seen = now;
     return { from: p.id, to: target.id };
   }

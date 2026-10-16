@@ -8,6 +8,27 @@ const json = (data, status = 200) => Response.json(data, { status, headers: { 'C
 const PUSH_INTERVAL = 40;
 const HELLO_TIMEOUT = 10000;
 const MAX_MESSAGE = protocol.max_message_bytes;
+async function readBody(request, limit, message = 'Слишком большое сообщение.') {
+  const reject = async reader => {
+    try { await (reader ? reader.cancel() : request.body?.cancel()); } catch {}
+    throw new RoomError(413, message);
+  };
+  if (Number(request.headers.get('Content-Length')) > limit) return reject();
+  if (!request.body) return '';
+  const reader = request.body.getReader();
+  const bytes = new Uint8Array(limit);
+  let size = 0;
+  try {
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      if (value.byteLength > limit - size) return await reject(reader);
+      bytes.set(value, size);
+      size += value.byteLength;
+    }
+    return new TextDecoder().decode(bytes.subarray(0, size));
+  } finally { reader.releaseLock(); }
+}
 // Room IDs: the protocol pattern without its anchors, reused in every route.
 const ROOM_ID = protocol.room_id_pattern.replace(/^\^|\$$/g, '');
 const SOCKET_ROUTE = new RegExp(`^/api/rooms/(${ROOM_ID})/socket$`);
@@ -62,8 +83,7 @@ export class RallyRoom {
       return new Response(null, { status: 101, webSocket: pair[0] });
     }
     try {
-      const raw = await request.text();
-      if (raw.length > MAX_MESSAGE) throw new RoomError(413, 'Слишком большое сообщение.');
+      const raw = await readBody(request, MAX_MESSAGE);
       let body;
       try { body = JSON.parse(raw); } catch { throw new RoomError(400, 'Некорректное сообщение.'); }
       if (!body || typeof body !== 'object') throw new RoomError(400, 'Некорректное сообщение.');
@@ -140,7 +160,7 @@ export class RallyRoom {
   async webSocketMessage(ws, message) {
     let body;
     try {
-      if (typeof message !== 'string' || message.length > MAX_MESSAGE) throw new RoomError(413, 'Слишком большое сообщение.');
+      if (typeof message !== 'string' || new TextEncoder().encode(message).byteLength > MAX_MESSAGE) throw new RoomError(413, 'Слишком большое сообщение.');
       try { body = JSON.parse(message); } catch { throw new RoomError(400, 'Некорректное сообщение.'); }
       if (!body || typeof body !== 'object') throw new RoomError(400, 'Некорректное сообщение.');
       const now = Date.now();
@@ -231,8 +251,9 @@ export default {
         response.headers.set('X-Rally-Payments-Handler', PAYMENT_HANDLER_VERSION);
         return response;
       };
-      try { return reply(await paymentCallback(await request.text(), env)); }
+      try { return reply(await paymentCallback(await readBody(request, 16384, 'Слишком большое уведомление.'), env)); }
       catch (error) {
+        if (error instanceof RoomError && error.status === 413) error = new PaymentError(20, error.message);
         const known = error instanceof PaymentError;
         console.warn('[RFM VK payments]', JSON.stringify({handler:PAYMENT_HANDLER_VERSION,error_code:known ? error.code : 1,message:known ? error.message : 'Платежи временно недоступны.'}));
         return reply({error:{error_code:known ? error.code : 1,error_msg:known ? error.message : 'Платежи временно недоступны.',critical:known ? error.critical : false}});
@@ -248,11 +269,13 @@ export default {
     } catch (error) { return limitResponse(error); }
     const origin = request.headers.get('Origin');
     if (origin && origin !== url.origin) return json({ error: 'Недопустимый источник.' }, 403);
-    if (Number(request.headers.get('Content-Length')) > MAX_MESSAGE) return json({ error: 'Слишком большое сообщение.' }, 413);
+    if (Number(request.headers.get('Content-Length')) > MAX_MESSAGE) {
+      try { await request.body?.cancel(); } catch {}
+      return json({ error: 'Слишком большое сообщение.' }, 413);
+    }
     try {
       if (url.pathname === '/api/vk/session') {
-        const raw = await request.text();
-        if (raw.length > 16384) return json({ error: 'Слишком большое сообщение.' }, 413);
+        const raw = await readBody(request, 16384);
         let body;
         try { body = JSON.parse(raw); } catch { return json({ error: 'Некорректное сообщение.' }, 400); }
         const bootstrap = await authenticateLaunch(body?.launch_params, env);
@@ -262,8 +285,7 @@ export default {
         const session = await authenticateSession(request, env);
         await enforceLimit(env, url.pathname === '/api/vk/store' ? 'STORE_RATE_LIMIT' : 'PURCHASE_RATE_LIMIT', 'user:' + session.user);
         if (url.pathname === '/api/vk/store') return json(await accountStore(env,session.user));
-        const raw = await request.text();
-        if (raw.length > 1024) return json({error:'Слишком большое сообщение.'},413);
+        const raw = await readBody(request, 1024);
         let body;
         try { body = JSON.parse(raw); } catch { return json({error:'Некорректное сообщение.'},400); }
         return json(await preparePurchase(env,session.user,body?.sku));
@@ -274,8 +296,7 @@ export default {
         const session = await authenticateSession(request, env);
         if (url.pathname === '/api/rooms' || ENTRY_ROUTE.test(url.pathname)) {
           await enforceLimit(env, 'ROOM_ENTRY_RATE_LIMIT', 'user:' + session.user);
-          const raw = await request.text();
-          if (raw.length > 1024) return json({ error: 'Слишком большое сообщение.' }, 413);
+          const raw = await readBody(request, 1024);
           let body;
           try { body = JSON.parse(raw); } catch { return json({ error: 'Некорректное сообщение.' }, 400); }
           if (!body || typeof body !== 'object' || Array.isArray(body)) return json({ error: 'Некорректное сообщение.' }, 400);
@@ -285,14 +306,16 @@ export default {
         }
       }
     } catch (error) {
+      if (error instanceof RoomError) return json({error:error.message},error.status);
       if (error instanceof LimitError) return limitResponse(error);
       if (error instanceof PaymentError) return json({error:error.message},error.critical ? 403 : 503);
       if (error instanceof AuthError) return json({ error: error.message }, error.status);
       return json({ error: 'Авторизация временно недоступна.' }, 503);
     }
     if (url.pathname === '/api/rooms') {
-      const raw = await request.text();
-      if (raw.length > 1024) return json({ error: 'Слишком длинное имя.' }, 413);
+      let raw;
+      try { raw = await readBody(request, 1024, 'Слишком длинное имя.'); }
+      catch (error) { if (error instanceof RoomError) return json({error:error.message},error.status); throw error; }
       for (let attempt = 0; attempt < 4; attempt++) {
         const id = [...crypto.getRandomValues(new Uint8Array(3))].map(n => n.toString(16).padStart(2, '0')).join('').toUpperCase();
         const room = env.ROOMS.get(env.ROOMS.idFromName(id));
