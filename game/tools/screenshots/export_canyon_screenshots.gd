@@ -24,12 +24,15 @@ func run() -> void:
 
 	# The Valley of Castles from the rim: the gorge, its towers and the road
 	# threading the floor far below.
-	var rim = stage.at(470.0) + stage.side(470.0) * -150.0
-	rim.y = canyon.PLATEAU + 16.0
-	rig.aim(rim, stage.at(500.0) + Vector3(0, 10, 0), 62.0)
+	var rim = stage.at(516.0) + stage.side(516.0) * -52.0
+	rim.y = canyon.PLATEAU + 22.0
+	rig.aim(rim, stage.at(596.0) + Vector3(0, 10, 0), 64.0)
+	await rig.capture("res://../docs/screenshots/charyn-overview.webp", Vector2i(1920, 1080))
+
+	# Menu art: the walls closing in over the road along the dry bed.
+	rig.aim(view(stage, 528.0, -6.0, 7.0), stage.at(616.0) + Vector3(0, 16, 0), 60.0)
 	await rig.capture("res://textures/previews/stage_3.webp", Vector2i(480, 240))
 	await rig.capture("res://textures/previews/backdrop_3.webp", Vector2i(1280, 720))
-	await rig.capture("res://../docs/screenshots/charyn-overview.webp", Vector2i(1920, 1080))
 
 	# A rally car on the ledge of the descent, wall above, gorge below.
 	var racer = game.Props.rally_car(2)
