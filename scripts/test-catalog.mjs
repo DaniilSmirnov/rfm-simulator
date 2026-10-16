@@ -36,16 +36,18 @@ export const groups = Object.freeze({
 });
 export const nodeSuites = Object.freeze({
  core: [
-  ["--test", "tests/platform.test.mjs", "tests/auth-vk.test.mjs", "tests/payments-vk.test.mjs",
-   "tests/store.test.mjs", "tests/deploy-cloudflare.test.mjs", "tests/fullscreen.test.mjs",
-   "tests/mobile-viewport.test.mjs", "tests/mobile-host-pause.test.mjs", "tests/pointer-capture.test.mjs",
-   "tests/test-catalog.test.mjs", "tests/room-input.test.mjs",
-   "tests/rate-limits.test.mjs", "tests/gdscript-lint.test.mjs", "tests/localization.test.mjs"],
-  ["--test", "tests/branding.test.mjs", "tests/boot-diagnostics.test.mjs",
-   "tests/audio-recovery.test.mjs"],
+  ["--test", "tests/platform.test.mjs"], ["--test", "tests/auth-vk.test.mjs"],
+  ["--test", "tests/payments-vk.test.mjs"], ["--test", "tests/store.test.mjs"],
+  ["--test", "tests/deploy-cloudflare.test.mjs"], ["--test", "tests/fullscreen.test.mjs"],
+  ["--test", "tests/mobile-viewport.test.mjs"], ["--test", "tests/mobile-host-pause.test.mjs"],
+  ["--test", "tests/pointer-capture.test.mjs"], ["--test", "tests/test-catalog.test.mjs"],
+  ["--test", "tests/room-input.test.mjs"], ["--test", "tests/rate-limits.test.mjs"],
+  ["--test", "tests/gdscript-lint.test.mjs"], ["--test", "tests/localization.test.mjs"],
+  ["--test", "--test-concurrency=1", "tests/branding.test.mjs", "tests/boot-diagnostics.test.mjs",
+   "tests/audio-recovery.test.mjs", "tests/voice-chat.test.mjs"],
   ["scripts/test-device.mjs"],
  ],
- simulation: [["--test", "tests/room-core.test.mjs", "tests/room-socket.test.mjs", "tests/room-session.test.mjs", "tests/protocol.test.mjs"]],
+ simulation: [["--test", "--test-concurrency=1", "tests/room-core.test.mjs", "tests/room-socket.test.mjs", "tests/room-session.test.mjs", "tests/protocol.test.mjs"]],
  world: [],
 });
 export const groupDescriptions = Object.freeze({
@@ -54,7 +56,7 @@ export const groupDescriptions = Object.freeze({
  world: "all stages, terrain, scenery, route topology and performance",
 });
 export const slowTests = new Set([
- "test_village_terrain_performance.gd", "test_canyon.gd", "test_finnish_forest.gd", "test_mineshaft.gd",
+ "test_village_terrain_performance.gd", "test_canyon.gd", "test_finnish_forest.gd", "test_mineshaft.gd", "test_direct_link.gd",
  "test_course_schedule.gd", "test_course_officials.gd", "test_spectators.gd", "test_alpine_winter.gd",
  "test_selection.gd", "test_world_loading.gd", "test_baked_village.gd",
  "test_provence_village.gd", "test_stage_solids.gd", "test_service_parks.gd", "test_service_park_layout.gd",

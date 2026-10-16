@@ -155,6 +155,7 @@ func _layout_walking(target: Dictionary) -> Array:
 	if not game.seated and game.beers < 30:
 		add_button("Встать" if game.injuries.down else "Прыжок", "jump", false, grid_rect(2, 0))
 		add_button("Бег", "sprint", true, grid_rect(2, 1))
+	add_button("Рация", "radio", true, grid_rect(1, 1))
 	if game.tow_target != null or game.nearby_tow_target() or tow_caption() == "Тащить":
 		add_button(tow_caption(), "tow", true, grid_rect(0, 1))
 	var gear: Array = []

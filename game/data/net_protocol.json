@@ -34,5 +34,11 @@
     "max_packet": 16000,
     "max_signal_bytes": 16384,
     "signals_per_10s": 120
+  },
+  "voice": {
+    "comment": "WebRTC audio signaling only; media never passes through the room server.",
+    "max_signal_bytes": 8192,
+    "signals_per_10s": 80,
+    "session_timeout": 30
   }
 }

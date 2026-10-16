@@ -70,7 +70,7 @@ static func animate(game: Node, peer: Dictionary, delta: float, clock: float, fr
 	var moving = room_v(state.get("push", [0, 0, 0])).length() > 0.1
 	var pose = {"gait": (2 if bool(state.get("running", false)) else 1) if moving and not sitting else 0, "time": clock,
 		"seed": float(hash(str(peer.id)) % 628) / 100.0, "airborne": bool(state.get("airborne", false)),
-		"arms": "limp" if collapsed else hands.arms, "lift": hands.lift}
+		"arms": "limp" if collapsed else ("radio" if bool(state.get("radio", false)) else hands.arms), "lift": hands.lift}
 	if peer.held_box.visible and hands.arms == "":
 		pose.arms = Props.carry_arms(peer.held_kind)
 	if bool(state.get("relief", false)) and not collapsed:
