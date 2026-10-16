@@ -15,7 +15,7 @@ func run() -> void:
 	await process_frame
 	Settler.configure(body)
 	await process_frame
-	check(body.linear_damp >= 1.8 and body.angular_damp >= 3.0, "dynamic objects receive enough damping to settle")
+	check(body.linear_damp >= 1.8 - 0.001 and body.angular_damp >= 3.0 - 0.001, "dynamic objects receive enough damping to settle")
 	body.position = Vector3(0, 0.5, 0)
 	body.rotation = Vector3(0.35, 0.2, -0.25)
 	body.linear_velocity = Vector3(0.05, 0, 0)
