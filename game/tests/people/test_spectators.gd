@@ -10,9 +10,9 @@ func run() -> void:
 	for variant in range(RallyStage.STAGES.size()):
 		game.select_stage(variant)
 		var crowd = game.spectators
-		# Two people at every clearing camp (canyon summits are reached on foot and
-		# have none) plus one at each of four roadside spots outside the village.
-		var camps = game.stage.clearings.size() - (game.stage.canyon.mesas.size() if game.stage.desert else 0)
+		# Two people at every clearing camp plus one at each of four roadside
+		# spots outside the village.
+		var camps = game.stage.clearings.size()
 		var roadside = 0 if game.stage.provence else 4
 		check(crowd.groups.size() == camps + roadside, "NPC camps populate stage %d" % variant)
 		check(crowd.people.size() == camps * 2 + roadside, "NPC spectators populate stage %d" % variant)
