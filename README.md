@@ -165,7 +165,16 @@ Mini Web-движок пересобран с модулем GodotPhysics3D. П�
 
 ## Сборка для Linux и Windows (Steam)
 
-`npm run build:linux` и `npm run build:windows` экспортируют x86_64-версии тем же скриптом и из тех же проверенных шаблонов: `dist-linux/RallyFansSimulator.x86_64` и `dist-windows/Rally Fans Simulator.exe`, у каждой рядом лежит `.pck` с данными игры (обычная раскладка депо Steam). Обе собираются на Linux и, как остальные нативные версии, ходят в production Worker. Windows-версия без подписи кода, поэтому вне Steam SmartScreen покажет предупреждение. Интеграции Steamworks пока нет.
+`npm run build:linux` экспортирует x86_64-версию в `dist-linux/RallyFansSimulator.x86_64` с отдельным `.pck`.
+
+`npm run build:windows` за один импорт и запекание сцен выпускает две самостоятельные сборки в `dist-windows/`:
+
+- `Rally_Fans_Simulator_x86.exe` — Windows x86 (32 бита).
+- `Rally_Fans_Simulator_x64.exe` — Windows x64 (64 бита).
+
+Для запуска достаточно **одного exe нужной разрядности**: ресурсы `.pck` встроены, консольная обёртка и дополнительные ANGLE/Direct3D 12 DLL отключены. Игра использует Compatibility/OpenGL 3.3 и системный графический драйвер. Настройки и сохранения создаются в пользовательском каталоге Godot, переносить их для первого запуска не нужно. Скрипт проверяет имена, PE-разрядность, встроенный PCK и отсутствие лишних файлов; отдельно проверку можно запустить через `node scripts/verify-windows-build.mjs dist-windows`.
+
+Обе платформы собираются на Linux из проверенных SHA-256 шаблонов Godot 4.4.1 и, как остальные нативные версии, ходят в production Worker. Windows-версия без подписи кода. Интеграции Steamworks пока нет. CI сохраняет обе Windows-сборки в артефакте `desktop-windows` и проверяет запуск каждого exe в изолированном каталоге на Windows.
 
 ## Web и Cloudflare Workers
 

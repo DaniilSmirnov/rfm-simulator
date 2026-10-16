@@ -4,16 +4,20 @@ import { createReadStream } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { spawnSync } from 'node:child_process';
+import { verifyWindowsBuild } from './verify-windows-build.mjs';
 import { getGodot, root, run } from './godot.mjs';
 
 // Native exports (Steam desktop, Android). Usage: node scripts/build-desktop.mjs --platform=macos|linux|windows|android
 // The official 4.4.1 export templates are downloaded once into .cache/templates and
-// checked against a pinned SHA-256; only the one platform archive is unpacked.
-// Linux and Windows export the executable next to its .pck, the usual layout of a Steam depot.
+// checked against a pinned SHA-256; only the selected platform templates are unpacked.
+// Linux exports a separate .pck; Windows embeds all game data into each executable.
 const platforms = {
   macos: { preset: 'macOS', template: 'macos.zip', output: 'Rally Fans Simulator.zip', patch: macosPatch, mobileTextures: true },
   linux: { preset: 'Linux', template: 'linux_release.x86_64', output: 'RallyFansSimulator.x86_64', pck: 'RallyFansSimulator.pck', patch: preset => preset },
-  windows: { preset: 'Windows', template: 'windows_release_x86_64.exe', output: 'Rally Fans Simulator.exe', pck: 'Rally Fans Simulator.pck', patch: windowsPatch, prepare: prepareWindows },
+  windows: { targets: [
+    { preset: 'Windows x86', template: 'windows_release_x86_32.exe', output: 'Rally_Fans_Simulator_x86.exe' },
+    { preset: 'Windows x64', template: 'windows_release_x86_64.exe', output: 'Rally_Fans_Simulator_x64.exe' },
+  ], patch: windowsPatch, prepare: prepareWindows },
   android: { preset: 'Android', template: 'android_release.apk', output: 'Rally Fans Simulator.apk', patch: androidPatch, prepare: prepareAndroid, mobileTextures: true },
 };
 const name = process.argv.find(arg => arg.startsWith('--platform='))?.split('=')[1] ?? 'macos';
@@ -33,8 +37,8 @@ function sha256(path) {
 
 async function exists(path) { try { await stat(path); return true; } catch { return false; } }
 
-async function getTemplate() {
-  const target = join(cache, `4.4.1-${platform.template}`);
+async function getTemplate(filename) {
+  const target = join(cache, `4.4.1-${filename}`);
   if (await exists(target)) return target;
   await mkdir(cache, { recursive: true });
   const archive = join(cache, 'templates.tpz');
@@ -47,7 +51,7 @@ async function getTemplate() {
     await pipeline(Readable.fromWeb(response.body), createWriteStream(archive));
   }
   if (await sha256(archive) !== tpzSha) throw new Error('Export templates failed their SHA-256 check.');
-  run('python3', ['-c', 'import zipfile,sys; open(sys.argv[3],"wb").write(zipfile.ZipFile(sys.argv[1]).read("templates/"+sys.argv[2]))', archive, platform.template, target]);
+  run('python3', ['-c', 'import zipfile,sys; open(sys.argv[3],"wb").write(zipfile.ZipFile(sys.argv[1]).read("templates/"+sys.argv[2]))', archive, filename, target]);
   return target;
 }
 
@@ -128,7 +132,9 @@ async function prepareWindows() {
 }
 
 const godot = await getGodot();
-const template = await getTemplate();
+const targets = platform.targets ?? [platform];
+const templates = [];
+for (const target of targets) templates.push(await getTemplate(target.template));
 const project = join(root, '.cache', 'export-project-' + name);
 const output = join(root, 'dist-' + name);
 await rm(project, { recursive: true, force: true });
@@ -137,16 +143,23 @@ await mkdir(output, { recursive: true });
 await cp(join(root, 'game'), project, { recursive: true, filter: path => !path.split(/[\\/]/).includes('.godot') });
 const presetPath = join(project, 'export_presets.cfg');
 let preset = await readFile(presetPath, 'utf8');
-// The preset block for this platform is edited in place; the template path is local to the build machine.
-const block = preset.indexOf(`name="${platform.preset}"`);
-if (block < 0) throw new Error(`Export preset ${platform.preset} is missing.`);
-for (const kind of ['debug', 'release']) {
-  const marker = `custom_template/${kind}=""`;
-  const at = preset.indexOf(marker, block);
-  if (at < 0) throw new Error('Unexpected export preset.');
-  preset = preset.slice(0, at) + `custom_template/${kind}=${JSON.stringify(template)}` + preset.slice(at + marker.length);
+// Patch each complete preset independently so the two architectures never share templates.
+for (const [index, target] of targets.entries()) {
+  const pattern = /\[preset\.(\d+)\]\r?\n[\s\S]*?(?=\[preset\.\d+\]\r?\n|$)/g;
+  let found = false;
+  preset = preset.replace(pattern, section => {
+    if (!section.includes(`name="${target.preset}"`)) return section;
+    found = true;
+    for (const kind of ['debug', 'release']) {
+      const marker = `custom_template/${kind}=""`;
+      if (!section.includes(marker)) throw new Error('Unexpected export preset.');
+      section = section.replace(marker, `custom_template/${kind}=${JSON.stringify(templates[index])}`);
+    }
+    return platform.patch(section);
+  });
+  if (!found) throw new Error(`Export preset ${target.preset} is missing.`);
 }
-await writeFile(presetPath, platform.patch(preset));
+await writeFile(presetPath, preset);
 // Apple Silicon and Android need ETC2/ASTC textures; the Web and PC builds do not, so only those copies enable them.
 if (platform.mobileTextures) {
   const settingsPath = join(project, 'project.godot');
@@ -159,8 +172,11 @@ run(godot, ['--headless', '--editor', '--path', project, '--import']);
 const note = platform.prepare ? await platform.prepare() : '';
 run(godot, ['--headless', '--path', project, '--script', 'res://tools/bake/bake_rally_tracks.gd']);
 run(godot, ['--headless', '--path', project, '--script', 'res://tools/bake/bake_village.gd']);
-run(godot, ['--headless', '--path', project, '--export-release', platform.preset, join(output, platform.output)]);
-const size = (await stat(join(output, platform.output))).size;
-if (size < 1024 * 1024) throw new Error('Exported archive is suspiciously small.');
-if (platform.pck && (await stat(join(output, platform.pck))).size < 1024 * 1024) throw new Error('Exported game data (.pck) is suspiciously small.');
-console.log(`${platform.preset} ready: ${join(output, platform.output)} (${(size / 1048576).toFixed(1)} MiB). ${note}`);
+for (const target of targets) {
+  run(godot, ['--headless', '--path', project, '--export-release', target.preset, join(output, target.output)]);
+  const size = (await stat(join(output, target.output))).size;
+  if (size < 1024 * 1024) throw new Error('Exported archive is suspiciously small.');
+  if (target.pck && (await stat(join(output, target.pck))).size < 1024 * 1024) throw new Error('Exported game data (.pck) is suspiciously small.');
+  console.log(`${target.preset} ready: ${join(output, target.output)} (${(size / 1048576).toFixed(1)} MiB). ${note}`);
+}
+if (name === 'windows') await verifyWindowsBuild(output);

@@ -249,7 +249,7 @@ jobs:
         if: matrix.platform == 'windows'
         run: sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends wine wine64
       - run: npm ci
-      - name: Export the release build (production server, x86_64)
+      - name: Export the release build (Windows x86 + x64, others x86_64/universal)
         run: npm run build:${{ matrix.platform }}
       - name: Check the executable format
         run: |
@@ -257,6 +257,8 @@ jobs:
             unzip -q dist-macos/*.zip -d macos-check
             file macos-check/*.app/Contents/MacOS/* | tee file.txt
             grep -q "Mach-O universal binary with 2 architectures" file.txt
+          elif [ "${{ matrix.platform }}" = windows ]; then
+            node scripts/verify-windows-build.mjs dist-windows
           else
             file dist-${{ matrix.platform }}/* | tee file.txt && grep -qE "ELF 64-bit LSB.*x86-64|PE32\+ executable.*x86-64" file.txt
           fi
@@ -267,3 +269,22 @@ jobs:
           path: dist-${{ matrix.platform }}/
           retention-days: 7
           if-no-files-found: error
+
+  windows-startup:
+    name: Windows standalone startup (x86 + x64)
+    needs: desktop
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: desktop-windows
+          path: dist-windows
+      - name: Launch each exe alone from an isolated directory
+        run: node scripts/test-windows-startup.mjs dist-windows
