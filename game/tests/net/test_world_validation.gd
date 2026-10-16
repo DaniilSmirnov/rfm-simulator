@@ -28,6 +28,7 @@ func run() -> void:
 	transport.handle_http(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), JSON.stringify(reply).to_utf8_buffer())
 	check(probe.failures == 1 and transport.errors == 2, "malformed HTTP world never clears transport failures")
 	reply.type = "reply"
+	reply.id = 0
 	transport._socket_message(JSON.stringify(reply))
 	check(probe.failures == 2 and transport.errors == 2, "malformed socket world never clears transport failures")
 	transport.free()
