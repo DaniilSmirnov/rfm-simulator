@@ -64,7 +64,7 @@ if(!importOK) {
  if(bakeOK){
   for(const group of activeShards)for(const args of nodeSuites[group]){
    const command=process.execPath;
-   execute('Node '+group+' '+args.join(' '),command,args.map(a=>
+   execute('Node '+group+' '+args.join(' '),command,(args.includes('--test') ? ['--test-reporter=spec', ...args] : args).map(a=>
     a.endsWith('.mjs')?join(root,a):a),120_000);
   }
   for(const filename of selected){

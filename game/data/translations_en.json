@@ -435,6 +435,8 @@
 "Приближается %s, номер %d!": "%s is coming, number %d!",
 "ВЫЛЕТ! Отойди с траектории!": "CAR OFF! Get out of the way!",
 "Экипаж застрял. Нужен трос — T рядом с машиной.": "A crew is stuck. They need a tow — T next to the car.",
+"Столкновение машин! Экипаж остановился.": "Cars collided! The crew has stopped.",
+"Раллийная машина врезалась в твою легковушку!": "A rally car crashed into your car!",
 "Гравий из-под колёс! Отойди дальше от края СУ.": "Gravel from the wheels! Move farther from the edge of the stage.",
 "Путь перекрыт. Тяни в другую сторону или освободи проход.": "The way is blocked. Pull in another direction or clear the path.",
 "Вытащили! Экипаж благодарит и продолжает СУ.": "Pulled out! The crew thanks you and continues the stage.",
