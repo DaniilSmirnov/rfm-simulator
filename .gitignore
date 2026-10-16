@@ -17,3 +17,6 @@ dist-windows/
 # Rebuilt from source before every web export.
 game/generated/
 dist-android/
+
+# Promo screenshot render staging
+out2/
