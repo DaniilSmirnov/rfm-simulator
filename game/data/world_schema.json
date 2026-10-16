@@ -15,7 +15,7 @@
     "link": {"one": [{"fields": {"player": "string", "racer": "int", "pos": "vec", "car": "string", "hitch": "bool"}, "required": ["player", "racer", "pos"]}, {"fields": {"player": "string", "racer": "int", "pos": "vec", "car": "string", "hitch": "bool"}, "required": ["player", "car", "pos"]}]},
     "carry": {"fields": {"kind": "string", "owner": "string", "returning": "bool", "movable": "bool"}, "required": ["kind", "owner", "returning"]},
     "stock": {"fields": {"mushrooms": "int", "berries": "int", "mushroom_types": {"array": "string", "max": 10000}}, "required": ["mushrooms", "berries"]},
-    "skewer": {"fields": {"species": "string", "ready_at": "number"}, "required": ["species", "ready_at"]},
+    "skewer": {"fields": {"species": "string", "ready_at": "number"}, "required": ["ready_at"]},
     "effect": {"fields": {"serial": "int", "until": "number", "remaining": "number"}},
     "foraging": {"fields": {"harvested": {"array": "int", "max": 20000}, "inventories": {"map": "stock", "max": 16}, "skewers": {"map": {"array": "skewer", "max": 10}, "max": 2048}, "effects": {"map": "effect", "max": 16}}},
     "camp_cooking": {"fields": {"fire": "bool", "pos": "vec", "yaw": "number", "fire_owner": "string", "pot": "bool", "pot_pos": {"one": ["vec", []]}, "pot_yaw": "number", "pot_owner": "string", "phase": "string", "cook_time": "number", "servings": "int"}, "required": ["pos"], "empty": true},

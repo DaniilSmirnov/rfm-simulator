@@ -140,6 +140,20 @@
           }
         ]
       }
+    },
+    {
+      "name": "skewer with default species",
+      "world": {
+        "foraging": {
+          "skewers": {
+            "-1": [
+              {
+                "ready_at": 0
+              }
+            ]
+          }
+        }
+      }
     }
   ],
   "invalid": [
