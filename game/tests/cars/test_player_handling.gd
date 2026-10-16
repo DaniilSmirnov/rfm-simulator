@@ -29,6 +29,18 @@ func run() -> void:
 	check(snow.slip > 0.02, "a fast slippery turn produces measurable side slip")
 	var caught = turn(0.22, true)
 	check(caught.slip < snow.slip, "countersteering reduces slide compared with releasing the wheel")
+	# Hold the wheel throughout launch, including cars with little engine torque.
+	for variant in range(CarRegistry.count()):
+		for grip in [1.05, 0.78, 0.22]:
+			for direction in [-1.0, 1.0]:
+				for pedal in [-1.0, 0.5, 1.0]:
+					var turning = Motion.new()
+					var turn_yaw = 0.0
+					for step in range(1200):
+						turn_yaw = turning.handling.advance(turning, turn_yaw, pedal, direction, false, grip, 19, variant, Handling.STEP)
+					var forward = Vector3(-sin(turn_yaw), 0, -cos(turn_yaw))
+					var signed_speed = turning.velocity.dot(forward) * signf(pedal)
+					check(signed_speed > (3.0 if pedal == 1.0 else 1.5), "car %d launches with pedal %.1f, steering %.1f, grip %.2f (speed %.2f)" % [variant, pedal, direction, grip, signed_speed])
 	var motion = Motion.new()
 	var yaw = 0.0
 	for step in range(240):

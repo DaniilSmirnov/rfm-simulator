@@ -63,7 +63,12 @@ func advance(motion, heading: float, throttle: float, steer: float, brake: bool,
 	var front_grip = sqrt(maxf(0, front_capacity * front_capacity - front_drive * front_drive))
 	var rear_grip = sqrt(maxf(0, rear_capacity * rear_capacity - rear_drive * rear_drive))
 	var axle: float = float(spec.wheelbase) * 0.5
-	var front_slip = atan2(lateral + yaw_rate * axle, maxf(1.5, magnitude)) - steering * signf(longitudinal)
+	# Measure slip in the wheel frame before regularizing near zero speed.
+	# Subtracting steering after atan2 invents full tyre scrub at rest.
+	var front_lateral = lateral + yaw_rate * axle
+	var wheel_lateral = front_lateral * cos(steering) - longitudinal * sin(steering)
+	var wheel_longitudinal = longitudinal * cos(steering) + front_lateral * sin(steering)
+	var front_slip = atan2(wheel_lateral, maxf(1.5, absf(wheel_longitudinal)))
 	var rear_slip = atan2(lateral - yaw_rate * axle, maxf(1.5, magnitude))
 	var front_force = clampf(-front_slip * 23.0, -front_grip, front_grip)
 	var rear_force = clampf(-rear_slip * 25.0, -rear_grip, rear_grip)
@@ -77,7 +82,10 @@ func advance(motion, heading: float, throttle: float, steer: float, brake: bool,
 	if magnitude < 2.5 and motion.grounded:
 		# Parking/reversing remains controllable without unstable low-speed slip angles.
 		yaw_rate = lerpf(yaw_rate, longitudinal * tan(steering) / float(spec.wheelbase), 1 - exp(-dt * 10))
-		lateral = move_toward(lateral, 0, adhesion * dt)
+		# Velocity is measured at the body centre, half a wheelbase ahead
+		# of the rear axle. A rolling turn needs this lateral component;
+		# forcing it to zero makes the front tyres fight the parking model.
+		lateral = move_toward(lateral, yaw_rate * axle, adhesion * dt)
 	else:
 		yaw_rate += (front_force - rear_force) * axle / float(spec.inertia) * dt
 		yaw_rate *= exp(-dt * (0.45 if motion.grounded else 0.1))
