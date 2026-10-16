@@ -13,7 +13,8 @@ func run() -> void:
 	body.add_child(collider)
 	root.add_child(body)
 	Settler.configure(body)
-	check(body.linear_damp >= 1.8 and body.angular_damp >= 3.0, "dynamic objects receive enough damping to settle")
+	# Godot stores these properties as float32: 1.8 reads back just below 1.8.
+	check(is_equal_approx(body.linear_damp, 1.8) and is_equal_approx(body.angular_damp, 3.0), "dynamic objects receive the configured damping to settle")
 	body.position = Vector3(0, 0.5, 0)
 	body.rotation = Vector3(0.35, 0.2, -0.25)
 	body.linear_velocity = Vector3(0.05, 0, 0)
