@@ -66,6 +66,17 @@
         "ambient": "d9d6c8", "ambient_energy": 0.34, "fog": "c4d0d4", "fog_density": 0.0006
       },
       "sun": {"rotation": [-46, -24, 0], "color": "fff0d8", "energy": 0.85}
+    },
+    {
+      "id": "sever", "title": "Поречье", "subtitle": "зимняя деревня русского севера",
+      "biome": "res://scripts/stages/sever/sever.gd",
+      "loading": "Поля и деревня",
+      "minimap": "7a93abe8",
+      "environment": {
+        "sky_top": "7a93ab", "sky_curve": 0.05, "sky_horizon": "e4e6e2", "ground_bottom": "aab4ba", "ground_horizon": "e4e6e2",
+        "ambient": "d6dadb", "ambient_energy": 0.4, "fog": "ccd4d4", "fog_density": 0.0022
+      },
+      "sun": {"rotation": [-18, -40, 0], "color": "eef1f0", "energy": 0.62}
     }
   ]
 }
