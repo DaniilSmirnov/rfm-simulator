@@ -36,11 +36,13 @@ export const groups = Object.freeze({
 });
 export const nodeSuites = Object.freeze({
  core: [
-  ["--test", "--test-concurrency=1", "tests/platform.test.mjs", "tests/auth-vk.test.mjs", "tests/payments-vk.test.mjs",
-   "tests/store.test.mjs", "tests/deploy-cloudflare.test.mjs", "tests/fullscreen.test.mjs",
-   "tests/mobile-viewport.test.mjs", "tests/mobile-host-pause.test.mjs", "tests/pointer-capture.test.mjs",
-   "tests/test-catalog.test.mjs", "tests/room-input.test.mjs",
-   "tests/rate-limits.test.mjs", "tests/gdscript-lint.test.mjs", "tests/localization.test.mjs"],
+  ["--test", "tests/platform.test.mjs"], ["--test", "tests/auth-vk.test.mjs"],
+  ["--test", "tests/payments-vk.test.mjs"], ["--test", "tests/store.test.mjs"],
+  ["--test", "tests/deploy-cloudflare.test.mjs"], ["--test", "tests/fullscreen.test.mjs"],
+  ["--test", "tests/mobile-viewport.test.mjs"], ["--test", "tests/mobile-host-pause.test.mjs"],
+  ["--test", "tests/pointer-capture.test.mjs"], ["--test", "tests/test-catalog.test.mjs"],
+  ["--test", "tests/room-input.test.mjs"], ["--test", "tests/rate-limits.test.mjs"],
+  ["--test", "tests/gdscript-lint.test.mjs"], ["--test", "tests/localization.test.mjs"],
   ["--test", "--test-concurrency=1", "tests/branding.test.mjs", "tests/boot-diagnostics.test.mjs",
    "tests/audio-recovery.test.mjs", "tests/voice-chat.test.mjs"],
   ["scripts/test-device.mjs"],
