@@ -36,16 +36,16 @@ export const groups = Object.freeze({
 });
 export const nodeSuites = Object.freeze({
  core: [
-  ["--test", "tests/platform.test.mjs", "tests/auth-vk.test.mjs", "tests/payments-vk.test.mjs",
+  ["--test", "--test-concurrency=1", "tests/platform.test.mjs", "tests/auth-vk.test.mjs", "tests/payments-vk.test.mjs",
    "tests/store.test.mjs", "tests/deploy-cloudflare.test.mjs", "tests/fullscreen.test.mjs",
    "tests/mobile-viewport.test.mjs", "tests/mobile-host-pause.test.mjs", "tests/pointer-capture.test.mjs",
    "tests/test-catalog.test.mjs", "tests/room-input.test.mjs",
    "tests/rate-limits.test.mjs", "tests/gdscript-lint.test.mjs", "tests/localization.test.mjs"],
-  ["--test", "tests/branding.test.mjs", "tests/boot-diagnostics.test.mjs",
+  ["--test", "--test-concurrency=1", "tests/branding.test.mjs", "tests/boot-diagnostics.test.mjs",
    "tests/audio-recovery.test.mjs", "tests/voice-chat.test.mjs"],
   ["scripts/test-device.mjs"],
  ],
- simulation: [["--test", "tests/room-core.test.mjs", "tests/room-socket.test.mjs", "tests/room-session.test.mjs", "tests/protocol.test.mjs"]],
+ simulation: [["--test", "--test-concurrency=1", "tests/room-core.test.mjs", "tests/room-socket.test.mjs", "tests/room-session.test.mjs", "tests/protocol.test.mjs"]],
  world: [],
 });
 export const groupDescriptions = Object.freeze({
