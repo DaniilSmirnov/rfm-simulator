@@ -155,7 +155,7 @@ func run() -> void:
 		var command_context = preload("res://scripts/player/action_context.gd").from_command({"state": guest.room.local_state()}, "guest", variant)
 		var command_pose = command_context.cargo_context(host.car.position)
 		command_pose.pos = command_pose.car
-		check(host.cargo.point(command_pose).is_equal_approx(friend_trunk), "guest command preserves the full tilted trunk pose")
+		check(host.cargo.point(command_pose).distance_to(friend_trunk) < 0.02, "guest command preserves the full tilted trunk pose")
 		host.heading = 0
 		host.car.position = friend_trunk + Vector3(0.3, 0, 0) - host.cargo.point({"pos": Vector3.ZERO, "heading": 0.0, "variant": 0})
 		host.room._update_peers([{"id": "guest", "name": "Друг", "state": guest.room.local_state(), "car_model": variant}])

@@ -16,7 +16,8 @@ func run() -> void:
 		scene.stage.trees.clear()
 		scene.stage.rocks.clear()
 	var origin: Vector3 = game.stage.clearings[0]
-	game.car.position = origin + Vector3(0, 0, 12)
+	# Synthetic tilts must stay clear of terrain so this tests cargo aiming alone.
+	game.car.position = origin + Vector3(0, 10, 12)
 	# Exercise every visible box against its actual model transform, on flat ground and slopes.
 	game.stage.has_snow = true
 	for tilt in [Vector3.ZERO, Vector3(0.42, 0, -0.24), Vector3(-0.42, 0, 0.24)]:
@@ -66,6 +67,7 @@ func run() -> void:
 		game.stage = original_stage
 		stage.free()
 	game.stage.has_snow = false
+	game.car.position = origin + Vector3(0, 0, 12)
 	game.car.rotation = Vector3.ZERO
 	game.heading = 0
 	var pot_spot = origin + Vector3(3, 0, 0)
