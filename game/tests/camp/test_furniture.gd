@@ -109,7 +109,7 @@ func run() -> void:
 		for node in [host.camp, host.personal_chairs["host"], host.grill, placed_flag]:
 			host.camp_actions.ground_item(node, slope, yaw)
 			host.camp_actions.ground_item(node, origin, -0.4)
-			check(node.basis.y.is_equal_approx(Vector3.UP), "returning to level ground clears the previous tilt")
+			check(node.basis.is_equal_approx(host.stage.terrain_basis(origin, -0.4, host.stage.ground)), "returning to the clearing replaces the previous hillside tilt")
 			host.camp_actions.ground_item(node, slope, yaw)
 		host.walker = slope
 		check(host.camp_cooking.deploy_fire(slope + Vector3(4, 0, 0), yaw), "fire can be deployed beside a hillside camp")
