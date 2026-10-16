@@ -1,5 +1,14 @@
 extends "res://tests/harness.gd"
 
+class SilentSocket extends RefCounted:
+	var closed = false
+	func poll() -> void: pass
+	func get_ready_state() -> int: return 1
+	func get_available_packet_count() -> int: return 0
+	func get_current_outbound_buffered_amount() -> int: return 0
+	func send_text(_text: String) -> int: return OK
+	func close() -> void: closed = true
+
 func _initialize() -> void:
 	call_deferred("run")
 
@@ -51,6 +60,45 @@ func outage(room, socket: bool) -> void:
 	failure(room, socket, 500)
 	check(not room.connected and room.game.menu_text.text == "Recovery test error", "persistent outage ends after finite recovery window")
 
+func stalled_socket(room) -> void:
+	room.connected = true
+	room.transport.reset_recovery()
+	var socket = SilentSocket.new()
+	room.transport.socket = socket
+	room.transport.socket_open = true
+	room.transport.socket_hello = true
+	room.transport.poll(0.1)
+	check(not socket.closed, "idle socket without outstanding sync does not time out")
+	room.transport._send_socket({"token": room.token})
+	if "socket_waiting_since" in room.transport:
+		room.transport.socket_waiting_since = room.transport.now() - 9.0
+	for i in range(40):
+		room.transport._send_socket({"token": room.token})
+	room.transport._socket_message('{"type":"reply","players":[],"accepted":0,"world":17}')
+	room.transport.poll(0.1)
+	check(socket.closed and not room.transport.socket_open, "silent open socket falls back to HTTP despite continuous sends and malformed replies")
+	check(room.connected and room.transport.errors == 1 and room.clock < 0, "socket silence starts one bounded recovery episode")
+	check(room.commands.size() == 1 and room.acknowledgements == ["guest:2"] and room.prediction.pending.size() == 1, "socket timeout preserves queued work")
+	room.transport.poll(0.1)
+	check(room.transport.errors == 1, "timed out socket reports failure only once")
+
+func resumed_outage(room) -> void:
+	room.connected = true
+	room.transport.reset_recovery()
+	failure(room, false, 500)
+	room.transport.notification(MainLoop.NOTIFICATION_APPLICATION_FOCUS_OUT)
+	room.transport.recovery_started_at = room.transport.now() - 65.0
+	if "suspended_at" in room.transport:
+		room.transport.suspended_at = room.transport.now() - 60.0
+	failure(room, false, 500)
+	check(room.connected, "background callbacks do not consume suspended recovery time")
+	room.transport.notification(MainLoop.NOTIFICATION_APPLICATION_FOCUS_IN)
+	failure(room, false, 500)
+	check(room.connected, "suspended time does not exhaust active recovery budget on resume")
+	room.transport.recovery_started_at = room.transport.now() - 46.0
+	failure(room, false, 500)
+	check(not room.connected, "active outage still expires after a resume")
+
 func run() -> void:
 	var game = load("res://main.tscn").instantiate()
 	root.add_child(game)
@@ -66,6 +114,8 @@ func run() -> void:
 	outage(room, false)
 	room.transport.reset_recovery()
 	outage(room, true)
+	stalled_socket(room)
+	resumed_outage(room)
 	for socket in [false, true]:
 		for status in [400, 413, 401, 404, 410]:
 			room.connected = true
