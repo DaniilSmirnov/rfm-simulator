@@ -20,7 +20,7 @@ func failure(room, socket: bool, status: int) -> void:
 		room._response(HTTPRequest.RESULT_SUCCESS if status else HTTPRequest.RESULT_CANT_CONNECT, status, PackedStringArray(), JSON.stringify({"error": "Recovery test error"}).to_utf8_buffer())
 
 func success(room, socket: bool) -> void:
-	var reply = {"type": "reply", "players": [], "accepted": 0}
+	var reply = {"type": "reply", "id": 0, "players": [], "accepted": 0}
 	if socket:
 		room.transport._socket_message(JSON.stringify(reply))
 	else:
@@ -75,8 +75,10 @@ func stalled_socket(room) -> void:
 	for i in range(40):
 		room.transport._send_socket({"token": room.token})
 	room.transport._socket_message('{"type":"reply","players":[],"accepted":0,"world":17}')
+	for i in range(5):
+		room.transport._socket_message('{"type":"push","players":[],"accepted":0}')
 	room.transport.poll(0.1)
-	check(socket.closed and not room.transport.socket_open, "silent open socket falls back to HTTP despite continuous sends and malformed replies")
+	check(socket.closed and not room.transport.socket_open, "unanswered sync falls back to HTTP despite continuous sends and incoming pushes")
 	check(room.connected and room.transport.errors == 1 and room.clock < 0, "socket silence starts one bounded recovery episode")
 	check(room.commands.size() == 1 and room.acknowledgements == ["guest:2"] and room.prediction.pending.size() == 1, "socket timeout preserves queued work")
 	room.transport.poll(0.1)
@@ -99,6 +101,36 @@ func resumed_outage(room) -> void:
 	failure(room, false, 500)
 	check(not room.connected, "active outage still expires after a resume")
 
+func correlated_reply(room) -> void:
+	room.connected = true
+	var socket = SilentSocket.new()
+	room.transport.socket = socket
+	room.transport.socket_open = true
+	room.transport.socket_hello = true
+	room.transport._send_socket({"token": room.token})
+	var id = room.transport.message_id
+	room.transport.socket_waiting_since = room.transport.now() - 9.0
+	var reply = {"type": "reply", "id": id + 1, "players": [], "accepted": 0}
+	room.transport._socket_message(JSON.stringify(reply))
+	check(room.transport.socket_waiting_since != -INF, "uncorrelated reply cannot acknowledge an outstanding sync")
+	reply.id = id
+	room.transport._socket_message(JSON.stringify(reply))
+	check(room.transport.socket_waiting_since == -INF, "correlated reply clears outstanding sync watchdog")
+	room.transport.poll(0.1)
+	check(not socket.closed, "acknowledged sync does not trigger stale socket timeout")
+	room.transport.close_socket()
+
+func malformed_socket_numbers(room) -> void:
+	room.connected = true
+	room.transport.reset_recovery()
+	failure(room, false, 500)
+	for extra in [{"id": {}}, {"id": 1, "server_time": []}]:
+		var reply = {"type": "reply", "id": 0, "players": [], "accepted": 0}
+		reply.merge(extra, true)
+		room.transport.message_times[1] = room.transport.now()
+		room.transport._socket_message(JSON.stringify(reply))
+		check(room.transport.errors == 1, "malformed numeric socket fields cannot reset recovery")
+
 func run() -> void:
 	var game = load("res://main.tscn").instantiate()
 	root.add_child(game)
@@ -115,6 +147,8 @@ func run() -> void:
 	room.transport.reset_recovery()
 	outage(room, true)
 	stalled_socket(room)
+	correlated_reply(room)
+	malformed_socket_numbers(room)
 	resumed_outage(room)
 	for socket in [false, true]:
 		for status in [400, 413, 401, 404, 410]:

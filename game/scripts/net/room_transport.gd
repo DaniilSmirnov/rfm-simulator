@@ -277,7 +277,12 @@ func send_signal(to: String, data: Dictionary) -> bool:
 		return false
 	return socket.send_text(JSON.stringify({"type": "signal", "to": to, "data": data})) == OK
 
+static func _finite_number(value) -> bool:
+	return (value is int or value is float) and is_finite(float(value)) and absf(float(value)) <= 9007199254740991.0
+
 func valid_sync_reply(data: Dictionary) -> bool:
+	for key in ["server_time", "world_time"]:
+		if data.has(key) and not _finite_number(data[key]): return false
 	if not data.get("players") is Array or data.players.size() > NetProtocol.max_players(): return false
 	for player in data.players:
 		if not player is Dictionary or not player.get("id") is String: return false
@@ -297,17 +302,18 @@ func _socket_message(text: String) -> void:
 			socket_opened_at = now()
 			print("ROOM_SOCKET open")
 		"reply":
-			if not valid_sync_reply(data): return
-			socket_waiting_since = -INF
+			var raw_id = data.get("id")
+			if not valid_sync_reply(data) or not _finite_number(raw_id) or raw_id < 0 or float(raw_id) != floorf(float(raw_id)): return
 			reset_recovery()
-			var id = int(data.get("id", -1))
-			if message_times.has(id) and data.has("server_time"):
-				update_server_clock(float(data.server_time), message_times[id])
+			var id = int(raw_id)
+			if message_times.has(id):
+				socket_waiting_since = -INF
+				if data.has("server_time"):
+					update_server_clock(float(data.server_time), message_times[id])
 				message_times.erase(id)
 			room._on_reply("sync", data)
 		"push":
 			if not valid_sync_reply(data): return
-			socket_waiting_since = -INF
 			reset_recovery()
 			room._on_reply("sync", data)
 		"signal":
