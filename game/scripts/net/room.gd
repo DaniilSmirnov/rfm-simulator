@@ -121,11 +121,14 @@ func _on_rate_limited(retry: float) -> void:
 	ui.room_label.text = Loc.t("Слишком много запросов. Повторим через %d сек.") % ceili(retry)
 
 func _on_failure(kind: String, code: int, message: String, _data) -> void:
-	if connected and (code in [401, 404, 410] or transport.errors >= 2):
+	if connected and code in [400, 401, 404, 410, 413]:
 		disconnect_room(message)
 	elif connected:
-		transport.errors += 1
-		clock = -1
+		var retry = transport.recovery_delay()
+		if retry < 0:
+			disconnect_room(message)
+			return
+		clock = -retry
 		ui.room_label.text = "Связь прервалась. Переподключаемся…"
 	else:
 		ui.status.text = message

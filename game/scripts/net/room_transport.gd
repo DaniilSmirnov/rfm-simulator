@@ -14,6 +14,8 @@ const SOCKET_CLOSED = 3
 const SOCKET_CONNECT_TIMEOUT = 6.0
 const SOCKET_RETRY = 5.0
 const SOCKET_MAX_FAILURES = 3
+# Leave time for an 8s HTTP request and capped backoff before membership's 90s TTL.
+const RECOVERY_SECONDS = 45.0
 
 var room
 var http: HTTPRequest
@@ -22,6 +24,7 @@ var busy = false
 var request_kind = ""
 var request_sent_at = 0.0
 var errors = 0
+var recovery_started_at = -INF
 # Server clock (NTP-style: offset estimated from the fastest round trips).
 var server_offset = 0.0
 var clock_initialized = false
@@ -101,10 +104,24 @@ func handle_http(result: int, code: int, _headers: PackedStringArray, bytes: Pac
 		var message = str(data.get("error", "Нет связи с сервером комнаты.")) if data is Dictionary else "Нет связи с сервером комнаты."
 		room._on_failure(request_kind, code, message, data)
 		return
-	errors = 0
+	reset_recovery()
 	if data.has("server_time"):
 		update_server_clock(float(data.server_time))
 	room._on_reply(request_kind, data)
+
+# HTTP and socket failures share one bounded episode, without changing identity
+# or discarding commands and driving inputs waiting for server acknowledgement.
+func recovery_delay() -> float:
+	if recovery_started_at == -INF:
+		recovery_started_at = now()
+	errors += 1
+	if now() - recovery_started_at >= RECOVERY_SECONDS:
+		return -1.0
+	return minf(5.0, pow(2.0, mini(errors - 1, 3)))
+
+func reset_recovery() -> void:
+	errors = 0
+	recovery_started_at = -INF
 
 # ---------------------------------------------------------------- clock
 
@@ -250,13 +267,14 @@ func _socket_message(text: String) -> void:
 			socket_opened_at = now()
 			print("ROOM_SOCKET open")
 		"reply":
-			errors = 0
+			reset_recovery()
 			var id = int(data.get("id", -1))
 			if message_times.has(id) and data.has("server_time"):
 				update_server_clock(float(data.server_time), message_times[id])
 				message_times.erase(id)
 			room._on_reply("sync", data)
 		"push":
+			reset_recovery()
 			room._on_reply("sync", data)
 		"signal":
 			if data.get("data") is Dictionary:
@@ -266,5 +284,7 @@ func _socket_message(text: String) -> void:
 			var message = str(data.get("error", "Нет связи с сервером комнаты."))
 			if status == 429:
 				room._on_rate_limited(clampf(float(data.get("retry_after", 10)), 1.0, 60.0))
-			elif status in [401, 404, 410]:
+			else:
+				if status >= 500:
+					_socket_failed()
 				room._on_failure("sync", status, message, data)
