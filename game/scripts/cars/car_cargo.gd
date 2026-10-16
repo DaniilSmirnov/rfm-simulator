@@ -48,18 +48,29 @@ func available() -> bool:
 func poses() -> Dictionary:
 	var result = {}
 	var local_owner = game.chair_owner()
-	result[local_owner] = {"pos": context.get("host_car", game.car.position), "heading": game.heading, "variant": game.selected_car}
+	result[local_owner] = {"pos": context.get("host_car", game.car.position), "heading": game.heading, "variant": game.selected_car, "rotation": Vector3(game.car.rotation.x, game.heading, game.car.rotation.z)}
 	for owner in game.room.peers:
 		var peer = game.room.peers[owner]
 		if peer.state != null and peer.has("car"):
-			result[owner] = {"pos": game.room.v(peer.state.car), "heading": float(peer.state.heading), "variant": int(peer.car.get_meta("variant", 0))}
+			result[owner] = {"pos": game.room.v(peer.state.car), "heading": float(peer.state.heading), "variant": int(peer.car.get_meta("variant", 0)), "rotation": state_rotation(peer.state)}
 	if not context.is_empty():
-		result[actor()] = {"pos": context.car, "heading": context.heading, "variant": context.variant}
+		result[actor()] = {"pos": context.car, "heading": context.heading, "variant": context.variant, "rotation": context.get("rotation", Vector3(0, context.heading, 0))}
 	return result
+
+# Keep hit targets on the rendered cargo when parked on a slope.
+func state_rotation(state: Dictionary) -> Vector3:
+	var tilt: Array = state.get("tilt", [0, 0, 0])
+	return Vector3(float(tilt[0]), float(state.heading), float(tilt[2]))
+
+func pose_basis(pose: Dictionary) -> Basis:
+	return Basis.from_euler(pose.get("rotation", Vector3(0, pose.heading, 0)))
+
+func cargo_position(pose: Dictionary, index: int) -> Vector3:
+	return pose.pos + pose_basis(pose) * Props.cargo_point(Props.trunk_profile(int(pose.variant)), index)
 
 func point(pose: Dictionary) -> Vector3:
 	var p = Props.trunk_profile(int(pose.variant))
-	return pose.pos + Vector3(0, p.floor + 0.42, p.rear + 0.25).rotated(Vector3.UP, pose.heading)
+	return pose.pos + pose_basis(pose) * Vector3(0, p.floor + 0.42, p.rear + 0.25)
 
 func near(owner: String) -> bool:
 	var cars = poses()
@@ -73,13 +84,18 @@ func at_open_trunk(owner: String) -> bool:
 		return false
 	var pose: Dictionary = cars[owner]
 	var profile = Props.trunk_profile(int(pose.variant))
-	var offset: Vector3 = (game.actor_pos() - pose.pos).rotated(Vector3.UP, -float(pose.heading))
+	var offset: Vector3 = pose_basis(pose).inverse() * (game.actor_pos() - pose.pos)
 	return offset.z >= profile.rear - 0.75 and absf(offset.x) <= profile.half + 0.85
 
 func owner_of(item: Dictionary) -> String:
 	return str(item.get("owner", item.node.get_meta("gear_owner", game.chair_owner())))
 
+func enabled(kind: String) -> bool:
+	return kind != "shovel" or (game.stage != null and game.stage.has_snow)
+
 func stored(kind: String, owner: String) -> bool:
+	if not enabled(kind):
+		return false
 	for item in game.packing.items():
 		if (item.kind == kind or (item.kind == "chair" and kind == "chairs")) and owner_of(item) == owner:
 			return false
@@ -143,7 +159,7 @@ func can_redeploy() -> bool:
 
 func take(kind: String) -> bool:
 	refresh_opened()
-	if kind not in KINDS or not available() or (game.packing.active() and not can_redeploy()):
+	if kind not in KINDS or not enabled(kind) or not available() or (game.packing.active() and not can_redeploy()):
 		return false
 	var owner = actor()
 	if held.has(owner):
@@ -236,12 +252,11 @@ func offers(items: Array, interaction) -> void:
 			interaction.offer(items, spot, maxf(0.9, profile.half), 3.3, "return_gear", "Вернуть коробку в багажник владельца", spot)
 		if owner != game.chair_owner() or not opened.get(owner, false) or not holding.is_empty() or game.packing.active():
 			continue
-		var p = Props.trunk_profile(int(cars[owner].variant))
 		var candidates: Array = []
 		for i in range(KINDS.size()):
 			if not stored(KINDS[i], owner):
 				continue
-			var box_point: Vector3 = cars[owner].pos + Props.cargo_point(p, i).rotated(Vector3.UP, cars[owner].heading)
+			var box_point: Vector3 = cargo_position(cars[owner], i)
 			interaction.offer(candidates, box_point, 0.42, 3.3, "take_gear", Loc.t("Взять %s") % Loc.t(["стол", "стул", "мангал", "дрова", "казан", "лопату"][i]), KINDS[i])
 
 		# Overlapping forgiving hit zones choose the box nearest the crosshair.

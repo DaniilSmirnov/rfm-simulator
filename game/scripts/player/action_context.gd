@@ -6,6 +6,7 @@ var owner = ""
 var pos = Vector3.ZERO
 var car = Vector3.ZERO
 var heading = 0.0
+var rotation = Vector3.ZERO
 var yaw = 0.0
 var in_car = false
 var beers = 0
@@ -19,6 +20,8 @@ static func from_command(c: Dictionary, actor: String, car_variant: int):
 	context.pos = _vec(state.get("pos", [0, 0, 0]))
 	context.car = _vec(state.get("car", [0, 0, 0]))
 	context.heading = float(state.get("heading", 0.0))
+	var tilt = _vec(state.get("tilt", [0, 0, 0]))
+	context.rotation = Vector3(tilt.x, context.heading, tilt.z)
 	context.yaw = float(state.get("yaw", 0.0))
 	context.in_car = bool(state.get("in_car", false))
 	context.beers = int(state.get("beers", 0))
@@ -35,4 +38,4 @@ func position() -> Vector3:
 
 # The trunk/cargo system keys its own context by owner and car pose.
 func cargo_context(host_car: Vector3) -> Dictionary:
-	return {"owner": owner, "car": car, "heading": heading, "variant": variant, "host_car": host_car, "speed": speed}
+	return {"owner": owner, "car": car, "heading": heading, "rotation": rotation, "variant": variant, "host_car": host_car, "speed": speed}

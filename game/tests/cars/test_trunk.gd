@@ -37,7 +37,7 @@ func run() -> void:
 	host.car.position = origin + Vector3(0, 0, 8)
 	host.heading = 0
 	host.begin_placement("table")
-	check(host.placement_preview == null and host.cargo.boxes("local") == [true, true, true, true, true, true], "cannot place furniture remotely from a closed trunk")
+	check(host.placement_preview == null and host.cargo.boxes("local") == [true, true, true, true, true, false], "cannot place furniture remotely from a closed trunk")
 	for variant in range(Props.PLAYER_MODELS.size()):
 		host.select_player_car(variant)
 		host.car.position = origin + Vector3(0, 0, 8)
@@ -79,7 +79,7 @@ func run() -> void:
 		host.walker = origin
 		var spot = origin + (Vector3(3, 0, 0) if kind == "chairs" else (Vector3(0, 0, -3) if kind == "grill" else Vector3.ZERO))
 		check(host.cargo.deploy(kind, spot, 0), "selected %s deploys at a free spot" % kind)
-	check(host.cargo.boxes("local") == [false, false, false, true, true, true], "three boxes disappear only when equipment is deployed")
+	check(host.cargo.boxes("local") == [false, false, false, true, true, false], "three boxes disappear only when equipment is deployed")
 	check(not host.cargo.deploy("chairs", origin + Vector3(0, 0, 4), 0) and host.personal_chairs.size() == 1, "placement cannot duplicate an item without acquiring it")
 	host.course.phase = "complete"
 	host.course.pass_index = 2
@@ -92,7 +92,7 @@ func run() -> void:
 		host.walker = trunk(host) + Vector3(5, 0, 0)
 		check(not host.cargo.return_item(trunk(host)), "remote equipment cannot be deposited before approaching")
 		return_box(host)
-	check(host.packing.remaining() == 0 and host.cargo.boxes("local") == [true, true, true, true, true, true], "all three boxes reappear after the camp is loaded")
+	check(host.packing.remaining() == 0 and host.cargo.boxes("local") == [true, true, true, true, true, false], "all three boxes reappear after the camp is loaded")
 	host.room.connected = true
 	host.room.is_host = true
 	host.room.player_id = "host"
@@ -129,9 +129,9 @@ func run() -> void:
 	command.state.pos = host.room.a(origin)
 	command.placement = {"pos": host.room.a(origin + Vector3(-3, 0, 0)), "yaw": 0}
 	host.room._apply_command(command)
-	check(host.personal_chairs.has("guest") and host.cargo.boxes("guest") == [true, false, true, true, true, true], "guest placement consumes only their chair box")
+	check(host.personal_chairs.has("guest") and host.cargo.boxes("guest") == [true, false, true, true, true, false], "guest placement consumes only their chair box")
 	guest.room.apply_world(host.room.world_state())
-	check(guest.cargo.opened.get("guest", false) == host.cargo.opened.get("guest", false) and guest.cargo.boxes("guest") == [true, false, true, true, true, true], "late world snapshot restores automatic trunk state and correct cargo")
+	check(guest.cargo.opened.get("guest", false) == host.cargo.opened.get("guest", false) and guest.cargo.boxes("guest") == [true, false, true, true, true, false], "late world snapshot restores automatic trunk state and correct cargo")
 	guest.cargo.update(1)
 	check(guest.car.get_node("TrunkBoxes").visible and not guest.car.get_node("TrunkBoxes").get_child(1).visible, "guest cargo geometry reflects authoritative inventory")
 	command.action = "grill"
@@ -149,8 +149,13 @@ func run() -> void:
 		host.select_player_car(0)
 		guest.select_player_car(variant)
 		guest.heading = PI / 2 if variant % 2 else 0.0
+		guest.car.rotation = Vector3(0.42 if variant % 2 else -0.42, guest.heading, 0.24)
 		guest.car.position = origin + Vector3(0, 10, 8)
 		var friend_trunk = trunk(guest)
+		var command_context = preload("res://scripts/player/action_context.gd").from_command({"state": guest.room.local_state()}, "guest", variant)
+		var command_pose = command_context.cargo_context(host.car.position)
+		command_pose.pos = command_pose.car
+		check(host.cargo.point(command_pose).distance_to(friend_trunk) < 0.02, "guest command preserves the full tilted trunk pose")
 		host.heading = 0
 		host.car.position = friend_trunk + Vector3(0.3, 0, 0) - host.cargo.point({"pos": Vector3.ZERO, "heading": 0.0, "variant": 0})
 		host.room._update_peers([{"id": "guest", "name": "Друг", "state": guest.room.local_state(), "car_model": variant}])
