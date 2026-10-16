@@ -24,7 +24,8 @@ for (const arch of ['x86', 'x64']) {
     assert.ifError(result.error);
     assert.equal(result.status, 0, `${name}: startup failed (${result.signal})`);
     assert.match(log, /Godot Engine v4\.4\.1/, `${name}: no engine startup log`);
-    assert.doesNotMatch(log, /SCRIPT ERROR:|ERROR:|Couldn't load project data|Failed to load/i, `${name}: startup errors`);
+    assert.match(log, /\[RFM\] Запуск завершён/, `${name}: game initialization did not finish`);
+    assert.doesNotMatch(`${result.stdout ?? ''}${result.stderr ?? ''}${log}`, /SCRIPT ERROR:|ERROR:|Couldn't load project data|Failed to load/i, `${name}: startup errors`);
     console.log(`PASS: ${name} starts from an isolated directory containing only its exe`);
   } finally {
     await rm(isolated, { recursive: true, force: true });
