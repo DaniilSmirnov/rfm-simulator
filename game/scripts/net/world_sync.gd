@@ -303,13 +303,13 @@ func _camp_snapshot() -> Dictionary:
 	var chair_poses = {}
 	for owner in game.personal_chairs:
 		var chair = game.personal_chairs[owner]
-		chair_poses[owner] = {"pos": room.a(chair.position), "yaw": chair.rotation.y}
+		chair_poses[owner] = {"pos": room.a(chair.position), "yaw": game.camp_actions.item_yaw(chair)}
 	var flag_poses = {}
 	for owner in game.personal_flags:
 		flag_poses[owner] = []
 		for flag in game.personal_flags[owner]:
-			flag_poses[owner].append({"pos": room.a(flag.position), "yaw": flag.rotation.y})
-	return {"camp": room.a(game.camp.position) if game.camp != null else null, "table_yaw": game.camp.rotation.y if game.camp != null else 0.0, "chairs": game.has_chairs, "chair_poses": chair_poses, "flag_poses": flag_poses, "cooking": game.cooking, "grill_pose": {"pos": room.a(game.grill.position), "yaw": game.grill.rotation.y} if game.grill != null else null, "grill_fire": game.camp_grill.snapshot(), "grill_servings": game.camp_grill.servings, "npc_servings": game.spectators.snapshot(), "eaten": game.eaten}
+			flag_poses[owner].append({"pos": room.a(flag.position), "yaw": game.camp_actions.item_yaw(flag)})
+	return {"camp": room.a(game.camp.position) if game.camp != null else null, "table_yaw": game.camp_actions.item_yaw(game.camp) if game.camp != null else 0.0, "chairs": game.has_chairs, "chair_poses": chair_poses, "flag_poses": flag_poses, "cooking": game.cooking, "grill_pose": {"pos": room.a(game.grill.position), "yaw": game.camp_actions.item_yaw(game.grill)} if game.grill != null else null, "grill_fire": game.camp_grill.snapshot(), "grill_servings": game.camp_grill.servings, "npc_servings": game.spectators.snapshot(), "eaten": game.eaten}
 
 func _camp_apply(f: Dictionary, _t: float) -> void:
 	var camp_position = f.get("camp")
@@ -333,8 +333,7 @@ func _camp_apply(f: Dictionary, _t: float) -> void:
 			game.camp = Node3D.new()
 			game.add_child(game.camp)
 			Props.table(game.camp)
-		game.camp.position = room.v(camp_position)
-		game.camp.rotation.y = float(f.get("table_yaw", 0.0))
+		game.camp_actions.ground_item(game.camp, room.v(camp_position), float(f.get("table_yaw", 0.0)))
 	if f.has("flag_poses"):
 		for owner in f.flag_poses:
 			var poses = f.flag_poses[owner]
@@ -348,8 +347,7 @@ func _camp_apply(f: Dictionary, _t: float) -> void:
 					game.place_flag(room.v(pose.pos), float(pose.yaw), str(owner), true)
 					existing = game.personal_flags.get(owner, [])
 				else:
-					existing[i].position = room.v(pose.pos)
-					existing[i].rotation.y = float(pose.yaw)
+					game.camp_actions.ground_item(existing[i], room.v(pose.pos), float(pose.yaw))
 			game.personal_flags[owner] = existing
 	if f.has("chair_poses"):
 		for owner in f.chair_poses:
