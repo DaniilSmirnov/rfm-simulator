@@ -56,5 +56,21 @@ func run() -> void:
 	wall.position = Vector3(0, box.size.y + 5, 0)
 	stage.solids.index()
 	check(Hitbox.solids(stage.solids, Vector3.ZERO, Vector3.FORWARD * 10, shape, []).is_empty(), "scenery above the car does not block its path")
+	stage.trees.assign([Vector3.ZERO])
+	stage.forest_data.assign([{"height": 10.0}])
+	stage.fallen = {0: {"direction": Vector3.BACK, "age": 1.3}}
+	var low_car = Hitbox.shape(AABB(Vector3(-0.8, 0, -1.5), Vector3(1.6, 1.4, 3)), 0)
+	check(Hitbox.tree(stage, Vector3(-4, 0, 3), Vector3(4, 0, 3), low_car) == 0, "fallen trunk still blocks approach at trunk height")
+	for height in [0.6, 0.4]:
+		for direction in [Vector3.LEFT, Vector3.RIGHT, Vector3.FORWARD, Vector3.BACK]:
+			var start = Vector3(0, height, 3)
+			check(Hitbox.tree(stage, start, start + direction * 0.00001, low_car) == -1, "car above or slightly overlapping log can drive off: %s %s" % [height, direction])
+	check(Hitbox.tree(stage, Vector3(-1, 0, 3), Vector3(-0.99, 0, 3), low_car) == 0, "side overlap still blocks driving deeper into log")
+	stage.trees[0].y = 4.0
+	check(Hitbox.tree(stage, Vector3(-4, 0, 3), Vector3(4, 0, 3), low_car) == -1, "elevated log permits driving underneath")
+	stage.trees[0].y = 0.0
+	stage.fallen[0].age = 0.65
+	check(Hitbox.tree(stage, Vector3(-4, 2, 3), Vector3(4, 2, 3), low_car) == 0, "falling trunk collides at real tilted height")
+	check(Hitbox.tree(stage, Vector3(-4, -2, 3), Vector3(4, -2, 3), low_car) == -1, "falling trunk does not create full height wall")
 	stage.free()
 	finish()
