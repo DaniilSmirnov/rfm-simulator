@@ -2,6 +2,8 @@ extends RefCounted
 # Playful falls share injury poses/replication, but never dispatch an ambulance.
 # Car casualties keep their existing medical recovery rules.
 const HEAD = 1.5
+const PLAYER_CONTACT_HEIGHT = 1.0
+const PLAYER_CONTACT_RADIUS = 0.75
 const REACH = 2.5
 const HELP_SECONDS = 1.0
 var _owner: WeakRef
@@ -19,7 +21,9 @@ func grabbed(key: String) -> bool:
 			return true
 	return false
 
-# Swept feet crossing the shoulders from above, never a side bump or ascent.
+# Descending feet hit players throughout the upper body, including side contact
+# after passing shoulder height. A level-ground jump only rises about 0.84 m.
+# NPCs keep the precise shoulder landing used for jumping on spectators.
 func landing(actor: String, start: Vector3, end: Vector3) -> bool:
 	if not injuries.authority() or injuries.is_down(actor) or end.y >= start.y:
 		return false
@@ -27,10 +31,17 @@ func landing(actor: String, start: Vector3, end: Vector3) -> bool:
 		if person.key == actor or injuries.is_down(person.key):
 			continue
 		var top: float = person.pos.y + HEAD
-		if start.y < top or end.y > top:
+		var is_player: bool = person.key.begins_with("player:")
+		var bottom: float = person.pos.y + PLAYER_CONTACT_HEIGHT if is_player else top
+		if start.y < bottom or end.y > top:
 			continue
-		var at = start.lerp(end, (start.y - top) / (start.y - end.y))
-		if Vector2(at.x - person.pos.x, at.z - person.pos.z).length() <= 0.48:
+		var enter: float = clampf((start.y - top) / (start.y - end.y), 0.0, 1.0)
+		var leave: float = clampf((start.y - bottom) / (start.y - end.y), 0.0, 1.0)
+		var from = start.lerp(end, enter)
+		var to = start.lerp(end, leave)
+		var at = Geometry2D.get_closest_point_to_segment(Vector2(person.pos.x, person.pos.z), Vector2(from.x, from.z), Vector2(to.x, to.z))
+		var radius: float = PLAYER_CONTACT_RADIUS if is_player else 0.48
+		if at.distance_to(Vector2(person.pos.x, person.pos.z)) <= radius:
 			return injuries.knock(person.key, person.pos, Vector3.ZERO, start, true)
 	return false
 

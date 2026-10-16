@@ -20,6 +20,23 @@ func run() -> void:
 	var key = "npc:%d" % person.id
 	var play = game.injuries.play
 	play.injuries = game.injuries
+	# Target the host from a guest, away from NPCs, through the network sweep.
+	game.walker = pos + Vector3(20, 0, 0)
+	var target: Vector3 = game.walker
+	check(not play.landing("player:friend", target + Vector3(0.6, 1.1, 0), target + Vector3(0.6, 1.3, 0)), "ascending upper-body contact does not knock a player")
+	check(not play.landing("player:friend", target + Vector3(0.6, 0.84, 0), target + Vector3(0.6, 0.7, 0)), "ordinary jump from the same ground is too low")
+	check(not play.landing("player:friend", target + Vector3(0.8, 1.4, 0), target + Vector3(0.8, 1.1, 0)), "falling past outside body contact does not knock a player")
+	check(not play.landing("player:local", target + Vector3.UP * 1.4, target + Vector3.UP * 1.1), "player cannot knock themselves down")
+	var jumper = {"pos": game.room.a(target + Vector3(1.0, 1.4, 0)), "in_car": false, "airborne": true}
+	play.update({"friend": jumper}, 0.1)
+	jumper.pos = game.room.a(target + Vector3(0.6, 1.1, 0))
+	play.update({"friend": jumper}, 0.1)
+	check(game.injuries.down and game.injuries.records["player:local"].play, "guest descending into upper body below shoulders knocks the host playfully")
+	check(not game.injuries.red_flag(), "player jump contact does not call an ambulance")
+	game.injuries._land(game.injuries.records["player:local"])
+	check(play.stand("player:local"), "player can get up after the easier jump contact")
+	game.injuries.records.erase("player:local")
+	play.previous.clear()
 	check(not play.landing("player:local", pos + Vector3.UP, pos + Vector3.UP * 2), "ascending through shoulder height does not knock a person")
 	check(not play.landing("player:local", pos + Vector3(2, 2, 0), pos + Vector3(2, 1, 0)), "missing the person horizontally does not knock them")
 	check(play.landing("player:local", pos + Vector3.UP * 2, pos + Vector3.UP), "descending feet sweep knocks a spectator")
