@@ -1,0 +1,29 @@
+{
+  "comment": "Validation of existing world providers, shared by Worker and Godot. Fields are optional unless required by a record consumer. Unknown extension fields remain bounded JSON.",
+  "types": {
+    "vec": ["coordinate", "coordinate", "coordinate"],
+    "pose": {"fields": {"pos": "vec", "yaw": "number"}, "required": ["pos", "yaw"]},
+    "rotation_pose": {"fields": {"key": "string", "pos": "vec", "rot": "vec", "anchored": "bool"}, "required": ["key", "pos", "rot"]},
+    "racer": {"fields": {"id": "int", "variant": "int", "pos": "vec", "yaw": "number", "state": "string", "tilt": ["number", "number"], "role": "string", "zero_index": "int", "towed": "bool", "recovery_helpers": "int"}, "required": ["id", "variant", "pos", "yaw", "state"]},
+    "drive": {"fields": {"ack": "int", "pos": "vec", "yaw": "number", "velocity": "vec", "vertical": "number", "grounded": "bool", "pitch": "number", "roll": "number", "steering": "number", "yaw_rate": "number", "longitudinal": "number", "initialized": "bool", "condition": "number", "impact_timer": "number", "recovery_ack": "int", "prop_contacts": {"map": "number", "max": 2048}}, "required": ["ack", "pos", "yaw", "velocity", "vertical", "grounded", "pitch", "roll", "steering", "yaw_rate", "longitudinal"]},
+    "stone": {"fields": {"id": "int", "pos": "vec", "velocity": "vec", "bounces": "int"}, "required": ["id", "pos", "velocity"]},
+    "tree": {"fields": {"id": "int", "dir": "vec", "age": "number", "pos": "vec"}, "required": ["id", "dir", "age"]},
+    "lamp": {"fields": {"id": "int", "pos": "vec", "rot": "vec"}, "required": ["id", "pos", "rot"]},
+    "actor": {"fields": {"id": "int", "pos": "vec", "yaw": "number", "action": "string", "helper": "int"}, "required": ["id", "pos"]},
+    "injury": {"fields": {"key": "string", "phase": "string", "pos": "vec", "rot": "vec", "play": "bool", "limp": "number", "eta": "number", "treat": "bool", "moving": "bool", "clock": "number", "goal": "vec", "home_yaw": "number"}, "required": ["key", "phase", "pos", "rot"]},
+    "medic": {"fields": {"id": "int", "pos": "vec", "yaw": "number", "state": "string", "moving": "bool", "clock": "number", "time": "number"}, "required": ["id", "pos", "yaw", "state"]},
+    "link": {"one": [{"fields": {"player": "string", "racer": "int", "pos": "vec", "car": "string", "hitch": "bool"}, "required": ["player", "racer", "pos"]}, {"fields": {"player": "string", "racer": "int", "pos": "vec", "car": "string", "hitch": "bool"}, "required": ["player", "car", "pos"]}]},
+    "carry": {"fields": {"kind": "string", "owner": "string", "returning": "bool", "movable": "bool"}, "required": ["kind", "owner", "returning"]},
+    "stock": {"fields": {"mushrooms": "int", "berries": "int", "mushroom_types": {"array": "string", "max": 10000}}},
+    "skewer": {"fields": {"species": "string", "ready_at": "number"}, "required": ["species", "ready_at"]},
+    "effect": {"fields": {"serial": "int", "until": "number", "remaining": "number"}},
+    "foraging": {"fields": {"harvested": {"array": "int", "max": 20000}, "inventories": {"map": "stock", "max": 16}, "skewers": {"map": {"array": "skewer", "max": 10}, "max": 2048}, "effects": {"map": "effect", "max": 16}}},
+    "camp_cooking": {"fields": {"fire": "bool", "pos": "vec", "yaw": "number", "fire_owner": "string", "pot": "bool", "pot_pos": {"one": ["vec", []]}, "pot_yaw": "number", "pot_owner": "string", "phase": "string", "cook_time": "number", "servings": "int"}, "required": ["pos"], "empty": true},
+    "cargo": {"fields": {"opened": {"map": "bool", "max": 32}, "held": {"map": "carry", "max": 16}, "table_owner": "string", "grill_owner": "string"}},
+    "course": {"fields": {"pass_index": "int", "phase": "string", "remaining": "number", "zero_index": "int", "active_id": "int", "red_flag": "bool"}},
+    "parks": {"fields": {"parked": [{"array": "string", "max": 64}, {"array": "string", "max": 64}]}},
+    "grill_fire": {"fields": {"lit": "bool", "fire": "number"}},
+    "bell": {"fields": {"serial": "int", "elapsed": "number"}},
+    "world": {"fields": {"camp": {"one": ["vec", "null"]}, "table_yaw": "number", "chairs": "bool", "chair_poses": {"map": "pose", "max": 16}, "flag_poses": {"map": {"array": "pose", "max": 32}, "max": 16}, "cooking": "bool", "grill_pose": {"one": ["pose", "null"]}, "grill_fire": "grill_fire", "grill_servings": "int", "npc_servings": {"array": "int", "max": 2048}, "eaten": "bool", "drive_protocol": "int", "driving": {"map": "drive", "max": 8}, "stones": {"array": "stone", "max": 96}, "stone_ids": {"array": "int", "max": 96}, "impacts": {"map": "int", "max": 16}, "paused": "bool", "notice": "string", "notice_time": "number", "cook_time": "number", "npc_people": {"array": "actor", "max": 2048}, "marshals": {"array": "actor", "max": 512}, "foraging": "foraging", "course": "course", "parks": "parks", "cargo": "cargo", "racing": "bool", "passed": "int", "helped": "int", "elapsed": "number", "camp_cooking": "camp_cooking", "racers": {"array": "racer", "max": 64}, "recovery_links": {"array": "link", "max": 2048}, "park_movers": {"array": "rotation_pose", "max": 64}, "injuries": {"array": "injury", "max": 4096}, "movable_props": {"array": "rotation_pose", "max": 20000}, "medics": {"array": "medic", "max": 64}, "dead": "bool", "finished": "bool", "title": "string", "text": "string", "city_lamps": {"array": "lamp", "max": 512}, "church_bell": "bell", "fallen": {"array": "tree", "max": 20000}, "snow": {"array": ["int", "int", "int"], "max": 768}, "snow_dug": {"array": ["int", "int", "int", "int"], "max": 256}, "direct": "bool", "cold_revs": {"map": "int", "max": 16}, "cold": {"map": "world", "max": 16}}}
+  }
+}

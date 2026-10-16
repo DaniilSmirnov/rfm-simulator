@@ -19,7 +19,7 @@ export const groups = Object.freeze({
  ],
  simulation: [
   "test_camp_cooking.gd", "test_course_schedule.gd", "test_service_parks.gd", "test_rally_handling.gd",
-  "test_rally_rejoin.gd", "test_rally_smoothness.gd", "test_rally_tracks.gd", "test_rally_traffic.gd", "test_room.gd", "test_direct_link.gd",
+  "test_rally_rejoin.gd", "test_rally_smoothness.gd", "test_rally_tracks.gd", "test_rally_traffic.gd", "test_room.gd", "test_direct_link.gd", "test_world_validation.gd",
   "test_physics.gd", "test_prop_contact.gd", "test_car_hitbox.gd", "test_food_fleet.gd", "test_foraging.gd", "test_grill_fire.gd", "test_camp_models.gd",
   "test_poison_mushrooms.gd", "test_network_motion.gd", "test_tow_recovery.gd", "test_car_rides.gd",
   "test_crew_limit.gd", "test_drive_prediction.gd", "test_route_index.gd", "test_knockdown.gd", "test_ambulance_medics.gd", "test_ambulance_right_of_way.gd",
@@ -45,7 +45,7 @@ export const nodeSuites = Object.freeze({
    "tests/audio-recovery.test.mjs"],
   ["scripts/test-device.mjs"],
  ],
- simulation: [["--test", "tests/room-core.test.mjs", "tests/room-socket.test.mjs", "tests/room-session.test.mjs", "tests/protocol.test.mjs"]],
+ simulation: [["--test", "tests/room-core.test.mjs", "tests/room-socket.test.mjs", "tests/room-session.test.mjs", "tests/protocol.test.mjs", "tests/world-validation.test.mjs"]],
  world: [],
 });
 export const groupDescriptions = Object.freeze({

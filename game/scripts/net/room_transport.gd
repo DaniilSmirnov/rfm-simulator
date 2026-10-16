@@ -7,6 +7,7 @@ extends Node
 #   room._on_failure(kind, code, message, data)
 #   room._on_rate_limited(retry_seconds)
 #   room._on_left()
+const WorldValidation = preload("res://scripts/net/world_validation.gd")
 const NetProtocol = preload("res://scripts/net/net_protocol.gd")
 # WebSocket ready states, kept numeric so the script parses without the module.
 const SOCKET_OPEN = 1
@@ -100,6 +101,9 @@ func handle_http(result: int, code: int, _headers: PackedStringArray, bytes: Pac
 	if result != HTTPRequest.RESULT_SUCCESS or code != 200 or not data is Dictionary:
 		var message = str(data.get("error", "Нет связи с сервером комнаты.")) if data is Dictionary else "Нет связи с сервером комнаты."
 		room._on_failure(request_kind, code, message, data)
+		return
+	if data.get("world") != null and not WorldValidation.valid(data.world):
+		room._on_failure(request_kind, 400, "Некорректный снимок мира.", data)
 		return
 	errors = 0
 	if data.has("server_time"):
@@ -250,6 +254,9 @@ func _socket_message(text: String) -> void:
 			socket_opened_at = now()
 			print("ROOM_SOCKET open")
 		"reply":
+			if data.get("world") != null and not WorldValidation.valid(data.world):
+				room._on_failure("sync", 400, "Некорректный снимок мира.", data)
+				return
 			errors = 0
 			var id = int(data.get("id", -1))
 			if message_times.has(id) and data.has("server_time"):
@@ -257,6 +264,9 @@ func _socket_message(text: String) -> void:
 				message_times.erase(id)
 			room._on_reply("sync", data)
 		"push":
+			if data.get("world") != null and not WorldValidation.valid(data.world):
+				room._on_failure("sync", 400, "Некорректный снимок мира.", data)
+				return
 			room._on_reply("sync", data)
 		"signal":
 			if data.get("data") is Dictionary:

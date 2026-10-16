@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { RoomState, MAX_PLAYERS, STAGE_COUNT } from '../server/room-core.mjs';
 const state = (x = 0) => ({ pos: [x, 1, 2], car: [3, 4, 5], heading: 1, yaw: 2, pitch: 0, in_car: false, tow: false, beer: -1 });
+const racer = () => ({id:1,variant:0,pos:[0,0,0],yaw:0,state:'racing'});
+const drive = () => ({ack:0,pos:[0,0,0],yaw:0,velocity:[0,0,0],vertical:0,grounded:true,pitch:0,roll:0,steering:0,yaw_rate:0,longitudinal:0});
 const setup = () => { const r = new RoomState(); const h = r.add('Хозяин', 1000, true); const g = r.add('Друг', 1000); return { r, h, g }; };
 test('mushroom species survives player sync and rejects unknown species', () => {
   const { r, h, g } = setup();
@@ -87,7 +89,7 @@ test('invalid tokens, positions and actions cannot modify room', () => {
 });
 test('late join receives picnic and current rally snapshot', () => {
   const { r, h } = setup();
-  const world = { camp: [1, 2, 3], chairs: true, cooking: true, cook_time: 25, racers: [{ id: 1 }] };
+  const world = { camp: [1, 2, 3], chairs: true, cooking: true, cook_time: 25, racers: [racer()] };
   r.sync({ token: h.token, state: state(), world }, 1100);
   const late = r.add('late', 1200);
   assert.deepEqual(r.sync({ token: late.token, state: state() }, 1300).world, world);
@@ -386,7 +388,7 @@ test('drive input transport limits and sanitizes prediction commands and preserv
 test('recovery survives transport while extra input fields and forged authority are discarded', () => {
   const {r,h,g}=setup();
   const input={seq:1,ticks:1,throttle:0,steer:0,brake:false,recover:true,condition:1000,pos:[999,0,0]};
-  r.sync({token:h.token,state:state(),world:{driving:{[g.player]:{ack:0,pos:[0,0,0]}}}},1100);
+  r.sync({token:h.token,state:state(),world:{driving:{[g.player]:drive()}}},1100);
   const reply=r.sync({token:g.token,state:{...state(),drive_enabled:true,drive_inputs:[input]},world:{driving:{[g.player]:{ack:999}}}},1200);
   assert.equal(reply.world.driving[g.player].ack,0);
   const hostReply=r.sync({token:h.token,state:state()},1300);
@@ -478,7 +480,7 @@ test('a guest from another protocol version is refused at join', () => {
 });
 test('a guest with a live direct link gets only slow sections and the roster', () => {
   const { r, h, g } = setup();
-  const hot = { racers: [{ id: 1 }], stones: [{ id: 5 }], cold_revs: { camp: 3 } };
+  const hot = { racers: [racer()], stones: [{ id:5,pos:[0,0,0],velocity:[0,0,0] }], cold_revs: { camp: 3 } };
   r.sync({ token: h.token, state: state(), world: hot, cold: { camp: { table_yaw: 1 } } }, 1100);
   const full = r.sync({ token: g.token, state: state(), cold_revs: {} }, 1150);
   assert.ok(full.world.racers && full.world.cold.camp, 'a guest without a link gets the whole world');
