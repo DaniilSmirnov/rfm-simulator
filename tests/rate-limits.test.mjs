@@ -73,7 +73,7 @@ test('store and purchase use verified account ID even when launch sessions are r
 });
 
 const request = (path, body, headers = {}) => new Request('https://game.test'+path,{method:'POST',body,headers,duplex:'half'});
-const room = () => { const r = new RallyRoom({blockConcurrencyWhile:()=>{}, storage:{put:async()=>{},setAlarm:async()=>{}},getWebSockets:()=>[]}); r.room = new RoomState(); return r; };
+const room = () => { const r = new RallyRoom({blockConcurrencyWhile:()=>{}, storage:{put:async()=>{},getAlarm:async()=>null,setAlarm:async()=>{}},getWebSockets:()=>[]}); r.room = new RoomState(); return r; };
 const padded = (limit, character) => { const prefix = JSON.stringify({name:'Host',padding:''}); const count = Math.floor((limit-prefix.length)/Buffer.byteLength(character)); return prefix.slice(0,-2)+character.repeat(count)+'x'.repeat(limit-prefix.length-count*Buffer.byteLength(character))+'"}'; };
 
 test('room HTTP and WebSocket limits count UTF-8 bytes at ASCII, Cyrillic and emoji boundaries',async()=>{
