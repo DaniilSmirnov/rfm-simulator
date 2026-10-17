@@ -12,6 +12,7 @@ extends RefCounted
 #            "interval": float (seconds; a busy section uploads at most this often)}
 const Props = preload("res://scripts/core/props.gd")
 const SnapshotMotion = preload("res://scripts/net/snapshot_motion.gd")
+const Validation = preload("res://scripts/net/world_validation.gd")
 
 var room
 var game
@@ -187,6 +188,7 @@ func cold_part(w: Dictionary):
 # World collision geometry (snow, trees, lamps) a guest needs before replaying
 # its own unacknowledged driving input.
 func apply_collision(w: Dictionary) -> void:
+	if not Validation.valid(w): return
 	_ensure()
 	var cold = cold_part(w)
 	if cold == null:
@@ -198,6 +200,7 @@ func apply_collision(w: Dictionary) -> void:
 # Only the slow sections of a server snapshot, while the hot world arrives over
 # a direct link.
 func apply_cold(w: Dictionary, sample_time: float) -> void:
+	if not Validation.valid(w): return
 	_ensure()
 	var cold = cold_part(w)
 	if cold == null:
@@ -212,6 +215,7 @@ func apply_cold(w: Dictionary, sample_time: float) -> void:
 				cold_revs[section] = int(revisions[section])
 
 func apply_world(w: Dictionary, sample_time: float) -> void:
+	if not Validation.valid(w): return
 	_ensure()
 	var cold = cold_part(w)
 	if cold != null:

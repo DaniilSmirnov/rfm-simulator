@@ -1,5 +1,7 @@
 import protocol from '../game/data/net_protocol.json' with { type: 'json' };
 import { catalog } from './store.mjs';
+import {validWorld, validCold} from './world-validation.mjs';
+export {validWorld};
 // Limits and the action list come from the protocol file the game reads too.
 export { protocol };
 export const MAX_PLAYERS = protocol.max_players;
@@ -10,15 +12,6 @@ const COMMANDS = new Set(protocol.actions);
 // Content counts follow the catalog: a new stage or car needs no server change.
 export const STAGE_COUNT = catalog.filter(p => p.type === 'stage').length;
 export const CAR_COUNT = catalog.filter(p => p.type === 'car').length;
-// The host's world is the game's own snapshot; the server checks its shape:
-// a bounded number of plain top-level keys and a bounded serialized size.
-const WORLD_KEY = /^[a-z_]{1,32}$/;
-const WORLD_KEYS = 96;
-export function validWorld(world) {
-  if (!world || typeof world !== 'object' || Array.isArray(world)) return false;
-  const keys = Object.keys(world);
-  return keys.length <= WORLD_KEYS && keys.every(key => WORLD_KEY.test(key));
-}
 const vec = value => Array.isArray(value) && value.length === 3 && value.every(n => Number.isFinite(n) && Math.abs(n) < 3000);
 const number = n => Number.isFinite(n) && Math.abs(n) < 100000;
 // The car a walker stands on (perches.gd key) and the feet in its frame.
@@ -93,6 +86,8 @@ export class RoomState {
     if (this.data.closed) throw new RoomError(410, 'Создатель вышел. Комната закрыта.');
     const p = this.member(body.token);
     this.rateLimit(p, "sync", now, 150, 10000);
+    if (p.id === this.data.host && ((body.world !== undefined && !validWorld(body.world)) ||
+        (body.cold !== undefined && !validCold(body.cold,body.world?.cold_revs)))) throw new RoomError(400, 'Некорректный снимок мира.');
     const s = body.state;
     if (!s || !vec(s.pos) || !vec(s.car) || !number(s.heading) || !number(s.yaw) || !number(s.pitch) || typeof s.in_car !== 'boolean') throw new RoomError(400, 'Некорректное состояние игрока.');
     const drive_inputs = (Array.isArray(s.drive_inputs) ? s.drive_inputs.slice(0, LIMIT.drive_inputs_per_sync) : []).filter(c =>
@@ -110,7 +105,6 @@ export class RoomState {
     this.trackColdRevisions(p, body);
     if (p.id === this.data.host) {
       if (body.world !== undefined) {
-        if (!validWorld(body.world)) throw new RoomError(400, 'Некорректный снимок мира.');
         this.data.world = body.world; this.data.world_time = now;
       }
       // Slowly changing world sections arrive only when their revision changes.
@@ -206,7 +200,7 @@ export class RoomState {
     this.rateLimit(p, 'signal', now, protocol.direct.signals_per_10s, 10000);
     const target = typeof to === 'string' ? this.data.players[to] : undefined;
     if (!target || target.id === p.id || (p.id !== this.data.host && target.id !== this.data.host)) throw new RoomError(404, 'Участник не найден.');
-    if (!data || typeof data !== 'object' || Array.isArray(data) || JSON.stringify(data).length > protocol.direct.max_signal_bytes) throw new RoomError(400, 'Некорректное сообщение.');
+    if (!data || typeof data !== 'object' || Array.isArray(data) || new TextEncoder().encode(JSON.stringify(data)).byteLength > protocol.direct.max_signal_bytes) throw new RoomError(400, 'Некорректное сообщение.');
     p.seen = now;
     return { from: p.id, to: target.id };
   }

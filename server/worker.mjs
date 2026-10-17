@@ -6,7 +6,29 @@ import { validateRoomSelection } from './store.mjs';
 import { RoomState, RoomError, protocol } from './room-core.mjs';
 const json = (data, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
 const PUSH_INTERVAL = 40;
+const HELLO_TIMEOUT = 10000;
 const MAX_MESSAGE = protocol.max_message_bytes;
+async function readBody(request, limit, message = 'Слишком большое сообщение.') {
+  const reject = async reader => {
+    try { await (reader ? reader.cancel() : request.body?.cancel()); } catch {}
+    throw new RoomError(413, message);
+  };
+  if (Number(request.headers.get('Content-Length')) > limit) return reject();
+  if (!request.body) return '';
+  const reader = request.body.getReader();
+  const bytes = new Uint8Array(limit);
+  let size = 0;
+  try {
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      if (value.byteLength > limit - size) return await reject(reader);
+      bytes.set(value, size);
+      size += value.byteLength;
+    }
+    return new TextDecoder().decode(bytes.subarray(0, size));
+  } finally { reader.releaseLock(); }
+}
 // Room IDs: the protocol pattern without its anchors, reused in every route.
 const ROOM_ID = protocol.room_id_pattern.replace(/^\^|\$$/g, '');
 const SOCKET_ROUTE = new RegExp(`^/api/rooms/(${ROOM_ID})/socket$`);
@@ -23,21 +45,45 @@ export class RallyRoom {
   async persist(now, force) {
     if (!force && now - this.savedAt <= 5000) return;
     await this.ctx.storage.put('room', this.room.data);
-    await this.ctx.storage.setAlarm(now + 30000);
+    await this.scheduleAlarm(now + 30000);
     this.savedAt = now;
+  }
+  async scheduleAlarm(deadline) {
+    const current = await this.ctx.storage.getAlarm();
+    if (current === null || deadline < current) await this.ctx.storage.setAlarm(deadline);
+  }
+  retire(ws, code, reason) {
+    const player = ws.deserializeAttachment()?.player;
+    ws.serializeAttachment({ retired: true });
+    if (player) {
+      clearTimeout(this.pushes.get(player));
+      this.pushes.delete(player);
+    }
+    try { ws.close(code, reason); } catch {}
+  }
+  expirePending(now) {
+    for (const ws of this.ctx.getWebSockets()) {
+      const session = ws.deserializeAttachment();
+      if (!session?.player && !session?.retired && !session?.replaced && (!session?.hello_deadline || session.hello_deadline <= now)) this.retire(ws, 4401, 'hello timeout');
+    }
   }
   async fetch(request) {
     const url = new URL(request.url);
     if (url.pathname.endsWith('/socket')) {
       if (request.headers.get('Upgrade') !== 'websocket') return json({ error: 'Нужен WebSocket.' }, 426);
+      const now = Date.now();
+      this.expirePending(now);
+      const pending = this.ctx.getWebSockets().filter(ws => ws.deserializeAttachment()?.hello_deadline);
+      if (pending.length >= protocol.max_players) return json({ error: 'Сервер комнаты временно недоступен.' }, 429);
       const pair = new WebSocketPair();
       // Hibernation keeps idle rooms cheap; membership is proven by the first message.
       this.ctx.acceptWebSocket(pair[1]);
+      pair[1].serializeAttachment({ hello_deadline: now + HELLO_TIMEOUT });
+      await this.scheduleAlarm(now + HELLO_TIMEOUT);
       return new Response(null, { status: 101, webSocket: pair[0] });
     }
     try {
-      const raw = await request.text();
-      if (raw.length > MAX_MESSAGE) throw new RoomError(413, 'Слишком большое сообщение.');
+      const raw = await readBody(request, MAX_MESSAGE);
       let body;
       try { body = JSON.parse(raw); } catch { throw new RoomError(400, 'Некорректное сообщение.'); }
       if (!body || typeof body !== 'object') throw new RoomError(400, 'Некорректное сообщение.');
@@ -114,14 +160,21 @@ export class RallyRoom {
   async webSocketMessage(ws, message) {
     let body;
     try {
-      if (typeof message !== 'string' || message.length > MAX_MESSAGE) throw new RoomError(413, 'Слишком большое сообщение.');
+      if (typeof message !== 'string' || new TextEncoder().encode(message).byteLength > MAX_MESSAGE) throw new RoomError(413, 'Слишком большое сообщение.');
       try { body = JSON.parse(message); } catch { throw new RoomError(400, 'Некорректное сообщение.'); }
       if (!body || typeof body !== 'object') throw new RoomError(400, 'Некорректное сообщение.');
       const now = Date.now();
       this.room.expire(now);
       if (this.room.data.closed) throw new RoomError(410, 'Создатель вышел. Комната закрыта.');
+      const attachment = ws.deserializeAttachment();
+      if (attachment?.replaced && body.type === 'hello') return;
+      if (attachment?.retired || (attachment?.hello_deadline && attachment.hello_deadline <= now)) {
+        this.retire(ws, 4401, 'hello timeout');
+        return;
+      }
       if (body.type === 'hello') {
         const p = this.room.member(body.token);
+        if (attachment?.player && attachment.player !== p.id) throw new RoomError(401, 'Участник не найден. Войди в комнату заново.');
         this.room.trackColdRevisions(p, body);
         this.replaceSockets(p.id, ws);
         ws.serializeAttachment({ player: p.id, token: p.token });
@@ -151,22 +204,27 @@ export class RallyRoom {
         return;
       }
       this.send(ws, { type: 'error', id: body?.id, status, error: known ? error.message : 'Сервер комнаты временно недоступен.', ...(status === 429 ? { retry_after: error.retryAfter ?? 10 } : {}) });
-      if ([401, 404, 410].includes(status)) { try { ws.close(4000 + status, 'room'); } catch {} }
+      if ([401, 404, 410].includes(status)) this.retire(ws, 4000 + status, 'room');
     }
   }
   async webSocketClose(ws, code) {
-    try { ws.close(code === 1005 || code === 1006 ? 1000 : code, 'closed'); } catch {}
+    this.retire(ws, code === 1005 || code === 1006 ? 1000 : code, 'closed');
   }
   async webSocketError(ws) {
-    try { ws.close(1011, 'error'); } catch {}
+    this.retire(ws, 1011, 'error');
   }
   async alarm() {
-    this.room.expire(Date.now());
+    const now = Date.now();
+    this.expirePending(now);
+    this.room.expire(now);
     if (this.room.data.closed || !this.room.data.host) {
-      for (const ws of this.ctx.getWebSockets()) { try { ws.close(4410, 'closed'); } catch {} }
+      for (const ws of this.ctx.getWebSockets()) this.retire(ws, 4410, 'closed');
       await this.ctx.storage.deleteAll();
     }
-    else await this.ctx.storage.setAlarm(Date.now() + 30000);
+    else {
+      const deadlines = this.ctx.getWebSockets().map(ws => ws.deserializeAttachment()?.hello_deadline).filter(Boolean);
+      await this.ctx.storage.setAlarm(Math.min(now + 30000, ...deadlines));
+    }
   }
 }
 export default {
@@ -193,8 +251,9 @@ export default {
         response.headers.set('X-Rally-Payments-Handler', PAYMENT_HANDLER_VERSION);
         return response;
       };
-      try { return reply(await paymentCallback(await request.text(), env)); }
+      try { return reply(await paymentCallback(await readBody(request, 16384, 'Слишком большое уведомление.'), env)); }
       catch (error) {
+        if (error instanceof RoomError && error.status === 413) error = new PaymentError(20, error.message);
         const known = error instanceof PaymentError;
         console.warn('[RFM VK payments]', JSON.stringify({handler:PAYMENT_HANDLER_VERSION,error_code:known ? error.code : 1,message:known ? error.message : 'Платежи временно недоступны.'}));
         return reply({error:{error_code:known ? error.code : 1,error_msg:known ? error.message : 'Платежи временно недоступны.',critical:known ? error.critical : false}});
@@ -210,11 +269,13 @@ export default {
     } catch (error) { return limitResponse(error); }
     const origin = request.headers.get('Origin');
     if (origin && origin !== url.origin) return json({ error: 'Недопустимый источник.' }, 403);
-    if (Number(request.headers.get('Content-Length')) > MAX_MESSAGE) return json({ error: 'Слишком большое сообщение.' }, 413);
+    if (Number(request.headers.get('Content-Length')) > MAX_MESSAGE) {
+      try { await request.body?.cancel(); } catch {}
+      return json({ error: 'Слишком большое сообщение.' }, 413);
+    }
     try {
       if (url.pathname === '/api/vk/session') {
-        const raw = await request.text();
-        if (raw.length > 16384) return json({ error: 'Слишком большое сообщение.' }, 413);
+        const raw = await readBody(request, 16384);
         let body;
         try { body = JSON.parse(raw); } catch { return json({ error: 'Некорректное сообщение.' }, 400); }
         const bootstrap = await authenticateLaunch(body?.launch_params, env);
@@ -224,8 +285,7 @@ export default {
         const session = await authenticateSession(request, env);
         await enforceLimit(env, url.pathname === '/api/vk/store' ? 'STORE_RATE_LIMIT' : 'PURCHASE_RATE_LIMIT', 'user:' + session.user);
         if (url.pathname === '/api/vk/store') return json(await accountStore(env,session.user));
-        const raw = await request.text();
-        if (raw.length > 1024) return json({error:'Слишком большое сообщение.'},413);
+        const raw = await readBody(request, 1024);
         let body;
         try { body = JSON.parse(raw); } catch { return json({error:'Некорректное сообщение.'},400); }
         return json(await preparePurchase(env,session.user,body?.sku));
@@ -236,8 +296,7 @@ export default {
         const session = await authenticateSession(request, env);
         if (url.pathname === '/api/rooms' || ENTRY_ROUTE.test(url.pathname)) {
           await enforceLimit(env, 'ROOM_ENTRY_RATE_LIMIT', 'user:' + session.user);
-          const raw = await request.text();
-          if (raw.length > 1024) return json({ error: 'Слишком большое сообщение.' }, 413);
+          const raw = await readBody(request, 1024);
           let body;
           try { body = JSON.parse(raw); } catch { return json({ error: 'Некорректное сообщение.' }, 400); }
           if (!body || typeof body !== 'object' || Array.isArray(body)) return json({ error: 'Некорректное сообщение.' }, 400);
@@ -247,14 +306,16 @@ export default {
         }
       }
     } catch (error) {
+      if (error instanceof RoomError) return json({error:error.message},error.status);
       if (error instanceof LimitError) return limitResponse(error);
       if (error instanceof PaymentError) return json({error:error.message},error.critical ? 403 : 503);
       if (error instanceof AuthError) return json({ error: error.message }, error.status);
       return json({ error: 'Авторизация временно недоступна.' }, 503);
     }
     if (url.pathname === '/api/rooms') {
-      const raw = await request.text();
-      if (raw.length > 1024) return json({ error: 'Слишком длинное имя.' }, 413);
+      let raw;
+      try { raw = await readBody(request, 1024, 'Слишком длинное имя.'); }
+      catch (error) { if (error instanceof RoomError) return json({error:error.message},error.status); throw error; }
       for (let attempt = 0; attempt < 4; attempt++) {
         const id = [...crypto.getRandomValues(new Uint8Array(3))].map(n => n.toString(16).padStart(2, '0')).join('').toUpperCase();
         const room = env.ROOMS.get(env.ROOMS.idFromName(id));

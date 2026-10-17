@@ -1,0 +1,358 @@
+{
+  "valid": [
+    {
+      "name": "empty partial world",
+      "world": {}
+    },
+    {
+      "name": "camp and tilted prop",
+      "world": {
+        "camp": [
+          1,
+          2,
+          3
+        ],
+        "chair_poses": {
+          "owner": {
+            "pos": [
+              4,
+              2,
+              3
+            ],
+            "yaw": 0.2
+          }
+        },
+        "movable_props": [
+          {
+            "key": "camp:chair:owner",
+            "pos": [
+              4,
+              2,
+              3
+            ],
+            "rot": [
+              1.5,
+              0.2,
+              0
+            ],
+            "anchored": false
+          }
+        ]
+      }
+    },
+    {
+      "name": "cold late join",
+      "world": {
+        "cold_revs": {
+          "camp": 7,
+          "props": 8
+        },
+        "cold": {
+          "camp": {
+            "camp": null,
+            "chairs": false
+          },
+          "props": {
+            "movable_props": []
+          }
+        }
+      }
+    },
+    {
+      "name": "authoritative driver",
+      "world": {
+        "drive_protocol": 1,
+        "driving": {
+          "owner": {
+            "ack": 1,
+            "pos": [
+              0,
+              1,
+              2
+            ],
+            "yaw": 0,
+            "velocity": [
+              0,
+              0,
+              0
+            ],
+            "vertical": 0,
+            "grounded": true,
+            "pitch": 0,
+            "roll": 0,
+            "steering": 0,
+            "yaw_rate": 0,
+            "longitudinal": 0
+          }
+        }
+      }
+    },
+    {
+      "name": "racing and snow",
+      "world": {
+        "racers": [
+          {
+            "id": 1,
+            "variant": 0,
+            "pos": [
+              1,
+              2,
+              3
+            ],
+            "yaw": 0,
+            "state": "racing",
+            "tilt": [
+              0,
+              0
+            ]
+          }
+        ],
+        "snow": [
+          [
+            1,
+            2,
+            255
+          ]
+        ],
+        "snow_dug": [
+          [
+            1,
+            2,
+            4,
+            0
+          ]
+        ]
+      }
+    },
+    {
+      "name": "car towing rope",
+      "world": {
+        "recovery_links": [
+          {
+            "player": "guest",
+            "pos": [
+              0,
+              1,
+              2
+            ],
+            "car": "host",
+            "hitch": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "skewer with default species",
+      "world": {
+        "foraging": {
+          "skewers": {
+            "-1": [
+              {
+                "ready_at": 0
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "driver is a number",
+      "world": {
+        "driving": 17
+      }
+    },
+    {
+      "name": "driver lacks velocity",
+      "world": {
+        "driving": {
+          "owner": {
+            "ack": 1,
+            "pos": [
+              0,
+              1,
+              2
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "racer lacks fields",
+      "world": {
+        "racers": [
+          {}
+        ]
+      }
+    },
+    {
+      "name": "racer wrong vector",
+      "world": {
+        "racers": [
+          {
+            "id": 1,
+            "variant": 0,
+            "pos": [
+              1,
+              2
+            ],
+            "yaw": 0,
+            "state": "racing"
+          }
+        ]
+      }
+    },
+    {
+      "name": "camp wrong vector",
+      "world": {
+        "passed": 99,
+        "camp": [
+          0,
+          1
+        ]
+      }
+    },
+    {
+      "name": "chair pose is a scalar",
+      "world": {
+        "chair_poses": {
+          "owner": 7
+        }
+      }
+    },
+    {
+      "name": "prop wrong rotation",
+      "world": {
+        "movable_props": [
+          {
+            "key": "scene:1",
+            "pos": [
+              0,
+              0,
+              0
+            ],
+            "rot": "upright"
+          }
+        ]
+      }
+    },
+    {
+      "name": "cold bad prop",
+      "world": {
+        "cold": {
+          "props": {
+            "movable_props": [
+              {}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "cold is an array",
+      "world": {
+        "cold": []
+      }
+    },
+    {
+      "name": "bad revision",
+      "world": {
+        "cold_revs": {
+          "camp": "7"
+        }
+      }
+    },
+    {
+      "name": "snow wrong row",
+      "world": {
+        "snow": [
+          [
+            0,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "name": "injury wrong position",
+      "world": {
+        "injuries": [
+          {
+            "key": "npc:0",
+            "phase": "down",
+            "pos": [
+              1
+            ],
+            "rot": [
+              0,
+              0,
+              0
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "cargo malformed carry",
+      "world": {
+        "cargo": {
+          "held": {
+            "owner": {
+              "kind": false
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "stone lacks velocity",
+      "world": {
+        "stones": [
+          {
+            "id": 1,
+            "pos": [
+              1,
+              2,
+              3
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "foraging wrong inventory",
+      "world": {
+        "foraging": {
+          "inventories": {
+            "owner": false
+          }
+        }
+      }
+    },
+    {
+      "name": "camp cooking lacks position",
+      "world": {
+        "camp_cooking": {
+          "fire": true
+        }
+      }
+    },
+    {
+      "name": "notice time lacks notice",
+      "world": {
+        "notice_time": 1
+      }
+    },
+    {
+      "name": "inventory lacks counters",
+      "world": {
+        "foraging": {
+          "inventories": {
+            "guest": {}
+          }
+        }
+      }
+    }
+  ]
+}

@@ -169,3 +169,10 @@ static func expand_state(c: Dictionary) -> Dictionary:
 	if not s.has("push"):
 		s.push = [0.0, 0.0, 0.0]
 	return s
+
+# Check compact tuples before expand_state indexes them.
+static func valid_compact_state(c) -> bool:
+	if not c is Dictionary or not _vec(c.get("pos")) or not _number(c.get("heading")) or not _number(c.get("yaw")) or not _number(c.get("pitch")) or not c.get("in_car") is bool: return false
+	if c.has("car") and not _vec(c.car): return false
+	var tilt = c.get("tilt", [0.0, 0.0])
+	return tilt is Array and tilt.size() == 2 and _number(tilt[0]) and _number(tilt[1])

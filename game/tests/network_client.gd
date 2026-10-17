@@ -35,6 +35,13 @@ func _process(delta: float) -> void:
 		var sample = {"role": role, "connected": game.room.connected, "room": game.room.room_id, "player": game.room.player_id, "enabled": game.room.prediction_enabled, "active": p.active, "ack": p.ack, "seq": p.seq, "pending": p.pending.size(), "pos": game.room.a(game.car.position), "speed": game.speed, "condition": game.condition, "dead": game.dead, "paused": game.paused, "world_paused": game.room.world_paused, "in_car": game.in_car, "driving": {}}
 		for id in game.room.host_drives:
 			sample.driving[id] = game.room.host_drives[id].snapshot()
+		sample.control_id = last_command
+		sample.transport = game.room.transport.transport_name()
+		sample.transport_errors = game.room.transport.errors
+		sample.pending_sequences = p.pending.map(func(input): return input.seq)
+		sample.commands = game.room.commands.map(func(command): return command.seq)
+		sample.action_sequence = game.room.sequence
+		sample.processed = game.room.processed.keys()
 		sample.safe_area_ready = game.mobile_safe_rect.has_area()
 		sample.direct = game.room.direct.open_links().size()
 		sample.direct_healthy = not game.room.is_host and game.room.direct.healthy(game.room.host_id)
@@ -51,6 +58,9 @@ func on_control(_result: int, code: int, _headers: PackedStringArray, body: Pack
 	for action in ["forward", "left", "right", "brake", "back"]:
 		Input.action_release(action)
 	match command.action:
+		"outage":
+			game.room.submit("stand_person")
+			game.room.recover_drive()
 		"forward":
 			game.paused = false
 			Input.action_press("forward")

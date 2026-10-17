@@ -11,12 +11,13 @@ const web = process.argv.includes('--web');
 // --socket runs the room over WebSocket with 150 ms added each way; the default
 // pins HTTP polling so injected HTTP losses stay meaningful.
 const socketMode = process.argv.includes('--socket');
-const transportArgs = socketMode ? [] : ['--room-transport=http'];
+const directOff = process.argv.includes('--room-direct=off');
+const transportArgs = [...(socketMode ? [] : ['--room-transport=http']), ...(directOff ? ['--room-direct=off'] : [])];
 const SOCKET_DELAY = 150;
 // With a WebRTC engine, browser clients also open a direct host-guest link; the
 // room socket (still delayed) only relays its setup.
 const engineManifest = JSON.parse(await readFile(new URL('../engine/manifest.json', import.meta.url), 'utf8'));
-const directMode = web && socketMode && engineManifest.webrtc === true;
+const directMode = web && socketMode && engineManifest.webrtc === true && !directOff;
 const workerPort = 8793;
 const processes = [];
 let browserFactory;
@@ -56,7 +57,8 @@ async function until(predicate, title, timeout=60000) {
   throw Error(`${title} timed out; host=${JSON.stringify(latest('host'))}; guest=${JSON.stringify(latest('guest'))}`);
 }
 function command(role, action, extra = {}) {controls[role] = {id:controls[role].id+1,action,...extra};}
-let syncs=0, dropped=0;
+let syncs=0, dropped=0, outageRejected=0;
+let httpOutage=false, socketBlackholeUntil=0;
 const output = join(root,'.cache/network-web');
 const proxy = createServer(async(req,res)=> {
   try {
@@ -71,6 +73,7 @@ const proxy = createServer(async(req,res)=> {
       if(slow) {
         syncs++;
         await wait(100 + (syncs%3)*50);
+        if(httpOutage) {outageRejected++;res.writeHead(503,{'Content-Type':'application/json'});res.end('{"error":"Test sustained outage"}');return;}
         if(syncs===5 || syncs===9) {dropped++;res.writeHead(503,{'Content-Type':'application/json'});res.end('{"error":"Test packet loss"}');return;}
       }
       const response = await fetch(`http://127.0.0.1:${workerPort}${path}`,{method:req.method,headers:{'Content-Type':'application/json'},body});
@@ -80,7 +83,11 @@ const proxy = createServer(async(req,res)=> {
         const data=JSON.parse(payload);
         tokenRoles.set(data.token,path === "/api/rooms" ? "host" : "guest");
         // Route sockets through this proxy so they share its origin and latency.
-        if(data.socket)data.socket=data.socket.replace(/^ws:\/\/[^/]+/,`ws://127.0.0.1:${proxy.address().port}`);
+        if(data.socket) {
+          const socket=new URL(data.socket.replace(/^ws:\/\/[^/]+/,`ws://127.0.0.1:${proxy.address().port}`));
+          socket.searchParams.set('test_role',tokenRoles.get(data.token));
+          data.socket=socket.href;
+        }
         reply=JSON.stringify(data);
       }
       if(slow)await wait(150);
@@ -98,11 +105,16 @@ const proxy = createServer(async(req,res)=> {
   } catch(error) {res.writeHead(500).end(String(error));}
 });
 proxy.on('upgrade',(req,client,head)=> {
+  const role=new URL(req.url,'http://localhost').searchParams.get('test_role');
+  const blackholed=()=>role==='guest' && Date.now()<socketBlackholeUntil;
   const upstream=tcpConnect(workerPort,'127.0.0.1',()=> {
     const headers=Object.entries(req.headers).map(([k,v])=>`${k}: ${k==='host'?`127.0.0.1:${workerPort}`:k==='origin'?`http://127.0.0.1:${workerPort}`:v}`);
     upstream.write(`${req.method} ${req.url} HTTP/1.1\r\n${headers.join('\r\n')}\r\n\r\n`);
     if(head.length)upstream.write(head);
-    const delayed=(from,to)=>from.on('data',chunk=>setTimeout(()=>{if(!to.destroyed)to.write(chunk);},SOCKET_DELAY/2));
+    const delayed=(from,to)=>from.on('data',chunk=>{
+      if(blackholed())return;
+      setTimeout(()=>{if(!to.destroyed && !blackholed())to.write(chunk);},SOCKET_DELAY/2);
+    });
     delayed(client,upstream);delayed(upstream,client);
   });
   const close=()=>{client.destroy();upstream.destroy();};
@@ -177,6 +189,51 @@ try {
     await until(()=>dropped===2,'two injected HTTP failures');
     assert.ok(dropped===2,'two real HTTP failures exercised');
   }
+  const identity={room:latest('guest').room,player:latest('guest').player};
+  const sameGuest=()=> {
+    const guest=latest('guest');
+    assert.equal(guest.connected,true,'outage preserves membership');
+    assert.equal(guest.player,identity.player,'outage preserves player identity');
+    assert.equal(guest.room,identity.room,'outage preserves room identity');
+    assert.equal(guest.dead,false,'outage does not end the outing');
+  };
+  const converged=()=> {
+    const guest=latest('guest'),drive=latest('host').driving[identity.player];
+    return drive && guest.pending===0 && guest.ack===guest.seq && Math.hypot(...guest.pos.map((x,i)=>x-drive.pos[i]))<0.05;
+  };
+  if(!socketMode) {
+    httpOutage=true;
+    await until(()=>outageRejected>0,'sustained HTTP outage reaches guest',10000);
+    command('guest','outage');
+    await until(()=>latest('guest').control_id===controls.guest.id && latest('guest').commands.length===1 && latest('guest').pending>0,'action and recovery driving input queued during outage',5000);
+    const outageStarted=Date.now(), queuedAction=latest('guest').action_sequence;
+    const pending=latest('guest').pending_sequences.slice();
+    for(const seconds of [5,15,30]) {
+      await until(()=>Date.now()-outageStarted>=seconds*1000,`${seconds}s HTTP outage checkpoint`,seconds*1000+5000);
+      sameGuest();
+      assert.ok(latest('guest').commands.includes(queuedAction),`queued action retained at ${seconds}s`);
+      assert.ok(pending.every(seq=>latest('guest').pending_sequences.includes(seq)),`unacknowledged driving inputs retained at ${seconds}s`);
+    }
+    assert.ok(outageRejected>=3,'outage exercises repeated real HTTP failures');
+    httpOutage=false;
+    command('guest','brake');
+    await until(()=>latest('guest').commands.length===0 && latest('host').processed.includes(`${identity.player}:${queuedAction}`),'queued action accepted and applied after recovery',20000);
+    await until(()=>Math.abs(latest('guest').speed)<0.1 && latest('guest').pending===0,'recovered driving inputs acknowledged and car stopped',30000);
+    command('guest','pause');
+    await until(converged,'HTTP outage recovery converges to authority',15000);
+    sameGuest();
+    assert.equal(latest('host').processed.filter(id=>id===`${identity.player}:${queuedAction}`).length,1,'one command identity is applied after retransmission');
+  } else if(!web) {
+    await until(()=>latest('guest').transport==='ws','guest socket ready before blackhole',15000);
+    const start=samples.guest.length;
+    socketBlackholeUntil=Date.now()+10000;
+    await until(()=>samples.guest.slice(start).some(sample=>sample.transport==='http'),'silent socket falls back to HTTP through watchdog',15000);
+    sameGuest();
+    await until(()=>Date.now()>=socketBlackholeUntil,'TCP blackhole ends',12000);
+    await until(()=>latest('guest').transport==='ws','socket reconnects after blackhole',25000);
+    await until(converged,'socket outage recovery converges to authority',15000);
+    sameGuest();
+  }
   assert.equal(latest('guest').dead,false);
   command('host','pause');await until(()=>latest('guest').world_paused,'host pause replicated');
   const seq=latest('guest').seq;await wait(500);assert.equal(latest('guest').seq,seq,'paused world produces no commands');
@@ -207,7 +264,7 @@ try {
   if(web)assert.equal(latest("guest").safe_area_ready,true,"mobile Web client reads safe area through browser-local transport");
   if(socketMode)assert.ok(!logs.some(line=>line.includes('ROOM_SOCKET disabled')),'WebSocket stayed in use');
   if(directMode)await until(()=>latest('guest')?.direct_healthy,'direct link reopened after rejoin',60000);
-  console.log(`PASS: ${web?'two Chromium clients (mobile guest)':'two Godot clients'}: ${directMode?'WebRTC direct link, WebSocket setup with 150ms RTT':socketMode?'WebSocket with 150ms RTT':'delayed HTTP, 2 lost responses'}, prediction, braking, convergence, pause/resume, recovery, exit/re-entry, fallen prop and repeated impact, leave/rejoin`);
+  console.log(`PASS: ${web?'two Chromium clients (mobile guest)':'two Godot clients'}: ${directMode?'WebRTC direct link, WebSocket setup with 150ms RTT':socketMode?'WebSocket with 150ms RTT':'delayed HTTP, 2 lost responses'}, ${!socketMode?'30s HTTP recovery':!web?'silent socket fallback/reconnect':'socket/direct transport'}, prediction, braking, convergence, pause/resume, recovery, exit/re-entry, fallen prop and repeated impact, leave/rejoin`);
 } catch (error) {
   console.error(logs.filter(x => !x.includes('NETWORK_SAMPLE ')).slice(-100).join('\n'));
   if(process.env.GITHUB_ACTIONS) {
