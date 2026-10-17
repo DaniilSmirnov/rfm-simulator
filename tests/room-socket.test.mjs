@@ -15,13 +15,14 @@ class FakeSocket {
 function fakeRoom() {
   const sockets = [];
   const storage = new Map();
+  let alarm = null;
   const ctx = {
     blockConcurrencyWhile: fn => fn(),
     acceptWebSocket: ws => sockets.push(ws),
     getWebSockets: () => sockets,
-    storage: { get: async key => storage.get(key), put: async (key, value) => storage.set(key, structuredClone(value)), setAlarm: async () => {}, deleteAll: async () => storage.clear() },
+    storage: { get: async key => storage.get(key), put: async (key, value) => storage.set(key, structuredClone(value)), getAlarm: async () => alarm, setAlarm: async value => { alarm = value; }, deleteAll: async () => storage.clear() },
   };
-  return { room: new RallyRoom(ctx), sockets, storage };
+  return { room: new RallyRoom(ctx), sockets, storage, ctx };
 }
 const state = (x = 0) => ({ pos: [x, 1, 2], car: [3, 4, 5], heading: 1, yaw: 2, pitch: 0, in_car: true, tow: false, beer: -1 });
 async function connect(room, sockets, token) {
@@ -120,6 +121,9 @@ test('a new hello retires the earlier sockets of the same participant', async ()
   await room.webSocketMessage(hostWs, JSON.stringify({ type: 'sync', id: 2, state: state(), cold_revs: {}, world: { elapsed: 5, cold_revs: {} } }));
   assert.equal(guestOld.take('push').length, 0);
   assert.equal(guestNew.take('push').length, 1);
+  await room.webSocketMessage(guestOld, JSON.stringify({ type: 'hello', token: g.token }));
+  assert.equal(guestOld.take('hello').length, 0, 'replaced sockets cannot reclaim membership');
+  assert.deepEqual(room.sockets(g.player), [guestNew]);
   // A late message on the retired socket is refused, not served.
   await room.webSocketMessage(guestOld, JSON.stringify({ type: 'sync', id: 3, state: state() }));
   assert.equal(guestOld.take('error')[0].status, 401);
@@ -206,18 +210,76 @@ test('a participant with two sockets gets each push once per socket, not once pe
   const h = room.room.add('Host', now, true);
   const g = room.room.add('Guest', now);
   const hostWs = await connect(room, sockets, h.token);
-  // A reconnect can leave the old socket open next to the new one for a while.
+  // Hibernation can restore duplicate attachments saved before replacement.
   const guestOld = await connect(room, sockets, g.token);
-  const guestNew = await connect(room, sockets, g.token);
+  const guestNew = new FakeSocket();
+  guestNew.serializeAttachment(guestOld.deserializeAttachment());
+  sockets.push(guestNew);
   for (const ws of [hostWs, guestOld, guestNew]) ws.take();
   await room.webSocketMessage(hostWs, JSON.stringify({ type: 'sync', id: 2, state: state(), cold_revs: {}, world: { elapsed: 5, cold_revs: {} } }));
   assert.equal(guestOld.take('push').length, 1, 'old socket receives the snapshot once');
   assert.equal(guestNew.take('push').length, 1, 'new socket receives the snapshot once');
   // Both sockets of the host are served by one merged push as well.
-  const hostSecond = await connect(room, sockets, h.token);
+  const hostSecond = new FakeSocket();
+  hostSecond.serializeAttachment(hostWs.deserializeAttachment());
+  sockets.push(hostSecond);
   for (const ws of [hostWs, hostSecond]) ws.take();
   await room.webSocketMessage(guestNew, JSON.stringify({ type: 'sync', id: 3, state: state(1), cold_revs: {} }));
   await wait(80);
   assert.equal(hostWs.take('push').length, 1);
   assert.equal(hostSecond.take('push').length, 1);
+});
+
+test('pending sockets are capped and expire through the durable alarm after restoration', async t => {
+  const { room, sockets, storage, ctx } = fakeRoom();
+  await wait(0);
+  const host = room.room.add('Host', Date.now(), true);
+  storage.set('room', structuredClone(room.room.data));
+  const NativeResponse = globalThis.Response;
+  t.mock.method(globalThis, 'Response', function(body, options) {
+    if (options?.status === 101) return options;
+    return new NativeResponse(body, options);
+  });
+  globalThis.Response.json = NativeResponse.json;
+  globalThis.WebSocketPair ??= function() {};
+  t.mock.method(globalThis, 'WebSocketPair', function() { return [new FakeSocket(), new FakeSocket()]; });
+  const request = new Request('https://game.test/socket', { headers: { Upgrade: 'websocket' } });
+  for (let i = 0; i < 8; i++) assert.equal((await room.fetch(request)).status, 101);
+  assert.equal((await room.fetch(request)).status, 429);
+  assert.equal(sockets.length, 8);
+  const deadline = sockets[0].attachment.hello_deadline;
+  assert.ok(deadline > Date.now() && deadline <= Date.now() + 10000);
+  assert.equal(await ctx.storage.getAlarm(), deadline);
+  await room.persist(Date.now(), true);
+  assert.equal(await ctx.storage.getAlarm(), deadline, 'saving room state does not postpone hello expiry');
+  for (const ws of sockets) ws.attachment.hello_deadline = Date.now() - 1;
+  const restored = new RallyRoom(ctx);
+  await wait(0);
+  await restored.alarm();
+  for (const ws of sockets) assert.equal(ws.closed, 4401);
+  await room.webSocketMessage(sockets[0], JSON.stringify({ type: 'hello', token: host.token }));
+  assert.equal(room.sockets(host.player).length, 0);
+  assert.equal((await room.fetch(request)).status, 101);
+  const expiredOnUpgrade = sockets.at(-1);
+  expiredOnUpgrade.attachment.hello_deadline = Date.now() - 1;
+  assert.equal((await room.fetch(request)).status, 101);
+  assert.equal(expiredOnUpgrade.closed, 4401, 'upgrades expire pending sockets even before the alarm');
+  const disconnected = sockets.at(-1);
+  await room.webSocketClose(disconnected, 1000);
+  assert.equal(disconnected.attachment.hello_deadline, undefined, 'closing releases pending capacity');
+  await room.webSocketMessage(disconnected, JSON.stringify({ type: 'hello', token: host.token }));
+  assert.equal(disconnected.take('hello').length, 0, 'retired sockets cannot authenticate');
+});
+
+
+test('expired hello is rejected before the alarm runs', async () => {
+  const { room, sockets } = fakeRoom();
+  await wait(0);
+  const host = room.room.add('Host', Date.now(), true);
+  const ws = new FakeSocket();
+  ws.serializeAttachment({ hello_deadline: Date.now() - 1 });
+  sockets.push(ws);
+  await room.webSocketMessage(ws, JSON.stringify({ type: 'hello', token: host.token }));
+  assert.equal(ws.closed, 4401);
+  assert.equal(room.sockets(host.player).length, 0);
 });

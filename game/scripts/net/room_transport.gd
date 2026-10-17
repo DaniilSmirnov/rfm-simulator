@@ -7,6 +7,7 @@ extends Node
 #   room._on_failure(kind, code, message, data)
 #   room._on_rate_limited(retry_seconds)
 #   room._on_left()
+const WorldValidation = preload("res://scripts/net/world_validation.gd")
 const NetProtocol = preload("res://scripts/net/net_protocol.gd")
 # WebSocket ready states, kept numeric so the script parses without the module.
 const SOCKET_OPEN = 1
@@ -14,6 +15,9 @@ const SOCKET_CLOSED = 3
 const SOCKET_CONNECT_TIMEOUT = 6.0
 const SOCKET_RETRY = 5.0
 const SOCKET_MAX_FAILURES = 3
+# Leave time for an 8s HTTP request and capped backoff before membership's 90s TTL.
+const RECOVERY_SECONDS = 45.0
+const SOCKET_REPLY_TIMEOUT = 8.0
 
 var room
 var http: HTTPRequest
@@ -22,6 +26,9 @@ var busy = false
 var request_kind = ""
 var request_sent_at = 0.0
 var errors = 0
+var recovery_started_at = -INF
+var suspended_at = -INF
+var socket_waiting_since = -INF
 # Server clock (NTP-style: offset estimated from the fastest round trips).
 var server_offset = 0.0
 var clock_initialized = false
@@ -68,6 +75,16 @@ func _ready() -> void:
 	add_child(http)
 	http.request_completed.connect(handle_http)
 
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and suspended_at == -INF:
+		suspended_at = now()
+	elif what == NOTIFICATION_APPLICATION_FOCUS_IN and suspended_at != -INF:
+		if recovery_started_at != -INF:
+			recovery_started_at += now() - maxf(suspended_at, recovery_started_at)
+		if socket_waiting_since != -INF:
+			socket_waiting_since += now() - maxf(suspended_at, socket_waiting_since)
+		suspended_at = -INF
+
 func endpoint(kind: String, room_id: String) -> String:
 	return server + ("/api/rooms" if kind == "create" else "/api/rooms/%s/%s" % [room_id, kind])
 
@@ -97,14 +114,32 @@ func handle_http(result: int, code: int, _headers: PackedStringArray, bytes: Pac
 	if result == HTTPRequest.RESULT_SUCCESS and code == 429 and room.connected:
 		room._on_rate_limited(clampf(float(data.get("retry_after", 10)) if data is Dictionary else 10.0, 1.0, 60.0))
 		return
-	if result != HTTPRequest.RESULT_SUCCESS or code != 200 or not data is Dictionary:
+	if result != HTTPRequest.RESULT_SUCCESS or code != 200 or not data is Dictionary or (request_kind == "sync" and not valid_sync_reply(data)):
 		var message = str(data.get("error", "Нет связи с сервером комнаты.")) if data is Dictionary else "Нет связи с сервером комнаты."
 		room._on_failure(request_kind, code, message, data)
 		return
-	errors = 0
+	if data.get("world") != null and not WorldValidation.valid(data.world):
+		room._on_failure(request_kind, 400, "Некорректный снимок мира.", data)
+		return
+	reset_recovery()
 	if data.has("server_time"):
 		update_server_clock(float(data.server_time))
 	room._on_reply(request_kind, data)
+
+# HTTP and socket failures share one bounded episode, without changing identity
+# or discarding commands and driving inputs waiting for server acknowledgement.
+func recovery_delay() -> float:
+	var active_now = now() if suspended_at == -INF else suspended_at
+	if recovery_started_at == -INF:
+		recovery_started_at = active_now
+	errors += 1
+	if active_now - recovery_started_at >= RECOVERY_SECONDS:
+		return -1.0
+	return minf(5.0, pow(2.0, mini(errors - 1, 3)))
+
+func reset_recovery() -> void:
+	errors = 0
+	recovery_started_at = -INF
 
 # ---------------------------------------------------------------- clock
 
@@ -161,6 +196,7 @@ func close_socket() -> void:
 	socket_open = false
 	socket_hello = false
 	message_times.clear()
+	socket_waiting_since = -INF
 
 func _socket_failed() -> void:
 	var was_open = socket_open
@@ -201,6 +237,9 @@ func poll(delta: float) -> void:
 		socket.send_text(JSON.stringify({"type": "hello", "id": 0, "token": room.token, "protocol": NetProtocol.version(), "cold_revs": room.world_sync.cold_revs}))
 	while socket != null and socket.get_available_packet_count() > 0:
 		_socket_message(socket.get_packet().get_string_from_utf8())
+	if socket_open and suspended_at == -INF and socket_waiting_since != -INF and now() - socket_waiting_since >= SOCKET_REPLY_TIMEOUT:
+		_socket_failed()
+		room._on_failure("sync", 0, "Нет связи с сервером комнаты.", null)
 
 # Sends a sync body over the open socket or, without one, as an HTTP request.
 # Returns false when nothing could be sent now (a request is still in flight).
@@ -223,6 +262,8 @@ func _send_socket(body: Dictionary) -> void:
 	# Back off instead of queueing when the browser cannot drain the socket.
 	if socket.get_current_outbound_buffered_amount() > NetProtocol.max_message_bytes():
 		return
+	if socket_waiting_since == -INF:
+		socket_waiting_since = now()
 	message_id += 1
 	body.erase("token")
 	body.type = "sync"
@@ -240,6 +281,21 @@ func send_signal(to: String, data: Dictionary) -> bool:
 		return false
 	return socket.send_text(JSON.stringify({"type": "signal", "to": to, "data": data})) == OK
 
+static func _finite_number(value) -> bool:
+	return (value is int or value is float) and is_finite(float(value)) and absf(float(value)) <= 9007199254740991.0
+
+func valid_sync_reply(data: Dictionary) -> bool:
+	for key in ["server_time", "world_time"]:
+		if data.has(key) and not _finite_number(data[key]): return false
+	if not data.get("players") is Array or data.players.size() > NetProtocol.max_players(): return false
+	for player in data.players:
+		if not player is Dictionary or not player.get("id") is String: return false
+	if data.get("world") != null and not data.world is Dictionary: return false
+	if room.is_host:
+		return data.get("commands") is Array
+	var accepted = data.get("accepted")
+	return (accepted is int or accepted is float) and is_finite(float(accepted)) and accepted >= 0 and float(accepted) == floorf(float(accepted))
+
 func _socket_message(text: String) -> void:
 	var data = JSON.parse_string(text)
 	if not data is Dictionary or not room.connected:
@@ -250,13 +306,25 @@ func _socket_message(text: String) -> void:
 			socket_opened_at = now()
 			print("ROOM_SOCKET open")
 		"reply":
-			errors = 0
-			var id = int(data.get("id", -1))
-			if message_times.has(id) and data.has("server_time"):
-				update_server_clock(float(data.server_time), message_times[id])
+			var raw_id = data.get("id")
+			if not valid_sync_reply(data) or not _finite_number(raw_id) or raw_id < 0 or float(raw_id) != floorf(float(raw_id)): return
+			if data.get("world") != null and not WorldValidation.valid(data.world):
+				room._on_failure("sync", 400, "Некорректный снимок мира.", data)
+				return
+			reset_recovery()
+			var id = int(raw_id)
+			if message_times.has(id):
+				socket_waiting_since = -INF
+				if data.has("server_time"):
+					update_server_clock(float(data.server_time), message_times[id])
 				message_times.erase(id)
 			room._on_reply("sync", data)
 		"push":
+			if not valid_sync_reply(data): return
+			if data.get("world") != null and not WorldValidation.valid(data.world):
+				room._on_failure("sync", 400, "Некорректный снимок мира.", data)
+				return
+			reset_recovery()
 			room._on_reply("sync", data)
 		"signal":
 			if data.get("data") is Dictionary:
@@ -266,5 +334,7 @@ func _socket_message(text: String) -> void:
 			var message = str(data.get("error", "Нет связи с сервером комнаты."))
 			if status == 429:
 				room._on_rate_limited(clampf(float(data.get("retry_after", 10)), 1.0, 60.0))
-			elif status in [401, 404, 410]:
+			else:
+				if status >= 500:
+					_socket_failed()
 				room._on_failure("sync", status, message, data)
