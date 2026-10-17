@@ -34,6 +34,18 @@ func recovery_contact(game, p: Vector3) -> bool:
 			return false
 	return true
 
+# Mean of a height function under the four tyres of the settled car: the
+# suspension rests on their average, not on the land under the car's centre.
+func _contact(game, st, p: Vector3, height: Callable) -> float:
+	var along = game.car.basis.z
+	along.y = 0
+	along = along.normalized()
+	var across = along.cross(Vector3.UP)
+	var mean = 0.0
+	for offset in [along * 1.15, -along * 1.15, across * 0.7, -across * 0.7]:
+		mean += float(height.call(p + offset)) * 0.25
+	return mean
+
 func run() -> void:
 	for stage_index in range(Stage.STAGES.size()):
 		var game = load("res://main.tscn").instantiate()
@@ -58,6 +70,10 @@ func run() -> void:
 					continue
 				if st.biome.has_method("in_village") and st.biome.in_village(st.road_s(p)):
 					continue
+				# Nowhere to park: a shelf cut into a cliff has a bank on one
+				# side and the drop on the other.
+				if not st.biome.level_ground(p, 1.4, 1.2):
+					continue
 				var y = settle(game, p)
 				recovery_supported = recovery_contact(game, p) and recovery_supported
 				# The car origin sits 0.06 m above the four tyre contact points.
@@ -70,14 +86,7 @@ func run() -> void:
 		var settled = settle(game, road)
 		# The suspension averages four contact points, so a bumpy road is
 		# compared with their mean, not with the centre alone.
-		var along = game.car.basis.z
-		along.y = 0
-		along = along.normalized()
-		var across = along.cross(Vector3.UP)
-		var contact = 0.0
-		for offset in [along * 1.15, -along * 1.15, across * 0.7, -across * 0.7]:
-			contact += st.ground(road + offset) * 0.25
-		var on_road = settled - 0.06 - contact
+		var on_road = settled - 0.06 - _contact(game, st, road, st.ground)
 		check(absf(on_road) < 0.05, "%s: on the road the car keeps the road surface (%.2f m)" % [Stage.STAGES[stage_index], on_road])
 		await game._shutdown_audio()
 		game.queue_free()

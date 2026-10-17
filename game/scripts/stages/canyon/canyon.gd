@@ -193,7 +193,12 @@ func camp_supported(pos: Vector3) -> bool:
 	return true
 
 func marshal_stations() -> Array:
-	return [140.0, 232.0, 470.0, 716.0]
+	return [140.0, 232.0, 604.0, 760.0]
+
+# The cut bank of the shelf is not a cliff, but nobody posts a marshal on it:
+# here the ground has to be nearly flat before someone may stand on it.
+func level_ground(pos: Vector3, reach: float = 1.2, limit: float = 1.6) -> bool:
+	return super(pos, reach, minf(limit, 0.8))
 
 # The camp stands on the levelled spot itself: pushing it further out would
 # put it over the edge of a shelf or into the foot of a cliff.

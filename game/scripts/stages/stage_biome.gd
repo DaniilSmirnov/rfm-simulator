@@ -105,10 +105,11 @@ func walk_blocked(_next: Vector3, _feet_height: float) -> bool:
 func snowbank_mask(_s: float) -> float:
 	return 1.0
 
-# True where the land around pos is flat enough to stand or park on. Someone
-# placed on a cliff face stands half inside it, so everything that puts a
-# person or a car beside the road asks this first.
-func level_ground(pos: Vector3, reach: float = 1.2, limit: float = 0.7) -> bool:
+# True where a person can stand: not on a cliff face, where they would be
+# drawn half inside it. Everything that puts someone beside the road asks
+# this first. A bank is fine — people do stand on banks — so the limit is a
+# slope no one could keep their feet on, not merely a sloping one.
+func level_ground(pos: Vector3, reach: float = 1.2, limit: float = 1.6) -> bool:
 	var height: float = stage.ground(pos)
 	for offset in [Vector3(reach, 0, 0), Vector3(-reach, 0, 0), Vector3(0, 0, reach), Vector3(0, 0, -reach)]:
 		if absf(stage.ground(pos + offset) - height) > limit:
