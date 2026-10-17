@@ -1,26 +1,26 @@
 extends "res://tests/harness.gd"
 const Stage = preload("res://scripts/stages/stage.gd")
+const Form = preload("res://scripts/stages/canyon/canyon_form.gd")
 func _initialize() -> void:
 	call_deferred("run")
 
-# Samples the slope of a wall across its run and counts the near-flat benches
-# and the steep bands between them.
-func wall_bands(stage, s: float, side: float) -> Vector2i:
-	var canyon = stage.canyon
-	var p: Vector3 = stage.at(s)
-	var foot: float = canyon.wall_foot(s, canyon.floor_half(s))
-	var run: float = canyon.wall_run(s, side)
+# Samples a wall across its run and counts the near-flat benches and the
+# steep bands between them.
+func wall_bands(stage, z: float, side: float) -> Vector2i:
+	var foot: float = Form.wall_foot(z, side)
+	var run: float = Form.wall_run(z, side)
 	var step = run / 24.0
-	var previous: float = stage.ground(p + stage.side(s) * side * foot)
+	var previous: float = stage.ground(Vector3(Form.axis_x(z) + side * foot, 0.0, z))
 	var benches = 0
 	var cliffs = 0
 	for i in range(1, 25):
-		var height: float = stage.ground(p + stage.side(s) * side * (foot + step * i))
+		var p = Vector3(Form.axis_x(z) + side * (foot + step * i), 0.0, z)
+		var height: float = stage.ground(p)
 		var slope = (height - previous) / step
 		previous = height
-		if slope < 0.6:
+		if slope < 0.5:
 			benches += 1
-		elif slope > 1.8:
+		elif slope > 1.6:
 			cliffs += 1
 	return Vector2i(benches, cliffs)
 
@@ -31,78 +31,10 @@ func run() -> void:
 	var canyon = stage.canyon
 	check(stage.desert and not stage.provence and not stage.winter, "fourth stage is a distinct desert biome")
 	check(stage.collectibles.is_empty(), "no woodland food grows in the gorge")
-	var grove = not stage.trees.is_empty()
-	for tree in stage.trees:
-		var station = stage.road_s(tree)
-		grove = grove and station > 540.0 and station < 712.0 and tree.y < canyon.PLATEAU - 40.0
-	check(grove, "the ash grove stands only on the floor of the dry bed")
-	check(stage.at(100).y - stage.at(500).y > 35.0 and stage.at(800).y - stage.at(500).y > 30.0, "route descends into a deep canyon and climbs back out")
-	check(stage.clearings.size() == canyon.CAMPS.size(), "every spectator area stands on the ground")
-	check(absf(stage.at(60).y - canyon.PLATEAU) < 4.0 and absf(stage.at(820).y - canyon.PLATEAU) < 4.0, "the stage starts and finishes on the steppe table")
-	check(stage.get_node_or_null("CanyonValleyTowers") != null and stage.get_node_or_null("CanyonGate") != null, "the Valley of Castles has its towers and the gate on the rim")
-	check(stage.get_node_or_null("CanyonBenchTowers") != null, "pinnacles stand on the benches of the walls")
-	check(stage.get_node_or_null("SteppeYurtCamp") != null and stage.get_node_or_null("GorgeYurtCamp") != null, "yurt camps stand on the steppe and down in the gorge")
-	var level = true
-	for clearing in stage.clearings:
-		level = level and canyon.camp_supported(clearing)
-	check(level, "every spectator area is level enough for camp furniture")
-	var enclosed = true
-	var narrow = true
-	for s in range(420, 701, 20):
-		# The amphitheatres are meant to open out; the corridor between them is not.
-		if canyon.floor_half(s) > 55.0:
-			continue
-		var p = stage.at(s)
-		var highest = -INF
-		for lateral in [-110.0, -80.0, -60.0, -40.0, 40.0, 60.0, 80.0, 110.0]:
-			highest = maxf(highest, stage.ground(p + stage.side(s) * lateral) - p.y)
-		enclosed = enclosed and highest > 40.0
-	for s in [530.0, 540.0, 550.0, 700.0, 710.0]:
-		narrow = narrow and canyon.floor_half(s) < 35.0
-	check(enclosed, "walls of the gorge stand far above the road along the whole floor")
-	check(narrow, "the floor between the amphitheatres is a narrow corridor")
-	check(canyon.floor_half(462.0) > 70.0 and canyon.floor_half(616.0) > 65.0, "the gorge opens into an amphitheatre twice")
-	var banded = true
-	var climbed = 0.0
-	for s in [448.0, 540.0, 596.0, 668.0]:
-		for side in [-1.0, 1.0]:
-			var bands = wall_bands(stage, s, side)
-			banded = banded and bands.x >= 3 and bands.y >= 5
-			# Walk out from the foot of the wall, jumping at every step.
-			var foot: float = canyon.wall_foot(s, canyon.floor_half(s))
-			var start: float = stage.ground(stage.at(s) + stage.side(s) * side * foot)
-			var feet = start
-			for i in range(1, 40):
-				var next = stage.at(s) + stage.side(s) * side * (foot + i)
-				if canyon.walk_blocked(next, feet + 0.75):
-					break
-				feet = stage.ground(next)
-				climbed = maxf(climbed, feet - start)
-	check(banded, "each wall climbs in cliff bands separated by benches of fallen rock")
-	check(climbed < 4.0, "walls stop a walker at their foot: the gorge cannot be climbed out of")
-	var ledge = true
-	for s in [250.0, 270.0, 280.0]:
-		var p = stage.at(s)
-		ledge = ledge and stage.ground(p + stage.side(s) * 22.0) - p.y > 5.0
-		ledge = ledge and stage.ground(p - stage.side(s) * 22.0) - p.y < -10.0
-	check(ledge, "the descent is a ledge with the wall above it and the gorge below")
-	check(absf(stage.ground(stage.at(600) + stage.side(600) * 2) - stage.ground(stage.at(600) - stage.side(600) * 2)) > 0.1, "road has physical crossfall")
-	var min_height = INF
-	var max_height = -INF
-	for s in range(570, 650):
-		var p = stage.at(s)
-		var relief = stage.ground(p) - p.y
-		min_height = minf(min_height, relief)
-		max_height = maxf(max_height, relief)
-	check(max_height - min_height > 0.5, "dry riverbed contains physical waves and crests")
-	var life = canyon.canyon_life
-	check(life.camels.size() >= 12 and life.eagles.size() >= 4, "camel herds graze the steppe under circling eagles")
-	var on_steppe = true
-	for camel in life.camels:
-		on_steppe = on_steppe and camel.node.position.y > canyon.PLATEAU - 8.0
-	check(on_steppe, "camels stay on the steppe and never spawn in the gorge")
-	var camel_model: Node3D = life.camels[0].node
-	check(camel_model.get_node_or_null("Graze") != null and camel_model.get_node_or_null("StepA") != null, "the camel model carries its grazing and walking poses")
+	_check_route(stage)
+	_check_gorge(stage)
+	_check_grove(stage, canyon)
+	_check_people(stage, canyon)
 	var road: ArrayMesh = stage.get_node("StageRoadSurface").mesh
 	var vertices: PackedVector3Array = road.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
 	var contact = true
@@ -113,6 +45,103 @@ func run() -> void:
 	check(stage.points == copy.points and stage.clearings == copy.clearings, "route and spectator areas match across clients")
 	copy.free()
 	stage.free()
+	await _check_game()
+	print("CANYON RESULT: %d failures" % failures)
+	finish()
+
+# The rim, the hairpin and the long way down to the river.
+func _check_route(stage) -> void:
+	check(stage.canyon.winding_route() and stage.winding, "the road doubles back, so stations are searched for")
+	var start = stage.at(20.0)
+	var finish_point = stage.at(840.0)
+	check(start.y - finish_point.y > 40.0, "the stage drops from the table to the floor of the gorge")
+	check(stage.direction(120.0).z > 0.6, "the rim road runs upstream, along the gorge")
+	check(stage.direction(300.0).z < -0.6, "past the turn the road runs back down the gorge")
+	var apex = stage.at(215.0)
+	check(Vector2(apex.x - start.x, apex.z - start.z).length() < 190.0 and stage.at(215.0).z > stage.at(120.0).z, "the hairpin turns at the head of the gorge")
+	var steepest = 0.0
+	for i in range(1, 420):
+		var a = stage.at(i * 2.0)
+		var b = stage.at(i * 2.0 + 2.0)
+		steepest = maxf(steepest, absf(b.y - a.y) * 0.5)
+	check(steepest < 0.22, "no part of the road is steeper than a gravel road can be")
+	var on_land = true
+	for i in range(0, 42):
+		var p = stage.at(i * 20.0)
+		on_land = on_land and absf(p.y - Form.surface(p)) < 9.0
+	check(on_land, "the road is graded into the hillside, not flown over it")
+
+# The gorge itself: narrow and deep at the castles, walled in cliff bands.
+func _check_gorge(stage) -> void:
+	var enclosed = true
+	for z in range(-180, -461, 40):
+		var p = Vector3(Form.axis_x(z), Form.bed_level(z), z)
+		var highest = -INF
+		for side in [-1.0, 1.0]:
+			highest = maxf(highest, stage.ground(Vector3(p.x + side * (Form.rim_edge(z, side) + 4.0), 0.0, z)) - p.y)
+		enclosed = enclosed and highest > 34.0
+	check(enclosed, "the walls stand far above the bed the whole way through the castles")
+	check(Form.floor_half(-300.0) < 22.0 and Form.floor_half(-640.0) > 70.0, "a slot at the castles, a wide gravel floor at the grove")
+	var banded = true
+	var climbed = 0.0
+	for z in [-220.0, -300.0, -380.0, -460.0]:
+		for side in [-1.0, 1.0]:
+			var bands = wall_bands(stage, z, side)
+			banded = banded and bands.x >= 2 and bands.y >= 4
+			var foot: float = Form.wall_foot(z, side)
+			var start: float = stage.ground(Vector3(Form.axis_x(z) + side * foot, 0.0, z))
+			var feet = start
+			for i in range(1, 40):
+				var next = Vector3(Form.axis_x(z) + side * (foot + i), 0.0, z)
+				if stage.canyon.walk_blocked(next, feet + 0.75):
+					break
+				feet = stage.ground(next)
+				climbed = maxf(climbed, feet - start)
+	check(banded, "each wall climbs in cliff bands separated by benches of fallen rock")
+	check(climbed < 6.0, "the walls stop a walker: the gorge cannot be climbed out of")
+	var shelf = true
+	for s in [330.0, 400.0, 460.0]:
+		var p = stage.at(s)
+		shelf = shelf and stage.ground(p + stage.side(s) * 18.0) - p.y > 8.0
+		shelf = shelf and stage.ground(p - stage.side(s) * 18.0) - p.y < -8.0
+	check(shelf, "the descent is a shelf with the wall above it and the gorge below")
+
+# The ash grove above the Ili, and the service park standing in it.
+func _check_grove(stage, canyon) -> void:
+	check(not stage.trees.is_empty(), "the relict ash grove grows above the Ili")
+	var grove = true
+	for tree in stage.trees:
+		grove = grove and Form.grove(tree.z) > 0.25 and tree.y < Form.bed_level(tree.z) + 6.0
+	check(grove, "the ash stands only on the floor of the grove reach")
+	var park: Dictionary = stage.parks.ends[1]
+	check(Form.grove(float(park.origin.z)) > 0.6, "the service park at the finish stands in the grove")
+	var level = true
+	for corner in [Vector2(-19.0, 14.0), Vector2(19.0, 14.0), Vector2(-19.0, 44.0), Vector2(19.0, 44.0)]:
+		var p = stage.parks.world(1, corner.x, corner.y)
+		level = level and absf(stage.ground(p) - float(park.height)) < 0.01
+	check(level, "its whole paddock is level gravel")
+	check(absf(Form.offset(park.origin)) < Form.floor_half(float(park.origin.z)), "it stands between the walls, on the floor of the gorge")
+	for node_name in ["CanyonValleyTowers", "SteppeYurtCamp", "GroveYurtCamp", "LedgeMarkers"]:
+		check(stage.get_node_or_null(node_name) != null, "%s is built" % node_name)
+
+# Spectators, camps and the life of the steppe.
+func _check_people(stage, canyon) -> void:
+	check(stage.clearings.size() == canyon.CAMPS.size(), "every spectator area is placed")
+	var level = true
+	for clearing in stage.clearings:
+		level = level and canyon.camp_supported(clearing)
+	check(level, "every spectator area is level enough for camp furniture")
+	var life = canyon.canyon_life
+	check(life.camels.size() >= 12 and life.eagles.size() >= 6, "camel herds graze the steppe under circling eagles")
+	var on_steppe = true
+	for camel in life.camels:
+		on_steppe = on_steppe and camel.node.position.y > Form.rim_level(camel.node.position) - 6.0
+	check(on_steppe, "camels stay on the table and never spawn in the gorge")
+	var camel_model: Node3D = life.camels[0].node
+	check(camel_model.get_node_or_null("Graze") != null and camel_model.get_node_or_null("StepA") != null, "the camel model carries its grazing and walking poses")
+
+# The real game: parked cars, a table in the grove.
+func _check_game() -> void:
 	var game = load("res://main.tscn").instantiate()
 	root.add_child(game)
 	game.set_process(false)
@@ -124,11 +153,9 @@ func run() -> void:
 	for group in game.spectators.groups:
 		parked = parked and absf(group.car.position.y - game.stage.vehicle_ground(group.car.position)) < 0.01
 	check(game.spectators.groups.size() >= game.stage.clearings.size(), "NPC camps stand at every spectator area")
-	check(parked, "NPC cars rest on the ground of the gorge and the steppe")
-	var camp_spot: Vector3 = game.stage.clearings[4] + Vector3(2.5, 0, 0)
+	check(parked, "parked NPC cars rest on the ground of the gorge and the steppe")
+	var camp_spot: Vector3 = game.stage.clearings[5] + Vector3(2.5, 0, 0)
 	camp_spot.y = game.stage.ground(camp_spot)
-	check(game.place_table(camp_spot) and absf(game.camp.position.y - game.stage.ground(camp_spot)) < 0.001, "a real table rests on the floor of the gorge")
+	check(game.place_table(camp_spot) and absf(game.camp.position.y - game.stage.ground(camp_spot)) < 0.001, "a real table rests on the floor of the grove")
 	await game._shutdown_audio()
 	game.free()
-	print("CANYON RESULT: %d failures" % failures)
-	finish()

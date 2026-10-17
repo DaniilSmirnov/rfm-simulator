@@ -100,6 +100,60 @@ test('socket errors report rate limits and closed rooms', async () => {
   assert.equal(guestWs.closed, 4410);
 });
 
+test('a new hello retires the earlier sockets of the same participant', async () => {
+  const { room, sockets } = fakeRoom();
+  await wait(0);
+  const now = Date.now();
+  const h = room.room.add('Host', now, true);
+  const g = room.room.add('Guest', now);
+  const hostWs = await connect(room, sockets, h.token);
+  const guestOld = await connect(room, sockets, g.token);
+  assert.equal(guestOld.closed, null);
+  const guestNew = await connect(room, sockets, g.token);
+  assert.equal(guestOld.closed, 4409, 'the earlier socket is closed');
+  assert.equal(guestNew.closed, null);
+  assert.equal(hostWs.closed, null, 'other participants are untouched');
+  // The close handshake is asynchronous: the old socket stays in the runtime's
+  // list for a while, but it no longer receives anything.
+  assert.ok(sockets.includes(guestOld));
+  for (const ws of [hostWs, guestOld, guestNew]) ws.take();
+  await room.webSocketMessage(hostWs, JSON.stringify({ type: 'sync', id: 2, state: state(), cold_revs: {}, world: { elapsed: 5, cold_revs: {} } }));
+  assert.equal(guestOld.take('push').length, 0);
+  assert.equal(guestNew.take('push').length, 1);
+  // A late message on the retired socket is refused, not served.
+  await room.webSocketMessage(guestOld, JSON.stringify({ type: 'sync', id: 3, state: state() }));
+  assert.equal(guestOld.take('error')[0].status, 401);
+  assert.equal(guestOld.take('reply').length, 0);
+  // Reconnecting the host retires its old socket too; a repeated hello on the
+  // same socket changes nothing.
+  const hostNew = await connect(room, sockets, h.token);
+  assert.equal(hostWs.closed, 4409);
+  await room.webSocketMessage(hostNew, JSON.stringify({ type: 'hello', id: 5, token: h.token, cold_revs: {} }));
+  assert.equal(hostNew.closed, null);
+});
+
+test('direct-link setup reaches only the current socket of the other side, once', async () => {
+  const { room, sockets } = fakeRoom();
+  await wait(0);
+  const now = Date.now();
+  const h = room.room.add('Host', now, true);
+  const g = room.room.add('Guest', now);
+  const hostWs = await connect(room, sockets, h.token);
+  const guestOld = await connect(room, sockets, g.token);
+  const guestNew = await connect(room, sockets, g.token);
+  for (const ws of [hostWs, guestOld, guestNew]) ws.take();
+  // The host answers and sends candidates to a guest that has reconnected.
+  const answer = { kind: 'answer', sdp: 'v=0', session: 7 };
+  const candidate = { kind: 'candidate', media: '0', index: 0, name: 'candidate:1', session: 7 };
+  for (const data of [answer, candidate]) await room.webSocketMessage(hostWs, JSON.stringify({ type: 'signal', to: g.player, data }));
+  assert.equal(guestOld.take('signal').length, 0);
+  assert.deepEqual(guestNew.take('signal').map(m => m.data), [answer, candidate]);
+  // And the other way round: the guest's offer reaches the host once.
+  const offer = { kind: 'offer', sdp: 'v=0', session: 8 };
+  await room.webSocketMessage(guestNew, JSON.stringify({ type: 'signal', to: h.player, data: offer }));
+  assert.deepEqual(hostWs.take('signal'), [{ type: 'signal', from: g.player, data: offer }]);
+});
+
 test('direct-link setup is relayed between the host and a guest only', async () => {
   const { room, sockets } = fakeRoom();
   await wait(0);
@@ -143,4 +197,27 @@ test('direct-link setup is rate limited per member', async () => {
   guestWs.take();
   for (let i = 0; i < 130; i++) await room.webSocketMessage(guestWs, JSON.stringify({ type: 'signal', to: h.player, data: { kind: 'candidate', session: 1 } }));
   assert.ok(guestWs.take('signal_error').some(m => m.status === 429));
+});
+
+test('a participant with two sockets gets each push once per socket, not once per socket pair', async () => {
+  const { room, sockets } = fakeRoom();
+  await wait(0);
+  const now = Date.now();
+  const h = room.room.add('Host', now, true);
+  const g = room.room.add('Guest', now);
+  const hostWs = await connect(room, sockets, h.token);
+  // A reconnect can leave the old socket open next to the new one for a while.
+  const guestOld = await connect(room, sockets, g.token);
+  const guestNew = await connect(room, sockets, g.token);
+  for (const ws of [hostWs, guestOld, guestNew]) ws.take();
+  await room.webSocketMessage(hostWs, JSON.stringify({ type: 'sync', id: 2, state: state(), cold_revs: {}, world: { elapsed: 5, cold_revs: {} } }));
+  assert.equal(guestOld.take('push').length, 1, 'old socket receives the snapshot once');
+  assert.equal(guestNew.take('push').length, 1, 'new socket receives the snapshot once');
+  // Both sockets of the host are served by one merged push as well.
+  const hostSecond = await connect(room, sockets, h.token);
+  for (const ws of [hostWs, hostSecond]) ws.take();
+  await room.webSocketMessage(guestNew, JSON.stringify({ type: 'sync', id: 3, state: state(1), cold_revs: {} }));
+  await wait(80);
+  assert.equal(hostWs.take('push').length, 1);
+  assert.equal(hostSecond.take('push').length, 1);
 });

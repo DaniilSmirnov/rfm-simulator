@@ -68,6 +68,18 @@ export class RallyRoom {
   send(ws, message) {
     try { ws.send(JSON.stringify(message)); } catch {}
   }
+  // A player has one live socket. After a reconnect (a network switch can leave
+  // the old connection half-open for minutes) the earlier sockets would still
+  // receive every push and relayed signal, so they are retired at the new hello.
+  // The attachment is cleared first: the close handshake takes a while, and the
+  // old socket must not be listed under the player in the meantime.
+  replaceSockets(player, current) {
+    for (const old of this.sockets(player)) {
+      if (old === current) continue;
+      try { old.serializeAttachment({ replaced: true }); } catch {}
+      try { old.close(4409, 'replaced'); } catch {}
+    }
+  }
   // Deliver a fresh view to a socket-connected participant without waiting
   // for its next request. Bursts of guest inputs are merged for the host.
   push(player, delay = 0) {
@@ -86,10 +98,14 @@ export class RallyRoom {
   fanOut(sender) {
     const host = this.room.data.host;
     if (sender === host) {
+      // push() already writes to every socket of a player, so each player is
+      // visited once: a player with two sockets would otherwise get 2 x 2 pushes.
+      const guests = new Set();
       for (const ws of this.ctx.getWebSockets()) {
         const player = ws.deserializeAttachment()?.player;
-        if (player && player !== host) this.push(player);
+        if (player && player !== host) guests.add(player);
       }
+      for (const player of guests) this.push(player);
     } else if (this.sockets(host).length) {
       const since = Date.now() - (this.room.data.players[host]?.pushed_at ?? 0);
       this.push(host, Math.max(0, PUSH_INTERVAL - since));
@@ -107,6 +123,7 @@ export class RallyRoom {
       if (body.type === 'hello') {
         const p = this.room.member(body.token);
         this.room.trackColdRevisions(p, body);
+        this.replaceSockets(p.id, ws);
         ws.serializeAttachment({ player: p.id, token: p.token });
         this.send(ws, { type: 'hello', id: body.id, player: p.id });
         return;
