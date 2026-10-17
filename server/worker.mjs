@@ -6,6 +6,7 @@ import { validateRoomSelection } from './store.mjs';
 import { RoomState, RoomError, protocol } from './room-core.mjs';
 const json = (data, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
 const PUSH_INTERVAL = 40;
+const HELLO_TIMEOUT = 10000;
 const MAX_MESSAGE = protocol.max_message_bytes;
 // Room IDs: the protocol pattern without its anchors, reused in every route.
 const ROOM_ID = protocol.room_id_pattern.replace(/^\^|\$$/g, '');
@@ -23,16 +24,41 @@ export class RallyRoom {
   async persist(now, force) {
     if (!force && now - this.savedAt <= 5000) return;
     await this.ctx.storage.put('room', this.room.data);
-    await this.ctx.storage.setAlarm(now + 30000);
+    await this.scheduleAlarm(now + 30000);
     this.savedAt = now;
+  }
+  async scheduleAlarm(deadline) {
+    const current = await this.ctx.storage.getAlarm();
+    if (current === null || deadline < current) await this.ctx.storage.setAlarm(deadline);
+  }
+  retire(ws, code, reason) {
+    const player = ws.deserializeAttachment()?.player;
+    ws.serializeAttachment({ retired: true });
+    if (player) {
+      clearTimeout(this.pushes.get(player));
+      this.pushes.delete(player);
+    }
+    try { ws.close(code, reason); } catch {}
+  }
+  expirePending(now) {
+    for (const ws of this.ctx.getWebSockets()) {
+      const session = ws.deserializeAttachment();
+      if (!session?.player && !session?.retired && !session?.replaced && (!session?.hello_deadline || session.hello_deadline <= now)) this.retire(ws, 4401, 'hello timeout');
+    }
   }
   async fetch(request) {
     const url = new URL(request.url);
     if (url.pathname.endsWith('/socket')) {
       if (request.headers.get('Upgrade') !== 'websocket') return json({ error: 'Нужен WebSocket.' }, 426);
+      const now = Date.now();
+      this.expirePending(now);
+      const pending = this.ctx.getWebSockets().filter(ws => ws.deserializeAttachment()?.hello_deadline);
+      if (pending.length >= protocol.max_players) return json({ error: 'Сервер комнаты временно недоступен.' }, 429);
       const pair = new WebSocketPair();
       // Hibernation keeps idle rooms cheap; membership is proven by the first message.
       this.ctx.acceptWebSocket(pair[1]);
+      pair[1].serializeAttachment({ hello_deadline: now + HELLO_TIMEOUT });
+      await this.scheduleAlarm(now + HELLO_TIMEOUT);
       return new Response(null, { status: 101, webSocket: pair[0] });
     }
     try {
@@ -120,8 +146,15 @@ export class RallyRoom {
       const now = Date.now();
       this.room.expire(now);
       if (this.room.data.closed) throw new RoomError(410, 'Создатель вышел. Комната закрыта.');
+      const attachment = ws.deserializeAttachment();
+      if (attachment?.replaced && body.type === 'hello') return;
+      if (attachment?.retired || (attachment?.hello_deadline && attachment.hello_deadline <= now)) {
+        this.retire(ws, 4401, 'hello timeout');
+        return;
+      }
       if (body.type === 'hello') {
         const p = this.room.member(body.token);
+        if (attachment?.player && attachment.player !== p.id) throw new RoomError(401, 'Участник не найден. Войди в комнату заново.');
         this.room.trackColdRevisions(p, body);
         this.replaceSockets(p.id, ws);
         ws.serializeAttachment({ player: p.id, token: p.token });
@@ -151,22 +184,27 @@ export class RallyRoom {
         return;
       }
       this.send(ws, { type: 'error', id: body?.id, status, error: known ? error.message : 'Сервер комнаты временно недоступен.', ...(status === 429 ? { retry_after: error.retryAfter ?? 10 } : {}) });
-      if ([401, 404, 410].includes(status)) { try { ws.close(4000 + status, 'room'); } catch {} }
+      if ([401, 404, 410].includes(status)) this.retire(ws, 4000 + status, 'room');
     }
   }
   async webSocketClose(ws, code) {
-    try { ws.close(code === 1005 || code === 1006 ? 1000 : code, 'closed'); } catch {}
+    this.retire(ws, code === 1005 || code === 1006 ? 1000 : code, 'closed');
   }
   async webSocketError(ws) {
-    try { ws.close(1011, 'error'); } catch {}
+    this.retire(ws, 1011, 'error');
   }
   async alarm() {
-    this.room.expire(Date.now());
+    const now = Date.now();
+    this.expirePending(now);
+    this.room.expire(now);
     if (this.room.data.closed || !this.room.data.host) {
-      for (const ws of this.ctx.getWebSockets()) { try { ws.close(4410, 'closed'); } catch {} }
+      for (const ws of this.ctx.getWebSockets()) this.retire(ws, 4410, 'closed');
       await this.ctx.storage.deleteAll();
     }
-    else await this.ctx.storage.setAlarm(Date.now() + 30000);
+    else {
+      const deadlines = this.ctx.getWebSockets().map(ws => ws.deserializeAttachment()?.hello_deadline).filter(Boolean);
+      await this.ctx.storage.setAlarm(Math.min(now + 30000, ...deadlines));
+    }
   }
 }
 export default {
