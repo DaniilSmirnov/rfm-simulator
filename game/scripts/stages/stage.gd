@@ -458,10 +458,10 @@ func road_surface_kind(s: float) -> String:
 	return biome.road_surface_kind(s)
 
 func _build_road() -> void:
-	# One mesh per surface kind: the village cobbles carry a texture.
+	# A mesh per surface kind and per 64 m, so the frustum drops the length
+	# the camera cannot see; the village cobbles carry a texture of their own.
 	var builders: Dictionary = {}
-	# Strips share their edge vertices; sample ground and colour once per vertex.
-	var vertices: Dictionary = {}
+	var vertices: Dictionary = {} # strips share edge vertices: sample each once
 	var vertex = func(station: float, lateral: float) -> Vector3:
 		var key = Vector2(station, lateral)
 		if not vertices.has(key):
@@ -475,7 +475,7 @@ func _build_road() -> void:
 	var seam_shoulders = biome.road_seam_shoulders()
 	for i in range(int(LENGTH)):
 		var s = float(i)
-		var kind = road_surface_kind(s)
+		var kind = [road_surface_kind(s), i / 64]
 		if not builders.has(kind):
 			var builder = SurfaceTool.new()
 			builder.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -535,7 +535,7 @@ func _build_road() -> void:
 		st.generate_normals()
 		var n = MeshInstance3D.new()
 		n.mesh = st.commit()
-		var surface_material = biome.road_material(kind)
+		var surface_material = biome.road_material(kind[0])
 		if surface_material != null:
 			n.material_override = surface_material
 		else:
@@ -544,7 +544,7 @@ func _build_road() -> void:
 			mat.vertex_color_is_srgb = true
 			mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 			n.material_override = mat
-		n.name = "StageRoadSurface" if kind == "default" else "StageRoadSurface_" + kind
+		n.name = "StageRoadSurface_%s_%d" % [kind[0], kind[1]]
 		add_child(n)
 	biome.after_road()
 

@@ -35,11 +35,12 @@ func run() -> void:
 	_check_gorge(stage)
 	_check_grove(stage, canyon)
 	_check_people(stage, canyon)
-	var road: ArrayMesh = stage.get_node("StageRoadSurface").mesh
-	var vertices: PackedVector3Array = road.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	_check_river(stage)
 	var contact = true
-	for i in range(0, vertices.size(), 37):
-		contact = contact and absf(vertices[i].y - stage.ground(vertices[i]) - 0.04) < 0.001
+	for chunk in stage.find_children("StageRoadSurface_*", "MeshInstance3D", false, false):
+		var vertices: PackedVector3Array = chunk.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+		for i in range(0, vertices.size(), 37):
+			contact = contact and absf(vertices[i].y - stage.ground(vertices[i]) - 0.04) < 0.001
 	check(contact, "visible road follows the driving contact surface")
 	var copy = Stage.new(3)
 	check(stage.points == copy.points and stage.clearings == copy.clearings, "route and spectator areas match across clients")
@@ -124,6 +125,23 @@ func _check_grove(stage, canyon) -> void:
 	for node_name in ["CanyonValleyTowers", "SteppeYurtCamp", "GroveYurtCamp", "LedgeMarkers"]:
 		check(stage.get_node_or_null(node_name) != null, "%s is built" % node_name)
 
+# The Ili the Charyn runs out into, past the grove and the service park.
+func _check_river(stage) -> void:
+	check(stage.water != null, "the stage has standing water")
+	check(stage.get_node_or_null("WaterSurface_ili") != null, "the river has a drawn surface")
+	var wide = true
+	var deep = true
+	for x in [-190.0, -95.0, 0.0, 95.0, 190.0]:
+		var mid = Vector3(x, 0.0, -840.0)
+		wide = wide and stage.water.depth(mid) > 1.0
+		deep = deep and stage.water.depth(mid) < 8.0
+	check(wide, "the Ili runs from one edge of the map to the other")
+	check(deep and stage.water.depth(Vector3(0.0, 0.0, -840.0)) > 2.0, "it is a river to swim in, not a canyon of water")
+	check(stage.water.depth(Vector3(0.0, 0.0, -916.0)) < 0.0, "its far bank is dry ground, rising away")
+	var park: Dictionary = stage.parks.ends[1]
+	check(stage.water.depth(park.origin) < -2.0, "the service park stands dry, above the river")
+	check(stage.water.depth(stage.at(820.0)) < -1.0, "the road never runs into the water")
+
 # Spectators, camps and the life of the steppe.
 func _check_people(stage, canyon) -> void:
 	check(stage.clearings.size() == canyon.CAMPS.size(), "every spectator area is placed")
@@ -131,6 +149,13 @@ func _check_people(stage, canyon) -> void:
 	for clearing in stage.clearings:
 		level = level and canyon.camp_supported(clearing)
 	check(level, "every spectator area is level enough for camp furniture")
+	var standing = true
+	for spot in canyon.roadside_spots():
+		var s: float = float(spot[0])
+		var p = stage.at(s) + stage.side(s) * float(spot[1]) * 7.2
+		p.y = stage.ground(p)
+		standing = standing and canyon.level_ground(p)
+	check(standing, "every roadside spectator has level ground to stand on")
 	var life = canyon.canyon_life
 	check(life.camels.size() >= 12 and life.eagles.size() >= 6, "camel herds graze the steppe under circling eagles")
 	var on_steppe = true

@@ -444,6 +444,7 @@ func spectator_camp(_index: int, clearing: Vector3, s: float, _outward: Vector3)
 				return candidate
 	return clearing + stage.direction(s) * 7.0
 
-# Village spectators use the roadside spots and the square.
-func roadside_spectators() -> bool:
-	return false
+# Village spectators stand at the squares and the farm gates, never on the
+# verges of its streets.
+func roadside_spots() -> Array:
+	return []

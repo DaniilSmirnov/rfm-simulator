@@ -31,6 +31,8 @@ func roadside(station: float, preferred_side: float, clearance: float) -> Dictio
 					continue
 				if stage.obstacle_hit(point, point, clearance) >= 0 or not stage.rock_hit(point, point, clearance, false).is_empty():
 					continue
+				if not stage.biome.level_ground(point):
+					continue
 				var clear = true
 				if clearance > 1.0:
 					for along in [-4.6, -3.2, -1.1, 1.1, 3.2]:

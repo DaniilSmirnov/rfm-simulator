@@ -35,14 +35,26 @@ func rebuild(cooperative: bool = false) -> void:
 			await get_tree().process_frame
 		_add_group(center, s, i, 2)
 	# The shoulder is already free of trees; leave the driving lane unobstructed.
-	for i in range(4 if stage.biome.roadside_spectators() else 0):
-		var s = 85.0 + i * 190.0
-		var center = stage.at(s) + stage.side(s) * (7.2 if i % 2 == 0 else -7.2)
+	var spots: Array = stage.biome.roadside_spots()
+	for i in range(spots.size()):
+		var s = float(spots[i][0])
+		var center = _verge(s, float(spots[i][1]))
+		if center == Vector3.INF:
+			continue
 		_add_group(center, s, i + stage.clearings.size(), 1)
 	# Pick watching positions only after every camp collider exists.
 	for person in people:
 		person.watch = watch_spot(float(person.station), person.home)
 	update(clock, 0.0, false)
+
+# A standing place on the shoulder: the side the stage asked for, the other
+# one if that is a bank or a drop, and nowhere at all if neither is level.
+func _verge(s: float, side: float) -> Vector3:
+	for sign in [side, -side]:
+		var spot = grounded(game.stage.at(s) + game.stage.side(s) * sign * 7.2)
+		if game.stage.biome.level_ground(spot):
+			return spot
+	return Vector3.INF
 
 func grounded(pos: Vector3) -> Vector3:
 	pos.y = game.stage.ground(pos)

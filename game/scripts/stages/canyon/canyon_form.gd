@@ -17,6 +17,25 @@ const DEPTHS = [[80.0, 3.0], [0.0, 15.0], [-60.0, 24.0], [-120.0, 32.0], [-200.0
 # Half-width of its floor at world z: a slot through the castles, a wide
 # gravel bed at the grove, the open Ili valley beyond.
 const HALVES = [[80.0, 5.0], [0.0, 7.0], [-120.0, 11.0], [-250.0, 15.0], [-350.0, 18.0], [-450.0, 25.0], [-520.0, 38.0], [-580.0, 58.0], [-650.0, 84.0], [-800.0, 112.0], [-960.0, 124.0]]
+# The Ili below the mouth of the gorge: a wide river running across the map
+# from edge to edge, with its far bank rising into the ridges beyond.
+const ILI_LEVEL = 6.5
+const ILI_NEAR = -782.0
+const ILI_FAR = -894.0
+const ILI_BED = 2.6
+const FAR_BANK = 26.0
+
+# How fully a point lies in the channel of the Ili.
+static func ili(z: float) -> float:
+	return smoothstep(ILI_NEAR + 30.0, ILI_NEAR - 16.0, z) * (1.0 - smoothstep(ILI_FAR + 16.0, ILI_FAR - 26.0, z))
+
+# The land of the valley floor below the gorge: the river channel cut into it
+# and the far bank climbing away on the other side.
+static func ili_bed(pos: Vector3, height: float) -> float:
+	var channel = ILI_BED + sin(pos.x * 0.035) * 0.7 + sin(pos.x * 0.11 + pos.z * 0.07) * 0.35
+	var bank = smoothstep(ILI_FAR - 2.0, ILI_FAR - 52.0, pos.z) * FAR_BANK
+	return lerpf(height, channel, ili(pos.z)) + bank
+
 # Where the ash grove stands: the reach below the castles where the floor has
 # widened and the walls have dropped back.
 const GROVE_BEGIN = -470.0
@@ -104,10 +123,10 @@ static func surface(pos: Vector3) -> float:
 	var rim = rim_level(pos)
 	var foot = wall_foot(pos.z, side)
 	if distance <= foot:
-		return _floor_surface(pos, distance, foot)
+		return ili_bed(pos, _floor_surface(pos, distance, foot))
 	var run = wall_run(pos.z, side)
 	var top = crest(pos.z, side, distance - foot - run, rim)
-	return lerpf(bed_level(pos.z), top, wall_profile((distance - foot) / run, pos.z))
+	return ili_bed(pos, lerpf(bed_level(pos.z), top, wall_profile((distance - foot) / run, pos.z)))
 
 # The gravel floor: braided channels in the bed, grassy flats by the grove.
 static func _floor_surface(pos: Vector3, distance: float, foot: float) -> float:

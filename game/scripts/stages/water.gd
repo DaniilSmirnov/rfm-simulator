@@ -1,6 +1,8 @@
 extends RefCounted
-# Lakes of the "Финский лес" stage: one analytic water surface shared by the
-# lake shader, buoyancy, drag, swimming, splashes and floating scenery.
+# Standing water of a stage — the lakes of «Финский лес», the Ili below the
+# Charyn gorge: one analytic surface shared by the water shader, buoyancy,
+# drag, swimming, splashes and floating scenery. The stage's biome says where
+# the water stands (water_level) and which sheets to draw (water_bodies).
 # The physical level of a lake is exact and deterministic; the small waves are a
 # visual and local effect (the same formula as res://shaders/lake_waves.gdshaderinc).
 const WAVE_AMPLITUDE = 0.045
@@ -47,7 +49,7 @@ func now() -> float:
 # ---------------------------------------------------------------- queries
 
 func level(pos: Vector3) -> float:
-	return stage.finnish_forest.nearest_water_level(pos)
+	return stage.biome.water_level(pos)
 
 # Metres of water above the lake bed; <= 0 on dry land.
 func depth(pos: Vector3) -> float:
@@ -200,23 +202,32 @@ func _render() -> void:
 func build(owner_stage) -> void:
 	stage = owner_stage
 	rng.seed = 5402026
-	for body in stage.finnish_forest.BODIES:
+	for body in stage.biome.water_bodies():
 		_build_surface(body)
 	_build_effects()
 
 func world_point(s: float, lat: float) -> Vector3:
 	return Vector3(stage.at(s).x + lat, 0.0, -s)
 
+# A corner of a body's mesh, whether it is laid out along the road or on the
+# world grid (a river runs across the map, not along the route).
+func body_point(body: Dictionary, row: float, column: float) -> Vector3:
+	var grid: float = body.get("grid", GRID)
+	if body.has("x0"):
+		return Vector3(float(body.x0) + column * grid, 0.0, float(body.z0) - row * grid)
+	return world_point(float(body.s0) + row * grid, float(body.lat0) + column * grid)
+
 func _build_surface(body: Dictionary) -> void:
 	var st = SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var grid: float = body.get("grid", GRID)
 	var visible_level: float = body.level - 0.2 # rendered terrain sits 0.25 m below ground()
-	var rows = int((body.s1 - body.s0) / GRID)
-	var columns = int((body.lat1 - body.lat0) / GRID)
+	var rows = int((float(body.z0) - float(body.z1)) / grid) if body.has("x0") else int((body.s1 - body.s0) / grid)
+	var columns = int((float(body.x1) - float(body.x0)) / grid) if body.has("x0") else int((body.lat1 - body.lat0) / grid)
 	var depths: Dictionary = {}
 	for row in range(rows + 1):
 		for column in range(columns + 1):
-			var p = world_point(body.s0 + row * GRID, body.lat0 + column * GRID)
+			var p = body_point(body, row, column)
 			depths[Vector2i(row, column)] = body.level - stage.ground(p)
 	var quads = 0
 	for row in range(rows):
@@ -231,7 +242,7 @@ func _build_surface(body: Dictionary) -> void:
 			var points: Array[Vector3] = []
 			var colors: Array[Color] = []
 			for c in corners:
-				var p = world_point(body.s0 + c.x * GRID, body.lat0 + c.y * GRID)
+				var p = body_point(body, c.x, c.y)
 				p.y = visible_level
 				points.append(p)
 				colors.append(_tint(depths[c]))
@@ -245,7 +256,7 @@ func _build_surface(body: Dictionary) -> void:
 	if quads == 0:
 		return
 	var node = MeshInstance3D.new()
-	node.name = "LakeSurface_%s" % body.name
+	node.name = "WaterSurface_%s" % body.name
 	node.mesh = st.commit()
 	var mat = ShaderMaterial.new()
 	mat.shader = LAKE_SHADER

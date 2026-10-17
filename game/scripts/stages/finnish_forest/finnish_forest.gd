@@ -292,7 +292,7 @@ func road_paint(p: Vector3, lateral: float) -> Color:
 
 # ---------------------------------------------------------------- stage hooks
 
-const Water = preload("res://scripts/stages/finnish_forest/water.gd")
+const Water = preload("res://scripts/stages/water.gd")
 const ForestLife = preload("res://scripts/stages/finnish_forest/forest_life.gd")
 const MeshMerge = preload("res://scripts/core/mesh_merge.gd")
 const Loc = preload("res://scripts/ui/loc.gd")
@@ -300,6 +300,12 @@ var forest_life: RefCounted = ForestLife.new()
 
 func make_water():
 	return Water.new()
+
+func water_level(pos: Vector3) -> float:
+	return nearest_water_level(pos)
+
+func water_bodies() -> Array:
+	return BODIES
 
 func terrain_tile_step(p: Vector3) -> float:
 	var s = stage.road_s(p)

@@ -24,6 +24,7 @@ const LEDGE_END = 566.0
 # The reach of the gorge the castles stand in.
 const CASTLE_BEGIN = -120.0
 const CASTLE_END = -540.0
+const CASTLE_CHUNK = 112.0
 
 var stage
 var biome
@@ -59,6 +60,8 @@ func random_floor_point(from_z: float, to_z: float) -> Vector3:
 # Open ground away from the road, the spectator areas and the camps.
 func open_ground(p: Vector3, road: float, padding: float) -> bool:
 	if stage.road_distance(p) < road or stage.parks.contains(p, 6.0):
+		return false
+	if stage.water != null and stage.water.depth(p) > -0.6:
 		return false
 	for c in stage.clearings:
 		if Vector2(p.x - c.x, p.z - c.z).length() < 10.0 + padding:
@@ -97,7 +100,7 @@ func _triangle(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, color: Color
 		st.set_color(color)
 		st.add_vertex(point)
 
-func _rock_node(st: SurfaceTool, node_name: String) -> void:
+func _rock_node(st: SurfaceTool, node_name: String, parent: Node3D = null) -> void:
 	st.generate_normals()
 	var node = MeshInstance3D.new()
 	node.name = node_name
@@ -107,7 +110,10 @@ func _rock_node(st: SurfaceTool, node_name: String) -> void:
 	mat.vertex_color_is_srgb = true
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	node.material_override = mat
-	stage.add_child(node)
+	if parent == null:
+		stage.add_child(node)
+	else:
+		parent.add_child(node)
 
 # A castle: a fluted tower, stepped where the softer marl has weathered back,
 # standing on a skirt of its own debris and narrowing to a broken top.
@@ -155,18 +161,25 @@ func _tower_color(height: float, seed_index: int) -> Color:
 # The castles: a crowd of them at the foot of both walls through the Valley of
 # Castles, more standing back on the benches and along the rim.
 func _castles() -> void:
-	var st = SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var root = Node3D.new()
+	root.name = "CanyonValleyTowers"
+	stage.add_child(root)
 	var built = 0
 	var index = 0
 	var z = CASTLE_BEGIN
+	# One mesh per reach of the gorge, so the frustum can drop the towers that
+	# the wall in front of the camera is hiding.
 	while z > CASTLE_END:
-		for side in [-1.0, 1.0]:
-			index += 1
-			if _castle(st, z, side, index):
-				built += 1
-		z -= 7.0
-	_rock_node(st, "CanyonValleyTowers")
+		var st = SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		var reach = z
+		while z > maxf(CASTLE_END, reach - CASTLE_CHUNK):
+			for side in [-1.0, 1.0]:
+				index += 1
+				if _castle(st, z, side, index):
+					built += 1
+			z -= 7.0
+		_rock_node(st, "Towers_%d" % int(-reach), root)
 	counts["towers"] = built
 
 # One castle beside the gorge at z: at the foot of the wall, on a bench of it
@@ -347,15 +360,25 @@ func _ledge_markers() -> void:
 
 # ---------------------------------------------------------------- horizon
 
-# The snow line of the Tien Shan, far beyond the steppe: blue with distance,
-# with snow only on the summits.
+# The snow line of the Tien Shan: a range standing beyond the far bank of the
+# Ili, with lower foothills in front of it, and more of it away to the east
+# over the steppe. Blue with distance, with snow only on the high summits.
 func horizon() -> void:
 	for i in range(11):
-		var far = i % 3 == 2
-		var p = Vector3(stage.rng.randf_range(430, 660), 30, -i * 96.0 + 20.0) if not far else Vector3(stage.rng.randf_range(-620, 620), 30, -1120.0 - stage.rng.randf_range(0, 200))
-		var height = stage.rng.randf_range(120, 250)
-		var radius = stage.rng.randf_range(190, 330)
-		# cylinder() centres its mesh: the snow cap sits on the cone's own taper.
-		var cap = height * 0.18
-		RallyProps.cylinder(stage, p, radius, 0, height, Color("6f8296"), 6)
-		RallyProps.cylinder(stage, p + Vector3.UP * (height - cap) * 0.5, radius * cap / height, 0, cap, Color("dbe6ee"), 6)
+		_peak(Vector3(-700.0 + i * 140.0 + stage.rng.randf_range(-50, 50), 10.0, -1240.0 - stage.rng.randf_range(0, 220)), 1.45, 0.3)
+	for i in range(13):
+		_peak(Vector3(-660.0 + i * 110.0 + stage.rng.randf_range(-40, 40), 16.0, -1010.0 - stage.rng.randf_range(0, 90)), 0.62, 0.0)
+	for i in range(6):
+		_peak(Vector3(stage.rng.randf_range(450, 760), 20.0, -i * 170.0 + 20.0), 0.85, 0.2)
+
+# One cone of the range. `snow` is how much of it stands above the snow line.
+func _peak(at: Vector3, scale: float, snow: float) -> void:
+	var height = stage.rng.randf_range(130, 240) * scale
+	var radius = stage.rng.randf_range(200, 330) * scale
+	var rock = Color("7d8ea0").lerp(Color("5f7283"), stage.rng.randf())
+	RallyProps.cylinder(stage, at, radius, 0, height, rock, 6)
+	if snow <= 0.0:
+		return
+	# cylinder() centres its mesh: the cap sits on the cone's own taper.
+	var cap = height * snow
+	RallyProps.cylinder(stage, at + Vector3.UP * (height - cap) * 0.5, radius * cap / height, 0, cap, Color("e2ebf2"), 6)

@@ -21,9 +21,21 @@ func attach(owner) -> void:
 func has_snow() -> bool:
 	return false
 
-# Lakes: buoyancy, wading, splashes (water.gd). Return the Water instance.
+# Standing water — lakes, a river: buoyancy, wading, splashes (water.gd).
+# Return the Water instance.
 func make_water():
 	return null
+
+# Level of the water at pos, or -1000 where the stage has none. Water exists
+# wherever the land lies below it, so banks and islands need no description.
+func water_level(_pos: Vector3) -> float:
+	return -1000.0
+
+# The sheets of water to draw. Each is {"name", "level"} plus either a station
+# box ("s0", "s1", "lat0", "lat1") or a world box ("x0", "x1", "z0", "z1"),
+# and may set "grid" to coarsen its mesh.
+func water_bodies() -> Array:
+	return []
 
 # ---------------------------------------------------------------- route
 
@@ -92,6 +104,16 @@ func walk_blocked(_next: Vector3, _feet_height: float) -> bool:
 # Height share (0..1) of the ploughed snowbanks at station s, e.g. 0 on a bridge.
 func snowbank_mask(_s: float) -> float:
 	return 1.0
+
+# True where the land around pos is flat enough to stand or park on. Someone
+# placed on a cliff face stands half inside it, so everything that puts a
+# person or a car beside the road asks this first.
+func level_ground(pos: Vector3, reach: float = 1.2, limit: float = 0.7) -> bool:
+	var height: float = stage.ground(pos)
+	for offset in [Vector3(reach, 0, 0), Vector3(-reach, 0, 0), Vector3(0, 0, reach), Vector3(0, 0, -reach)]:
+		if absf(stage.ground(pos + offset) - height) > limit:
+			return false
+	return true
 
 # Whether camp furniture of this kind may stand at spot (dry, level, dug out).
 func camp_allowed(_spot: Vector3, _kind: String) -> bool:
@@ -243,9 +265,11 @@ func after_baked_load() -> void:
 func spectator_camp(index: int, clearing: Vector3, s: float, outward: Vector3) -> Vector3:
 	return clearing + outward * 6.0
 
-# One-person groups along the roadside.
-func roadside_spectators() -> bool:
-	return true
+# Where the lone roadside spectators stand: [station, side] pairs, each one
+# person on the shoulder. Empty for a stage that has none, and a stage with
+# no room on its verges (a shelf cut into a cliff) leaves those out.
+func roadside_spots() -> Array:
+	return [[85.0, 1.0], [275.0, -1.0], [465.0, 1.0], [655.0, -1.0]]
 
 # Stations of the marshals along the route.
 func marshal_stations() -> Array:

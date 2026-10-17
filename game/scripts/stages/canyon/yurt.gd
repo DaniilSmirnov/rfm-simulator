@@ -94,14 +94,49 @@ static func _hitching_rail(node: Node3D, at: Vector3) -> void:
 	for i in range(3):
 		Props.cylinder(node, at + Vector3(-1.6 + i * 1.6, 1.1, 0.1), 0.02, 0.02, 0.7, ROPE, 4)
 
-# Flag of Kazakhstan on a pole: a sky-blue cloth with a golden sun and bird
-# and the ornament band at the hoist.
+# Flag of Kazakhstan on a pole: a sky-blue cloth carrying a golden sun with
+# its rays and the steppe eagle soaring under it, and the national ornament
+# running up the hoist.
+const FLAG_BLUE = Color("00afca")
+const FLAG_GOLD = Color("fec50c")
+const CLOTH = Vector2(1.8, 0.9)
+
 static func flag(parent: Node3D, at: Vector3) -> void:
 	Props.cylinder(parent, at + Vector3(0, 3.2, 0), 0.05, 0.04, 6.4, Color("d8d8d2"), 6)
-	var cloth = at + Vector3(0.95, 5.6, 0)
-	Props.box(parent, cloth, Vector3(1.8, 0.9, 0.03), Color("1c9ac6"))
-	Props.cylinder(parent, cloth + Vector3(0.05, 0.08, 0.02), 0.22, 0.22, 0.02, Color("f4cd3a"), 12)
+	var cloth = at + Vector3(CLOTH.x * 0.5 + 0.05, 5.6, 0)
+	Props.box(parent, cloth, Vector3(CLOTH.x, CLOTH.y, 0.03), FLAG_BLUE)
+	_sun(parent, cloth + Vector3(0.08, 0.13, 0.02))
+	_eagle(parent, cloth + Vector3(0.08, -0.2, 0.02))
+	_ornament(parent, cloth + Vector3(-CLOTH.x * 0.5 + 0.1, 0.0, 0.02))
+
+# The sun: a disc with thirty-two rays around it.
+static func _sun(parent: Node3D, center: Vector3) -> void:
+	Props.cylinder(parent, center, 0.115, 0.115, 0.02, FLAG_GOLD, 14).rotation.x = PI * 0.5
+	for i in range(32):
+		var angle = i * TAU / 32.0
+		var ray = Props.box(parent, center + Vector3(cos(angle), sin(angle), 0.0) * 0.155, Vector3(0.055, 0.016, 0.02), FLAG_GOLD)
+		ray.rotation.z = angle
+
+# The steppe eagle under the sun: a small body with wings sweeping out and up
+# in overlapping feathers, so the span reads as one wing, not as a crossbar.
+static func _eagle(parent: Node3D, center: Vector3) -> void:
+	Props.box(parent, center, Vector3(0.045, 0.125, 0.02), FLAG_GOLD)
+	Props.box(parent, center + Vector3(0.0, 0.085, 0.0), Vector3(0.03, 0.04, 0.02), FLAG_GOLD)
+	Props.box(parent, center + Vector3(0.0, -0.088, 0.0), Vector3(0.055, 0.055, 0.02), FLAG_GOLD)
+	for side in [-1.0, 1.0]:
+		var inner = Props.box(parent, center + Vector3(side * 0.1, 0.008, 0.0), Vector3(0.22, 0.058, 0.02), FLAG_GOLD)
+		inner.rotation.z = -side * 0.07
+		var outer = Props.box(parent, center + Vector3(side * 0.248, 0.055, 0.0), Vector3(0.21, 0.048, 0.02), FLAG_GOLD)
+		outer.rotation.z = -side * 0.5
+
+# The koshkar-muiz band up the hoist: a line of horned ornament, the ram's
+# horns curling in towards it.
+static func _ornament(parent: Node3D, center: Vector3) -> void:
+	Props.box(parent, center, Vector3(0.022, 0.78, 0.02), FLAG_GOLD)
 	for i in range(5):
-		Props.box(parent, cloth + Vector3(-0.3 + i * 0.16, 0.4, 0.02), Vector3(0.1, 0.05, 0.02), Color("f4cd3a"))
-	for i in range(4):
-		Props.box(parent, cloth + Vector3(-0.82, -0.3 + i * 0.22, 0.02), Vector3(0.1, 0.1, 0.02), Color("f4cd3a"))
+		var p = center + Vector3(0.0, -0.3 + i * 0.15, 0.0)
+		var knot = Props.box(parent, p, Vector3(0.05, 0.05, 0.02), FLAG_GOLD)
+		knot.rotation.z = PI * 0.25
+		for side in [-1.0, 1.0]:
+			Props.box(parent, p + Vector3(side * 0.052, 0.0, 0.0), Vector3(0.055, 0.02, 0.02), FLAG_GOLD)
+			Props.box(parent, p + Vector3(side * 0.07, 0.025, 0.0), Vector3(0.02, 0.05, 0.02), FLAG_GOLD)

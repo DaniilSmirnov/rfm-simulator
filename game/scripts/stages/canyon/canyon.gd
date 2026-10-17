@@ -11,6 +11,7 @@ extends "res://scripts/stages/stage_biome.gd"
 # stands.
 const Form = preload("res://scripts/stages/canyon/canyon_form.gd")
 const Route = preload("res://scripts/stages/canyon/canyon_route.gd")
+const Water = preload("res://scripts/stages/water.gd")
 const Scenery = preload("res://scripts/stages/canyon/canyon_scenery.gd")
 const CanyonLife = preload("res://scripts/stages/canyon/canyon_life.gd")
 
@@ -26,12 +27,24 @@ const BLEND = 17.0
 # steppe, two on the rim and a bench above the descent, and two on the gravel
 # floor by the grove. Each is levelled into the land by blend_clearings();
 # the shelf road itself has no room for one.
-const CAMPS = [[48.0, -1.0, 18.0], [150.0, -1.0, 20.0], [560.0, 1.0, 26.0], [450.0, 1.0, 24.0], [700.0, 1.0, 28.0], [790.0, -1.0, 26.0]]
+const CAMPS = [[48.0, -1.0, 18.0], [150.0, -1.0, 20.0], [450.0, 1.0, 24.0], [560.0, 1.0, 26.0], [700.0, 1.0, 28.0], [790.0, -1.0, 26.0]]
 
 var plan: PackedVector2Array = PackedVector2Array()
 var surface: PackedFloat32Array = PackedFloat32Array()
 var scenery = Scenery.new()
 var canyon_life = CanyonLife.new()
+
+# ---------------------------------------------------------------- water
+
+# The Ili, which the Charyn runs out into below the grove.
+func make_water():
+	return Water.new()
+
+func water_level(pos: Vector3) -> float:
+	return Form.ILI_LEVEL if pos.z < Form.ILI_NEAR + 34.0 else -1000.0
+
+func water_bodies() -> Array:
+	return [{"name": "ili", "level": Form.ILI_LEVEL, "grid": 4.0, "x0": -210.0, "x1": 210.0, "z0": Form.ILI_NEAR + 20.0, "z1": Form.ILI_FAR - 10.0}]
 
 # ---------------------------------------------------------------- route
 
@@ -86,6 +99,11 @@ func base_ground(pos: Vector3) -> float:
 func cache_terrain() -> bool:
 	return true
 
+# The map is large and most of it is hidden behind a wall: split the land into
+# 64 m tiles so the frustum throws away what the gorge is hiding.
+func terrain_tiled() -> bool:
+	return true
+
 # Fine triangles where the detail is: the road, and the faces of both walls.
 func terrain_tile_step(p: Vector3) -> float:
 	if stage.road_distance(p) < 13.0:
@@ -94,10 +112,11 @@ func terrain_tile_step(p: Vector3) -> float:
 	var side = signf(across) if across != 0.0 else 1.0
 	var distance = absf(across)
 	var foot = Form.wall_foot(p.z, side)
-	if distance < foot - 6.0 or distance > Form.rim_edge(p.z, side) + 6.0:
+	if distance < foot - 4.0 or distance > Form.rim_edge(p.z, side) + 4.0:
 		return 4.0
-	# The cliff bands are a few metres wide: they need the finest triangles.
-	return 1.0 if Form.depth(p.z) > 26.0 else 2.0
+	# The cliff bands are a few metres wide: they need the finest triangles,
+	# but only where the wall is tall enough to have them.
+	return 1.0 if Form.depth(p.z) > 30.0 else 2.0
 
 # Horizontal strata: red sandstone, grey gravels and pale marl in bands that
 # waver slightly, so a wall and the castles cut from it share one palette.
@@ -164,7 +183,8 @@ func walk_blocked(next: Vector3, feet_height: float) -> bool:
 func camp_allowed(spot: Vector3, _kind: String) -> bool:
 	return camp_supported(spot)
 
-# Camp furniture needs level ground: not a cliff bench, not a talus slope.
+# Camp furniture needs more than a standing place: a table must not straddle
+# a bench of the wall or lean down a talus slope.
 func camp_supported(pos: Vector3) -> bool:
 	var height = base_ground(pos)
 	for offset in [Vector3(1.4, 0, 0), Vector3(-1.4, 0, 0), Vector3(0, 0, 1.4), Vector3(0, 0, -1.4), Vector3(1.4, 0, 1.4), Vector3(-1.4, 0, 1.4), Vector3(1.4, 0, -1.4), Vector3(-1.4, 0, -1.4)]:
@@ -175,10 +195,21 @@ func camp_supported(pos: Vector3) -> bool:
 func marshal_stations() -> Array:
 	return [140.0, 232.0, 470.0, 716.0]
 
+# The camp stands on the levelled spot itself: pushing it further out would
+# put it over the edge of a shelf or into the foot of a cliff.
+func spectator_camp(_index: int, clearing: Vector3, _s: float, _outward: Vector3) -> Vector3:
+	return clearing
+
+# Lone spectators only where a verge exists: the steppe above and the gravel
+# of the floor. The shelf has a cliff on one side and the gorge on the other.
+func roadside_spots() -> Array:
+	return [[72.0, -1.0], [138.0, -1.0], [726.0, 1.0], [806.0, -1.0]]
+
 # ---------------------------------------------------------------- scenery
 
 func build_details(_cooperative: bool) -> void:
 	scenery.build(stage, self)
+	stage.water.build(stage)
 	canyon_life.build(stage, self)
 
 func build_horizon() -> void:
