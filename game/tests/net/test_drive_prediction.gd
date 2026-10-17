@@ -115,6 +115,26 @@ func run() -> void:
 	client.context = {"contacts": [{"position": client.node.position + Vector3(0, 0, -1), "person": true}]}
 	client.predict(1, 1, 0, false, stage, 0)
 	check(client.events.any(func(e): return e.kind == "person"), "fast contact with a walking participant reports host fatal collision")
+	# A log that has fallen beneath a parked car must not cancel each launch tick.
+	client.context = {}
+	host.context = {}
+	for throttle in [1.0, -1.0]:
+		var parked = stage.at(12)
+		stage.trees.assign([parked + Vector3(0, 0, -3)])
+		stage.forest_data.assign([{"height": 10.0}])
+		stage.fallen = {0: {"direction": Vector3.BACK, "age": 1.3}}
+		client.reset(parked, 0)
+		host.reset(parked, 0)
+		for i in range(30):
+			client.predict(5, throttle, 0, false, stage, 0)
+		host.accept(client.pending, stage, 0)
+		check(client.motion.velocity.length() > 1 and client.node.position.distance_to(parked) > 0.5, "car starts from fallen log with throttle %s" % throttle)
+		check(client.condition == 100 and not client.events.any(func(e): return e.kind == "impact"), "log beneath chassis causes no repeated damage")
+		client.reconcile(host.snapshot(), stage, 0)
+		check(client.node.position.distance_to(host.node.position) < 0.00001, "host and client agree when driving off fallen log")
+	stage.trees.clear()
+	stage.forest_data.clear()
+	stage.fallen.clear()
 	var village = Stage.new(2)
 	root.add_child(village)
 	village.build()

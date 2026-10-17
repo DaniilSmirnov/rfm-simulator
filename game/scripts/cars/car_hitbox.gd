@@ -32,7 +32,7 @@ static func shape(box: AABB, yaw: float) -> Dictionary:
 
 # Continuous SAT on both boxes' face normals and their edge cross products.
 # Returns first time of contact; no substep sampling or tunnelling at speed.
-static func sweep(start: Vector3, end: Vector3, car: Dictionary, pose: Transform3D, half: Vector3, escape: bool = true) -> Dictionary:
+static func sweep(start: Vector3, end: Vector3, car: Dictionary, pose: Transform3D, half: Vector3, escape: bool = true, slide_overlap: bool = false) -> Dictionary:
 	var axes: Array = [car.basis.x, car.basis.y, car.basis.z]
 	for axis in [pose.basis.x, pose.basis.y, pose.basis.z]:
 		axes.append(axis.normalized())
@@ -45,12 +45,17 @@ static func sweep(start: Vector3, end: Vector3, car: Dictionary, pose: Transform
 	var far = 1.0
 	var normal = -travel.normalized()
 	var inside = true
+	var shallowest = INF
+	var escape_normal = Vector3.ZERO
 	for axis in axes:
 		var radius = 0.0
 		for i in range(3):
 			radius += absf(axis.dot(car.basis[i])) * car.half[i] + absf(axis.dot(pose.basis[i])) * half[i]
 		var distance: float = relative.dot(axis)
 		var speed: float = travel.dot(axis)
+		if slide_overlap and radius - absf(distance) < shallowest:
+			shallowest = radius - absf(distance)
+			escape_normal = axis * signf(distance)
 		if absf(distance) > radius: inside = false
 		if absf(speed) < 0.0000001:
 			if absf(distance) > radius: return {}
@@ -66,6 +71,9 @@ static func sweep(start: Vector3, end: Vector3, car: Dictionary, pose: Transform
 			normal = -signf(speed) * axis
 		far = minf(far, last)
 		if near > far: return {}
+	# A falling log may overlap the chassis. Let the car slide along or
+	# away from its shallowest contact instead of cancelling every tick.
+	if inside and slide_overlap and travel.length_squared() > 0.0000000000000001 and escape_normal.dot(travel) >= -0.0000000001: return {}
 	if inside and escape and relative.dot(travel) >= 0 and travel.length_squared() > 0.0000001: return {}
 	if near < 0 or near > 1: return {}
 	return {"time": near, "position": start.lerp(end, near) + normal * 0.035, "normal": normal}
@@ -145,11 +153,15 @@ static func tree(stage, start: Vector3, end: Vector3, car: Dictionary) -> int:
 			if not circle(start, end, car, stage.trees[index], 0.2).is_empty(): return index
 		else:
 			var f: Dictionary = stage.fallen[index]
-			var length: float = stage.forest_data[index].height * 0.64 * sin(smoothstep(0, 1.3, f.age) * PI * 0.5)
+			var length: float = stage.forest_data[index].height * 0.64
 			var direction: Vector3 = f.direction
-			var pose = Transform3D(Basis(Vector3.UP, atan2(direction.x, direction.z)), stage.trees[index] + direction * length * 0.5)
-			pose.origin.y = (start.y + end.y) * 0.5 + car.offset.y
-			if not sweep(start, end, car, pose, Vector3(0.35, 0.35, length * 0.5 + 0.35)).is_empty(): return index
+			var angle = smoothstep(0, 1.3, f.age) * PI * 0.5
+			var basis = Basis(Vector3.UP.cross(direction).normalized(), angle)
+			# Match the rendered trunk's pivot and tilt, including during its fall.
+			# Raising the collider to car height traps a car above the log.
+			var lift = Vector3.ZERO if stage.detail_tree_visuals.has(index) else Vector3(0, 0.2, 0)
+			var pose = Transform3D(basis, stage.trees[index] + lift + basis * Vector3(0, length * 0.5, 0))
+			if not sweep(start, end, car, pose, Vector3(0.35, length * 0.5, 0.35), true, true).is_empty(): return index
 	return -1
 
 static func contact(node: Node3D) -> Dictionary:

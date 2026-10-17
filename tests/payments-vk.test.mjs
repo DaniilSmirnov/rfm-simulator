@@ -176,7 +176,7 @@ test('Red Canyon SKU gives VK metadata for 20 votes and ownership only after ver
  assert.equal(product.purchase_enabled,true);
  assert.equal((await accountStore(env,'42')).entitlements.skus.includes('stage_04'),false);
  const meta=await paymentCallback(signedCallback({notification_type:'get_item',user_id:'42',item:'stage_04'}),env);
- assert.deepEqual(meta.response,{item_id:'stage_04',title:'Красный каньон',photo_url:'',price:20});
+ assert.deepEqual(meta.response,{item_id:'stage_04',title:'Чарынский каньон',photo_url:'',price:20});
  assert.equal(data.size,0,'item lookup never grants ownership');
  const order={notification_type:'order_status_change',order_id:'39393',item:'stage_04',item_id:'stage_04',item_price:'20',status:'chargeable',user_id:'42'};
  await assert.rejects(paymentCallback(signedCallback({...order,item_price:'19'}),env));
@@ -242,7 +242,7 @@ test('production purchases every paid SKU at catalog price; test rights never gr
  env.VK_PAYMENTS_MODE='production';
  assert.deepEqual((await accountStore(env,'42')).entitlements.skus,[]);
  const products=paymentCatalog(env,'44').filter(p=>p.purchase_enabled);
- assert.equal(products.length,12);
+ assert.equal(products.length,13);
  await assert.rejects(paymentCallback(signedCallback(order),env));
  for(const [i,p] of products.entries()){
   const price=p.type==='car'?3:20;

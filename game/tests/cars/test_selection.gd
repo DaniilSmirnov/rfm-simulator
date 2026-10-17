@@ -28,7 +28,7 @@ func run() -> void:
 	for game in [host, guest]:
 		game.set_process(false)
 		game.room.set_process(false)
-	check(host.car_choice.item_count == 10 and host.stage_choice.item_count == 6, "menu offers ten cars and six stages")
+	check(host.car_choice.item_count == 10 and host.stage_choice.item_count == 7, "menu offers ten cars and seven stages")
 	check(host.car.get_meta("model_source", "") == "granta_detailed" and host.car.get_meta("variant", -1) == 0, "first vehicle uses standalone detailed Granta model")
 	check(baked(host.car).has("BodyShellGranta") and host.car.get_node_or_null("TrunkHinge") != null, "detailed Granta preserves body and animated trunk")
 	var original_granta_hinge = host.car.get_node("TrunkHinge")
