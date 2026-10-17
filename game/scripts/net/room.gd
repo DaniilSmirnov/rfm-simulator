@@ -22,6 +22,7 @@ const SharedActions = preload("res://scripts/player/shared_actions.gd")
 const DirectLink = preload("res://scripts/net/direct_link.gd")
 const CarRides = preload("res://scripts/cars/car_rides.gd")
 const Loc = preload("res://scripts/ui/loc.gd")
+const WorldValidation = preload("res://scripts/net/world_validation.gd")
 
 var game: Node3D
 var transport: Node
@@ -205,6 +206,7 @@ func _adopt_local_host_state() -> void:
 # ---------------------------------------------------------------- sync
 
 func _apply_sync(data: Dictionary) -> void:
+	if data.get("world") != null and not WorldValidation.valid(data.world): return
 	if is_host and data.get("cold_revs") is Dictionary:
 		world_sync.server_cold_revs = data.cold_revs
 	host_id = str(data.get("host", host_id))
@@ -235,6 +237,7 @@ func _apply_sync(data: Dictionary) -> void:
 
 # A guest applies the host's world: from the server, or straight from the host.
 func _guest_world(world, stamp: float, players: Array, membership: bool) -> void:
+	if world != null and not WorldValidation.valid(world): return
 	if world is Dictionary and stamp > authority_stamp:
 		authoritative_drives = world.get("driving", {})
 		authority_stamp = stamp

@@ -7,6 +7,7 @@ extends Node
 #   room._on_failure(kind, code, message, data)
 #   room._on_rate_limited(retry_seconds)
 #   room._on_left()
+const WorldValidation = preload("res://scripts/net/world_validation.gd")
 const NetProtocol = preload("res://scripts/net/net_protocol.gd")
 # WebSocket ready states, kept numeric so the script parses without the module.
 const SOCKET_OPEN = 1
@@ -116,6 +117,9 @@ func handle_http(result: int, code: int, _headers: PackedStringArray, bytes: Pac
 	if result != HTTPRequest.RESULT_SUCCESS or code != 200 or not data is Dictionary or (request_kind == "sync" and not valid_sync_reply(data)):
 		var message = str(data.get("error", "Нет связи с сервером комнаты.")) if data is Dictionary else "Нет связи с сервером комнаты."
 		room._on_failure(request_kind, code, message, data)
+		return
+	if data.get("world") != null and not WorldValidation.valid(data.world):
+		room._on_failure(request_kind, 400, "Некорректный снимок мира.", data)
 		return
 	reset_recovery()
 	if data.has("server_time"):
@@ -304,6 +308,9 @@ func _socket_message(text: String) -> void:
 		"reply":
 			var raw_id = data.get("id")
 			if not valid_sync_reply(data) or not _finite_number(raw_id) or raw_id < 0 or float(raw_id) != floorf(float(raw_id)): return
+			if data.get("world") != null and not WorldValidation.valid(data.world):
+				room._on_failure("sync", 400, "Некорректный снимок мира.", data)
+				return
 			reset_recovery()
 			var id = int(raw_id)
 			if message_times.has(id):
@@ -314,6 +321,9 @@ func _socket_message(text: String) -> void:
 			room._on_reply("sync", data)
 		"push":
 			if not valid_sync_reply(data): return
+			if data.get("world") != null and not WorldValidation.valid(data.world):
+				room._on_failure("sync", 400, "Некорректный снимок мира.", data)
+				return
 			reset_recovery()
 			room._on_reply("sync", data)
 		"signal":

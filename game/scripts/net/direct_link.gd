@@ -12,6 +12,7 @@ extends Node
 #
 # Only browser builds have a WebRTC implementation; native builds keep using
 # the server. Tests replace `connection_factory` with an in-process pair.
+const WorldValidation = preload("res://scripts/net/world_validation.gd")
 const NetProtocol = preload("res://scripts/net/net_protocol.gd")
 # Numeric engine enums, so the script parses without the WebRTC module.
 const PEER_CONNECTED = 2
@@ -271,7 +272,7 @@ func _member_entry(id: String, state: Dictionary, state_time: int) -> Dictionary
 # A member entry as the server would list it, with the roster filled in.
 func _full_entry(entry: Dictionary) -> Dictionary:
 	var member: Dictionary = room.members.get(str(entry.get("id", "")), {})
-	return {"id": entry.id, "name": member.get("name", ""), "slot": member.get("slot", 0), "car_model": member.get("car_model", 0), "state_time": entry.get("state_time", 0), "state": NetProtocol.expand_state(entry.state)}
+	return {"id": entry.id, "name": member.get("name", ""), "slot": member.get("slot", 0), "car_model": member.get("car_model", 0), "state_time": entry.get("state_time", 0), "state": NetProtocol.clean_state(NetProtocol.expand_state(entry.state))}
 
 func _receive(from: String, message: Dictionary) -> void:
 	match str(message.get("t", "")):
@@ -280,10 +281,11 @@ func _receive(from: String, message: Dictionary) -> void:
 				_receive_state(from, message.get("state"))
 		"w":
 			if not room.is_host and from == room.host_id and message.get("world") is Dictionary and message.get("players") is Array:
+				if not WorldValidation.valid(message.world) or not _timestamp(message.get("time", -1)): return
 				var players: Array = []
 				for entry in message.players:
-					if entry is Dictionary and entry.get("id") is String and entry.get("state") is Dictionary and NetProtocol._vec(entry.state.get("pos")):
-						players.append(_full_entry(entry))
+					if not entry is Dictionary or not entry.get("id") is String or not NetProtocol.valid_compact_state(entry.get("state")) or not _timestamp(entry.get("state_time", 0)): return
+					players.append(_full_entry(entry))
 				room._guest_world(message.world, float(message.get("time", -1)), players, false)
 
 # The host takes a guest's state straight from its link, with the checks the
@@ -296,3 +298,6 @@ func _receive_state(from: String, raw) -> void:
 		return
 	var member: Dictionary = room.members[from]
 	room._update_peer({"id": from, "name": member.name, "slot": member.slot, "car_model": member.car_model, "state_time": int(room.server_clock() * 1000.0), "state": state})
+
+static func _timestamp(value) -> bool:
+	return (value is int or value is float) and is_finite(float(value)) and absf(float(value)) <= 9007199254740991.0
