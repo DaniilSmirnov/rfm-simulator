@@ -6,13 +6,14 @@ extends RefCounted
 # gameplay state stays in stage.gd and is the same for every client.
 const Props = preload("res://scripts/core/props.gd")
 const CamelModel = preload("res://scripts/stages/canyon/camel_model.gd")
+const Form = preload("res://scripts/stages/canyon/canyon_form.gd")
 const LIFE_RANGE = 140.0
 const SHY_DISTANCE = 17.0
-# Station, side and distance of each camel herd; all of them on the steppe,
-# where the grazing is, never down in the gorge.
-const HERDS = [[64.0, 1.0, 54.0], [130.0, -1.0, 44.0], [800.0, -1.0, 50.0], [826.0, 1.0, 36.0]]
-# Station and side of the thermals the eagles turn in, over the gorge.
-const THERMALS = [[300.0, 1.0], [520.0, -1.0], [690.0, 1.0]]
+# Station, side and distance of each camel herd, all of them out on the
+# steppe table where the grazing is, never down in the gorge.
+const HERDS = [[36.0, -1.0, 56.0], [112.0, -1.0, 46.0], [168.0, -1.0, 62.0], [214.0, -1.0, 44.0]]
+# World z of the thermals the eagles turn in, over the gorge.
+const THERMALS = [-180.0, -330.0, -470.0, -620.0]
 
 var stage
 var biome
@@ -60,10 +61,9 @@ func _build_camels() -> void:
 			camels.append({"node": camel, "home": home, "target": p, "heading": heading, "wait": rng.randf_range(0.0, 8.0), "phase": 0.0, "speed": 0.0, "shy": false})
 
 func _build_eagles() -> void:
-	for thermal in THERMALS:
-		var s: float = thermal[0]
-		var center = stage.at(s) + stage.side(s) * float(thermal[1]) * 30.0
-		center.y = biome.PLATEAU + rng.randf_range(14.0, 34.0)
+	for z in THERMALS:
+		var center = Vector3(Form.axis_x(z), 0.0, z)
+		center.y = Form.rim_level(center) + rng.randf_range(6.0, 26.0)
 		for i in range(2):
 			var bird = Node3D.new()
 			bird.name = "SteppeEagle"
