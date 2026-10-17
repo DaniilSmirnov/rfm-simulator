@@ -27,6 +27,9 @@ var moving_obstacle_ids: Array[int] = []
 var movable_obstacle_ids: Array[int] = []
 var prop_index_frame = -1
 var indexed_obstacle_count = -1
+# Awake props are re-measured once per physics tick, not once per collision query.
+var moving_pose_tick = -1
+const MOVING_MARGIN = 0.3
 var collision_radius_factor = 1.0
 
 func solid(parent: Node3D, center: Vector3, size: Vector3, kind: String) -> StaticBody3D:
@@ -96,6 +99,7 @@ func index() -> void:
 	obstacles.assign(obstacles.filter(func(o): return is_instance_valid(o.body)))
 	collision_cells.clear()
 	moving_obstacle_ids.clear()
+	moving_pose_tick = -1
 	movable_obstacle_ids.clear()
 	prop_index_frame = Engine.get_process_frames()
 	collision_radius_factor = 1.0
@@ -142,11 +146,17 @@ func candidates(start: Vector3, end: Vector3, radius: float) -> Array:
 		for z in range(floori(low.z / COLLISION_CELL), floori(high.z / COLLISION_CELL) + 1):
 			for id in collision_cells.get(Vector2i(x, z), []):
 				seen[id] = true
+	var tick = Engine.get_physics_frames()
+	if moving_pose_tick != tick:
+		moving_pose_tick = tick
+		for id in moving_obstacle_ids:
+			var object: Dictionary = obstacles[id]
+			if is_instance_valid(object.body): _cache_live_pose(object)
 	for id in moving_obstacle_ids:
 		var object: Dictionary = obstacles[id]
 		if not is_instance_valid(object.body): continue
-		_cache_live_pose(object)
-		var bounds: AABB = object.live_bounds.grow(radius * float(object.live_expansion))
+		if not object.has("live_bounds"): _cache_live_pose(object)
+		var bounds: AABB = object.live_bounds.grow(radius * float(object.live_expansion) + MOVING_MARGIN)
 		if bounds.end.x >= low.x and bounds.position.x <= high.x and bounds.end.z >= low.z and bounds.position.z <= high.z:
 			seen[id] = true
 	var ids = seen.keys()
