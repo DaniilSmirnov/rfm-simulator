@@ -252,7 +252,6 @@ try {
   if(socketMode)assert.ok(!logs.some(line=>line.includes('ROOM_SOCKET disabled')),'WebSocket stayed in use');
   if(directMode)await until(()=>latest('guest')?.direct_healthy,'direct link reopened after rejoin',60000);
   console.log(`PASS: ${web?'two Chromium clients (mobile guest)':'two Godot clients'}: ${directMode?'WebRTC direct link, WebSocket setup with 150ms RTT':socketMode?'WebSocket with 150ms RTT':'delayed HTTP, 2 lost responses'}, ${!socketMode?'30s HTTP recovery':!web?'silent socket fallback/reconnect':'socket/direct transport'}, prediction, braking, convergence, pause/resume, recovery, exit/re-entry, leave/rejoin`);
-
 } catch (error) {
   console.error(logs.filter(x => !x.includes('NETWORK_SAMPLE ')).slice(-100).join('\n'));
   if(process.env.GITHUB_ACTIONS) {
