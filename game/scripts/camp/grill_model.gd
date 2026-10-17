@@ -55,10 +55,12 @@ const HALF_WIDTH = 0.25
 static func _body(root: Node3D) -> void:
 	# Firebox: thin walls and a floor; the bed of ash the coals lie on is dark
 	# until the grill is lit (GrillFire draws the glowing coals over it).
+	var shapes: Array[AABB] = []
 	var floor_y = 0.6
 	var wall = RIM - floor_y
 	for z in [-HALF_WIDTH, HALF_WIDTH]:
-		P.box(root, Vector3(0, floor_y + wall * 0.5, z), Vector3(HALF_LENGTH * 2, wall, 0.014), STEEL)
+		var side = P.box(root, Vector3(0, floor_y + wall * 0.5, z), Vector3(HALF_LENGTH * 2, wall, 0.014), STEEL)
+		shapes.append(side.transform * side.mesh.get_aabb())
 		# A rolled edge along the rim stiffens the long sides.
 		P.box(root, Vector3(0, RIM + 0.004, z), Vector3(HALF_LENGTH * 2 + 0.01, 0.012, 0.024), STEEL_EDGE)
 		# Notches: the skewers drop between these teeth.
@@ -71,23 +73,28 @@ static func _body(root: Node3D) -> void:
 			var outward = signf(z) * 0.0085
 			P.box(root, Vector3(hole_x, floor_y + 0.07, z + outward), Vector3(0.05, 0.04, 0.004), SOOT)
 	for x in [-HALF_LENGTH, HALF_LENGTH]:
-		P.box(root, Vector3(x, floor_y + wall * 0.5, 0), Vector3(0.014, wall, HALF_WIDTH * 2), STEEL)
+		var side = P.box(root, Vector3(x, floor_y + wall * 0.5, 0), Vector3(0.014, wall, HALF_WIDTH * 2), STEEL)
+		shapes.append(side.transform * side.mesh.get_aabb())
 		P.box(root, Vector3(x, RIM + 0.004, 0), Vector3(0.024, 0.012, HALF_WIDTH * 2 + 0.01), STEEL_EDGE)
 		# Bent rod handle on each end.
 		var out = signf(x)
 		for z in [-0.1, 0.1]:
 			P.box(root, Vector3(x + out * 0.04, 0.82, z), Vector3(0.08, 0.014, 0.014), STEEL_EDGE)
 		P.box(root, Vector3(x + out * 0.08, 0.82, 0), Vector3(0.014, 0.014, 0.214), STEEL_EDGE)
-	P.box(root, Vector3(0, floor_y, 0), Vector3(HALF_LENGTH * 2, 0.014, HALF_WIDTH * 2), STEEL)
+	var bottom = P.box(root, Vector3(0, floor_y, 0), Vector3(HALF_LENGTH * 2, 0.014, HALF_WIDTH * 2), STEEL)
+	shapes.append(bottom.transform * bottom.mesh.get_aabb())
 	P.box(root, Vector3(0, 0.83, 0), Vector3(HALF_LENGTH * 2 - 0.03, 0.02, HALF_WIDTH * 2 - 0.03), ASH)
 	# Angle-iron legs with small feet, and a shelf between them.
 	for x in [-HALF_LENGTH + 0.03, HALF_LENGTH - 0.03]:
 		for z in [-HALF_WIDTH + 0.03, HALF_WIDTH - 0.03]:
+			shapes.append(AABB(Vector3(x - 0.03, 0, z - 0.03), Vector3(0.06, floor_y, 0.06)))
 			P.box(root, Vector3(x, floor_y * 0.5, z - signf(z) * 0.012), Vector3(0.04, floor_y, 0.006), STEEL)
 			P.box(root, Vector3(x - signf(x) * 0.012, floor_y * 0.5, z), Vector3(0.006, floor_y, 0.04), STEEL)
 			P.box(root, Vector3(x, 0.006, z), Vector3(0.06, 0.012, 0.06), SOOT)
 	var shelf_y = 0.2
-	P.box(root, Vector3(0, shelf_y, 0), Vector3(HALF_LENGTH * 2 - 0.08, 0.012, HALF_WIDTH * 2 - 0.06), STEEL)
+	var shelf = P.box(root, Vector3(0, shelf_y, 0), Vector3(HALF_LENGTH * 2 - 0.08, 0.012, HALF_WIDTH * 2 - 0.06), STEEL)
+	shapes.append(shelf.transform * shelf.mesh.get_aabb())
+	root.set_meta("prop_shapes", shapes)
 	# A paper sack of charcoal, folded over at the top, and a poker beside it.
 	P.box(root, Vector3(-0.2, shelf_y + 0.13, 0.02), Vector3(0.34, 0.25, 0.2), Color("8a6740"))
 	P.box(root, Vector3(-0.2, shelf_y + 0.27, 0.02), Vector3(0.345, 0.04, 0.205), Color("745532"))

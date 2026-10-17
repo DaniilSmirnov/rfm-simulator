@@ -9,9 +9,12 @@ var game
 
 # Use the same surface sampler for the ghost, deployed gear and room snapshots.
 func ground_item(node: Node3D, spot: Vector3, yaw: float) -> void:
+	if game.room.is_guest() and node.get_meta("prop_dynamic", false): return
 	node.position = Vector3(spot.x, game.stage.ground(spot), spot.z)
 	node.basis = game.stage.terrain_basis(spot, yaw, game.stage.ground)
 	node.set_meta("placement_yaw", yaw)
+	var body = node.get_node_or_null("PropBody")
+	if body != null: body.place()
 
 func item_yaw(node: Node3D) -> float:
 	return float(node.get_meta("placement_yaw", node.rotation.y))
