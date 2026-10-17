@@ -165,6 +165,11 @@ func candidates(start: Vector3, end: Vector3, radius: float) -> Array:
 
 # Hundreds of props stand still during NPC pathfinding. Reuse their geometry
 # until the actual transform changes, including edits outside the drag system.
+# Call after teleporting a prop outside physics (tests, network snapshots) so
+# the per-tick broadphase cache does not keep its previous bounds.
+func invalidate_live_poses() -> void:
+	moving_pose_tick = -1
+
 func _cache_live_pose(object: Dictionary) -> void:
 	var current: Transform3D = object.body.global_transform if object.body.is_inside_tree() else relative_pose(object.body)
 	if object.get("live_global_pose") == current:
