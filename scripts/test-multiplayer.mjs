@@ -11,12 +11,13 @@ const web = process.argv.includes('--web');
 // --socket runs the room over WebSocket with 150 ms added each way; the default
 // pins HTTP polling so injected HTTP losses stay meaningful.
 const socketMode = process.argv.includes('--socket');
-const transportArgs = socketMode ? [] : ['--room-transport=http'];
+const directOff = process.argv.includes('--room-direct=off');
+const transportArgs = [...(socketMode ? [] : ['--room-transport=http']), ...(directOff ? ['--room-direct=off'] : [])];
 const SOCKET_DELAY = 150;
 // With a WebRTC engine, browser clients also open a direct host-guest link; the
 // room socket (still delayed) only relays its setup.
 const engineManifest = JSON.parse(await readFile(new URL('../engine/manifest.json', import.meta.url), 'utf8'));
-const directMode = web && socketMode && engineManifest.webrtc === true;
+const directMode = web && socketMode && engineManifest.webrtc === true && !directOff;
 const workerPort = 8793;
 const processes = [];
 let browserFactory;
