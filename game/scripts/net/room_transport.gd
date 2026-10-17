@@ -328,7 +328,8 @@ func _socket_message(text: String) -> void:
 			room._on_reply("sync", data)
 		"signal":
 			if data.get("data") is Dictionary:
-				room.direct.on_signal(str(data.get("from", "")), data.data)
+				if data.data.get("space", "") == "voice": room.voice.on_signal(str(data.get("from", "")), data.data)
+				else: room.direct.on_signal(str(data.get("from", "")), data.data)
 		"error":
 			var status = int(data.get("status", 500))
 			var message = str(data.get("error", "Нет связи с сервером комнаты."))

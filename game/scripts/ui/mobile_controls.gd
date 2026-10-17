@@ -31,7 +31,7 @@ const LOOK_RADIUS = STICK_RADIUS
 var look_center = Vector2.ZERO
 var look = Vector2.ZERO
 var icons: Dictionary = {}
-const ICON_NAMES = {"forward": "gas", "brake": "brake", "back": "reverse", "interact": "hand", "sprint": "run", "jump": "jump", "map": "map", "pause_demo": "pause", "gear": "bag", "recover": "recover", "table": "table", "chairs": "chair", "grill": "grill", "firewood": "wood", "cauldron": "pot", "flag": "flag", "eat_berries": "berries", "tow": "tow", "placement_confirm": "check", "placement_rotate": "rotate", "placement_cancel": "cancel"}
+const ICON_NAMES = {"forward": "gas", "brake": "brake", "back": "reverse", "interact": "hand", "sprint": "run", "jump": "jump", "map": "map", "pause_demo": "pause", "gear": "bag", "recover": "recover", "table": "table", "chairs": "chair", "grill": "grill", "firewood": "wood", "cauldron": "pot", "flag": "flag", "eat_berries": "berries", "tow": "tow", "radio": "radio", "placement_confirm": "check", "placement_rotate": "rotate", "placement_cancel": "cancel"}
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -155,6 +155,8 @@ func _layout_walking(target: Dictionary) -> Array:
 	if not game.seated and game.beers < 30:
 		add_button("Встать" if game.injuries.down else "Прыжок", "jump", false, grid_rect(2, 0))
 		add_button("Бег", "sprint", true, grid_rect(2, 1))
+	if game.room.voice.available():
+		add_button("Рация", "radio", true, grid_rect(1, 1))
 	if game.tow_target != null or game.nearby_tow_target() or tow_caption() == "Тащить":
 		add_button(tow_caption(), "tow", true, grid_rect(0, 1))
 	var gear: Array = []

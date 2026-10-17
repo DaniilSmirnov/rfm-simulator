@@ -19,7 +19,7 @@ export const groups = Object.freeze({
  ],
  simulation: [
   "test_camp_cooking.gd", "test_course_schedule.gd", "test_service_parks.gd", "test_rally_handling.gd",
-  "test_rally_rejoin.gd", "test_rally_smoothness.gd", "test_rally_tracks.gd", "test_rally_traffic.gd", "test_room.gd", "test_room_recovery.gd", "test_direct_link.gd", "test_world_validation.gd",
+  "test_rally_rejoin.gd", "test_rally_smoothness.gd", "test_rally_tracks.gd", "test_rally_traffic.gd", "test_room.gd", "test_room_recovery.gd", "test_direct_link.gd", "test_world_validation.gd", "test_voice_radio.gd",
   "test_physics.gd", "test_prop_contact.gd", "test_car_hitbox.gd", "test_food_fleet.gd", "test_foraging.gd", "test_grill_fire.gd", "test_camp_models.gd",
   "test_poison_mushrooms.gd", "test_network_motion.gd", "test_tow_recovery.gd", "test_car_rides.gd",
   "test_crew_limit.gd", "test_drive_prediction.gd", "test_route_index.gd", "test_knockdown.gd", "test_ambulance_medics.gd", "test_ambulance_right_of_way.gd",
@@ -40,7 +40,8 @@ export const nodeSuites = Object.freeze({
    "tests/store.test.mjs", "tests/deploy-cloudflare.test.mjs", "tests/fullscreen.test.mjs",
    "tests/mobile-viewport.test.mjs", "tests/mobile-host-pause.test.mjs", "tests/pointer-capture.test.mjs",
    "tests/test-catalog.test.mjs", "tests/room-input.test.mjs",
-   "tests/rate-limits.test.mjs", "tests/gdscript-lint.test.mjs", "tests/localization.test.mjs"],
+   "tests/rate-limits.test.mjs", "tests/gdscript-lint.test.mjs", "tests/localization.test.mjs",
+   "tests/voice-chat.test.mjs"],
   ["--test", "tests/branding.test.mjs", "tests/boot-diagnostics.test.mjs",
    "tests/audio-recovery.test.mjs"],
   ["scripts/test-device.mjs"],

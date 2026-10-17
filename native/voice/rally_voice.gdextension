@@ -1,0 +1,9 @@
+[configuration]
+entry_symbol = "rally_voice_init"
+compatibility_minimum = 4.4
+
+[libraries]
+linux.x86_64 = "res://native/voice/bin/librally_voice.linux.x86_64.so"
+windows.x86_64 = "res://native/voice/bin/rally_voice.windows.x86_64.dll"
+macos.arm64 = "res://native/voice/bin/librally_voice.macos.arm64.dylib"
+macos.x86_64 = "res://native/voice/bin/librally_voice.macos.x86_64.dylib"

@@ -206,6 +206,7 @@ func _controls(page_box: Control) -> void:
 	_row(drive, "Space", "тормоз")
 	_row(drive, "Home", "вернуть машину на дорогу")
 	_row(page_box, "M · R · Esc", "карта · что сейчас на СУ · пауза")
+	_row(page_box, "icon:radio" if touch() else "X", "Рация в комнате: держи и говори. Чем дальше друг, тем тише и больше помех.")
 
 func _camp(page_box: Control) -> void:
 	_row(page_box, "icon:bag", "Подойди к багажнику своей машины — он откроется сам.")

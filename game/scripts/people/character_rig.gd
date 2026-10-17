@@ -138,6 +138,13 @@ static func _arms(j: Dictionary, p: Dictionary, gait: int, swing: float) -> void
 		var target = rest
 		var pole = POLE_HANG
 		match mode:
+			"radio":
+				if right:
+					target = MOUTH + Vector3(0.04, 0.0, 0.02)
+					pole = POLE_LIFT
+				else:
+					target = Vector3(0.18, 0.92, -0.22)
+					pole = POLE_OUT
 			"eat", "drink":
 				if right:
 					var mouth = MOUTH + (Vector3(0, -0.04, 0) if mode == "drink" else Vector3.ZERO)
