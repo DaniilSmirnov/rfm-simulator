@@ -98,10 +98,14 @@ export class RallyRoom {
   fanOut(sender) {
     const host = this.room.data.host;
     if (sender === host) {
+      // push() already writes to every socket of a player, so each player is
+      // visited once: a player with two sockets would otherwise get 2 x 2 pushes.
+      const guests = new Set();
       for (const ws of this.ctx.getWebSockets()) {
         const player = ws.deserializeAttachment()?.player;
-        if (player && player !== host) this.push(player);
+        if (player && player !== host) guests.add(player);
       }
+      for (const player of guests) this.push(player);
     } else if (this.sockets(host).length) {
       const since = Date.now() - (this.room.data.players[host]?.pushed_at ?? 0);
       this.push(host, Math.max(0, PUSH_INTERVAL - since));
