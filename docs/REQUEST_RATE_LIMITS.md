@@ -33,6 +33,13 @@ disconnecting. Missing or failed bindings in a deployment with
 RATE_LIMIT_ENABLED=true return 503 with Retry-After. Unit fixtures may omit
 bindings; production config explicitly enables and declares all five bindings.
 
+Room sockets allow one authenticated connection per member token; a reconnect
+replaces the previous socket. At most eight sockets per room may wait for hello,
+with a ten-second authentication deadline. Deadlines live in hibernation
+attachments and share the existing durable alarm, so they survive object
+restoration without an idle polling timer. Expired sockets cannot authenticate
+even if alarm delivery is delayed. Excess pending upgrades return HTTP 429.
+
 VK payment callbacks keep their own signature, idempotency and retry protocol.
 They are excluded from client limits to avoid delaying legitimate orders.
 No real payment or deployment is performed by these checks.
