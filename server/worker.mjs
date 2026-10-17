@@ -68,6 +68,18 @@ export class RallyRoom {
   send(ws, message) {
     try { ws.send(JSON.stringify(message)); } catch {}
   }
+  // A player has one live socket. After a reconnect (a network switch can leave
+  // the old connection half-open for minutes) the earlier sockets would still
+  // receive every push and relayed signal, so they are retired at the new hello.
+  // The attachment is cleared first: the close handshake takes a while, and the
+  // old socket must not be listed under the player in the meantime.
+  replaceSockets(player, current) {
+    for (const old of this.sockets(player)) {
+      if (old === current) continue;
+      try { old.serializeAttachment({ replaced: true }); } catch {}
+      try { old.close(4409, 'replaced'); } catch {}
+    }
+  }
   // Deliver a fresh view to a socket-connected participant without waiting
   // for its next request. Bursts of guest inputs are merged for the host.
   push(player, delay = 0) {
@@ -107,6 +119,7 @@ export class RallyRoom {
       if (body.type === 'hello') {
         const p = this.room.member(body.token);
         this.room.trackColdRevisions(p, body);
+        this.replaceSockets(p.id, ws);
         ws.serializeAttachment({ player: p.id, token: p.token });
         this.send(ws, { type: 'hello', id: body.id, player: p.id });
         return;
