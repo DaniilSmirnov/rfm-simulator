@@ -89,6 +89,10 @@ func walk_floor(_pos: Vector3, height: float) -> float:
 func walk_blocked(_next: Vector3, _feet_height: float) -> bool:
 	return false
 
+# Height share (0..1) of the ploughed snowbanks at station s, e.g. 0 on a bridge.
+func snowbank_mask(_s: float) -> float:
+	return 1.0
+
 # Whether camp furniture of this kind may stand at spot (dry, level, dug out).
 func camp_allowed(_spot: Vector3, _kind: String) -> bool:
 	return true

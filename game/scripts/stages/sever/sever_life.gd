@@ -149,7 +149,7 @@ func _build_walkers() -> void:
 		var s: float = item[0]
 		while s <= item[1]:
 			var half = biome.road_width(s) * 0.5
-			var p = stage.at(s) + stage.side(s) * item[2] * (half + 1.6)
+			var p = stage.at(s) + stage.side(s) * item[2] * (half + 2.6)
 			s += 2.0
 			if biome.reserved(p, 0.6) or not stage.solids.clear(p, 0.3):
 				continue
@@ -189,7 +189,7 @@ func _update_walkers(delta: float, focus: Vector3) -> void:
 # ---------------------------------------------------------------- animals
 
 func _build_dog() -> void:
-	var yard = biome.place(biome.HOUSES[2][0], biome.HOUSES[2][1], biome.HOUSES[2][2] + 3.0)
+	var yard = biome.place(biome.WELL.s + 8.0, 1.0, 8.0)
 	var node = Node3D.new()
 	node.name = "VillageDog"
 	root.add_child(node)
@@ -213,7 +213,7 @@ func _update_dog(delta: float, focus: Vector3) -> void:
 	dog.wait = float(dog.wait) - delta
 	if dog.wait <= 0.0 or node.position.distance_to(dog.target) < 0.5:
 		dog.wait = rng.randf_range(2.0, 5.0)
-		dog.target = Vector3(dog.home) + Vector3(rng.randf_range(-6, 6), 0, rng.randf_range(-6, 6))
+		dog.target = Vector3(dog.home) + Vector3(rng.randf_range(-3, 3), 0, rng.randf_range(-3, 3))
 	var to_target: Vector3 = dog.target - node.position
 	to_target.y = 0.0
 	if to_target.length() > 0.2:
@@ -223,7 +223,7 @@ func _update_dog(delta: float, focus: Vector3) -> void:
 	node.position.y = stage.ground(node.position) + absf(sin(dog.phase)) * 0.05
 
 func _build_hens() -> void:
-	var yard = biome.place(biome.BARN.s, biome.BARN.side, biome.BARN.offset - 5.0)
+	var yard = biome.place(biome.BARN.s, biome.BARN.side, biome.BARN.offset + 6.5)
 	for i in range(5):
 		var node = Node3D.new()
 		node.name = "Hen"
@@ -247,21 +247,23 @@ func _update_hens(delta: float, focus: Vector3) -> void:
 # ---------------------------------------------------------------- crows
 
 func _build_crows() -> void:
-	var homes = [[200.0, 50.0], [430.0, -48.0], [650.0, 46.0], [790.0, -44.0]]
+	var homes = [[200.0, 70.0], [700.0, -70.0]]
 	for home in homes:
 		var s = float(home[0])
 		var center: Vector3 = stage.at(s) + stage.side(s) * float(home[1])
-		center.y = stage.ground(center) + 14.0
-		for i in range(4):
+		center.y = stage.ground(center) + 26.0
+		for i in range(3):
 			var bird = Node3D.new()
 			bird.name = "Crow"
-			Props.faceted(bird, Vector3.ZERO, Vector3(0.13, 0.11, 0.34), Color("141414"), 5, 2)
-			Props.box(bird, Vector3(0, 0, -0.2), Vector3(0.035, 0.03, 0.07), Color("17171a"))
+			Props.faceted(bird, Vector3.ZERO, Vector3(0.17, 0.15, 0.46), Color("141414"), 6, 3)
+			Props.faceted(bird, Vector3(0, 0.03, -0.27), Vector3(0.12, 0.11, 0.14), Color("141414"), 6, 3)
+			Props.box(bird, Vector3(0, 0, -0.36), Vector3(0.04, 0.035, 0.09), Color("2a2a2c"))
+			Props.box(bird, Vector3(0, 0, 0.3), Vector3(0.2, 0.02, 0.18), Color("141414"))
 			var wings: Array = []
 			for side in [-1.0, 1.0]:
 				var hinge = Node3D.new()
 				bird.add_child(hinge)
-				Props.box(hinge, Vector3(side * 0.28, 0, 0), Vector3(0.5, 0.02, 0.16), Color("1c1c1f"))
+				Props.box(hinge, Vector3(side * 0.34, 0, 0), Vector3(0.62, 0.025, 0.22), Color("1c1c1f"))
 				hinge.set_meta("side", side)
 				wings.append(hinge)
 			root.add_child(bird)

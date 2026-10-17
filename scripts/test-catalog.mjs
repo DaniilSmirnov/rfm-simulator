@@ -54,7 +54,7 @@ export const groupDescriptions = Object.freeze({
  world: "all stages, terrain, scenery, route topology and performance",
 });
 export const slowTests = new Set([
- "test_village_terrain_performance.gd", "test_canyon.gd", "test_finnish_forest.gd", "test_mineshaft.gd", "test_sever.gd",
+ "test_village_terrain_performance.gd", "test_canyon.gd", "test_finnish_forest.gd", "test_mineshaft.gd", "test_sever.gd", "test_offroad_contact.gd",
  "test_course_schedule.gd", "test_course_officials.gd", "test_spectators.gd", "test_alpine_winter.gd",
  "test_selection.gd", "test_world_loading.gd", "test_baked_village.gd",
  "test_provence_village.gd", "test_stage_solids.gd", "test_service_parks.gd", "test_service_park_layout.gd",
