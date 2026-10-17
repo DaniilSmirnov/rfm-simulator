@@ -47,3 +47,11 @@ No real payment or deployment is performed by these checks.
 Validation: npm run test:vk, node --test tests/room-core.test.mjs and Wrangler
 deploy --dry-run. A dry run validates config and bundles only; deploy the branch
 through the normal pipeline before checking limits in the production VK app.
+
+Request body caps count UTF-8 bytes: room creation, authenticated room entry and
+purchase preparation allow 1,024 bytes; session bootstrap and payment callbacks
+allow 16,384 bytes; room HTTP and WebSocket messages use the protocol message
+cap. HTTP readers stop and cancel at overflow before decoding or JSON parsing.
+Content-Length can reject early, but missing or understated headers do not bypass
+stream counting. Direct-link signals apply their protocol cap to serialized
+UTF-8 bytes. Oversized callbacks retain VK's HTTP 200 error envelope (code 20).
