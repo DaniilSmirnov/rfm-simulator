@@ -1,0 +1,10 @@
+{
+  "comment": "Pinned sources for scripts/build-voice.mjs. Bump revision when a ref changes so cached prefixes rebuild.",
+  "revision": 1,
+  "sources": {
+    "godot-cpp": {"url": "https://github.com/godotengine/godot-cpp.git", "ref": "godot-4.4.1-stable"},
+    "libdatachannel": {"url": "https://github.com/paullouisageneau/libdatachannel.git", "ref": "v0.22.2", "submodules": true},
+    "mbedtls": {"url": "https://github.com/Mbed-TLS/mbedtls.git", "ref": "v3.6.2", "submodules": true},
+    "opus": {"url": "https://github.com/xiph/opus.git", "ref": "v1.5.2"}
+  }
+}
