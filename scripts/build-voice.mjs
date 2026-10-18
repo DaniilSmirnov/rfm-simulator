@@ -39,8 +39,19 @@ export const TARGETS = {
 
 function run(command, args, cwd = root) {
   console.log('$', command, args.join(' '));
-  const result = spawnSync(command, args, {cwd, stdio: 'inherit'});
-  if (result.status !== 0) throw new Error(`${command} failed (${result.status ?? result.error?.message})`);
+  const result = spawnSync(command, args, {cwd, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024});
+  const output = `${result.stdout ?? ''}${result.stderr ?? ''}`;
+  process.stdout.write(output);
+  if (result.status !== 0) {
+    // CI logs are not always at hand: surface the cause as an annotation.
+    if (process.env.GITHUB_ACTIONS) {
+      const lines = output.split('\n');
+      const relevant = lines.filter(l => /error|Error|undefined reference|not found|No such|FAILED/.test(l)).slice(-30);
+      const text = [`$ ${command} ${args.slice(0, 6).join(' ')}`, ...(relevant.length ? relevant : lines.slice(-30))].join('\n').slice(-6000);
+      console.log(`::error title=build-voice ${command} failed::${text.replace(/%/g, '%25').replace(/\r/g, '').replace(/\n/g, '%0A')}`);
+    }
+    throw new Error(`${command} failed (${result.status ?? result.error?.message})`);
+  }
 }
 
 function fetchSources() {
