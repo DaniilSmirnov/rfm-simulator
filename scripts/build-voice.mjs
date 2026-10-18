@@ -68,7 +68,8 @@ function fetchSources() {
 
 function toolchain(target, prefix) {
   const t = TARGETS[target];
-  const args = ['-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Release', '-DCMAKE_POSITION_INDEPENDENT_CODE=ON', ...(t.args || [])];
+  // CMake 4 refuses plog's and usrsctp's cmake_minimum_required below 3.5.
+  const args = ['-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Release', '-DCMAKE_POSITION_INDEPENDENT_CODE=ON', '-DCMAKE_POLICY_VERSION_MINIMUM=3.5', ...(t.args || [])];
   if (t.mingw) {
     // The posix thread model provides std::thread/std::mutex for libdatachannel.
     const posix = suffix => existsSync(`/usr/bin/${t.mingw}-${suffix}-posix`) ? `${t.mingw}-${suffix}-posix` : `${t.mingw}-${suffix}`;
