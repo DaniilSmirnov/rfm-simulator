@@ -15,7 +15,11 @@ func ensure_at(at: Vector3, reach: float) -> void:
 		for z in range(low.y, high.y + 1):
 			var key = Vector2i(x, z)
 			if not tiles.has(key): _tile(key)
+	# Standing trunks never move: only felled ones are posed (setting a pose,
+	# even the same one, wakes every prop leaning on the trunk).
 	for index in trunks.keys():
+		if index < stage.trees.size() and not stage.fallen.has(index):
+			continue
 		if index >= stage.trees.size() or stage.fallen.get(index, {}).get("dynamic", false):
 			trunks[index].queue_free()
 			trunks.erase(index)
@@ -27,8 +31,9 @@ func ensure_at(at: Vector3, reach: float) -> void:
 		var direction: Vector3 = fallen.get("direction", Vector3.UP)
 		var angle = smoothstep(0, 1.3, float(fallen.get("age", 0))) * PI * 0.5
 		var axis = Vector3.UP.lerp(direction, sin(angle)).normalized()
-		trunk.global_position = base + axis * length * 0.5
-		trunk.global_basis = Basis(Quaternion(Vector3.UP, axis))
+		var pose = Transform3D(Basis(Quaternion(Vector3.UP, axis)), base + axis * length * 0.5)
+		if not trunk.global_transform.is_equal_approx(pose):
+			trunk.global_transform = pose
 
 func _tile(key: Vector2i) -> void:
 	var origin = Vector3(key.x * TILE + TILE / 2, 0, key.y * TILE + TILE / 2)

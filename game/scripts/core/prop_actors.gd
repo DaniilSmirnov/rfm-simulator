@@ -4,6 +4,13 @@ const Hitbox = preload("res://scripts/cars/car_hitbox.gd")
 var game
 var bodies: Dictionary = {}
 var frame = -1
+# People who stand or sit still get no collider: a crew sitting on its camp
+# chairs, or standing at its table, overlapped them for good and kept them
+# (and everything they touch) awake. A walker pushes props for STILL_TICKS after
+# it stops, so a shove still lands.
+const STILL_TICKS = 30
+var _last: Dictionary = {}
+var _still: Dictionary = {}
 
 func _physics_process(_delta: float) -> void:
 	update(get_parent().tiles)
@@ -16,13 +23,17 @@ func update(tiles: Dictionary) -> void:
 		if game.injuries.is_down(person.key): continue
 		var p: Vector3 = person.pos
 		if not tiles.has(Vector2i(floori(p.x / 16.0), floori(p.z / 16.0))): continue
+		var moved = not _last.has(person.key) or Vector3(_last[person.key]).distance_squared_to(p) > 0.000004
+		_last[person.key] = p
+		_still[person.key] = 0 if moved else int(_still.get(person.key, STILL_TICKS)) + 1
+		if _still[person.key] >= STILL_TICKS: continue
 		present[person.key] = true
 		if not bodies.has(person.key):
 			var shape = CapsuleShape3D.new()
 			shape.radius = 0.28
 			shape.height = 1.7
 			_create(person.key, shape)
-		bodies[person.key].global_position = p + Vector3.UP * 0.85
+		_pose(bodies[person.key], Transform3D(Basis.IDENTITY, p + Vector3.UP * 0.85))
 	var cars: Array = [game.car]
 	for peer in game.room.peers.values():
 		if peer.has("car"): cars.append(peer.car)
@@ -38,11 +49,22 @@ func update(tiles: Dictionary) -> void:
 			var shape = BoxShape3D.new()
 			shape.size = box.size
 			_create(key, shape)
-		bodies[key].global_transform = car.global_transform * Transform3D(Basis.IDENTITY, box.get_center())
+		_pose(bodies[key], car.global_transform * Transform3D(Basis.IDENTITY, box.get_center()))
+	for key in _last.keys():
+		if not present.has(key) and not _still.has(key):
+			_last.erase(key)
 	for key in bodies.keys():
 		if not present.has(key):
 			bodies[key].queue_free()
 			bodies.erase(key)
+
+# Moving a body, even onto the same spot, makes the physics server recheck its
+# contacts and wake every prop it touches. Spectators stand still beside the camp
+# chairs and tables, so rewriting their poses every tick kept a hundred props
+# awake for good and the physics step took most of the frame.
+func _pose(body: Node3D, pose: Transform3D) -> void:
+	if not body.global_transform.is_equal_approx(pose):
+		body.global_transform = pose
 
 func _create(key: String, shape: Shape3D) -> void:
 	var body = AnimatableBody3D.new()

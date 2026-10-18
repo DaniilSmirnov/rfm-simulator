@@ -7,6 +7,16 @@ var game
 var moving = false
 var actors
 var pull_velocity = Vector3.ZERO
+# Resting-contact jitter (a chair on bumpy ground, a car on its wheels) can keep
+# a body just above Godot's sleep thresholds forever, and every awake prop is a
+# full physics step plus a ground refresh each tick. A body that has not really
+# moved for REST_TICKS is put to sleep; any contact wakes it again.
+const REST_TICKS = 30
+const REST_DISTANCE = 0.01
+const REST_ANGLE = 0.01
+var _rest_pose = Transform3D()
+var _rest_ticks = 0
+var _grounded_at = Vector3.INF
 
 static func create(r: Dictionary, world_solids, owner_game) -> RigidBody3D:
 	var body = load("res://scripts/core/prop_body.gd").new()
@@ -68,7 +78,19 @@ func wake() -> void:
 	sleeping = false
 	record.changed = true
 	record.node.set_meta("prop_dynamic", true)
+	_rest_ticks = 0
+	_grounded_at = global_transform * center_of_mass
 	_ground()
+
+func _at_rest() -> bool:
+	var pose = global_transform
+	var still = pose.origin.distance_to(_rest_pose.origin) < REST_DISTANCE and pose.basis.get_rotation_quaternion().angle_to(_rest_pose.basis.get_rotation_quaternion()) < REST_ANGLE
+	if not still:
+		_rest_pose = pose
+		_rest_ticks = 0
+		return false
+	_rest_ticks += 1
+	return _rest_ticks >= REST_TICKS
 
 func _ground() -> void:
 	solids.physics_ground(global_transform * center_of_mass, record.box.size.length() * 0.5 + 2.0)
@@ -96,12 +118,22 @@ func _physics_process(delta: float) -> void:
 		apply_central_force(force)
 		angular_velocity = angular_velocity.move_toward(Vector3.ZERO, delta * 8.0)
 	var active = not sleeping
+	if active and pull_velocity.length_squared() <= 0.0001 and _at_rest():
+		sleeping = true
+		linear_velocity = Vector3.ZERO
+		angular_velocity = Vector3.ZERO
+		active = false
 	if active:
 		if not moving and game.seated and "movable_props" in game:
 			game.movable_props._unseat(record)
 		record.changed = true
 		record.node.set_meta("prop_dynamic", true)
-		_ground()
+		# The collision tiles around a prop only need refreshing once it has
+		# travelled; per tick it rebuilt nothing but cost a scan of all trunks.
+		var center: Vector3 = global_transform * center_of_mass
+		if center.distance_squared_to(_grounded_at) > 1.0:
+			_grounded_at = center
+			_ground()
 	if active or moving:
 		record.node.global_transform = global_transform
 		if record.has("tree"):
