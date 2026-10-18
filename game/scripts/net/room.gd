@@ -23,8 +23,10 @@ const DirectLink = preload("res://scripts/net/direct_link.gd")
 const CarRides = preload("res://scripts/cars/car_rides.gd")
 const Loc = preload("res://scripts/ui/loc.gd")
 const WorldValidation = preload("res://scripts/net/world_validation.gd")
+const VoiceChat = preload("res://scripts/net/voice_chat.gd")
 
 var game: Node3D
+var voice: Node
 var transport: Node
 var direct: Node
 var world_sync = WorldSync.new()
@@ -67,6 +69,10 @@ var busy: bool:
 			transport.busy = value
 
 func _ready() -> void:
+	voice = VoiceChat.new()
+	voice.name = "Voice"
+	voice.setup(self)
+	add_child(voice)
 	transport = Transport.new()
 	transport.name = "Transport"
 	transport.room = self
@@ -166,6 +172,7 @@ func _joined(data: Dictionary) -> void:
 		room_id = data.room
 	connected = true
 	transport.open_socket(str(data.get("socket", "")))
+	voice.join()
 	if converting_solo:
 		_adopt_local_host_state()
 	ui.show_connected()
@@ -264,6 +271,7 @@ func _update_members(players: Array) -> void:
 	for p in players:
 		members[str(p.id)] = {"name": p.get("name", ""), "slot": int(p.get("slot", 0)), "car_model": int(p.get("car_model", 0))}
 	direct.sync_members(host_id, members.keys())
+	voice.sync_members(members.keys())
 
 func sync_now() -> void:
 	clock = maxf(clock, NetProtocol.sync_interval())
@@ -366,7 +374,8 @@ func local_state() -> Dictionary:
 	return {"drive_enabled": prediction_enabled, "drive_inputs": prediction.outgoing() if prediction_enabled else [], "pos": a(game.player_position()), "car": a(game.car.position), "heading": snappedf(game.heading, 0.001), "tilt": a(game.car.rotation), "yaw": snappedf(game.view_yaw, 0.001), "pitch": snappedf(game.view_pitch, 0.001), "in_car": game.in_car,
 		"tow": Input.is_action_pressed("tow") and not game.in_car and not game.injuries.down and not game.paused and not game.dead and not game.finished and game.beers < 30 and game.drink_time < 0 and game.eat_time < 0,
 		"push": a(game.walking_intent()), "speed": snappedf(game.speed, 0.01), "beers": game.beers, "trees": tree_requests(), "lamps": lamp_requests(), "beer": snappedf(game.drink_time, 0.01), "eat": snappedf(game.eat_time, 0.01), "food_kind": game.eat_kind, "food_species": game.food_species, "seated": game.seated, "running": game.running(), "airborne": game.jump_height > 0.01, "relief": game.player.relief.active,
-		"ride": game.rides.ride, "hitch": game.rides.hitch, "broken": game.condition <= 0}.merged(game.player.perches.state_fields())
+		"ride": game.rides.ride, "hitch": game.rides.hitch, "broken": game.condition <= 0,
+		"radio": voice.on_air()}.merged(game.player.perches.state_fields())
 
 # ---------------------------------------------------------------- peers
 
@@ -565,6 +574,7 @@ func check_remote_collisions() -> void:
 # ---------------------------------------------------------------- leaving
 
 func leave() -> void:
+	voice.leave()
 	direct.close_all()
 	transport.close_socket()
 	transport.cancel()
@@ -573,6 +583,7 @@ func leave() -> void:
 
 func disconnect_room(message: String) -> void:
 	connected = false
+	voice.leave()
 	direct.close_all()
 	transport.close_socket()
 	game.paused = true

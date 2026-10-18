@@ -106,7 +106,7 @@ static func clean_state(s):
 		"beers": clampi(int(s.beers), 0, 100000) if _number(s.get("beers")) else 0,
 		"trees": _requests(s.get("trees"), 20000), "lamps": _requests(s.get("lamps"), 512),
 		"seated": seated, "running": s.get("running") == true and not in_car and not seated, "airborne": s.get("airborne") == true and not in_car and not seated,
-		"relief": s.get("relief") == true and not in_car and not seated,
+		"relief": s.get("relief") == true and not in_car and not seated, "radio": s.get("radio") is bool and s.radio,
 		"ride": ride, "hitch": _member_id(s.get("hitch")) if in_car and ride == "" else "", "broken": s.get("broken") == true,
 		"food_species": s.food_species if str(s.get("food_species", "")) in ["edible", "fly_agaric", "toadstool"] else "edible",
 		"food_kind": s.food_kind if str(s.get("food_kind", "")) in ["meat", "mushroom", "berries", "plov"] else "meat",
@@ -131,7 +131,7 @@ static func _member_id(value) -> String:
 # defaults below, the host-only fields (driving input, object requests), the
 # car position of a driver (it is the player position) and the middle tilt
 # angle (it is the heading). expand_state() puts them back.
-const STATE_DEFAULTS = {"airborne": false, "beer": -1.0, "beers": 0, "broken": false, "drive_enabled": false, "eat": -1.0, "food_kind": "meat",
+const STATE_DEFAULTS = {"airborne": false, "beer": -1.0, "beers": 0, "broken": false, "drive_enabled": false, "eat": -1.0, "radio": false, "food_kind": "meat",
 	"food_species": "edible", "hitch": "", "relief": false, "ride": "", "running": false, "seated": false, "tow": false, "speed": 0.0,
 	"stand": "", "stand_at": [0.0, 0.0, 0.0]}
 const STATE_HOST_ONLY = ["drive_inputs", "trees", "lamps"]

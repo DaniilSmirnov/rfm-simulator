@@ -59,7 +59,7 @@ func run() -> void:
 		"cheer": {"arms": "cheer"}, "flag": {"arms": "flag"}, "wave": {"arms": "wave"},
 		"clipboard": {"arms": "clipboard"}, "throw": {"arms": "throw", "lift": 1.0},
 		"throw_back": {"arms": "throw", "lift": 0.0}, "pick": {"arms": "pick", "lift": 1.0},
-		"lap": {"arms": "lap", "seat": Props.CHAIR_SEAT}, "limp": {"arms": "limp"},
+		"lap": {"arms": "lap", "seat": Props.CHAIR_SEAT}, "limp": {"arms": "limp"}, "radio": {"arms": "radio"},
 	}
 	for name in poses:
 		for phase in [0.0, 0.2, 0.4, 0.6]:
@@ -71,6 +71,8 @@ func run() -> void:
 	# Hands land where the action needs them.
 	CharacterRig.pose(avatar, {"arms": "eat", "lift": 1.0})
 	check(CharacterRig.grip_position(avatar).distance_to(CharacterRig.MOUTH) < 0.05, "eating brings the hand to the mouth")
+	CharacterRig.pose(avatar, {"arms": "radio"})
+	check(CharacterRig.grip_position(avatar).distance_to(CharacterRig.MOUTH) < 0.12, "the radio is held at the mouth")
 	CharacterRig.pose(avatar, {"arms": "flag"})
 	check(CharacterRig.grip_position(avatar).y > 1.72, "the flag hand is raised to the top of the head")
 	CharacterRig.pose(avatar, {"gait": 1, "time": 0.2})

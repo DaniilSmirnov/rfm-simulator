@@ -363,7 +363,7 @@ func _ready() -> void:
 	print("[RFM] Запуск завершён")
 
 func _setup_input() -> void:
-	var bindings = {"forward": [KEY_W, KEY_UP], "back": [KEY_S, KEY_DOWN], "left": [KEY_A, KEY_LEFT], "right": [KEY_D, KEY_RIGHT], "brake": [KEY_SPACE], "jump": [KEY_SPACE], "sprint": [KEY_SHIFT], "interact": [KEY_F], "table": [KEY_Z], "flag": [KEY_V], "chairs": [KEY_C], "grill": [KEY_G], "firewood": [KEY_J], "cauldron": [KEY_H], "beer": [KEY_B], "eat": [], "collect": [], "mount_mushroom": [], "eat_mushroom": [], "eat_berries": [KEY_K], "rally": [KEY_R], "tow": [KEY_T], "map": [KEY_M], "recover": [KEY_HOME], "pause_demo": [KEY_ESCAPE], "placement_confirm": [KEY_ENTER], "placement_rotate": [KEY_Q], "placement_cancel": []}
+	var bindings = {"forward": [KEY_W, KEY_UP], "back": [KEY_S, KEY_DOWN], "left": [KEY_A, KEY_LEFT], "right": [KEY_D, KEY_RIGHT], "brake": [KEY_SPACE], "jump": [KEY_SPACE], "sprint": [KEY_SHIFT], "interact": [KEY_F], "table": [KEY_Z], "flag": [KEY_V], "radio": [KEY_X], "chairs": [KEY_C], "grill": [KEY_G], "firewood": [KEY_J], "cauldron": [KEY_H], "beer": [KEY_B], "eat": [], "collect": [], "mount_mushroom": [], "eat_mushroom": [], "eat_berries": [KEY_K], "rally": [KEY_R], "tow": [KEY_T], "map": [KEY_M], "recover": [KEY_HOME], "pause_demo": [KEY_ESCAPE], "placement_confirm": [KEY_ENTER], "placement_rotate": [KEY_Q], "placement_cancel": []}
 	for action in bindings:
 		if not InputMap.has_action(action):
 			InputMap.add_action(action)
