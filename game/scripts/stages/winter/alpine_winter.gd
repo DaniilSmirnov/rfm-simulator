@@ -254,7 +254,7 @@ func road_paint(p: Vector3, s: float, lateral: float, half_width: float) -> Colo
 
 # Thin glossy glaze over every ice patch, conforming to the road surface. The
 # vertex alpha follows the same soft mask as grip, so the edges fade out.
-func build_ice() -> void:
+func build_ice(cooperative: bool = false) -> void:
 	var surface = SurfaceTool.new()
 	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var count = 0
@@ -265,6 +265,8 @@ func build_ice() -> void:
 		var s1 = minf(LENGTH - 1.0, float(patch.s) + float(patch.half) * 1.35)
 		var steps_s = maxi(2, int((s1 - s0) / 0.35))
 		for i in range(steps_s):
+			if cooperative:
+				await LoadPacer.tick(stage.get_tree())
 			for j in range(steps_l):
 				var corners = []
 				var visible = false
@@ -299,6 +301,7 @@ func build_ice() -> void:
 
 # ---------------------------------------------------------------- stage hooks
 
+const LoadPacer = preload("res://scripts/core/load_pacer.gd")
 const DeepSnow = preload("res://scripts/stages/winter/deep_snow.gd")
 const Snowbanks = preload("res://scripts/stages/winter/snowbanks.gd")
 const AlpineScenery = preload("res://scripts/stages/winter/alpine_scenery.gd")
@@ -415,9 +418,9 @@ func road_color(p: Vector3, _s: float) -> Color:
 func road_strips() -> int:
 	return 12
 
-func after_road() -> void:
-	Snowbanks.build(stage)
-	build_ice()
+func after_road(cooperative: bool = false) -> void:
+	await Snowbanks.build(stage, cooperative)
+	await build_ice(cooperative)
 
 func forest_tree_count() -> int:
 	return 900

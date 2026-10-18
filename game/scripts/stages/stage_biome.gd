@@ -168,7 +168,7 @@ func road_edges(width: float) -> Array:
 func road_divisions(length: float) -> int:
 	return stage.relief.divisions(length)
 
-func after_road() -> void:
+func after_road(_cooperative: bool = false) -> void:
 	pass
 
 # ---------------------------------------------------------------- driving

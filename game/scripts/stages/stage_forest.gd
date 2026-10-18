@@ -17,6 +17,7 @@ const NATURE_MUSHROOM_STEM = preload("res://models/nature/mushroom_stem.tres")
 const NATURE_STONE = preload("res://models/nature/stone.tres")
 const Records = preload("res://scripts/stages/stage_records.gd")
 const Loc = preload("res://scripts/ui/loc.gd")
+const LoadPacer = preload("res://scripts/core/load_pacer.gd")
 # Metres a forest chunk (64 m cell of shared trees) stays drawn at MEDIUM.
 const FOREST_RANGE = 320.0
 
@@ -387,7 +388,11 @@ func build_woodland(cooperative: bool = false) -> void:
 	detail_batch("ForestBoulders", boulder, boulder_poses, boulder_colors)
 	# Filter after rocks and undergrowth exist, so ground details cannot overlap them.
 	for group in [{"poses": grass_poses, "colors": grass_colors}, {"poses": stone_poses, "colors": stone_colors}]:
-		for index in range(group.poses.size() - 1, -1, -1):
+		var kept_poses: Array = []
+		var kept_colors: Array = []
+		for index in range(group.poses.size()):
+			if cooperative:
+				await LoadPacer.tick(stage.get_tree())
 			var pose: Transform3D = group.poses[index]
 			var point = pose.origin
 			point.y = stage.terrain_surface_height(point)
@@ -398,9 +403,11 @@ func build_woodland(cooperative: bool = false) -> void:
 				for z in range(-1, 2):
 					for bush in ground_exclusions.get(cell + Vector2i(x, z), []):
 						blocked = blocked or stage.flat(point).distance_to(stage.flat(bush.pos)) < padding + bush.radius
-			if blocked:
-				group.poses.remove_at(index)
-				group.colors.remove_at(index)
+			if not blocked:
+				kept_poses.append(pose)
+				kept_colors.append(group.colors[index])
+		group.poses.assign(kept_poses)
+		group.colors.assign(kept_colors)
 	detail_batch("ForestPebbles", shared_stone_mesh(), stone_poses, stone_colors, DetailLayer.tiled())
 	detail_batch("ForestGrass", grass_mesh(), grass_poses, grass_colors, DetailLayer.tiled())
 	var stem = NATURE_MUSHROOM_STEM

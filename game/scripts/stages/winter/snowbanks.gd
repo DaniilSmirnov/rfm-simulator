@@ -1,4 +1,5 @@
 extends RefCounted
+const LoadPacer = preload("res://scripts/core/load_pacer.gd")
 # Shared indexed rings keep both edges continuous through bends and elevation.
 const STRIPS = 10
 const SPACING = 2.0
@@ -14,7 +15,7 @@ static func vertex(stage, station: float, edge: float, fraction: float) -> Vecto
 	point.y = stage.terrain_surface_height(point) - 0.035 + height * pow(sin(PI * fraction), 2.0) * taper * stage.DeepSnow.camp_mask(stage, point)
 	return point
 
-static func mesh(stage, edge: float) -> ArrayMesh:
+static func mesh(stage, edge: float, cooperative: bool = false) -> ArrayMesh:
 	var stations = PackedFloat32Array([0.0])
 	for i in range(int(stage.LENGTH)):
 		var length: float = stage.at(i).distance_to(stage.at(i + 1.0))
@@ -24,6 +25,8 @@ static func mesh(stage, edge: float) -> ArrayMesh:
 	var surface = SurfaceTool.new()
 	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
 	for station in stations:
+		if cooperative:
+			await LoadPacer.tick(stage.get_tree())
 		for strip in range(STRIPS + 1):
 			surface.add_vertex(vertex(stage, station, edge, float(strip) / STRIPS))
 	for row in range(stations.size() - 1):
@@ -72,7 +75,7 @@ static func index_surface(stage, mesh: ArrayMesh) -> void:
 				if not stage.snowbank_cells.has(key): stage.snowbank_cells[key] = []
 				stage.snowbank_cells[key].append(triangle)
 
-static func build(stage) -> void:
+static func build(stage, cooperative: bool = false) -> void:
 	stage.snowbank_cells.clear()
 	var material = StandardMaterial3D.new()
 	material.albedo_color = Color("e1edf1")
@@ -80,7 +83,7 @@ static func build(stage) -> void:
 	for edge in [-1.0, 1.0]:
 		var node = MeshInstance3D.new()
 		node.name = "SnowbankLeft" if edge < 0 else "SnowbankRight"
-		node.mesh = mesh(stage, edge)
+		node.mesh = await mesh(stage, edge, cooperative)
 		index_surface(stage, node.mesh)
 		node.material_override = material
 		stage.add_child(node)

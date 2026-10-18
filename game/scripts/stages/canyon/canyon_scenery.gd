@@ -13,6 +13,7 @@ const DetailLayer = preload("res://scripts/stages/detail_layer.gd")
 const MeshMerge = preload("res://scripts/core/mesh_merge.gd")
 const Form = preload("res://scripts/stages/canyon/canyon_form.gd")
 const Yurt = preload("res://scripts/stages/canyon/yurt.gd")
+const LoadPacer = preload("res://scripts/core/load_pacer.gd")
 
 # Station, side and distance of the two yurt camps: the herders' camp on the
 # steppe by the rim road, and the warden's camp in the grove by the river.
@@ -31,16 +32,16 @@ var rng = RandomNumberGenerator.new()
 var reserved: Array[Dictionary] = []
 var counts := {}
 
-func build(owner_stage, owner_biome) -> void:
+func build(owner_stage, owner_biome, cooperative: bool = false) -> void:
 	stage = owner_stage
 	biome = owner_biome
 	rng.seed = 20261017
 	_camps()
-	_castles()
-	_talus()
-	_steppe_cover()
-	_floor_cover()
-	_ash_grove()
+	await _castles(cooperative)
+	await _talus(cooperative)
+	await _steppe_cover(cooperative)
+	await _floor_cover(cooperative)
+	await _ash_grove(cooperative)
 	_ledge_markers()
 
 func surface(p: Vector3) -> Vector3:
@@ -154,13 +155,14 @@ func _tower_color(height: float, seed_index: int) -> Color:
 
 # The castles: a crowd of them at the foot of both walls through the Valley of
 # Castles, more standing back on the benches and along the rim.
-func _castles() -> void:
+func _castles(cooperative: bool = false) -> void:
 	var st = SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var built = 0
 	var index = 0
 	var z = CASTLE_BEGIN
 	while z > CASTLE_END:
+		if cooperative: await LoadPacer.tick(stage.get_tree())
 		for side in [-1.0, 1.0]:
 			index += 1
 			if _castle(st, z, side, index):
@@ -201,10 +203,11 @@ func _level_enough(p: Vector3, limit: float) -> bool:
 	return true
 
 # Blocks that have come off the cliffs and piled up at their feet.
-func _talus() -> void:
+func _talus(cooperative: bool = false) -> void:
 	var poses: Array = []
 	var colors: Array = []
 	for i in range(1100):
+		if cooperative: await LoadPacer.tick(stage.get_tree())
 		var z = rng.randf_range(-700.0, -60.0)
 		var side = 1.0 if i % 2 == 0 else -1.0
 		var foot: float = Form.wall_foot(z, side)
@@ -225,7 +228,7 @@ func _talus() -> void:
 # ---------------------------------------------------------------- plants
 
 # Feather grass, wormwood and sun-bleached stones of the open steppe.
-func _steppe_cover() -> void:
+func _steppe_cover(cooperative: bool = false) -> void:
 	var feather_p: Array = []
 	var feather_c: Array = []
 	var bush_p: Array = []
@@ -233,6 +236,7 @@ func _steppe_cover() -> void:
 	var stone_p: Array = []
 	var stone_c: Array = []
 	for i in range(16000):
+		if cooperative: await LoadPacer.tick(stage.get_tree())
 		var p = random_point()
 		if not open_ground(p, 5.0, 0.0):
 			continue
@@ -258,7 +262,7 @@ func _steppe_cover() -> void:
 	counts["feather_grass"] = feather_p.size()
 
 # Tamarisk, dry reeds, river stones and the soft grass of the grove glades.
-func _floor_cover() -> void:
+func _floor_cover(cooperative: bool = false) -> void:
 	var bush_p: Array = []
 	var bush_c: Array = []
 	var grass_p: Array = []
@@ -266,6 +270,7 @@ func _floor_cover() -> void:
 	var stone_p: Array = []
 	var stone_c: Array = []
 	for i in range(9000):
+		if cooperative: await LoadPacer.tick(stage.get_tree())
 		var p = random_floor_point(-40.0, -860.0)
 		if absf(p.x) > 196.0 or not open_ground(p, 6.0, 0.0):
 			continue
@@ -295,7 +300,7 @@ func _floor_cover() -> void:
 
 # The relict Sogdian ash: broad, low crowns standing far apart on the gravel
 # flats above the Ili, with soft grass between them and no undergrowth.
-func _ash_grove() -> void:
+func _ash_grove(cooperative: bool = false) -> void:
 	var stick = CylinderMesh.new()
 	stick.top_radius = 0.34
 	stick.bottom_radius = 0.5
@@ -307,6 +312,7 @@ func _ash_grove() -> void:
 	crown.rings = 5
 	var trees: Array = []
 	for i in range(1400):
+		if cooperative: await LoadPacer.tick(stage.get_tree())
 		var p = random_floor_point(Form.GROVE_BEGIN, Form.GROVE_END)
 		if absf(p.x) > 196.0 or Form.grove(p.z) < 0.3 or not open_ground(p, 9.0, 2.5):
 			continue

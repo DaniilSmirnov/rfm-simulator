@@ -450,8 +450,8 @@ func road_color(p: Vector3, _s: float) -> Color:
 func road_strips() -> int:
 	return 10
 
-func after_road() -> void:
-	Snowbanks.build(stage)
+func after_road(cooperative: bool = false) -> void:
+	await Snowbanks.build(stage, cooperative)
 
 # ---------------------------------------------------------------- scenery
 
@@ -474,9 +474,9 @@ func roadside_rock_blocked(p: Vector3) -> bool:
 func woodland_blocked(pos: Vector3, padding: float) -> bool:
 	return reserved(pos, padding) or gully(pos) > 0.0
 
-func build_details(_cooperative: bool) -> void:
+func build_details(cooperative: bool) -> void:
 	scenery = Scenery.new()
-	scenery.build(stage, self)
+	await scenery.build(stage, self, cooperative)
 	life = Life.new()
 	life.build(stage, self)
 
