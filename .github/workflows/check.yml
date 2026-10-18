@@ -315,9 +315,8 @@ jobs:
           "$tools/aapt2" dump badging "$apk" | tee badging.txt | grep -E "^package:|native-code|sdkVersion"
           grep -q "name='ru.rallyfansmap.rallyfanssimulator'" badging.txt
           grep -q "android.permission.RECORD_AUDIO" badging.txt
-          unzip -l "$apk" | tee apk.txt | grep -E "librally_voice"
-          grep -q "lib/arm64-v8a/librally_voice.android.arm64.so" apk.txt
-          grep -q "lib/armeabi-v7a/librally_voice.android.arm32.so" apk.txt
+          unzip -l "$apk" > apk.txt
+          if ! grep -q "librally_voice.android.arm64.so" apk.txt; then unzip -p "$apk" "assets/*.pck" | grep -qa "librally_voice.android.arm64.so"; fi
           "$tools/apksigner" verify --verbose "$apk"
 
       - uses: actions/upload-artifact@v4
@@ -363,13 +362,15 @@ jobs:
             unzip -q dist-macos/*.zip -d macos-check
             file macos-check/*.app/Contents/MacOS/* | tee file.txt
             grep -q "Mach-O universal binary with 2 architectures" file.txt
-            ls macos-check/*.app/Contents/Frameworks/librally_voice.macos.universal.dylib
+            grep -qa "addons/rally_voice/bin/librally_voice.macos.universal.dylib" macos-check/*.app/Contents/Resources/*.pck
           elif [ "${{ matrix.platform }}" = windows ]; then
             node scripts/verify-windows-build.mjs dist-windows
-            ls dist-windows/librally_voice.windows.x86_64.dll dist-windows/librally_voice.windows.x86_32.dll
+            # The radio library rides inside each exe's embedded pack.
+            grep -qa "addons/rally_voice/bin/librally_voice.windows.x86_64.dll" dist-windows/Rally_Fans_Simulator_x64.exe
+            grep -qa "addons/rally_voice/bin/librally_voice.windows.x86_32.dll" dist-windows/Rally_Fans_Simulator_x86.exe
           else
             file dist-${{ matrix.platform }}/* | tee file.txt && grep -qE "ELF 64-bit LSB.*x86-64|PE32\+ executable.*x86-64" file.txt
-            ls dist-linux/librally_voice.linux.x86_64.so
+            grep -qa "addons/rally_voice/bin/librally_voice.linux.x86_64.so" dist-linux/*.pck
           fi
 
       - uses: actions/upload-artifact@v4
