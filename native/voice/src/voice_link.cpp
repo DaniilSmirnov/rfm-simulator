@@ -129,7 +129,18 @@ Error RallyVoiceLink::initialize(const PackedStringArray &ice_servers, bool offe
 		pc = std::make_shared<rtc::PeerConnection>(config);
 		std::weak_ptr<Shared> weak = shared;
 		pc->onLocalDescription([weak](rtc::Description description) {
-			if (auto s = weak.lock()) s->push("description", description.typeString(), std::string(description));
+			auto s = weak.lock();
+			if (!s) return;
+			std::string sdp(description);
+			// Always be the DTLS client: Mbed TLS cannot reassemble a fragmented
+			// ClientHello, and Chrome's post-quantum ClientHello no longer fits
+			// one datagram. Our answers already take the active role; an offer
+			// says so too, and the other side answers passive.
+			if (description.type() == rtc::Description::Type::Offer) {
+				for (size_t at = sdp.find("a=setup:actpass"); at != std::string::npos; at = sdp.find("a=setup:actpass", at))
+					sdp.replace(at, 15, "a=setup:active");
+			}
+			s->push("description", description.typeString(), sdp);
 		});
 		pc->onLocalCandidate([weak](rtc::Candidate candidate) {
 			if (auto s = weak.lock()) s->push("candidate", candidate.candidate(), candidate.mid());
