@@ -5,6 +5,7 @@ extends "res://tests/harness.gd"
 const Props = preload("res://scripts/core/props.gd")
 const CharacterRig = preload("res://scripts/people/character_rig.gd")
 const MedicModel = preload("res://scripts/people/medic_model.gd")
+const RadioModel = preload("res://scripts/people/radio_model.gd")
 
 func _initialize() -> void:
 	call_deferred("run")
@@ -59,7 +60,7 @@ func run() -> void:
 		"cheer": {"arms": "cheer"}, "flag": {"arms": "flag"}, "wave": {"arms": "wave"},
 		"clipboard": {"arms": "clipboard"}, "throw": {"arms": "throw", "lift": 1.0},
 		"throw_back": {"arms": "throw", "lift": 0.0}, "pick": {"arms": "pick", "lift": 1.0},
-		"lap": {"arms": "lap", "seat": Props.CHAIR_SEAT}, "limp": {"arms": "limp"}, "radio": {"arms": "radio"},
+		"lap": {"arms": "lap", "seat": Props.CHAIR_SEAT}, "limp": {"arms": "limp"}, "radio": {"arms": "radio", "lift": 1.0}, "radio_half": {"arms": "radio", "lift": 0.5},
 	}
 	for name in poses:
 		for phase in [0.0, 0.2, 0.4, 0.6]:
@@ -71,8 +72,22 @@ func run() -> void:
 	# Hands land where the action needs them.
 	CharacterRig.pose(avatar, {"arms": "eat", "lift": 1.0})
 	check(CharacterRig.grip_position(avatar).distance_to(CharacterRig.MOUTH) < 0.05, "eating brings the hand to the mouth")
-	CharacterRig.pose(avatar, {"arms": "radio"})
+	CharacterRig.pose(avatar, {"arms": "radio", "lift": 1.0})
 	check(CharacterRig.grip_position(avatar).distance_to(CharacterRig.MOUTH) < 0.12, "the radio is held at the mouth")
+	var radio = RadioModel.attach_to_hand(CharacterRig.hand(avatar), CharacterRig.grip())
+	radio.show()
+	RadioModel.hold_upright(radio, avatar, 1.0)
+	var tip: Vector3 = avatar.global_transform.affine_inverse() * radio.get_node("Antenna").global_position
+	check(tip.y > CharacterRig.MOUTH.y and tip.distance_to(CharacterRig.MOUTH) < 0.3, "the raised radio stands upright beside the face (antenna at %s)" % tip)
+	check(inside_body(avatar.global_transform.affine_inverse() * radio.get_node("Body").global_position) == "", "the radio body stays outside the head and torso")
+	var up: Vector3 = avatar.global_basis.inverse() * radio.global_basis.y.normalized()
+	check(up.y > 0.95, "the raised radio stands upright (up %s)" % up)
+	var grip_point: Vector3 = avatar.global_transform.affine_inverse() * (CharacterRig.hand(avatar).global_transform * radio.get_meta("grip"))
+	var body_point: Vector3 = avatar.global_transform.affine_inverse() * radio.get_node("Body").global_position
+	check(grip_point.distance_to(body_point) < 0.06, "the hand holds the radio around its middle")
+	CharacterRig.pose(avatar, {"arms": "radio", "lift": 0.0})
+	check(CharacterRig.grip_position(avatar).y < 0.95, "without lift the radio hand hangs at rest")
+	radio.free()
 	CharacterRig.pose(avatar, {"arms": "flag"})
 	check(CharacterRig.grip_position(avatar).y > 1.72, "the flag hand is raised to the top of the head")
 	CharacterRig.pose(avatar, {"gait": 1, "time": 0.2})

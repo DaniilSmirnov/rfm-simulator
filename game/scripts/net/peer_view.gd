@@ -6,6 +6,9 @@ const Props = preload("res://scripts/core/props.gd")
 const SnapshotMotion = preload("res://scripts/net/snapshot_motion.gd")
 const NetProtocol = preload("res://scripts/net/net_protocol.gd")
 const CharacterRig = preload("res://scripts/people/character_rig.gd")
+const RadioModel = preload("res://scripts/people/radio_model.gd")
+# Seconds to raise the radio to the mouth (and to lower it again).
+const RADIO_RAISE = 0.2
 
 static func create(game: Node, p: Dictionary) -> Dictionary:
 	var car = Props.player_car(int(p.get("car_model", p.get("slot", 0))))
@@ -17,7 +20,8 @@ static func create(game: Node, p: Dictionary) -> Dictionary:
 	var arm = CharacterRig.hand(avatar)
 	var label = Props.label_3d(game, Vector3.ZERO, p.name, 26, 0.012, Color("fff1cb"))
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	var peer = {"id": p.id, "car": car, "avatar": avatar, "arm": arm, "held_box": carried_box, "held_kind": "table", "can": arm.get_node("BeerCan"), "skewer": arm.get_node("Skewer"), "eat_time": -1.0, "eat_sample": -1.0, "drink_time": -1.0, "drink_sample": -1.0, "label": label, "last_car": null, "state": null, "car_motion": SnapshotMotion.new(), "avatar_motion": SnapshotMotion.new()}
+	var peer = {"id": p.id, "car": car, "avatar": avatar, "arm": arm, "held_box": carried_box, "held_kind": "table", "can": arm.get_node("BeerCan"), "skewer": arm.get_node("Skewer"), "eat_time": -1.0, "eat_sample": -1.0, "drink_time": -1.0, "drink_sample": -1.0, "label": label, "last_car": null, "state": null, "car_motion": SnapshotMotion.new(), "avatar_motion": SnapshotMotion.new(),
+		"radio": RadioModel.attach_to_hand(arm, CharacterRig.grip()), "radio_lift": 0.0}
 	if p.state != null:
 		car.position = room_v(p.state.car)
 		avatar.position = room_v(p.state.pos)
@@ -67,10 +71,11 @@ static func animate(game: Node, peer: Dictionary, delta: float, clock: float, fr
 	if collapsed:
 		peer.avatar.position.y = avatar_pose.position.y + 0.25
 	var hands = _animate_hands(peer, state, delta, world_paused or game.paused)
+	hands = _animate_radio(peer, state, delta, collapsed, hands)
 	var moving = room_v(state.get("push", [0, 0, 0])).length() > 0.1
 	var pose = {"gait": (2 if bool(state.get("running", false)) else 1) if moving and not sitting else 0, "time": clock,
 		"seed": float(hash(str(peer.id)) % 628) / 100.0, "airborne": bool(state.get("airborne", false)),
-		"arms": "limp" if collapsed else ("radio" if bool(state.get("radio", false)) else hands.arms), "lift": hands.lift}
+		"arms": "limp" if collapsed else hands.arms, "lift": hands.lift}
 	if peer.held_box.visible and hands.arms == "":
 		pose.arms = Props.carry_arms(peer.held_kind)
 	if bool(state.get("relief", false)) and not collapsed:
@@ -79,8 +84,28 @@ static func animate(game: Node, peer: Dictionary, delta: float, clock: float, fr
 		pose.seat = Props.CHAIR_SEAT
 		pose.ground = avatar_pose.position.y
 	CharacterRig.pose(peer.avatar, pose)
+	_hold_radio(peer)
 	game.player.relief.draw_peer(peer, state)
 	peer.label.position = _seat_label(game, peer, state) if state.in_car else peer.avatar.position + Vector3(0, 2.3, 0)
+
+# The radio rises to the mouth while the member is on air and goes down after.
+# Hands busy with carried gear keep it hidden; it takes over from food and drink.
+static func _animate_radio(peer: Dictionary, state: Dictionary, delta: float, collapsed: bool, hands: Dictionary) -> Dictionary:
+	var talking = bool(state.get("radio", false)) and not state.in_car and not collapsed and not peer.held_box.visible
+	peer.radio_lift = move_toward(float(peer.radio_lift), 1.0 if talking else 0.0, delta / RADIO_RAISE)
+	var radio: Node3D = peer.radio
+	radio.visible = peer.radio_lift > 0.01 and not state.in_car
+	RadioModel.set_on_air(radio, talking)
+	if not radio.visible:
+		return hands
+	peer.can.hide()
+	peer.skewer.hide()
+	return {"arms": "radio", "lift": peer.radio_lift}
+
+# After the rig has posed the arm: the radio follows the hand, upright near the face.
+static func _hold_radio(peer: Dictionary) -> void:
+	if peer.radio.visible:
+		RadioModel.hold_upright(peer.radio, peer.avatar, smoothstep(0.0, 1.0, float(peer.radio_lift)))
 
 # A driver's name hangs over their car; passengers' names stack above the
 # friend's car they ride in.

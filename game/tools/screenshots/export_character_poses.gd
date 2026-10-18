@@ -14,6 +14,7 @@ const CharacterRig = preload("res://scripts/people/character_rig.gd")
 var rig
 var game
 var out = "res://../docs/screenshots/poses"
+var last_spot := Vector3.ZERO
 var spot = Vector3.ZERO
 var slot = 0
 
@@ -42,6 +43,13 @@ func shoot(name: String, center: Vector3, yaw: float) -> void:
 	rig.aim(target + (forward + side * 0.8).normalized() * 3.6 + Vector3(0, 0.7, 0), target, 42.0)
 	await rig.capture("%s/%s_front.webp" % [out, name], Vector2i(420, 420))
 
+# Head and hands from about a metre: held items in detail.
+func closeup(name: String, center: Vector3, yaw: float) -> void:
+	var target = center + Vector3(0, 1.4, 0)
+	var forward = Vector3(-sin(yaw), 0, -cos(yaw))
+	rig.aim(target + (forward + forward.cross(Vector3.UP) * 0.7).normalized() * 1.3 + Vector3(0, 0.15, 0), target, 40.0)
+	await rig.capture("%s/%s.webp" % [out, name], Vector2i(420, 420))
+
 func peer_state(pos: Vector3, extra: Dictionary) -> Dictionary:
 	var state = {"in_car": false, "pos": [pos.x, pos.y, pos.z], "car": [pos.x + 30, pos.y, pos.z], "push": [0, 0, 0], "running": false, "airborne": false, "seated": false, "beers": 0, "eat": -1, "beer": -1, "food_kind": "meat", "food_species": "edible"}
 	state.merge(extra, true)
@@ -62,6 +70,7 @@ func peer_pose(name: String, extra: Dictionary, clock: float = 0.3, carry: Strin
 		Props.table(table)
 		table.rotation.y = yaw
 		table.position = pos + Vector3(-sin(yaw), 0, -cos(yaw)) * 0.95
+	last_spot = pos
 	var peer = PeerView.create(game, {"id": id, "name": name, "slot": slot % 4, "car_model": 0, "state": null})
 	peer.state = peer_state(pos, extra)
 	if carry != "":
@@ -99,6 +108,7 @@ func marshal_pose(name: String, action: String) -> void:
 	var person: Dictionary = game.stage.officials.people[0]
 	var avatar: Node3D = person.avatar
 	var pos = next_spot()
+	last_spot = pos
 	avatar.position = pos
 	avatar.rotation.y = 0.4
 	var flag: Node3D = CharacterRig.hand(avatar).get_node("RedFlag")
@@ -160,12 +170,17 @@ func run() -> void:
 	await peer_pose("carry_box", {}, 0.3, "table")
 	await peer_pose("carry_shovel", {}, 0.3, "shovel")
 	await peer_pose("collapsed", {"beers": 30, "frames": 40})
+	await peer_pose("radio", {"radio": true, "frames": 10})
+	await closeup("peer_radio_closeup", last_spot, 0.4)
+	await peer_pose("radio_raising", {"radio": true, "frames": 3})
+	await peer_pose("radio_walk", {"radio": true, "push": [1, 0, 0], "frames": 10}, 0.1)
 	await spectator_pose("eat", "eat", 1.4)
 	await spectator_pose("beer", "beer", 1.6)
 	await spectator_pose("cheer", "cheer", 0.0)
 	await spectator_pose("push", "push", 0.0)
 	await spectator_pose("walk", "walk", 0.0)
 	await marshal_pose("watch", "watch")
+	await closeup("marshal_radio_closeup", last_spot, 0.4)
 	await marshal_pose("flag", "flag")
 	await marshal_pose("push", "push")
 	await medic_pose("walk", "walking", true)
