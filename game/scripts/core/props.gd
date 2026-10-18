@@ -699,17 +699,13 @@ static func tree(parent: Node3D, pos: Vector3, height: float, shade: float) -> v
 static func table(parent: Node3D, variant: int = 0, style: String = "camp") -> void:
 	load("res://scripts/camp/table_model.gd").build(parent, variant, style)
 
-# A low camping chair: the seat height fits the characters' short legs, so a
-# seated person keeps both feet on the ground (CharacterRig seat pose).
+# A low folding hiking chair (chair_model.gd): the seat height fits the
+# characters' short legs, so a seated person keeps both feet on the ground
+# (CharacterRig seat pose).
 const CHAIR_SEAT = 0.30
 
 static func chair(parent: Node3D, pos: Vector3) -> void:
-	load("res://scripts/player/perches.gd").mark(parent, false)
-	box(parent, pos + Vector3(0, CHAIR_SEAT - 0.045, 0), Vector3(0.65, 0.09, 0.65), Color("cf703e"))
-	box(parent, pos + Vector3(0, CHAIR_SEAT + 0.32, 0.3), Vector3(0.65, 0.65, 0.08), Color("cf703e"))
-	for x in [-0.27, 0.27]:
-		for z in [-0.27, 0.27]:
-			box(parent, pos + Vector3(x, (CHAIR_SEAT - 0.09) / 2.0, z), Vector3(0.06, CHAIR_SEAT - 0.09, 0.06), Color("dcd7c7"))
+	load("res://scripts/camp/chair_model.gd").build(parent, pos)
 
 static func wood_bundle(parent: Node3D, point: Vector3 = Vector3.ZERO) -> Node3D:
 	var root = Node3D.new()
@@ -982,6 +978,10 @@ static func gear_box(parent: Node3D, kind: String, point: Vector3 = Vector3.ZERO
 	root.name = "Box_" + kind
 	parent.add_child(root)
 	root.position = point
+	# The table and the chair travel folded (folded_gear_model.gd).
+	if kind in ["table", "chairs"]:
+		load("res://scripts/camp/folded_gear_model.gd").build(root, kind)
+		return root
 	var colors = {"table": "caa571", "chairs": "7fa78a", "grill": "a0a8b3", "cauldron": "52626b"}
 	box(root, Vector3.ZERO, Vector3(0.34, 0.30, 0.48), Color(colors.get(kind, "caa571")))
 	box(root, Vector3(0, 0.157, 0), Vector3(0.05, 0.014, 0.49), Color("ead9b6"))
