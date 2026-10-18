@@ -156,7 +156,12 @@ try {
  for (const id of ['0', 'b']) assert.equal(await pages[id].evaluate(() => RallyVoice.state.peers.has('a')), false, `${id} drops native after its bye`);
  console.log('Voice interop: native <-> Chromium in both offer directions, audio both ways, push-to-talk gating and bye passed');
 } catch (error) {
- console.error(logs.join('').split('\n').slice(-40).join('\n'));
+ const tail = logs.join('').split('\n').slice(-40).join('\n');
+ console.error(tail);
+ if (process.env.GITHUB_ACTIONS) {
+  const text = `${error.message}\n${tail}`.slice(-6000);
+  console.log(`::error title=voice interop::${text.replace(/%/g, '%25').replace(/\r/g, '').replace(/\n/g, '%0A')}`);
+ }
  throw error;
 } finally {
  if (exited === null) native.kill();
