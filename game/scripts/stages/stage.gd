@@ -640,21 +640,7 @@ static func flat(pos: Vector3) -> Vector2:
 func obstacle_hit(start: Vector3, end: Vector3, radius: float, allow_escape: bool = false, ignored: int = -1) -> int:
 	var a = flat(start)
 	var b = flat(end)
-	var candidates: Array = []
-	if tree_cells.is_empty() or indexed_tree_count != trees.size():
-		for index in range(trees.size()):
-			candidates.append(index)
-	else:
-		# Fallen trunks can extend up to roughly half a tree height from their
-		# base, so include a generous one-cell safety border around the sweep.
-		var padding = 12.0 + radius
-		var min_cell = _tree_cell(Vector3(minf(a.x, b.x) - padding, 0, minf(a.y, b.y) - padding))
-		var max_cell = _tree_cell(Vector3(maxf(a.x, b.x) + padding, 0, maxf(a.y, b.y) + padding))
-		for cell_x in range(min_cell.x, max_cell.x + 1):
-			for cell_z in range(min_cell.y, max_cell.y + 1):
-				var nearby = tree_cells.get(Vector2i(cell_x, cell_z), [])
-				for index in nearby:
-					candidates.append(index)
+	var candidates: Array = trees_near(a.min(b), a.max(b), radius)
 	for index in candidates:
 		if index == ignored: continue
 		var c = flat(trees[index])
@@ -685,6 +671,19 @@ func obstacle_hit(start: Vector3, end: Vector3, radius: float, allow_escape: boo
 		if distance < radius + width:
 			return index
 	return -1
+
+# Trees whose trunk, standing or fallen, may reach the area low..high.
+func trees_near(low: Vector2, high: Vector2, radius: float) -> Array:
+	if tree_cells.is_empty() or indexed_tree_count != trees.size():
+		return range(trees.size())
+	# Fallen trunks can extend up to roughly half a tree height from their
+	# base, so include a generous one-cell safety border around the sweep.
+	var padding = 12.0 + radius
+	var found: Array = []
+	for cell_x in range(_tree_cell(Vector3(low.x - padding, 0, 0)).x, _tree_cell(Vector3(high.x + padding, 0, 0)).x + 1):
+		for cell_z in range(_tree_cell(Vector3(0, 0, low.y - padding)).y, _tree_cell(Vector3(0, 0, high.y + padding)).y + 1):
+			found.append_array(tree_cells.get(Vector2i(cell_x, cell_z), []))
+	return found
 
 func rocks_in_bounds(low: Vector2, high: Vector2) -> Array:
 	if indexed_rock_count != rocks.size():
@@ -770,9 +769,6 @@ func woodland_spot(pos: Vector3, padding: float = 0.0) -> bool:
 
 func detail_batch(name: String, mesh: Mesh, poses: Array, colors: Array, layer: DetailLayer = null) -> void:
 	woodland.detail_batch(name, mesh, poses, colors, layer)
-
-func build_woodland(cooperative: bool = false) -> void:
-	await woodland.build_woodland(cooperative)
 
 # Nearest station and plan distance on the indexed route (route_index.gd).
 func route_nearest(pos: Vector3) -> Dictionary:

@@ -107,8 +107,12 @@ func _ground() -> void:
 func _physics_process(delta: float) -> void:
 	if not is_instance_valid(record.node) or record.node.is_queued_for_deletion(): return
 	var simulate: bool = game.room.is_authority() and game.playing and not game.paused and not game.dead and not game.finished
-	freeze = record.anchored or not simulate
-	if freeze: return
+	# Assign only on change: setting `freeze`, even to its current value, resets
+	# the body mode in the physics server and wakes it, so no prop ever slept.
+	var frozen: bool = record.anchored or not simulate
+	if freeze != frozen:
+		freeze = frozen
+	if frozen: return
 	if pull_velocity.length_squared() > 0.0001:
 		if sleeping: wake()
 		var planar = Vector3(linear_velocity.x, 0, linear_velocity.z)
@@ -119,9 +123,10 @@ func _physics_process(delta: float) -> void:
 		angular_velocity = angular_velocity.move_toward(Vector3.ZERO, delta * 8.0)
 	var active = not sleeping
 	if active and pull_velocity.length_squared() <= 0.0001 and _at_rest():
-		sleeping = true
+		# Velocities first: assigning one wakes the body again.
 		linear_velocity = Vector3.ZERO
 		angular_velocity = Vector3.ZERO
+		sleeping = true
 		active = false
 	if active:
 		if not moving and game.seated and "movable_props" in game:

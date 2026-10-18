@@ -75,7 +75,10 @@ func _tile(key: Vector2i) -> void:
 			var offset = Vector3(0, surface.rise * float(i + 1) / steps - 0.08, -half.y + half.y * (2 * i + 1) / steps)
 			var floor_body = _collider(box, Vector3.ZERO)
 			floor_body.global_transform = surface.pose * Transform3D(Basis.IDENTITY, offset)
-	for index in range(stage.trees.size()):
+	# Tiles and the stage's tree cells share one 16 m grid: only this cell's trees.
+	if stage.indexed_tree_count != stage.trees.size():
+		stage._rebuild_tree_index()
+	for index in stage.tree_cells.get(key, []):
 		var p: Vector3 = stage.trees[index]
 		if trunks.has(index) or stage.fallen.get(index, {}).get("dynamic", false) or Vector2i(floori(p.x / TILE), floori(p.z / TILE)) != key: continue
 		var shape_tree = CapsuleShape3D.new()

@@ -458,6 +458,7 @@ func prepare_world() -> void:
 	draw_distance.apply(stage)
 	await loading_screen.stage_progress("Зрители и лагерь", 85)
 	await spectators.rebuild(true)
+	await stage.solids.prepare_ground(true); movable_props.refresh()
 	await loading_screen.stage_progress("Машина", 95)
 	var previous = car.transform
 	car.free()

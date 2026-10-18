@@ -5,6 +5,7 @@ extends Node3D
 # same swept-box collision through hit(); a stage without solids answers {}.
 const Props = preload("res://scripts/core/props.gd")
 const RigidSettler = preload("res://scripts/stages/rigid_settler.gd")
+const LoadPacer = preload("res://scripts/core/load_pacer.gd")
 const COLLISION_CELL = 16.0
 
 const Ground = preload("res://scripts/stages/prop_ground.gd")
@@ -363,6 +364,18 @@ func walking_floor(pos: Vector3, feet_height: float) -> float:
 		if height <= feet_height + 0.45:
 			result = maxf(result, height)
 	return result if is_finite(result) else stage.walking_ground(pos)
+
+# Builds the collision tiles under every loose prop while the loading screen is
+# up. When play began, every camp prop settled at once and asked for its tiles
+# in the same frame: ~85 tiles of ~1 000 ground samples, a two-second freeze
+# during the camera's fly-in to the car.
+func prepare_ground(cooperative: bool = false) -> void:
+	for record in movables:
+		if not is_instance_valid(record.node) or record.anchored or not record.node.is_inside_tree():
+			continue
+		if cooperative: await LoadPacer.tick(get_tree())
+		var box: AABB = record.node.global_transform * record.box
+		physics_ground(box.get_center(), record.box.size.length() * 0.5 + 2.0)
 
 # Terrain collision is shared by active props instead of one overlapping patch per body.
 func physics_ground(at: Vector3, reach: float) -> void:
