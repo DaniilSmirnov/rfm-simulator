@@ -978,6 +978,10 @@ static func gear_box(parent: Node3D, kind: String, point: Vector3 = Vector3.ZERO
 	root.name = "Box_" + kind
 	parent.add_child(root)
 	root.position = point
+	# The table and the chair travel folded (folded_gear_model.gd).
+	if kind in ["table", "chairs"]:
+		load("res://scripts/camp/folded_gear_model.gd").build(root, kind)
+		return root
 	var colors = {"table": "caa571", "chairs": "7fa78a", "grill": "a0a8b3", "cauldron": "52626b"}
 	box(root, Vector3.ZERO, Vector3(0.34, 0.30, 0.48), Color(colors.get(kind, "caa571")))
 	box(root, Vector3(0, 0.157, 0), Vector3(0.05, 0.014, 0.49), Color("ead9b6"))

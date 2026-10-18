@@ -69,6 +69,21 @@ func run() -> void:
 	check(shapes.size() > 0 and shapes.size() <= 12, "a knocked-over chair collides with a few simple boxes (%d)" % shapes.size())
 	var moved: Array = shifted.get_meta("prop_shapes")
 	check(is_equal_approx(moved[0].position.x - shapes[0].position.x, 2.0), "collision boxes follow the chair's offset")
+	# Packed gear: the table and the chair ride folded in the same slot as the
+	# plain boxes (0.34 x 0.30 x 0.48, bottom at -0.15).
+	for kind in ["table", "chairs"]:
+		var holder = Node3D.new()
+		world.add_child(holder)
+		var packed = Props.gear_box(holder, kind, Vector3(0, 1, 0))
+		var twin = Props.gear_box(holder, kind)
+		var mesh: Mesh = packed.get_node("Baked").mesh
+		var size: AABB = mesh.get_aabb()
+		check(packed.name == "Box_" + kind and packed.get_child_count() == 1 and mesh == twin.get_node("Baked").mesh, "%s packed gear is one shared mesh named for its slot" % kind)
+		check(size.size.x <= 0.34 and size.size.y <= 0.34 and size.size.z <= 0.5 and size.position.y > -0.17 and size.position.y < -0.14, "%s packed gear fits the old box slot (%s)" % [kind, str(size)])
+		check(size.size.z > 0.42 and size.size.x > 0.24, "%s packed gear still fills the carrying hands (%s)" % [kind, str(size.size)])
+		check(packed.get_meta("baked_text").size() == 1 and packed.get_meta("baked_text")[0] == ("СТОЛ" if kind == "table" else "СТУЛ"), "%s packed gear keeps its name tag" % kind)
+	var plain = Props.gear_box(world, "grill")
+	check(plain.get_child_count() > 1 and plain.get_node_or_null("Baked") == null, "the grill still travels in its box")
 	world.free()
 	print("CAMP MODELS RESULT: %d checks, %d failures" % [checks, failures])
 	finish()
