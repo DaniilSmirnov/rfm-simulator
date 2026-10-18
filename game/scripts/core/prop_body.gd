@@ -17,6 +17,22 @@ const REST_ANGLE = 0.01
 var _rest_pose = Transform3D()
 var _rest_ticks = 0
 var _grounded_at = Vector3.INF
+# Furniture keeps its tilt unless something may tip it over: a car, a running
+# or jumping walker (allow_tip). The window stays open while the prop tumbles.
+# A walker who drags a tipped prop turns it back upright.
+const TUMBLE_SPIN = 0.5
+const TIPPED_ANGLE = 0.5
+const UPRIGHT_ANGLE = 0.05
+const RIGHTING_GAIN = 5.0
+const RIGHTING_SPEED = 3.0
+# Without a tipping impact a prop only slides at walking pace. A walker's
+# collider that ends up inside a prop (a cauldron mounted over the spot where
+# its owner stands) pushed it out at tens of metres per second.
+const MAX_DRIFT = 3.0
+var righting = false
+var _rising = false
+var _tip_time = 0.0
+var _guarded = false
 
 static func create(r: Dictionary, world_solids, owner_game) -> RigidBody3D:
 	var body = load("res://scripts/core/prop_body.gd").new()
@@ -34,6 +50,7 @@ static func create(r: Dictionary, world_solids, owner_game) -> RigidBody3D:
 	material.bounce = 0.08
 	body.physics_material_override = material
 	body.freeze = r.anchored or not owner_game.room.is_authority()
+	body._guard(not r.has("tree"))
 	body.sleeping = true
 	r.node.add_child(body)
 	body.top_level = true
@@ -71,7 +88,7 @@ func place() -> void:
 	global_transform = record.node.global_transform
 	linear_velocity = Vector3.ZERO
 	angular_velocity = Vector3.ZERO
-	if game.room.is_authority(): wake()
+	if game.room.is_authority() and not record.anchored: wake()
 
 func wake() -> void:
 	freeze = false
@@ -81,6 +98,28 @@ func wake() -> void:
 	_rest_ticks = 0
 	_grounded_at = global_transform * center_of_mass
 	_ground()
+
+func allow_tip(seconds: float) -> void:
+	_tip_time = maxf(_tip_time, seconds)
+	_guard(false)
+
+# Axis locks act on world axes: X and Z tilt, Y keeps yaw free. Assigning a
+# lock wakes the body, so only on change.
+func _guard(on: bool) -> void:
+	if _guarded == on: return
+	_guarded = on
+	axis_lock_angular_x = on
+	axis_lock_angular_z = on
+
+func _tilt() -> float:
+	return global_basis.y.normalized().angle_to(Vector3.UP)
+
+func _upright_spin() -> Vector3:
+	var up: Vector3 = global_basis.y.normalized()
+	var axis: Vector3 = up.cross(Vector3.UP)
+	if axis.length_squared() < 0.000001:
+		axis = global_basis.x
+	return axis.normalized() * minf(_tilt() * RIGHTING_GAIN, RIGHTING_SPEED)
 
 func _at_rest() -> bool:
 	var pose = global_transform
@@ -113,21 +152,40 @@ func _physics_process(delta: float) -> void:
 	if freeze != frozen:
 		freeze = frozen
 	if frozen: return
-	if pull_velocity.length_squared() > 0.0001:
+	if _tip_time > 0.0 and angular_velocity.length() < TUMBLE_SPIN:
+		_tip_time -= delta
+	if not righting or record.has("tree"):
+		_rising = false
+	elif not _rising and _tilt() > TIPPED_ANGLE:
+		_rising = true
+	elif _rising and _tilt() < UPRIGHT_ANGLE:
+		_rising = false
+	if not sleeping:
+		_guard(not record.has("tree") and _tip_time <= 0.0 and not _rising)
+	if pull_velocity.length_squared() > 0.0001 or _rising:
 		if sleeping: wake()
+	if pull_velocity.length_squared() > 0.0001:
 		var planar = Vector3(linear_velocity.x, 0, linear_velocity.z)
 		var force = (pull_velocity - planar) * mass * 20.0
 		# A pull must overcome contact friction before the velocity servo can act.
 		force += pull_velocity.normalized() * mass * 6.5
 		apply_central_force(force)
+	if _rising:
+		angular_velocity = _upright_spin()
+	elif pull_velocity.length_squared() > 0.0001:
 		angular_velocity = angular_velocity.move_toward(Vector3.ZERO, delta * 8.0)
+	if _guarded:
+		var drift = Vector3(linear_velocity.x, maxf(0.0, linear_velocity.y), linear_velocity.z)
+		if drift.length() > MAX_DRIFT:
+			linear_velocity -= drift - drift.limit_length(MAX_DRIFT)
 	var active = not sleeping
-	if active and pull_velocity.length_squared() <= 0.0001 and _at_rest():
+	if active and pull_velocity.length_squared() <= 0.0001 and not _rising and _at_rest():
 		# Velocities first: assigning one wakes the body again.
 		linear_velocity = Vector3.ZERO
 		angular_velocity = Vector3.ZERO
 		sleeping = true
 		active = false
+		_tip_time = 0.0
 	if active:
 		if not moving and game.seated and "movable_props" in game:
 			game.movable_props._unseat(record)

@@ -43,6 +43,19 @@ func run() -> void:
 	check(host.interaction.current().get("action", "") == "mount_cauldron", "contextual F offers mounting the carried pot on the fire")
 	host.interaction.activate()
 	check(host.camp_cooking.phase == "empty" and host.camp_cooking.pot.get_node("EmptyBottom").visible and not host.camp_cooking.pot.get_node("Rice").visible, "mounted pot is empty and visibly hollow")
+	# The owner stands beside the fire, not inside the cauldron stand.
+	host.walker = fire_spot + Vector3(1.6, 0, 0)
+	var fire_pose: Transform3D = host.camp_cooking.fire.global_transform
+	var pot_pose: Transform3D = host.camp_cooking.pot.global_transform
+	for i in range(120):
+		host.movable_props.update({}, {}, 1.0 / 60.0)
+		await physics_frame
+	var fire_now: Transform3D = host.camp_cooking.fire.global_transform
+	var pot_now: Transform3D = host.camp_cooking.pot.global_transform
+	check(fire_now.origin.distance_to(fire_pose.origin) < 0.01 and fire_now.basis.y.dot(fire_pose.basis.y) > 0.999, "a cauldron mounted on the campfire leaves the fire in place")
+	check(pot_now.origin.distance_to(pot_pose.origin) < 0.15 and pot_now.basis.y.dot(Vector3.UP) > 0.97, "the mounted cauldron stays upright over the fire")
+	check(not host.movable_props.knock(str(host.camp_cooking.fire.get_meta("prop_key")), Vector3.RIGHT * 10), "even a car cannot move the campfire")
+	host.walker = fire_spot
 	host.camera.look_at(fire_spot + Vector3(0, 1.1, 0))
 	check(host.interaction.current().get("action", "") == "plov_cook", "F starts cooking in the empty cauldron")
 	host.interaction.activate()

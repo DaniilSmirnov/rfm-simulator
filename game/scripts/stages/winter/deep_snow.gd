@@ -207,8 +207,14 @@ func dig(stage, point: Vector3) -> bool:
 	var key = polygon(stage, point)
 	dug[key] = true
 	dirty_polygon(key)
+	reshape_ground(stage, key)
 	refresh_clock = 0.5
 	return true
+
+# Prop physics samples ground() into cached tiles; they must follow the pit.
+func reshape_ground(stage, key: Vector4i) -> void:
+	if stage.solids != null and stage.solids.prop_ground != null:
+		stage.solids.prop_ground.reshape(Rect2(key.x, key.y, key.z, key.z))
 
 func dug_snapshot() -> Array:
 	var rows: Array = []
