@@ -317,6 +317,10 @@ func road_color(p: Vector3, s: float) -> Color:
 func road_ruts(s: float) -> bool:
 	return absf(s - FORD_STATION) >= 30.0
 
+# The tracks fade out over thirty metres towards the ford rather than stopping.
+func rut_strength(s: float) -> float:
+	return smoothstep(30.0, 60.0, absf(s - FORD_STATION))
+
 func walk_floor(pos: Vector3, height: float) -> float:
 	var deck = deck_height(pos)
 	if deck > height:
