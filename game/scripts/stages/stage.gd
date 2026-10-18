@@ -26,6 +26,7 @@ var snow = DeepSnow.new()
 const Snowbanks = preload("res://scripts/stages/winter/snowbanks.gd")
 const StageRegistry = preload("res://scripts/stages/stage_registry.gd")
 const StageSolids = preload("res://scripts/stages/stage_solids.gd")
+const RoadChunks = preload("res://scripts/stages/road_chunks.gd")
 const RoadRelief = preload("res://scripts/stages/road_relief.gd")
 const WorldSync = preload("res://scripts/net/world_sync.gd")
 # Everything that differs between stages lives in the biome (stage_biome.gd);
@@ -450,6 +451,10 @@ func _build_terrain(cooperative: bool = false) -> void:
 func road_width(s: float) -> float:
 	return biome.road_width(s)
 
+func road_meshes(kind: String = "default") -> Array:
+	var holder = get_node_or_null("StageRoadSurface" if kind == "default" else "StageRoadSurface_" + kind)
+	return [] if holder == null else holder.get_children()
+
 func road_surface_vertex(s: float, lateral: float) -> Vector3:
 	var p = at(s) + side(s) * lateral
 	p.y = ground(p) + 0.04
@@ -464,6 +469,7 @@ func road_surface_kind(s: float) -> String:
 func _build_road() -> void:
 	# One mesh per surface kind: the village cobbles carry a texture.
 	var builders: Dictionary = {}
+	var parts: Dictionary = {}
 	# Strips share their edge vertices; sample ground and colour once per vertex.
 	var vertices: Dictionary = {}
 	var vertex = func(station: float, lateral: float) -> Vector3:
@@ -484,7 +490,10 @@ func _build_road() -> void:
 			var builder = SurfaceTool.new()
 			builder.begin(Mesh.PRIMITIVE_TRIANGLES)
 			builders[kind] = builder
+			parts[kind] = {"block": -1, "marks": [], "count": 0}
 		var st: SurfaceTool = builders[kind]
+		var part = parts[kind]
+		RoadChunks.mark(part, i)
 		# Bound physical segment length as well as station length.
 		var divisions = biome.road_divisions(at(s).distance_to(at(s + 1.0)))
 		for segment in range(divisions):
@@ -498,6 +507,7 @@ func _build_road() -> void:
 				var b: Vector3 = vertex.call(begin, left)
 				var c: Vector3 = vertex.call(end, right)
 				var d: Vector3 = vertex.call(end, left)
+				part.count += 6
 				for v in [a, b, c, b, d, c]:
 					st.set_color(color_of.call(v, s))
 					st.set_uv(Vector2(v.x, v.z) * 0.45)
@@ -512,6 +522,7 @@ func _build_road() -> void:
 					var d = b
 					c.y = terrain_surface_height(c)
 					d.y = terrain_surface_height(d)
+					part.count += 6
 					for v in ([a, c, b, b, c, d] if edge_side > 0 else [a, b, c, b, d, c]):
 						st.set_color(color_of.call(v, s).darkened(0.12))
 						st.set_uv(Vector2(v.x, v.z) * 0.45)
@@ -524,19 +535,8 @@ func _build_road() -> void:
 		# Shared positions and colours allow smooth normals across strip joins.
 		st.index()
 		st.generate_normals()
-		var n = MeshInstance3D.new()
-		n.mesh = st.commit()
 		var surface_material = biome.road_material(kind)
-		if surface_material != null:
-			n.material_override = surface_material
-		else:
-			var mat = RallyProps.material(Color.WHITE)
-			mat.vertex_color_use_as_albedo = true
-			mat.vertex_color_is_srgb = true
-			mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-			n.material_override = mat
-		n.name = "StageRoadSurface" if kind == "default" else "StageRoadSurface_" + kind
-		add_child(n)
+		RoadChunks.build(self, "StageRoadSurface" if kind == "default" else "StageRoadSurface_" + kind, surface_material, st.commit().surface_get_arrays(0), parts[kind].marks)
 	biome.after_road()
 
 func shared_stone_mesh() -> SphereMesh:

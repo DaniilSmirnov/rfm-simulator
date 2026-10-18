@@ -35,8 +35,9 @@ func run() -> void:
 	_check_gorge(stage)
 	_check_grove(stage, canyon)
 	_check_people(stage, canyon)
-	var road: ArrayMesh = stage.get_node("StageRoadSurface").mesh
-	var vertices: PackedVector3Array = road.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	var vertices = PackedVector3Array()
+	for piece in stage.road_meshes():
+		vertices.append_array(piece.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX])
 	var contact = true
 	for i in range(0, vertices.size(), 37):
 		contact = contact and absf(vertices[i].y - stage.ground(vertices[i]) - 0.04) < 0.001

@@ -66,8 +66,9 @@ func run() -> void:
 			for lat in [-3.5, 0.0, 3.5]:
 				dry_road = dry_road and stage.water.depth(stage.at(s) + stage.side(s) * lat) < 0.0
 	check(dry_road, "outside the ford the driving surface stays dry")
-	var road: ArrayMesh = stage.get_node("StageRoadSurface").mesh
-	var vertices: PackedVector3Array = road.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	var vertices = PackedVector3Array()
+	for piece in stage.road_meshes():
+		vertices.append_array(piece.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX])
 	var contact = true
 	for i in range(0, vertices.size(), 41):
 		contact = contact and absf(vertices[i].y - stage.ground(vertices[i]) - 0.04) < 0.001
