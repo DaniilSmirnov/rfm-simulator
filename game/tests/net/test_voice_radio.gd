@@ -3,6 +3,7 @@ extends "res://tests/harness.gd"
 # build without browser voice keeps the radio switched off.
 const NetProtocol = preload("res://scripts/net/net_protocol.gd")
 const VoiceChat = preload("res://scripts/net/voice_chat.gd")
+const VoiceNative = preload("res://scripts/net/voice_native.gd")
 
 func _initialize() -> void:
 	call_deferred("run")
@@ -23,11 +24,13 @@ func run() -> void:
 	var voice = VoiceChat.new()
 	root.add_child(voice)
 	await process_frame
-	check(not voice.supported and not voice.available(), "native builds report the radio as unavailable")
-	voice.join()
-	voice.sync_members(["a", "b"])
-	voice.on_signal("a", {"space": "voice", "kind": "offer"})
-	voice.leave()
-	check(not voice.joined and not voice.on_air(), "without browser voice joining and leaving are no-ops")
+	check(voice.supported == VoiceNative.supported(), "native builds offer the radio exactly when the native library ships")
+	check(not voice.available(), "the radio is hidden until the room joins it")
+	if not voice.supported:
+		voice.join()
+		voice.sync_members(["a", "b"])
+		voice.on_signal("a", {"space": "voice", "kind": "offer"})
+		voice.leave()
+		check(not voice.joined and not voice.on_air(), "without a backend joining and leaving are no-ops")
 	voice.free()
 	finish()

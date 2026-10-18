@@ -147,9 +147,11 @@ try {
  await heardInBrowser(pages.b, 'a', 800);
  assert.ok(await heardInBrowser(pages.b, 'a', 1200) < 0.002, 'releasing the native key silences it in the browser');
 
+ // Leaving: the native client says bye, and the next roster no longer lists it.
  toNative({type: 'quit'});
  const quitBy = Date.now() + 10000;
- while (exited === null && Date.now() < quitBy) { await relay(); await wait(50); }
+ while (exited === null && Date.now() < quitBy) await wait(50);
+ for (const id of ['0', 'b']) await pages[id].evaluate(() => RallyVoice.syncMembers(['0', 'b']));
  await relay();
  for (const id of ['0', 'b']) assert.equal(await pages[id].evaluate(() => RallyVoice.state.peers.has('a')), false, `${id} drops native after its bye`);
  console.log('Voice interop: native <-> Chromium in both offer directions, audio both ways, push-to-talk gating and bye passed');

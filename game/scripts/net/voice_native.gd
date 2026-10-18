@@ -77,7 +77,10 @@ static func load_extension() -> bool:
 	var dir = "user://rally_voice/%s" % FileAccess.get_md5(source).left(12)
 	var target = dir.path_join(name)
 	DirAccess.make_dir_recursive_absolute(dir)
-	if FileAccess.get_size(target) != bytes.size():
+	var existing = FileAccess.open(target, FileAccess.READ)
+	var stale = existing == null or existing.get_length() != bytes.size()
+	existing = null
+	if stale:
 		var file = FileAccess.open(target, FileAccess.WRITE)
 		if file == null:
 			return false
@@ -205,7 +208,7 @@ func _open(id: String, initiator: bool) -> Dictionary:
 		_note_failure(id)
 		return {}
 	var peer = {"id": id, "link": link, "offering": initiator, "described": false, "candidates": [], "remote_session": "",
-		"opened_at": Time.get_ticks_msec(), "connected": false, "lost_at": -1, "distance": 9999.0, "talking": false, "player": null}
+		"opened_at": Time.get_ticks_msec(), "connected": false, "distance": 9999.0, "talking": false, "player": null}
 	peers[id] = peer
 	return peer
 
@@ -255,7 +258,8 @@ func _poll_links() -> void:
 					events.append({"type": "error", "stage": "native", "message": str(event.get("message", ""))})
 		if not peers.has(id):
 			continue
-		if not peer.connected and now - int(peer.opened_at) > DIAL_MSEC or peer.lost_at >= 0 and now - int(peer.lost_at) > LOST_MSEC:
+		# "lost_at" exists only while a connected link is silent.
+		if not peer.connected and now - int(peer.opened_at) > DIAL_MSEC or peer.has("lost_at") and now - int(peer.lost_at) > LOST_MSEC:
 			_drop(id, false)
 			_note_failure(id)
 
@@ -263,7 +267,7 @@ func _state_changed(id: String, peer: Dictionary, state: String, now: int) -> vo
 	match state:
 		"connected":
 			peer.connected = true
-			peer.lost_at = -1
+			peer.erase("lost_at")
 			attempts.erase(id)
 		"disconnected":
 			peer.lost_at = now

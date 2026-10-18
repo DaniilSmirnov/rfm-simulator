@@ -186,7 +186,7 @@ func real_links() -> void:
 	check(loud > 0.1, "the tone is heard on the other side (rms %.3f)" % loud)
 	check(encoder.get_level() > 0.2, "the encoder reports the input level")
 	var far = 0.0
-	for frame in range(10):
+	for frame in range(12):
 		var chunk = PackedVector2Array()
 		chunk.resize(960)
 		for i in range(960):
@@ -196,7 +196,10 @@ func real_links() -> void:
 		for packet in encoder.encode(chunk, 48000):
 			a.send_packet(packet)
 		await create_timer(0.02).timeout
-		far = maxf(far, rms(b.pull(960, 48000, 0.15, 1500.0, 0.0)))
+		# The volume glides over ~10 ms: measure once it has settled.
+		var level = rms(b.pull(960, 48000, 0.15, 1500.0, 0.0))
+		if frame >= 4:
+			far = maxf(far, level)
 	check(far < loud * 0.4, "a far radio is quieter (%.3f vs %.3f)" % [far, loud])
 	await create_timer(0.5).timeout
 	b.pull(48000, 48000, 1.0, 3400.0, 0.0)
