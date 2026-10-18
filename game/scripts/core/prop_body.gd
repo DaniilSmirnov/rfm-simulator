@@ -17,9 +17,11 @@ const REST_ANGLE = 0.01
 var _rest_pose = Transform3D()
 var _rest_ticks = 0
 var _grounded_at = Vector3.INF
-# Furniture keeps its tilt unless something may tip it over: a car, a running
-# or jumping walker (allow_tip). The window stays open while the prop tumbles.
-# A walker who drags a tipped prop turns it back upright.
+# Upright furniture keeps its tilt unless something may tip it over: a car, a
+# running or jumping walker (allow_tip). The window stays open while the prop
+# tumbles. A prop already lying over settles freely; a walker who drags it
+# turns it back upright.
+const GUARD_ANGLE = 0.35
 const TUMBLE_SPIN = 0.5
 const TIPPED_ANGLE = 0.5
 const UPRIGHT_ANGLE = 0.05
@@ -50,7 +52,7 @@ static func create(r: Dictionary, world_solids, owner_game) -> RigidBody3D:
 	material.bounce = 0.08
 	body.physics_material_override = material
 	body.freeze = r.anchored or not owner_game.room.is_authority()
-	body._guard(not r.has("tree"))
+	body._guard(not r.has("tree") and r.node.is_inside_tree() and r.node.global_basis.y.normalized().angle_to(Vector3.UP) < GUARD_ANGLE)
 	body.sleeping = true
 	r.node.add_child(body)
 	body.top_level = true
@@ -161,7 +163,7 @@ func _physics_process(delta: float) -> void:
 	elif _rising and _tilt() < UPRIGHT_ANGLE:
 		_rising = false
 	if not sleeping:
-		_guard(not record.has("tree") and _tip_time <= 0.0 and not _rising)
+		_guard(not record.has("tree") and _tip_time <= 0.0 and not _rising and _tilt() < GUARD_ANGLE)
 	if pull_velocity.length_squared() > 0.0001 or _rising:
 		if sleeping: wake()
 	if pull_velocity.length_squared() > 0.0001:
