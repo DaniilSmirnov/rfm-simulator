@@ -51,6 +51,7 @@ const browser = await chromium.launch({headless: true, executablePath: process.e
  '--disable-features=WebRtcHideLocalIpsWithMdns', '--allow-loopback-in-peer-connection',
 ]});
 const pages = {};
+const pageEvents = [];
 
 async function relay() {
  for (const message of inbox.splice(0)) {
@@ -58,6 +59,7 @@ async function relay() {
  }
  for (const id of ['0', 'b']) {
   const out = JSON.parse(await pages[id].evaluate(() => RallyVoice.tick('[]')));
+  for (const event of out.events) if (event.type === 'error') pageEvents.push(`${id}: ${event.stage}: ${event.message}`);
   for (const envelope of out.signals) {
    if (envelope.to === 'a') toNative({type: 'signal', from: id, data: envelope.data});
    else await pages[envelope.to].evaluate(([from, data]) => RallyVoice.onSignal(from, data), [id, envelope.data]);
@@ -119,12 +121,13 @@ try {
  let state = null;
  while (Date.now() < deadline) {
   await relay();
-  const counts = await Promise.all(['0', 'b'].map(id => pages[id].evaluate(() => JSON.parse(RallyVoice.tick('[]')).connected)));
+  const counts = await Promise.all(['0', 'b'].map(id => pages[id].evaluate(() => [...RallyVoice.state.peers.values()].filter(p => p.connected).length)));
   state = await report();
   if (state.connected === 2 && counts.every(n => n === 2)) break;
   await wait(100);
  }
- assert.equal(state?.connected, 2, `native links to both browsers: ${JSON.stringify(state)}`);
+ const browserStates = await pages.b.evaluate(() => [...RallyVoice.state.peers.entries()].map(([id, p]) => `${id}:${p.pc.connectionState}/${p.pc.iceConnectionState}/${p.pc.signalingState}`));
+ assert.equal(state?.connected, 2, `native links to both browsers: ${JSON.stringify(state)} b=${JSON.stringify(browserStates)} chrome=${browser.version()} errors=${JSON.stringify(pageEvents)}`);
  for (const id of ['0', 'b']) assert.equal(await pages[id].evaluate(() => [...RallyVoice.state.peers.values()].filter(p => p.connected).length), 2, `${id} is linked with both`);
 
  assert.ok(await heardInNative('0', 1500) < 0.002, 'native hears nothing before the browser presses the key');
