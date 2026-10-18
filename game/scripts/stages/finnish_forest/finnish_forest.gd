@@ -344,7 +344,7 @@ func woodland_blocked(pos: Vector3, padding: float) -> bool:
 	return reserved(pos, padding) or stage.water.depth(pos) > -0.3 - padding * 0.3
 
 func build_details(cooperative: bool) -> void:
-	await stage.build_woodland(cooperative)
+	await stage.woodland.build_woodland(cooperative)
 	stage.water.build(stage)
 	build_scenery()
 	forest_life.build(stage)

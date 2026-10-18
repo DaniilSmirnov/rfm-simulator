@@ -49,7 +49,7 @@ func forest_tree_count() -> int:
 	return 7600
 
 func build_details(cooperative: bool) -> void:
-	await stage.build_woodland(cooperative)
+	await stage.woodland.build_woodland(cooperative)
 
 func build_horizon() -> void:
 	stage.build_ridges()
