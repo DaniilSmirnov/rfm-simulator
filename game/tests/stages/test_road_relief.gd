@@ -69,10 +69,12 @@ func run() -> void:
 		check(absf(stage.ground(far) - stage.biome.base_ground(far)) < 0.1, "the basin does not spread over the road")
 		# --- the mesh carries the relief
 		stage._build_road()
-		var road: MeshInstance3D = stage.get_node("StageRoadSurface")
-		var arrays = road.mesh.surface_get_arrays(0)
-		var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
-		var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+		var vertices = PackedVector3Array()
+		var indices = PackedInt32Array()
+		for piece in stage.road_meshes():
+			var arrays = piece.mesh.surface_get_arrays(0)
+			vertices.append_array(arrays[Mesh.ARRAY_VERTEX])
+			indices.append_array(arrays[Mesh.ARRAY_INDEX])
 		check(indices.size() > 840 * 6 * 2 * 20 and indices.size() < 350000, "the road is cut finely across the tracks (%d indices)" % indices.size())
 		var station = roundf(deepest_s)
 		var wanted = stage.road_surface_vertex(station, 1.0)
