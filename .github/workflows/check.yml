@@ -190,8 +190,94 @@ jobs:
           path: dist-vk-prototype/
           if-no-files-found: error
 
+  native-voice:
+    name: Native radio (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # glibc 2.28: the library loads on every distribution Godot supports.
+          - {target: linux-x86_64, os: ubuntu-24.04, container: "quay.io/pypa/manylinux_2_28_x86_64"}
+          - {target: windows-x86_64, os: ubuntu-24.04}
+          - {target: windows-x86_32, os: ubuntu-24.04}
+          - {target: macos-universal, os: macos-14}
+          - {target: android-arm64, os: ubuntu-24.04}
+          - {target: android-arm32, os: ubuntu-24.04}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install build tools
+        shell: bash
+        run: |
+          case "${{ matrix.target }}" in
+            linux-*) echo /opt/python/cp312-cp312/bin >> "$GITHUB_PATH"; /opt/python/cp312-cp312/bin/pip install -q cmake ninja ;;
+            windows-*) sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends ninja-build mingw-w64 g++-mingw-w64 ;;
+            macos-*) brew install ninja ;;
+            android-*) sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends ninja-build ;;
+          esac
+      - uses: actions/cache@v4
+        with:
+          path: .cache/voice
+          key: voice-${{ matrix.target }}-${{ hashFiles('native/voice/deps.json') }}-${{ hashFiles('native/voice/**') }}
+          restore-keys: voice-${{ matrix.target }}-${{ hashFiles('native/voice/deps.json') }}-
+      - name: Build the extension
+        shell: bash
+        run: node scripts/build-voice.mjs --target=${{ matrix.target }}
+      - name: Check the library
+        shell: bash
+        run: |
+          lib=$(ls game/addons/rally_voice/bin/librally_voice.*)
+          ls -la $lib
+          if command -v file >/dev/null; then file $lib; fi
+          case "${{ matrix.target }}" in
+            linux-*) ! objdump -T $lib | grep -oE "GLIBC_2\.(29|[3-9][0-9])" ;;
+            macos-*) lipo -info $lib | grep -q "x86_64 arm64\|arm64 x86_64" ;;
+          esac
+      - uses: actions/upload-artifact@v4
+        with:
+          name: voice-${{ matrix.target }}
+          path: game/addons/rally_voice/bin/
+          retention-days: 7
+          if-no-files-found: error
+
+  native-voice-test:
+    name: Native radio (loopback and browser interop)
+    needs: native-voice
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: voice-linux-x86_64
+          path: game/addons/rally_voice/bin
+      - run: node scripts/build-voice.mjs --install
+      - name: Native links, Opus and the mesh in Godot
+        run: RFM_REQUIRE_NATIVE_VOICE=1 node scripts/test-game.mjs --only=test_voice_native.gd
+      - name: Install browser test runtime
+        run: |
+          npm install --no-save --package-lock=false playwright@1.63.0
+          npx playwright install --with-deps chromium
+      - name: Native Godot client talks with a Chromium client
+        run: node scripts/test-voice-interop.mjs
+
   android:
     name: Android build
+    needs: native-voice
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
@@ -213,6 +299,13 @@ jobs:
           distribution: temurin
           java-version: 17
       - run: npm ci
+      - name: Add the native radio extension
+        uses: actions/download-artifact@v4
+        with:
+          pattern: voice-*
+          merge-multiple: true
+          path: game/addons/rally_voice/bin
+      - run: node scripts/build-voice.mjs --install
       - name: Export the release APK (production server, arm64 and armv7)
         run: npm run build:android
       - name: Check package name, version and signature
@@ -221,6 +314,9 @@ jobs:
           apk="dist-android/Rally Fans Simulator.apk"
           "$tools/aapt2" dump badging "$apk" | tee badging.txt | grep -E "^package:|native-code|sdkVersion"
           grep -q "name='ru.rallyfansmap.rallyfanssimulator'" badging.txt
+          grep -q "android.permission.RECORD_AUDIO" badging.txt
+          unzip -l "$apk" > apk.txt
+          if ! grep -q "librally_voice.android.arm64.so" apk.txt; then unzip -p "$apk" "assets/*.pck" | grep -qa "librally_voice.android.arm64.so"; fi
           "$tools/apksigner" verify --verbose "$apk"
 
       - uses: actions/upload-artifact@v4
@@ -232,6 +328,7 @@ jobs:
 
   desktop:
     name: Desktop build (${{ matrix.platform }})
+    needs: native-voice
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     strategy:
@@ -250,6 +347,13 @@ jobs:
         if: matrix.platform == 'windows'
         run: sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends wine wine64
       - run: npm ci
+      - name: Add the native radio extension
+        uses: actions/download-artifact@v4
+        with:
+          pattern: voice-*
+          merge-multiple: true
+          path: game/addons/rally_voice/bin
+      - run: node scripts/build-voice.mjs --install
       - name: Export the release build (Windows x86 + x64, others x86_64/universal)
         run: npm run build:${{ matrix.platform }}
       - name: Check the executable format
@@ -258,10 +362,15 @@ jobs:
             unzip -q dist-macos/*.zip -d macos-check
             file macos-check/*.app/Contents/MacOS/* | tee file.txt
             grep -q "Mach-O universal binary with 2 architectures" file.txt
+            grep -qa "addons/rally_voice/bin/librally_voice.macos.universal.dylib" macos-check/*.app/Contents/Resources/*.pck
           elif [ "${{ matrix.platform }}" = windows ]; then
             node scripts/verify-windows-build.mjs dist-windows
+            # The radio library rides inside each exe's embedded pack.
+            grep -qa "addons/rally_voice/bin/librally_voice.windows.x86_64.dll" dist-windows/Rally_Fans_Simulator_x64.exe
+            grep -qa "addons/rally_voice/bin/librally_voice.windows.x86_32.dll" dist-windows/Rally_Fans_Simulator_x86.exe
           else
             file dist-${{ matrix.platform }}/* | tee file.txt && grep -qE "ELF 64-bit LSB.*x86-64|PE32\+ executable.*x86-64" file.txt
+            grep -qa "addons/rally_voice/bin/librally_voice.linux.x86_64.so" dist-linux/*.pck
           fi
 
       - uses: actions/upload-artifact@v4

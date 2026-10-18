@@ -197,3 +197,13 @@ test('the radio flag reaches other members through the room server', () => {
   assert.equal(reply.players.find(p => p.id === g.player).state.radio, true);
   assert.equal(reply.players.find(p => p.id === h.player).state.radio, false);
 });
+
+test('browser and native radios share the distance bands', () => {
+  const protocol = JSON.parse(readFileSync(new URL('../game/data/net_protocol.json', import.meta.url), 'utf8'));
+  const q = load().voice.quality;
+  for (const band of protocol.voice.bands) {
+    const at = band.max < 0 ? 10000 : band.max;
+    const got = q(at);
+    assert.deepEqual([got.volume, got.noise, got.cutoff], [band.volume, band.noise, band.cutoff], `band up to ${band.max} m`);
+  }
+});

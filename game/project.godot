@@ -31,6 +31,9 @@ textures/default_filters/use_nearest_mipmap_filter=false
 environment/defaults/default_clear_color=Color(0.64, 0.72, 0.72, 1)
 
 [audio]
+
+driver/enable_input=true
+driver/enable_input.web=false
 default_bus_layout="res://default_bus_layout.tres"
 
 [internationalization]

@@ -32,6 +32,9 @@ const CROUCH = 1.3
 # left mirrors x). The mouth is just in front of the face.
 const REST_HAND = Vector3(0.40, 0.81, -0.05)
 const MOUTH = Vector3(0.07, 1.42, -0.42)
+# Radio held just below and beside the mouth; the other hand rests forward.
+const RADIO_HAND = Vector3(0.11, 1.36, -0.40)
+const RADIO_FREE_HAND = Vector3(0.18, 0.92, -0.22)
 const CARRY_HAND = Vector3(0.30, 0.95, -0.40)
 const PUSH_HAND = Vector3(0.25, 1.12, -0.62)
 const CHEER_HAND = Vector3(0.50, 1.74, -0.16)
@@ -139,11 +142,15 @@ static func _arms(j: Dictionary, p: Dictionary, gait: int, swing: float) -> void
 		var pole = POLE_HANG
 		match mode:
 			"radio":
+				# `lift` raises the radio to the mouth; while on air the hand
+				# bobs a little with the speech.
+				var raise = smoothstep(0.0, 1.0, lift)
 				if right:
-					target = MOUTH + Vector3(0.04, 0.0, 0.02)
+					var bob = Vector3(0, sin(float(p.get("time", 0.0)) * 11.0 + float(p.get("seed", 0.0))) * 0.006, 0) * raise
+					target = rest.lerp(RADIO_HAND, raise) + bob
 					pole = POLE_LIFT
 				else:
-					target = Vector3(0.18, 0.92, -0.22)
+					target = rest.lerp(RADIO_FREE_HAND, raise)
 					pole = POLE_OUT
 			"eat", "drink":
 				if right:

@@ -1,10 +1,12 @@
 extends Node
-# Push-to-talk radio between the members of a room. Browser builds only: the
-# audio itself is WebRTC in web/voice-chat.js, this node feeds it the roster,
-# distances and the key, and relays its signaling over the room socket
-# (`space: "voice"`). Native builds report the radio as unavailable until the
-# native/voice extension carries audio.
+# Push-to-talk radio between the members of a room. The audio is WebRTC in a
+# backend: web/voice-chat.js in the browser (voice_web.gd), the native/voice
+# GDExtension on desktop and Android (voice_native.gd). This node feeds the
+# backend the roster, distances and the key, and relays its signaling over the
+# room socket (`space: "voice"`). Without either backend the radio is hidden.
 const NetProtocol = preload("res://scripts/net/net_protocol.gd")
+const VoiceWeb = preload("res://scripts/net/voice_web.gd")
+const VoiceNative = preload("res://scripts/net/voice_native.gd")
 const UiKit = preload("res://scripts/ui/ui_kit.gd")
 const Loc = preload("res://scripts/ui/loc.gd")
 
@@ -15,6 +17,7 @@ const PENDING_TTL_MSEC = 10000
 const MAX_PENDING = 64
 
 var room: Node
+var backend: Node
 var supported := false
 var joined := false
 var transmitting := false
@@ -28,7 +31,14 @@ func setup(owner: Node) -> void:
 	room = owner
 
 func _ready() -> void:
-	supported = OS.has_feature("web") and _eval("typeof RallyVoice === 'object' && typeof RTCPeerConnection === 'function'") == true
+	if VoiceWeb.supported():
+		backend = VoiceWeb.new()
+	elif VoiceNative.supported():
+		backend = VoiceNative.new()
+	supported = backend != null
+	if supported:
+		backend.name = "Backend"
+		add_child(backend)
 
 # The radio key and the touch button exist only where voice can work.
 func available() -> bool:
@@ -43,7 +53,7 @@ func join() -> void:
 		return
 	var session = ("%s-%s-%d" % [room.room_id, room.player_id, Time.get_ticks_msec()]).left(96)
 	var options = {"localId": room.player_id, "session": session, "iceServers": NetProtocol.direct("ice_servers", [])}
-	joined = _eval("RallyVoice.join(%s)" % JSON.stringify(options)) == true
+	joined = backend.join(options)
 	if joined:
 		sync_members(room.members.keys())
 
@@ -52,7 +62,7 @@ func leave() -> void:
 	if not joined:
 		return
 	_set_ptt(false)
-	_eval("RallyVoice.leave()")
+	backend.leave()
 	_tick()
 	joined = false
 	pending.clear()
@@ -62,11 +72,11 @@ func leave() -> void:
 
 func sync_members(ids: Array) -> void:
 	if joined:
-		_eval("RallyVoice.syncMembers(%s)" % JSON.stringify(ids))
+		backend.sync_members(ids)
 
 func on_signal(from: String, data: Dictionary) -> void:
 	if joined:
-		_eval("RallyVoice.onSignal(%s,%s)" % [JSON.stringify(from), JSON.stringify(data)])
+		backend.on_signal(from, data)
 
 func _process(delta: float) -> void:
 	if not joined:
@@ -82,12 +92,11 @@ func _set_ptt(value: bool) -> void:
 	if value == transmitting:
 		return
 	transmitting = value
-	_eval("RallyVoice.setPtt(%s)" % ("true" if value else "false"))
+	backend.set_ptt(value)
 
 func _tick() -> void:
-	var raw = _eval("RallyVoice.tick(%s)" % JSON.stringify(JSON.stringify(_levels())))
-	var result = JSON.parse_string(str(raw)) if raw is String else null
-	if result is Dictionary:
+	var result: Dictionary = backend.tick(_levels())
+	if not result.is_empty():
 		connected_peers = int(result.get("connected", 0))
 		for envelope in result.get("signals", []):
 			if envelope is Dictionary and envelope.get("data") is Dictionary:
@@ -138,8 +147,3 @@ func _update_label() -> void:
 	elif not names.is_empty():
 		label.text = Loc.t("РАЦИЯ · %s") % ", ".join(names)
 	label.visible = on_air() or not names.is_empty()
-
-func _eval(code: String):
-	if not OS.has_feature("web"):
-		return null
-	return JavaScriptBridge.eval(code, true)

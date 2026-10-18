@@ -862,7 +862,7 @@ static func course_official(role: String, variant: int = 0) -> Node3D:
 		CharacterRig.pose(avatar, {"arms": "clipboard"})
 	else:
 		CharacterRig.pose(avatar)
-		box(avatar, Vector3(-0.37, 1.28, 0.07), Vector3(0.11, 0.13, 0.06), Color("263336")).name = "Radio"
+		preload("res://scripts/people/radio_model.gd").clip_to_chest(avatar, Vector3(-0.17, 1.12, -0.33))
 	return avatar
 
 static func judges_car() -> Node3D:

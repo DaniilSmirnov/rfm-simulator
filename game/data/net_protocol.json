@@ -39,6 +39,13 @@
     "comment": "WebRTC audio signaling only; media never passes through the room server.",
     "max_signal_bytes": 8192,
     "signals_per_10s": 80,
-    "session_timeout": 30
+    "session_timeout": 30,
+    "bands": [
+      {"max": 30, "volume": 1, "noise": 0, "cutoff": 3400},
+      {"max": 100, "volume": 0.92, "noise": 0.04, "cutoff": 3200},
+      {"max": 250, "volume": 0.72, "noise": 0.12, "cutoff": 2700},
+      {"max": 500, "volume": 0.45, "noise": 0.24, "cutoff": 2100},
+      {"max": -1, "volume": 0.15, "noise": 0.4, "cutoff": 1500}
+    ]
   }
 }
