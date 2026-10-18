@@ -1,6 +1,18 @@
 extends Node3D
 const Stage = preload("res://scripts/stages/stage.gd")
 const Motion = preload("res://scripts/cars/vehicle_motion.gd")
+const Registry = preload("res://scripts/core/prop_registry.gd")
+const Props = preload("res://scripts/core/props.gd")
+const Body = preload("res://scripts/core/prop_body.gd")
+class Solo extends RefCounted:
+	func is_authority() -> bool: return true
+var room = Solo.new()
+var stage
+var playing = true
+var paused = false
+var dead = false
+var finished = false
+var seated = false
 func _ready() -> void:
 	var motion = Motion.new()
 	var heading = 0.0
@@ -11,7 +23,7 @@ func _ready() -> void:
 		get_tree().quit(1)
 		return
 	print("WEB_HANDLING_PASS: exported player accelerates and steers")
-	var stage = Stage.new(2)
+	stage = Stage.new(2)
 	add_child(stage)
 	var reports = []
 	await stage.build_async(func(title, amount):
@@ -32,6 +44,28 @@ func _ready() -> void:
 		get_tree().quit(1)
 		return
 	print("WEB_BAKED_VILLAGE_PASS: async scene, progress, walking support, harvest and bell")
+	var chair = Node3D.new()
+	stage.add_child(chair)
+	Props.chair(chair, Vector3.ZERO)
+	var at: Vector3 = stage.at(300)
+	chair.position = at + Vector3.UP * 4
+	chair.rotation.z = PI / 2
+	var record = Registry.register(stage.solids, chair, 5, false, "web:chair")
+	var body = Body.create(record, stage.solids, self)
+	for i in range(180): await get_tree().physics_frame
+	if chair.position.y > at.y + 1 or absf(chair.global_basis.y.dot(Vector3.UP)) > 0.6 or not body.sleeping:
+		push_error("WEB_PHYSICS_FAIL: chair did not fall and sleep in its physical pose")
+		get_tree().quit(1)
+		return
+	var resting = chair.position
+	body.wake()
+	body.apply_central_impulse(Vector3.RIGHT * 20)
+	for i in range(30): await get_tree().physics_frame
+	if chair.position.distance_to(resting) < 0.1:
+		push_error("WEB_PHYSICS_FAIL: a second chair impact did not wake it")
+		get_tree().quit(1)
+		return
+	print("WEB_PROP_PHYSICS_PASS: chair falls, sleeps, stays fallen and wakes on a second hit")
 	await get_tree().physics_frame
 	var lamp: RigidBody3D = stage.solids.lamps[0].body
 	var before = lamp.position

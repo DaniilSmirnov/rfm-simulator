@@ -56,7 +56,7 @@ async function until(predicate, title, timeout=60000) {
   }
   throw Error(`${title} timed out; host=${JSON.stringify(latest('host'))}; guest=${JSON.stringify(latest('guest'))}`);
 }
-function command(role, action) {controls[role] = {id:controls[role].id+1,action};}
+function command(role, action, extra = {}) {controls[role] = {id:controls[role].id+1,action,...extra};}
 let syncs=0, dropped=0, outageRejected=0;
 let httpOutage=false, socketBlackholeUntil=0;
 const output = join(root,'.cache/network-web');
@@ -241,6 +241,19 @@ try {
   command('guest','recover');await until(()=>latest('guest').ack>seq && latest('guest').pending===0,'recovery acknowledged');
   command('guest','exit');await until(()=>!latest('guest').in_car,'exit car');
   command('guest','enter');await until(()=>latest('guest').in_car,'enter car');
+  command('host','prop_drop');
+  await until(()=>latest('host').prop,'host drops a chair');
+  command('guest','prop_watch',{prop_key:latest('host').prop.key});
+  const propConverged=()=> {
+    const host=latest('host').prop,guest=latest('guest').prop;
+    return host && guest && host.key===guest.key && Math.hypot(...host.pos.map((x,i)=>x-guest.pos[i]))<0.03 && Math.hypot(...host.rot.map((x,i)=>Math.atan2(Math.sin(x-guest.rot[i]),Math.cos(x-guest.rot[i]))))<0.01;
+  };
+  await until(()=>latest('host').prop?.sleeping && propConverged(),'fallen chair settles identically on both clients');
+  assert.ok(Math.abs(latest('host').prop.up)<0.7,'chair stays fallen');
+  const restingProp=latest('host').prop.pos;
+  command('host','prop_hit');
+  await until(()=>Math.hypot(...latest('host').prop.pos.map((x,i)=>x-restingProp[i]))>0.1,'second impact wakes the replicated chair');
+  await until(()=>latest('host').prop.sleeping && propConverged(),'chair resettles and synchronizes after a second impact');
   const previousPlayer=latest('guest').player;
   command('guest','rejoin');
   await until(()=>latest('guest')?.player!==previousPlayer && latest('guest')?.active,'fresh session after leave and rejoin',web?120000:60000);
@@ -251,7 +264,7 @@ try {
   if(web)assert.equal(latest("guest").safe_area_ready,true,"mobile Web client reads safe area through browser-local transport");
   if(socketMode)assert.ok(!logs.some(line=>line.includes('ROOM_SOCKET disabled')),'WebSocket stayed in use');
   if(directMode)await until(()=>latest('guest')?.direct_healthy,'direct link reopened after rejoin',60000);
-  console.log(`PASS: ${web?'two Chromium clients (mobile guest)':'two Godot clients'}: ${directMode?'WebRTC direct link, WebSocket setup with 150ms RTT':socketMode?'WebSocket with 150ms RTT':'delayed HTTP, 2 lost responses'}, ${!socketMode?'30s HTTP recovery':!web?'silent socket fallback/reconnect':'socket/direct transport'}, prediction, braking, convergence, pause/resume, recovery, exit/re-entry, leave/rejoin`);
+  console.log(`PASS: ${web?'two Chromium clients (mobile guest)':'two Godot clients'}: ${directMode?'WebRTC direct link, WebSocket setup with 150ms RTT':socketMode?'WebSocket with 150ms RTT':'delayed HTTP, 2 lost responses'}, ${!socketMode?'30s HTTP recovery':!web?'silent socket fallback/reconnect':'socket/direct transport'}, prediction, braking, convergence, pause/resume, recovery, exit/re-entry, fallen prop and repeated impact, leave/rejoin`);
 } catch (error) {
   console.error(logs.filter(x => !x.includes('NETWORK_SAMPLE ')).slice(-100).join('\n'));
   if(process.env.GITHUB_ACTIONS) {

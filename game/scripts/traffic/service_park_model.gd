@@ -59,7 +59,10 @@ static func tent(stage: Node3D, root: Node3D, center: Vector2, team: Dictionary)
 	P.box(root, at(back_x, center.y, 1.25), Vector3(0.03, 2.3, half.y * 2), team.roof.lightened(0.1))
 	P.box(root, at(back_x - outward * 0.02, center.y, 1.6), Vector3(0.02, 0.5, half.y * 1.6), team.trim)
 	P.label_3d(root, at(back_x - outward * 0.035, center.y, 1.6), str(team.name), 96, 0.006, team.roof.darkened(0.3), -PI / 2 if outward > 0 else PI / 2)
-	Movable.group(stage.solids, root, first, 90, true)
+	# Keep equipment keys stable after excluding the former movable tent slot.
+	root.set_meta("prop_count", int(root.get_meta("prop_count", 0)) + 1)
+	stage.solids.solid(root, at(back_x, center.y, 1.25), Vector3(0.03, 2.3, half.y * 2), "service")
+	stage.solids.solid(root, at(center.x, center.y, 2.55), Vector3(half.x * 2 + 0.2, 0.1, half.y * 2 + 0.2), "service")
 	first = root.get_child_count()
 	# Workbench along the back wall, a red tool chest and a jack.
 	var bench_x = back_x - outward * 0.55

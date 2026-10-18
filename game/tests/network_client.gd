@@ -7,6 +7,7 @@ var control: HTTPRequest
 var last_command = -1
 var poll_clock = 0.0
 var report_clock = 0.0
+var prop_key = ""
 func _ready() -> void:
 	# Browser transport tests keep real physics, without two software-rendered forests.
 	if OS.has_feature("web"):
@@ -44,6 +45,9 @@ func _process(delta: float) -> void:
 		sample.safe_area_ready = game.mobile_safe_rect.has_area()
 		sample.direct = game.room.direct.open_links().size()
 		sample.direct_healthy = not game.room.is_host and game.room.direct.healthy(game.room.host_id)
+		if game.movable_props.records.has(prop_key):
+			var prop: Dictionary = game.movable_props.records[prop_key]
+			sample.prop = {"key": prop_key, "pos": game.room.a(prop.node.global_position), "rot": [prop.node.global_rotation.x, prop.node.global_rotation.y, prop.node.global_rotation.z], "up": prop.node.global_basis.y.y, "sleeping": prop.body.sleeping}
 		print("NETWORK_SAMPLE ", JSON.stringify(sample))
 func on_control(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
 	if code != 200: return
@@ -66,3 +70,13 @@ func on_control(_result: int, code: int, _headers: PackedStringArray, body: Pack
 		"recover": game.room.recover_drive()
 		"exit", "enter": game._toggle_car()
 		"rejoin": game.room.leave()
+		"prop_drop":
+			game.camp_actions.apply_chair(game.room.player_id, game.stage.at(500), 0)
+			var chair: Node3D = game.personal_chairs[game.room.player_id]
+			game.movable_props.refresh()
+			prop_key = str(chair.get_meta("prop_key"))
+			chair.global_position += Vector3.UP * 3
+			chair.global_rotation.z = PI / 2
+			game.movable_props.records[prop_key].body.place()
+		"prop_watch": prop_key = str(command.prop_key)
+		"prop_hit": game.movable_props.knock(prop_key, Vector3.RIGHT * 10)

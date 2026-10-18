@@ -7,6 +7,9 @@ const Props = preload("res://scripts/core/props.gd")
 const RigidSettler = preload("res://scripts/stages/rigid_settler.gd")
 const COLLISION_CELL = 16.0
 
+const Ground = preload("res://scripts/stages/prop_ground.gd")
+var prop_ground
+
 var stage: Node3D
 var obstacles: Array[Dictionary] = []
 var lamps: Array[Dictionary] = []
@@ -24,6 +27,9 @@ var moving_obstacle_ids: Array[int] = []
 var movable_obstacle_ids: Array[int] = []
 var prop_index_frame = -1
 var indexed_obstacle_count = -1
+# Awake props are re-measured once per physics tick, not once per collision query.
+var moving_pose_tick = -1
+const MOVING_MARGIN = 0.3
 var collision_radius_factor = 1.0
 
 func solid(parent: Node3D, center: Vector3, size: Vector3, kind: String) -> StaticBody3D:
@@ -79,6 +85,8 @@ func lamp(p: Vector3, yaw: float) -> RigidBody3D:
 	return body
 
 func relative_pose(node: Node3D) -> Transform3D:
+	if node.is_inside_tree():
+		return stage.global_transform.affine_inverse() * node.global_transform
 	var pose = node.transform
 	var parent = node.get_parent()
 	while parent != stage and parent is Node3D:
@@ -91,12 +99,13 @@ func index() -> void:
 	obstacles.assign(obstacles.filter(func(o): return is_instance_valid(o.body)))
 	collision_cells.clear()
 	moving_obstacle_ids.clear()
+	moving_pose_tick = -1
 	movable_obstacle_ids.clear()
 	prop_index_frame = Engine.get_process_frames()
 	collision_radius_factor = 1.0
 	for id in range(obstacles.size()):
 		var object: Dictionary = obstacles[id]
-		if object.body is RigidBody3D:
+		if object.body is RigidBody3D or object.get("dynamic", false):
 			moving_obstacle_ids.append(id)
 			continue
 		if object.get("movable", false):
@@ -137,11 +146,17 @@ func candidates(start: Vector3, end: Vector3, radius: float) -> Array:
 		for z in range(floori(low.z / COLLISION_CELL), floori(high.z / COLLISION_CELL) + 1):
 			for id in collision_cells.get(Vector2i(x, z), []):
 				seen[id] = true
+	var tick = Engine.get_physics_frames()
+	if moving_pose_tick != tick:
+		moving_pose_tick = tick
+		for id in moving_obstacle_ids:
+			var object: Dictionary = obstacles[id]
+			if is_instance_valid(object.body): _cache_live_pose(object)
 	for id in moving_obstacle_ids:
 		var object: Dictionary = obstacles[id]
 		if not is_instance_valid(object.body): continue
-		_cache_live_pose(object)
-		var bounds: AABB = object.live_bounds.grow(radius * float(object.live_expansion))
+		if not object.has("live_bounds"): _cache_live_pose(object)
+		var bounds: AABB = object.live_bounds.grow(radius * float(object.live_expansion) + MOVING_MARGIN)
 		if bounds.end.x >= low.x and bounds.position.x <= high.x and bounds.end.z >= low.z and bounds.position.z <= high.z:
 			seen[id] = true
 	var ids = seen.keys()
@@ -150,6 +165,11 @@ func candidates(start: Vector3, end: Vector3, radius: float) -> Array:
 
 # Hundreds of props stand still during NPC pathfinding. Reuse their geometry
 # until the actual transform changes, including edits outside the drag system.
+# Call after teleporting a prop outside physics (tests, network snapshots) so
+# the per-tick broadphase cache does not keep its previous bounds.
+func invalidate_live_poses() -> void:
+	moving_pose_tick = -1
+
 func _cache_live_pose(object: Dictionary) -> void:
 	var current: Transform3D = object.body.global_transform if object.body.is_inside_tree() else relative_pose(object.body)
 	if object.get("live_global_pose") == current:
@@ -343,3 +363,11 @@ func walking_floor(pos: Vector3, feet_height: float) -> float:
 		if height <= feet_height + 0.45:
 			result = maxf(result, height)
 	return result if is_finite(result) else stage.walking_ground(pos)
+
+# Terrain collision is shared by active props instead of one overlapping patch per body.
+func physics_ground(at: Vector3, reach: float) -> void:
+	if prop_ground == null:
+		prop_ground = Ground.new()
+		prop_ground.stage = stage
+		add_child(prop_ground)
+	prop_ground.ensure_at(at, reach)

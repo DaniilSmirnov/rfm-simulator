@@ -141,6 +141,7 @@ func run() -> void:
 	var lamp = village.solids.lamps[0].body
 	# Isolate the lamp contact from neighbouring facades for the full car body.
 	lamp.position = village.at(12)
+	village.solids.invalidate_live_poses()
 	var center = village.solids.relative_pose(lamp).origin
 	var start = center + Vector3(3.0, 0, 0)
 	start.y = village.ground(start)

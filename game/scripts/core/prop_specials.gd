@@ -42,5 +42,7 @@ static func move_tree(stage, r: Dictionary) -> void:
 		if not stage.tree_cells.has(new_cell): stage.tree_cells[new_cell] = []
 		stage.tree_cells[new_cell].append(index)
 	stage.trees[index] = next
+	stage.fallen[index].prop_rotation = r.node.rotation
+	stage.fallen[index].dynamic = true
 	stage.fallen[index].erase("rendered_age")
 	stage.update_fallen(0)

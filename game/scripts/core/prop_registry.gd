@@ -37,9 +37,18 @@ static func register(solids, node: Node3D, mass: float = 15.0, anchored: bool = 
 			obstacle.prop = key
 			found = true
 	if not found:
-		solids.solid(node, box.get_center(), box.size.max(Vector3.ONE * 0.08), "prop")
-		solids.obstacles.back().movable = true
-		solids.obstacles.back().prop = key
+		var parts: Array[AABB] = []
+		if node.has_meta("prop_shapes"):
+			parts.assign(node.get_meta("prop_shapes"))
+		else:
+			for child in node.get_children():
+				if child is MeshInstance3D and child.mesh != null:
+					parts.append(child.transform * child.mesh.get_aabb())
+		if parts.is_empty() or parts.size() > 12: parts.assign([box])
+		for part in parts:
+			solids.solid(node, part.get_center(), part.size.max(Vector3.ONE * 0.03), "prop")
+			solids.obstacles.back().movable = true
+			solids.obstacles.back().prop = key
 	solids.indexed_obstacle_count = -1
 	return record
 
@@ -52,8 +61,8 @@ static func group(solids, parent: Node3D, first: int, mass: float = 15.0, anchor
 	for child in children:
 		parent.remove_child(child)
 		node.add_child(child)
-	Merge.bake(node)
 	register(solids, node, mass, anchored)
+	Merge.bake(node)
 	return node
 
 static func _scene_key(solids, node: Node) -> String:
