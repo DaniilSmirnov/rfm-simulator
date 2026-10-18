@@ -1,4 +1,5 @@
 extends "res://tests/harness.gd"
+const RoadChunks = preload("res://scripts/stages/road_chunks.gd")
 const Stage = preload("res://scripts/stages/stage.gd")
 func _initialize() -> void:
 	call_deferred("run")
@@ -13,11 +14,11 @@ func run() -> void:
 			var kinds = ["asphalt", "cobble", "gravel"]
 			var present = kinds.filter(func(kind): return stage.get_node_or_null("StageRoadSurface_" + kind) != null)
 			check(present.size() == 3, "village road is split into asphalt, cobble and gravel meshes")
-			check(stage.road_meshes("cobble")[0].material_override.albedo_texture != null, "cobbles carry a sett texture")
+			check(RoadChunks.meshes(stage, "cobble")[0].material_override.albedo_texture != null, "cobbles carry a sett texture")
 		var vertices = PackedVector3Array()
 		var indices = PackedInt32Array()
 		var normals = PackedVector3Array()
-		for piece in stage.road_meshes("default" if variant == 0 else "cobble"):
+		for piece in RoadChunks.meshes(stage, "default" if variant == 0 else "cobble"):
 			var arrays = piece.mesh.surface_get_arrays(0)
 			vertices.append_array(arrays[Mesh.ARRAY_VERTEX])
 			indices.append_array(arrays[Mesh.ARRAY_INDEX])
@@ -27,7 +28,7 @@ func run() -> void:
 		for vertex in vertices:
 			valid = valid and is_finite(vertex.x) and is_finite(vertex.y) and is_finite(vertex.z)
 		check(valid, "road geometry and smooth normals are finite")
-		var pieces = stage.road_meshes("default" if variant == 0 else "cobble")
+		var pieces = RoadChunks.meshes(stage, "default" if variant == 0 else "cobble")
 		var longest = 0.0
 		for piece in pieces:
 			var box: AABB = piece.mesh.get_aabb()

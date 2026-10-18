@@ -1,4 +1,5 @@
 extends "res://tests/harness.gd"
+const RoadChunks = preload("res://scripts/stages/road_chunks.gd")
 const Stage = preload("res://scripts/stages/stage.gd")
 const Form = preload("res://scripts/stages/canyon/canyon_form.gd")
 func _initialize() -> void:
@@ -36,7 +37,7 @@ func run() -> void:
 	_check_grove(stage, canyon)
 	_check_people(stage, canyon)
 	var vertices = PackedVector3Array()
-	for piece in stage.road_meshes():
+	for piece in RoadChunks.meshes(stage):
 		vertices.append_array(piece.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX])
 	var contact = true
 	for i in range(0, vertices.size(), 37):

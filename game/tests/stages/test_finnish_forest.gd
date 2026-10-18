@@ -1,4 +1,5 @@
 extends "res://tests/harness.gd"
+const RoadChunks = preload("res://scripts/stages/road_chunks.gd")
 const Stage = preload("res://scripts/stages/stage.gd")
 const Motion = preload("res://scripts/cars/vehicle_motion.gd")
 func _initialize() -> void:
@@ -67,7 +68,7 @@ func run() -> void:
 				dry_road = dry_road and stage.water.depth(stage.at(s) + stage.side(s) * lat) < 0.0
 	check(dry_road, "outside the ford the driving surface stays dry")
 	var vertices = PackedVector3Array()
-	for piece in stage.road_meshes():
+	for piece in RoadChunks.meshes(stage):
 		vertices.append_array(piece.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX])
 	var contact = true
 	for i in range(0, vertices.size(), 41):

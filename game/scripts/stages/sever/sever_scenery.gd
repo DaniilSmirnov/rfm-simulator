@@ -7,6 +7,7 @@ const Carpentry = preload("res://scripts/stages/sever/sever_carpentry.gd")
 const Izba = preload("res://scripts/stages/sever/sever_izba.gd")
 const Church = preload("res://scripts/stages/sever/sever_church.gd")
 const Bridge = preload("res://scripts/stages/sever/sever_bridge.gd")
+const LoadPacer = preload("res://scripts/core/load_pacer.gd")
 # Static scenery of «Поречье»: izbas along the street with front-garden
 # palisades, the tent-roofed church, a crane well, a log granary, the bridge
 # over the stream gully, haystacks on poles in the fields, snow stakes and the
@@ -26,7 +27,7 @@ var post_colors: Array = []
 var rails: Array = []
 var rail_colors: Array = []
 
-func build(owner_stage, owner_biome) -> void:
+func build(owner_stage, owner_biome, cooperative: bool = false) -> void:
 	stage = owner_stage
 	biome = owner_biome
 	rng.seed = 19022026
@@ -34,23 +35,30 @@ func build(owner_stage, owner_biome) -> void:
 	root.name = "SeverScenery"
 	stage.add_child(root)
 	for item in biome.HOUSES:
+		if cooperative: await LoadPacer.tick(stage.get_tree())
 		var house = Izba.build(stage, biome, root, item, rng)
 		houses.append(house)
 		_palisade(house, float(item[3]), float(item[4]))
 	counts["houses"] = houses.size()
+	if cooperative: await LoadPacer.tick(stage.get_tree())
 	Church.build(stage, biome, root)
 	_well(root)
 	_granary(root)
+	if cooperative: await LoadPacer.tick(stage.get_tree())
 	Bridge.build(stage, biome, root, func(parent, name, poses, colors): _batch(parent, name, unit_box(), poses, colors))
 	_village_sign(root)
 	for item in biome.HAYSTACKS:
 		_haystack(root, biome.place(item[0], item[1], item[2]))
 	_roadside_posts(root)
+	if cooperative: await LoadPacer.tick(stage.get_tree())
 	_birches(root)
+	if cooperative: await LoadPacer.tick(stage.get_tree())
 	_spruces(root)
+	if cooperative: await LoadPacer.tick(stage.get_tree())
 	_batch(root, "FencePosts", unit_box(), posts, post_colors)
 	_batch(root, "FenceRails", unit_box(), rails, rail_colors)
 	for child in root.get_children():
+		if cooperative: await LoadPacer.tick(stage.get_tree())
 		if child is Node3D and not child.has_meta("unbatched"):
 			MeshMerge.bake(child)
 	stage.solids.index()

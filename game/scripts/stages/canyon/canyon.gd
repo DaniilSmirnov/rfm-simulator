@@ -177,8 +177,8 @@ func marshal_stations() -> Array:
 
 # ---------------------------------------------------------------- scenery
 
-func build_details(_cooperative: bool) -> void:
-	scenery.build(stage, self)
+func build_details(cooperative: bool) -> void:
+	await scenery.build(stage, self, cooperative)
 	canyon_life.build(stage, self)
 
 func build_horizon() -> void:

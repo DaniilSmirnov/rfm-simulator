@@ -2,6 +2,7 @@ extends "res://tests/harness.gd"
 # Wheel ruts and puddles are part of the road: dug into the height that tyres and
 # feet read, cut into the road mesh and filled with a thin disc of water, not
 # boxes and cylinders lying on the surface.
+const RoadChunks = preload("res://scripts/stages/road_chunks.gd")
 const Stage = preload("res://scripts/stages/stage.gd")
 func _initialize() -> void:
 	call_deferred("run")
@@ -71,7 +72,7 @@ func run() -> void:
 		stage._build_road()
 		var vertices = PackedVector3Array()
 		var indices = PackedInt32Array()
-		for piece in stage.road_meshes():
+		for piece in RoadChunks.meshes(stage):
 			var arrays = piece.mesh.surface_get_arrays(0)
 			vertices.append_array(arrays[Mesh.ARRAY_VERTEX])
 			indices.append_array(arrays[Mesh.ARRAY_INDEX])

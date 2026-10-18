@@ -26,6 +26,7 @@ var snow = DeepSnow.new()
 const Snowbanks = preload("res://scripts/stages/winter/snowbanks.gd")
 const StageRegistry = preload("res://scripts/stages/stage_registry.gd")
 const StageSolids = preload("res://scripts/stages/stage_solids.gd")
+const LoadPacer = preload("res://scripts/core/load_pacer.gd")
 const RoadChunks = preload("res://scripts/stages/road_chunks.gd")
 const RoadRelief = preload("res://scripts/stages/road_relief.gd")
 const WorldSync = preload("res://scripts/net/world_sync.gd")
@@ -375,7 +376,7 @@ func build_async(progress: Callable) -> void:
 	await progress.call("Рельеф", 0)
 	await _build_terrain(true)
 	await progress.call("Дорога", 30)
-	_build_road()
+	await _build_road(true)
 	await progress.call(str(StageRegistry.value(variant, "loading")), 40)
 	await woodland.plant_forest(true)
 	await progress.call("Объекты спецучастка", 55)
@@ -410,9 +411,8 @@ func _build_terrain(cooperative: bool = false) -> void:
 	var colors: Dictionary = {}
 	var tiled = biome.terrain_tiled()
 	for z in range(-920, 81, 4):
-		if cooperative and (z + 920) % 64 == 0:
-			await get_tree().process_frame
 		for x in range(-204, 204, 4):
+			if cooperative: await LoadPacer.tick(get_tree())
 			var tile = Vector2i(floori(x / 64.0), floori(z / 64.0)) if tiled else Vector2i.ZERO
 			if not builders.has(tile):
 				var builder = SurfaceTool.new()
@@ -439,6 +439,7 @@ func _build_terrain(cooperative: bool = false) -> void:
 	mat.vertex_color_use_as_albedo = true
 	mat.vertex_color_is_srgb = true
 	for tile in builders:
+		if cooperative: await LoadPacer.tick(get_tree())
 		var st: SurfaceTool = builders[tile]
 		st.generate_normals()
 		var n = MeshInstance3D.new()
@@ -451,10 +452,6 @@ func _build_terrain(cooperative: bool = false) -> void:
 func road_width(s: float) -> float:
 	return biome.road_width(s)
 
-func road_meshes(kind: String = "default") -> Array:
-	var holder = get_node_or_null("StageRoadSurface" if kind == "default" else "StageRoadSurface_" + kind)
-	return [] if holder == null else holder.get_children()
-
 func road_surface_vertex(s: float, lateral: float) -> Vector3:
 	var p = at(s) + side(s) * lateral
 	p.y = ground(p) + 0.04
@@ -466,7 +463,7 @@ func road_surface_color(p: Vector3, s: float) -> Color:
 func road_surface_kind(s: float) -> String:
 	return biome.road_surface_kind(s)
 
-func _build_road() -> void:
+func _build_road(cooperative: bool = false) -> void:
 	# One mesh per surface kind: the village cobbles carry a texture.
 	var builders: Dictionary = {}
 	var parts: Dictionary = {}
@@ -485,6 +482,7 @@ func _build_road() -> void:
 	var seam_shoulders = biome.road_seam_shoulders()
 	for i in range(int(LENGTH)):
 		var s = float(i)
+		if cooperative: await LoadPacer.tick(get_tree())
 		var kind = road_surface_kind(s)
 		if not builders.has(kind):
 			var builder = SurfaceTool.new()
@@ -536,8 +534,8 @@ func _build_road() -> void:
 		st.index()
 		st.generate_normals()
 		var surface_material = biome.road_material(kind)
-		RoadChunks.build(self, "StageRoadSurface" if kind == "default" else "StageRoadSurface_" + kind, surface_material, st.commit().surface_get_arrays(0), parts[kind].marks)
-	biome.after_road()
+		await RoadChunks.build(self, kind, surface_material, st.commit().surface_get_arrays(0), parts[kind].marks, cooperative)
+	await biome.after_road(cooperative)
 
 func shared_stone_mesh() -> SphereMesh:
 	return woodland.shared_stone_mesh()
