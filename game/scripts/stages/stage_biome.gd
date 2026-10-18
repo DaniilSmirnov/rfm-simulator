@@ -150,9 +150,23 @@ func road_strips() -> int:
 func road_seam_shoulders() -> bool:
 	return false
 
-# Muddy wheel tracks and puddles at station s.
+# Muddy wheel tracks and puddles at station s: dug into the road itself, as
+# relief for tyres and feet and in the road mesh (road_relief.gd).
 func road_ruts(_s: float) -> bool:
 	return false
+
+# How deep the ruts are at s, 0..1; a stage fades them out smoothly where it
+# stops (a ford) so the road has no step. The default follows road_ruts().
+func rut_strength(s: float) -> float:
+	return 1.0 if road_ruts(s) else 0.0
+
+# Lateral breakpoints of the road mesh across `width`, and how many segments one
+# metre of route is cut into; a road with ruts is cut finer.
+func road_edges(width: float) -> Array:
+	return stage.relief.edges(width, road_strips())
+
+func road_divisions(length: float) -> int:
+	return stage.relief.divisions(length)
 
 func after_road() -> void:
 	pass

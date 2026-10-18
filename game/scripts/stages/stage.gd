@@ -26,10 +26,13 @@ var snow = DeepSnow.new()
 const Snowbanks = preload("res://scripts/stages/winter/snowbanks.gd")
 const StageRegistry = preload("res://scripts/stages/stage_registry.gd")
 const StageSolids = preload("res://scripts/stages/stage_solids.gd")
+const RoadRelief = preload("res://scripts/stages/road_relief.gd")
 const WorldSync = preload("res://scripts/net/world_sync.gd")
 # Everything that differs between stages lives in the biome (stage_biome.gd);
 # this file is the shared machinery around it.
 var biome
+# Wheel ruts and puddles dug into the road (road_relief.gd).
+var relief = RoadRelief.new()
 # Shared features a biome switches on.
 var has_snow = false
 var water: RefCounted # lakes (water.gd), null on dry stages
@@ -128,6 +131,7 @@ func _init(selected: int = 0) -> void:
 	woodland.stage = self
 	biome = StageRegistry.make_biome(variant)
 	biome.attach(self)
+	relief.stage = self
 	has_snow = biome.has_snow()
 	water = biome.make_water()
 	if water != null:
@@ -190,7 +194,7 @@ func snow_sink(pos: Vector3) -> float:
 
 # Analytic land height, before snow.
 func base_ground(pos: Vector3) -> float:
-	return parks.level(pos, biome.base_ground(pos))
+	return parks.level(pos, relief.dig(pos, biome.base_ground(pos)))
 
 # Spectator clearings are level: blend the land towards each one.
 func blend_clearings(pos: Vector3, height: float, inner: float, outer: float) -> float:
@@ -452,7 +456,7 @@ func road_surface_vertex(s: float, lateral: float) -> Vector3:
 	return p
 
 func road_surface_color(p: Vector3, s: float) -> Color:
-	return biome.road_color(p, s)
+	return relief.tint(p, biome.road_color(p, s))
 
 func road_surface_kind(s: float) -> String:
 	return biome.road_surface_kind(s)
@@ -482,15 +486,14 @@ func _build_road() -> void:
 			builders[kind] = builder
 		var st: SurfaceTool = builders[kind]
 		# Bound physical segment length as well as station length.
-		var divisions = maxi(4, ceili(at(s).distance_to(at(s + 1.0)) / 0.75))
+		var divisions = biome.road_divisions(at(s).distance_to(at(s + 1.0)))
 		for segment in range(divisions):
 			var begin = s + float(segment) / divisions
 			var end = s + float(segment + 1) / divisions
-			var strips = biome.road_strips()
-			for strip in range(strips):
-				var width = road_width(s)
-				var left = -width * 0.5 + width * float(strip) / strips
-				var right = -width * 0.5 + width * float(strip + 1) / strips
+			var edges = biome.road_edges(road_width(s))
+			for strip in range(edges.size() - 1):
+				var left: float = edges[strip]
+				var right: float = edges[strip + 1]
 				var a: Vector3 = vertex.call(begin, right)
 				var b: Vector3 = vertex.call(begin, left)
 				var c: Vector3 = vertex.call(end, right)
@@ -513,19 +516,7 @@ func _build_road() -> void:
 						st.set_color(color_of.call(v, s).darkened(0.12))
 						st.set_uv(Vector2(v.x, v.z) * 0.45)
 						st.add_vertex(v)
-		# Broken muddy wheel tracks, shallow puddles.
-		var ruts = (i % 12 == 0 or i % 52 == 28) and biome.road_ruts(s)
-		if ruts and i % 12 == 0:
-			for offset in [-1.0, 1.0]:
-				var p = at(s) + side(s) * offset
-				p.y = ground(p)
-				var rut = RallyProps.box(self, p + Vector3(0, 0.07, 0), Vector3(0.5, 0.025, 2.7), Color("77654c"))
-				rut.rotation.y = atan2(-direction(s).x, -direction(s).z)
-		if ruts and i % 52 == 28:
-			var p = at(s) + side(s) * 1.5
-			p.y = ground(p)
-			var puddle = RallyProps.cylinder(self, p + Vector3(0, 0.10, 0), 1.1, 1.1, 0.025, Color("56645d"), 9)
-			puddle.scale.z = 1.7
+	relief.build_water(self)
 	var kinds = builders.keys()
 	kinds.sort()
 	for kind in kinds:
