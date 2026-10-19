@@ -21,6 +21,12 @@ func attach(owner) -> void:
 func has_snow() -> bool:
 	return false
 
+# What people wear here (character_profiles.gd OUTFITS; "" summer clothes):
+# players, peers, spectators, officials, villagers, the medic and
+# first-person hands. Snowy stages dress for winter.
+func outfit() -> String:
+	return "winter" if has_snow() else ""
+
 # Lakes: buoyancy, wading, splashes (water.gd). Return the Water instance.
 func make_water():
 	return null

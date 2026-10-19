@@ -283,7 +283,7 @@ func drink_beer() -> bool:
 	game.drink_time = 0.0
 	game.drink_committed = false
 	game.can_opened = false
-	game.beer_prop = Props.beer_hand(game.avatar_variant)
+	game.beer_prop = Props.beer_hand(game.avatar_variant, game.stage.outfit)
 	game.camera.add_child(game.beer_prop)
 	update_drinking(0)
 	game.show_consumption_warning("beer")
@@ -366,7 +366,7 @@ func eat_meat(source_group: int = -2) -> bool:
 	game.eat_kind = "meat"
 	game.eat_time = 0
 	game.eat_committed = false
-	game.meat_prop = Props.meat_hand(game.avatar_variant)
+	game.meat_prop = Props.meat_hand(game.avatar_variant, "meat", game.stage.outfit)
 	game.camera.add_child(game.meat_prop)
 	update_eating(0)
 	game.toast("Шампур горячий. Приятного аппетита!")
@@ -378,7 +378,7 @@ func eat_plov() -> bool:
 	game.eat_kind = "plov"
 	game.eat_time = 0
 	game.eat_committed = false
-	game.meat_prop = Props.meat_hand(game.avatar_variant, "plov")
+	game.meat_prop = Props.meat_hand(game.avatar_variant, "plov", game.stage.outfit)
 	game.camera.add_child(game.meat_prop)
 	update_eating(0)
 	game.toast("Едим плов из миски. Приятного аппетита!")
@@ -396,7 +396,7 @@ func eat_foraged(kind: String, source: int = -2) -> bool:
 	game.food_species = game.foraging.ready_species(game.forage_source) if kind == "mushroom" else "edible"
 	game.eat_time = 0
 	game.eat_committed = false
-	game.meat_prop = Props.meat_hand(game.avatar_variant, kind)
+	game.meat_prop = Props.meat_hand(game.avatar_variant, kind, game.stage.outfit)
 	Props.style_mushrooms(game.meat_prop, game.food_species)
 	game.camera.add_child(game.meat_prop)
 	update_eating(0)

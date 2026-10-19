@@ -594,7 +594,7 @@ func _go_down() -> void:
 	if game.drink_time >= 0:
 		game._cancel_drink()
 	if local_avatar == null:
-		local_avatar = Props.player_avatar(game.avatar_variant)
+		local_avatar = Props.player_avatar(game.avatar_variant, game.stage.outfit)
 		game.add_child(local_avatar)
 		local_avatar.position = game.walker
 

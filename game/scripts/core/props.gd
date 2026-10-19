@@ -103,15 +103,11 @@ static func cylinder(parent: Node3D, pos: Vector3, bottom: float, top: float, he
 	n.position = pos
 	return n
 
-const SPECTATOR_MODELS = [
-	{"name": "Шашлычник", "skin": "d9a482", "shirt": "202b31", "trim": "92985a", "pants": "394650", "hair": "71451f", "hat": "", "sleeves": false, "long_pants": false, "beard": false},
-	{"name": "Болельщик", "skin": "c8906a", "shirt": "346a9c", "trim": "e2e4cc", "pants": "374f69", "hair": "332a25", "hat": "cap", "sleeves": true, "long_pants": true, "beard": false},
-	{"name": "Бородатый механик", "skin": "e0b393", "shirt": "bb602d", "trim": "e9c678", "pants": "343a39", "hair": "a65d29", "hat": "", "sleeves": false, "long_pants": false, "beard": true},
-	{"name": "Лесной турист", "skin": "c6a08b", "shirt": "65736d", "trim": "d9b95d", "pants": "45513b", "hair": "473329", "hat": "beanie", "sleeves": true, "long_pants": true, "beard": false},
-]
+const CharacterProfiles = preload("res://scripts/people/character_profiles.gd")
+const SPECTATOR_MODELS = CharacterProfiles.SPECTATOR_MODELS
 
-static func spectator_profile(variant: int) -> Dictionary:
-	return SPECTATOR_MODELS[posmod(variant, SPECTATOR_MODELS.size())]
+static func spectator_profile(variant: int, outfit: String = "") -> Dictionary:
+	return CharacterProfiles.profile(variant, outfit)
 
 # Separate triangle normals keep these small ellipsoids visibly faceted in WebGL.
 static func faceted(parent: Node3D, pos: Vector3, size: Vector3, color: Color, sides: int = 10, rings: int = 5) -> MeshInstance3D:
@@ -149,19 +145,20 @@ static func faceted(parent: Node3D, pos: Vector3, size: Vector3, color: Color, s
 	return part
 
 const CharacterRig = preload("res://scripts/people/character_rig.gd")
-const AVATAR_SCENES = [
-	preload("res://models/characters/spectator_0.glb"),
-	preload("res://models/characters/spectator_1.glb"),
-	preload("res://models/characters/spectator_2.glb"),
-	preload("res://models/characters/spectator_3.glb"),
-]
+# Baked bodies by path: summer clothes load with this script, other outfits on
+# first use (character_profiles.gd).
+static var _avatar_scenes: Dictionary = CharacterProfiles.load_models("")
 
-static func player_avatar(variant: int = 0) -> Node3D:
-	var index = posmod(variant, AVATAR_SCENES.size())
-	var root = AVATAR_SCENES[index].instantiate() as Node3D
+static func player_avatar(variant: int = 0, outfit: String = "") -> Node3D:
+	var index = posmod(variant, SPECTATOR_MODELS.size())
+	var key = CharacterProfiles.model_path(index, outfit)
+	if not _avatar_scenes.has(key):
+		_avatar_scenes[key] = load(key)
+	var root = _avatar_scenes[key].instantiate() as Node3D
 	root.name = "RallySpectator"
 	root.set_meta("model", spectator_profile(index).name)
 	root.set_meta("variant", index)
+	root.set_meta("outfit", outfit if CharacterProfiles.OUTFITS.has(outfit) else "")
 	# Held items hang from the forearm, so they follow the hand.
 	var arm = root.get_node("RightArm/RightForearm")
 	var can = cylinder(arm, Vector3(0, -0.30, -0.085), 0.075, 0.075, 0.23, Color("daa44f"), 8)
@@ -516,15 +513,14 @@ static func skewer() -> Node3D:
 	bowl.hide()
 	return root
 
-static func meat_hand(variant: int = 0, kind: String = "meat") -> Node3D:
-	var profile = spectator_profile(variant)
-	var skin = Color(profile.skin)
-	var forearm = Color(profile.shirt) if profile.hat == "beanie" else skin
+static func meat_hand(variant: int = 0, kind: String = "meat", outfit: String = "") -> Node3D:
+	var colors = CharacterProfiles.forearm_colors(spectator_profile(variant, outfit))
+	var hand: Color = colors[1]
 	var root = skewer()
 	pose_food(root, 0.0, kind)
-	var sleeve = faceted(root, Vector3(0.07, -0.48, 0.08), Vector3(0.17, 0.35, 0.19), forearm, 8, 4)
+	var sleeve = faceted(root, Vector3(0.07, -0.48, 0.08), Vector3(0.17, 0.35, 0.19), colors[0], 8, 4)
 	sleeve.rotation.z = -0.18
-	box(root, Vector3(0, -0.24, 0.04), Vector3(0.13, 0.14, 0.12), skin)
+	box(root, Vector3(0, -0.24, 0.04), Vector3(0.13, 0.14, 0.12), hand)
 	for child in root.get_children():
 		if child is GeometryInstance3D:
 			child.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -657,19 +653,18 @@ static func update_course_lights(node: Node3D, clock: float) -> void:
 	blue.visible = posmod(int(clock * 5), 2) == 0
 	node.get_node("BeaconRed").visible = not blue.visible
 
-static func beer_hand(variant: int = 0) -> Node3D:
-	var profile = spectator_profile(variant)
-	var skin = Color(profile.skin)
-	var forearm = Color(profile.shirt) if profile.hat == "beanie" else skin
+static func beer_hand(variant: int = 0, outfit: String = "") -> Node3D:
+	var colors = CharacterProfiles.forearm_colors(spectator_profile(variant, outfit))
+	var hand: Color = colors[1]
 	var root = Node3D.new()
 	root.name = "BeerHand"
 	# Wrist and a thumb wrapping around the can, in camera-local space.
-	var sleeve = faceted(root, Vector3(0.08, -0.32, 0.1), Vector3(0.18, 0.42, 0.20), forearm, 8, 4)
+	var sleeve = faceted(root, Vector3(0.08, -0.32, 0.1), Vector3(0.18, 0.42, 0.20), colors[0], 8, 4)
 	sleeve.rotation.z = -0.18
-	box(root, Vector3(0.035, -0.1, 0.045), Vector3(0.13, 0.17, 0.12), skin)
-	box(root, Vector3(-0.065, -0.035, 0.025), Vector3(0.045, 0.11, 0.07), skin.lightened(0.04))
+	box(root, Vector3(0.035, -0.1, 0.045), Vector3(0.13, 0.17, 0.12), hand)
+	box(root, Vector3(-0.065, -0.035, 0.025), Vector3(0.045, 0.11, 0.07), hand.lightened(0.04))
 	for y in [-0.085, -0.045, -0.005]:
-		box(root, Vector3(0.01, y, 0.084), Vector3(0.11, 0.03, 0.035), skin.lightened(0.04))
+		box(root, Vector3(0.01, y, 0.084), Vector3(0.11, 0.03, 0.035), hand.lightened(0.04))
 	cylinder(root, Vector3.ZERO, 0.065, 0.065, 0.23, Color("dbb54e"), 10)
 	cylinder(root, Vector3(0, 0.12, 0), 0.062, 0.062, 0.008, Color("c4cac5"), 10)
 	cylinder(root, Vector3(0, -0.12, 0), 0.062, 0.062, 0.008, Color("c4cac5"), 10)
@@ -831,8 +826,8 @@ static func rope(parent: Node3D, a: Vector3, b: Vector3) -> MeshInstance3D:
 	n.quaternion = Quaternion(Vector3.UP, (b - a).normalized())
 	return n
 
-static func course_official(role: String, variant: int = 0) -> Node3D:
-	var avatar = player_avatar(variant + 1)
+static func course_official(role: String, variant: int = 0, outfit: String = "") -> Node3D:
+	var avatar = player_avatar(variant + 1, outfit)
 	avatar.name = "Marshal_%d" % variant if role == "marshal" else "Judge_%d" % variant
 	avatar.set_meta("role", role)
 	var vest = Color("e8f12c") if role == "marshal" else Color("f28a24")

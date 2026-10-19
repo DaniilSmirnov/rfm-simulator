@@ -61,7 +61,7 @@ func anchors(kind: String) -> Array:
 # ---------------------------------------------------------------- people
 
 func person(variant: int, accessory: String = "") -> Node3D:
-	var avatar = Props.player_avatar(variant)
+	var avatar = Props.player_avatar(variant, stage.outfit)
 	avatar.name = "Villager"
 	root.add_child(avatar)
 	CharacterRig.hand(avatar).get_node("BeerCan").hide()

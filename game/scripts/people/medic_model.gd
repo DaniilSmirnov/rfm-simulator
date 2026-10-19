@@ -2,8 +2,8 @@ extends RefCounted
 const Props = preload("res://scripts/core/props.gd")
 const CharacterRig = preload("res://scripts/people/character_rig.gd")
 
-static func create() -> Node3D:
-	var avatar = Props.player_avatar(1)
+static func create(outfit: String = "") -> Node3D:
+	var avatar = Props.player_avatar(1, outfit)
 	avatar.name = "AmbulanceMedic"
 	# Keep feet on the ground: the torso bends about the hips, not the ankles.
 	var upper = Node3D.new()
