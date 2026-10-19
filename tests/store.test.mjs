@@ -1,11 +1,12 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {catalog,canUseContent,canUseStage,validateRoomSelection,vkEntitlements} from '../server/store.mjs';
-test('catalog has stable unique SKUs; VK has one free stage and three free cars',()=>{
+test('catalog has stable unique SKUs; VK has one free stage, three free cars and free characters',()=>{
  assert.equal(new Set(catalog.map(p=>p.sku)).size,catalog.length);
- assert.equal(catalog.length,18);
+ assert.equal(catalog.length,29);
  for(let i=0;i<7;i++) assert.equal(canUseContent('stage',i),i===0);
  for(let i=0;i<11;i++) assert.equal(canUseContent('car',i),i<3);
+ for(let i=0;i<11;i++) assert.equal(canUseContent('character',i),true);
  assert.ok(catalog.every(p=>p.purchase_enabled === !p.free));
  for(const p of catalog.filter(p=>!p.free)) assert.equal(p.price,p.type==='car'?3:20);
 });
@@ -23,6 +24,12 @@ test('borrowed stage does not grant permanent ownership or a personal car',()=>{
  assert.deepEqual(rights.skus,[]);
  assert.match(validateRoomSelection({car_model:3},false),/машина/);
  for(const car of [-1,1.5,'0',11]) assert.match(validateRoomSelection({car_model:car},true),/машина/);
+});
+test('every playable character is free in VK; the patch collector is not offered',()=>{
+ const rights=vkEntitlements();
+ for(let look=0;look<11;look++) assert.equal(validateRoomSelection({car_model:0,character:look},true,rights),null);
+ assert.equal(validateRoomSelection({car_model:0},true,rights),null,'older builds send no character');
+ for(const look of [11,-1,'0']) assert.match(validateRoomSelection({car_model:0,character:look},true,rights),/персонаж/);
 });
 
 test('Red Canyon requires its own paid entitlement to host in VK; guests can join',()=>{

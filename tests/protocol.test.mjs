@@ -108,6 +108,24 @@ test('stage registry: one entry per catalog stage, each with an existing biome s
   assert.doesNotMatch(stageGd.replace(/#.*$/gm, ''), /\bif (not )?(winter|provence|desert|lakeland)\b|variant == \d/, 'stage.gd does not branch on a stage identity');
 });
 
+test('character registry: one free catalog entry per playable look, with summer and winter previews', async () => {
+  const profiles = await read('game/scripts/people/character_profiles.gd');
+  const block = profiles.slice(profiles.indexOf('const SPECTATOR_MODELS'), profiles.indexOf(']', profiles.indexOf('const SPECTATOR_MODELS')));
+  const looks = [...block.matchAll(/^\t\{"name": "([^"]+)".*\}/gm)].map(([line, name], index) => ({index, name, playable: !line.includes('"playable": false')}));
+  const outfits = [...profiles.slice(profiles.indexOf('const OUTFITS')).matchAll(/^\t"(\w+)": \[/gm)].map(m => m[1]);
+  assert.ok(looks.length >= 12 && outfits.includes('winter'));
+  const catalog = JSON.parse(await read('game/data/store_catalog.json')).filter(p => p.type === 'character');
+  const playable = looks.filter(look => look.playable);
+  assert.deepEqual(catalog.map(p => [p.content_id, p.title]), playable.map(look => [look.index, look.name]));
+  assert.ok(catalog.every(p => p.free && p.enabled && !p.purchase_enabled), 'characters are free for now');
+  // The menu shows textures/previews/character_[<outfit>_]<id>.webp (tools/screenshots/export_menu_previews.gd).
+  const previews = await readdir(new URL('../game/textures/previews/', import.meta.url));
+  for (const look of playable) for (const outfit of ['', ...outfits]) {
+    const file = outfit ? `character_${outfit}_${look.index}.webp` : `character_${look.index}.webp`;
+    assert.ok(previews.includes(file), `${look.name} has a menu preview ${file}`);
+  }
+});
+
 test('car registry: one record per catalog car, same names, known drive and model', async () => {
   const {cars} = JSON.parse(await read('game/data/cars.json'));
   const catalog = JSON.parse(await read('game/data/store_catalog.json')).filter(p => p.type === 'car');

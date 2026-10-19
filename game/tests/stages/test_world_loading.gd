@@ -66,14 +66,14 @@ func run() -> void:
 	guest.platform_service.entitlements = {"mode": "restricted", "skus": []}
 	guest.room.room_id = "ABCDEF"
 	guest.room.transport.request_kind = "join"
-	var response = {"player": "guest", "token": "test", "host": false, "stage": 2, "car_model": 0, "slot": 3}
+	var response = {"player": "guest", "token": "test", "host": false, "stage": 2, "car_model": 0, "slot": 3, "character": 3}
 	guest.room._response(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), JSON.stringify(response).to_utf8_buffer())
 	guest.room._process(1)
 	check(guest.loading_world and not guest.room.busy and guest.room.transport.request_kind == "join", "room does not publish partial world during preparation")
 	while guest.loading_world:
 		await process_frame
 	check(guest.playing and guest.world_ready and guest.stage.provence, "guest finishes world preparation before handshake enters play")
-	check(guest.car.position.distance_to(guest.stage.parks.visitor_pose(0, 3).origin) < 0.01 and guest.avatar_variant == 3, "handshake applies assigned lane after preparation")
+	check(guest.car.position.distance_to(guest.stage.parks.visitor_pose(0, 3).origin) < 0.01 and guest.avatar_variant == 3, "handshake applies assigned lane and character after preparation")
 	check(int(guest.stage.village.counts.get("vines", 0)) > 0 and int(guest.stage.village.counts.get("houses", 0)) > 0 and guest.stage.solids.lamps.size() > 0, "cooperative village creates landscape and physics")
 	var urban_sync = guest.Stage.new(2)
 	root.add_child(urban_sync)

@@ -1,5 +1,5 @@
 extends Node
-# Main menu presentation: car and stage cards with their own purchase buttons,
+# Main menu presentation: car, stage and character cards with their own purchase buttons,
 # site and support links, volume, host-pause banner and the menu backdrop.
 # Ownership remains in PlatformService and the backend.
 const NetProtocol = preload("res://scripts/net/net_protocol.gd")
@@ -7,7 +7,7 @@ const UiKit = preload("res://scripts/ui/ui_kit.gd")
 const Loc = preload("res://scripts/ui/loc.gd")
 const SUPPORT_EMAIL = "rallyfansmap@yandex.com"
 const AUDIO_SETTINGS_PATH = "user://audio_settings.cfg"
-const KINDS = ["МАШИНА", "СПЕЦУЧАСТОК"]
+const CharacterProfiles = preload("res://scripts/people/character_profiles.gd")
 var game: Node3D
 var background: TextureRect
 var images: Array[TextureRect] = []
@@ -64,39 +64,56 @@ func _is_vk_platform() -> bool:
 
 # ---------------------------------------------------------------- selection
 
+# One card per choice, in menu order: what it is, its catalog type, the
+# purchase label and the preview tooltip. The character card shows the pick
+# in the clothes of the selected stage (summer or winter).
+const CARDS = [
+	{"title": "МАШИНА", "kind": "car", "node": "CarCard", "buy": "КУПИТЬ МАШИНУ · %s", "preview": "Превью машины"},
+	{"title": "СПЕЦУЧАСТОК", "kind": "stage", "node": "StageCard", "buy": "ОТКРЫТЬ СУ · %s", "preview": "Превью спецучастка"},
+	{"title": "ПЕРСОНАЖ", "kind": "character", "node": "CharacterCard", "buy": "КУПИТЬ ПЕРСОНАЖА · %s", "preview": "Превью персонажа"},
+]
+var choices: Array[HBoxContainer] = []
+var buy_buttons: Array[Button] = []
+var character_choice: HBoxContainer
+
 func build_selection(parent: Control) -> void:
 	var cards = UiKit.hbox(parent, 14)
-	for kind in KINDS:
+	for spec in CARDS:
 		var card = UiKit.expand(UiKit.card(cards, UiKit.SURFACE_RAISED, Vector2(12, 12)))
-		card.name = "CarCard" if kind == "МАШИНА" else "StageCard"
+		card.name = spec.node
 		var column = UiKit.vbox(card, 8)
-		UiKit.label(column, kind, "caption")
-		add_preview(column, kind)
+		UiKit.label(column, spec.title, "caption")
+		add_preview(column, spec.preview)
 		var choice = preload("res://scripts/ui/menu_choice.gd").new()
 		choice.custom_minimum_size.y = 42
 		choice.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		column.add_child(choice)
+		choices.append(choice)
 		var state = UiKit.label(column, "", "muted")
 		states.append(state)
 		var buy = UiKit.button(column, "", "secondary", 40)
 		buy.add_theme_font_size_override("font_size", 15)
 		buy.hide()
-		if kind == "МАШИНА":
-			game.car_choice = choice
-			for model in game.Props.PLAYER_MODELS:
-				choice.add_item(model.name)
-			choice.item_selected.connect(game.select_player_car)
-			car_purchase_button = buy
-			buy.pressed.connect(func(): game.platform_service.buy(game.platform_service.product("car", game.car_choice.selected).get("sku", "")))
-		else:
-			game.stage_choice = choice
-			for title in game.Stage.STAGES:
-				choice.add_item(title.get_slice("·", 0).strip_edges())
-			choice.item_selected.connect(game.select_stage)
-			choice.tooltip_text = "В комнате СУ выбирает создатель. Все участники играют на одной трассе."
-			purchase_button = buy
-			buy.pressed.connect(func(): game.platform_service.buy(game.platform_service.product("stage", game.stage_choice.selected).get("sku", "")))
-	# VK purchases: one status line with a re-check, under both cards.
+		buy_buttons.append(buy)
+		var kind: String = spec.kind
+		buy.pressed.connect(func(): game.platform_service.buy(game.platform_service.product(kind, selected(kind)).get("sku", "")))
+	game.car_choice = choices[0]
+	for model in game.Props.PLAYER_MODELS:
+		game.car_choice.add_item(model.name)
+	game.car_choice.item_selected.connect(game.select_player_car)
+	car_purchase_button = buy_buttons[0]
+	game.stage_choice = choices[1]
+	for title in game.Stage.STAGES:
+		game.stage_choice.add_item(title.get_slice("·", 0).strip_edges())
+	game.stage_choice.item_selected.connect(game.select_stage)
+	game.stage_choice.tooltip_text = "В комнате СУ выбирает создатель. Все участники играют на одной трассе."
+	purchase_button = buy_buttons[1]
+	character_choice = choices[2]
+	for variant in CharacterProfiles.playable():
+		character_choice.add_item(CharacterProfiles.SPECTATOR_MODELS[variant].name)
+	character_choice.item_selected.connect(func(index: int): select_character(CharacterProfiles.playable()[index]))
+	character_choice.select(CharacterProfiles.playable().find(game.avatar_variant))
+	# VK purchases: one status line with a re-check, under the cards.
 	purchase_actions = UiKit.hbox(parent, 12)
 	purchase_actions.name = "PurchaseStatus"
 	purchase_actions.alignment = BoxContainer.ALIGNMENT_END
@@ -107,15 +124,29 @@ func build_selection(parent: Control) -> void:
 	check_purchase.pressed.connect(func(): game.platform_service.refresh_store())
 	purchase_actions.hide()
 
-func add_preview(parent: Control, kind: String) -> void:
+func add_preview(parent: Control, tooltip: String) -> void:
 	var image = TextureRect.new()
 	image.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	image.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	image.custom_minimum_size = Vector2(220, 140)
+	image.custom_minimum_size = Vector2(180, 140)
 	image.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	image.tooltip_text = "Превью машины" if kind == "МАШИНА" else "Превью спецучастка"
+	image.tooltip_text = tooltip
 	parent.add_child(image)
 	images.append(image)
+
+# The look the player walks as (its catalog content_id). Picked in the menu
+# only: a room learns it on joining, so it does not change while playing.
+func select_character(variant: int) -> void:
+	if game.playing or game.loading_world:
+		return
+	var looks = CharacterProfiles.playable()
+	game.avatar_variant = variant if variant in looks else looks[0]
+	character_choice.select(looks.find(game.avatar_variant))
+	refresh()
+
+# The content_id selected on a card of this catalog type.
+func selected(kind: String) -> int:
+	return game.car_choice.selected if kind == "car" else game.stage_choice.selected if kind == "stage" else game.avatar_variant
 
 # ---------------------------------------------------------------- links
 
@@ -260,7 +291,7 @@ func allowed(kind: String, index: int) -> bool:
 	return game.platform_service == null or game.platform_service.can_use(kind, index)
 
 func refresh() -> void:
-	if images.size() < 2:
+	if images.size() < CARDS.size():
 		return
 	# The VK profile can arrive after the menu was built.
 	if _is_vk_family():
@@ -269,40 +300,41 @@ func refresh() -> void:
 			Loc.force("ru")
 			language_button.text = Loc.other_name()
 	var service = game.platform_service
-	var product = service.product("stage", game.stage_choice.selected) if service != null else {}
-	var can_buy: bool = product.get("purchase_enabled", false) and not allowed("stage", game.stage_choice.selected)
-	var car_product = service.product("car", game.car_choice.selected) if service != null else {}
-	var can_buy_car: bool = car_product.get("purchase_enabled", false) and not allowed("car", game.car_choice.selected)
-	car_purchase_button.visible = can_buy_car and not game.playing
-	car_purchase_button.disabled = service.busy if service != null else true
-	car_purchase_button.text = ("ТЕСТ: " if car_product.get("payment_mode") == "test" else "") + Loc.t("КУПИТЬ МАШИНУ · %s") % vote_price(int(car_product.get("price", 0)))
-	purchase_button.visible = can_buy and not game.playing
-	purchase_button.disabled = service.busy if service != null else true
-	purchase_button.text = ("ТЕСТ: " if product.get("payment_mode") == "test" else "") + Loc.t("ОТКРЫТЬ СУ · %s") % vote_price(int(product.get("price", 0)))
-	check_purchase.visible = service != null and service.profile.get("platform") == "vk" and (can_buy or can_buy_car or not service.purchase_message.is_empty()) and not game.playing
+	var any_purchase = false
+	for i in range(CARDS.size()):
+		var kind: String = CARDS[i].kind
+		var index = selected(kind)
+		var product = service.product(kind, index) if service != null else {}
+		var ok = allowed(kind, index)
+		var can_buy: bool = product.get("purchase_enabled", false) and not ok
+		any_purchase = any_purchase or can_buy
+		var buy = buy_buttons[i]
+		buy.visible = can_buy and not game.playing
+		buy.disabled = service.busy if service != null else true
+		buy.text = ("ТЕСТ: " if product.get("payment_mode") == "test" else "") + Loc.t(CARDS[i].buy) % vote_price(int(product.get("price", 0)))
+		var bought = service != null and service.owns(kind, index)
+		# Free and available needs no note; only ownership and locks are shown.
+		states[i].text = ("Куплено" if bought else "") if ok else ("Закрыто · можно открыть" if can_buy else "Закрыто · скоро в продаже")
+		# A visible purchase button already says the content is closed.
+		states[i].visible = not states[i].text.is_empty() and not buy.visible
+		states[i].add_theme_color_override("font_color", UiKit.MUTED if ok else UiKit.WARNING)
+	check_purchase.visible = service != null and service.profile.get("platform") == "vk" and (any_purchase or not service.purchase_message.is_empty()) and not game.playing
 	check_purchase.disabled = service.busy if service != null else true
 	purchase_status.text = service.purchase_message if service != null else ""
 	purchase_status.visible = not purchase_status.text.is_empty() and not game.playing
 	purchase_actions.visible = check_purchase.visible or purchase_status.visible
 	var car_ok = allowed("car", game.car_choice.selected)
 	var stage_ok = allowed("stage", game.stage_choice.selected)
-	for i in range(2):
-		var ok = car_ok if i == 0 else stage_ok
-		var bought = service != null and service.owns("car" if i == 0 else "stage", game.car_choice.selected if i == 0 else game.stage_choice.selected)
-		var purchasable = (i == 1 and can_buy) or (i == 0 and can_buy_car)
-		# Free and available needs no note; only ownership and locks are shown.
-		states[i].text = ("Куплено" if bought else "") if ok else ("Закрыто · можно открыть" if purchasable else "Закрыто · скоро в продаже")
-		# A visible purchase button already says the content is closed.
-		states[i].visible = not states[i].text.is_empty() and not (car_purchase_button if i == 0 else purchase_button).visible
-		states[i].add_theme_color_override("font_color", UiKit.MUTED if ok else UiKit.WARNING)
+	var character_ok = allowed("character", game.avatar_variant)
 	background.visible = not game.playing
 	background.texture = null if game.playing else load("res://textures/previews/backdrop_%d.webp" % game.selected_stage)
 	images[0].texture = load("res://textures/previews/car_%d.webp" % game.selected_car)
 	images[1].texture = load("res://textures/previews/stage_%d.webp" % game.selected_stage)
+	images[2].texture = load(CharacterProfiles.preview_path(game.avatar_variant, game.stage.outfit if game.stage != null else ""))
 	if game.room != null:
-		game.room.ui.create_button.disabled = game.room.busy or not car_ok or not stage_ok
-		# A guest borrows the host's stage. Only their personal car is required.
-		game.room.ui.join_button.disabled = game.room.busy or not car_ok or game.room.ui.id_input.text.strip_edges().length() != NetProtocol.room_id_length()
+		game.room.ui.create_button.disabled = game.room.busy or not car_ok or not stage_ok or not character_ok
+		# A guest borrows the host's stage. Only their own car and character are required.
+		game.room.ui.join_button.disabled = game.room.busy or not car_ok or not character_ok or game.room.ui.id_input.text.strip_edges().length() != NetProtocol.room_id_length()
 
 func _process(_delta: float) -> void:
 	var size = game.get_viewport().get_visible_rect().size
