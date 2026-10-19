@@ -64,12 +64,25 @@ func plant_forest(cooperative: bool = false) -> void:
 			continue
 		p.y = stage.ground(p)
 		var radius = stage.rng.randf_range(0.3, 1)
+		# road_distance() reads the station from -z and overstates the gap in bends
+		# that run far off -z: rocks there lay on the road, and cars knocked the
+		# small ones into its middle. Keep every rock clear of the tarmac edge.
+		if road_clearance(p, s) < stage.road_width(s) * 0.5 + radius:
+			continue
 		var rock = RallyProps.cylinder(stage, p + Vector3(0, 0.2, 0), radius, 0.18, 0.65, Color("7d8070"), 5)
 		if radius >= 0.6:
 			stage.rocks.append(Records.rock(p, radius, 0.75))
 		rock.rotation.z = stage.rng.randf_range(-0.3, 0.3)
 		if radius < 0.6:
 			Movable.group(stage.solids, stage, stage.get_child_count() - 1, 40)
+
+# Distance in plan from p to the centre line near station s.
+func road_clearance(p: Vector3, s: float) -> float:
+	var nearest = INF
+	for k in range(-40, 41):
+		var a = stage.at(s + k * 0.5)
+		nearest = minf(nearest, Vector2(p.x - a.x, p.z - a.z).length())
+	return nearest
 
 # Four instanced draw calls for the forest instead of thousands of nodes.
 # Collision positions remain in `trees`, matching the original gameplay.

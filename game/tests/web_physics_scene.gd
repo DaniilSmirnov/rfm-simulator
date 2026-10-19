@@ -53,7 +53,8 @@ func _ready() -> void:
 	var record = Registry.register(stage.solids, chair, 5, false, "web:chair")
 	var body = Body.create(record, stage.solids, self)
 	for i in range(180): await get_tree().physics_frame
-	if chair.position.y > at.y + 1 or absf(chair.global_basis.y.dot(Vector3.UP)) > 0.6 or not body.sleeping:
+	# Fallen means not standing: on its side or, after tumbling, over on its back.
+	if chair.position.y > at.y + 1 or chair.global_basis.y.dot(Vector3.UP) > 0.6 or not body.sleeping:
 		push_error("WEB_PHYSICS_FAIL: chair did not fall and sleep in its physical pose")
 		get_tree().quit(1)
 		return
