@@ -104,11 +104,15 @@ func arch(s: float, caption: String, finish: bool) -> void:
 		var local = Vector3(sign * half_span, 0, 0)
 		var foot = gate.position + local.rotated(Vector3.UP, gate.rotation.y)
 		local.y = stage.ground(foot) - gate.position.y
-		Props.box(gate, local + Vector3(0, 2.3, 0), Vector3(0.65, 4.6, 0.70), Color("e1e2df"))
+		# The pillar is shallower than the banner (0.62 vs 0.70 m), so its top
+		# sits inside the banner instead of sharing its faces, and the stripes
+		# stand 4 cm proud of it, their backs buried in it: no coplanar faces
+		# to flicker in the depth buffer.
+		Props.box(gate, local + Vector3(0, 2.3, 0), Vector3(0.65, 4.6, 0.62), Color("e1e2df"))
 		Props.box(gate, local + Vector3(0, 0.12, 0), Vector3(1.0, 0.24, 1.05), Color("353c40"))
 		for row in range(8):
 			for face in [-1.0, 1.0]:
-				Props.box(gate, local + Vector3(0, 0.5 + row * 0.49, face * 0.361), Vector3(0.60, 0.24, 0.018), Color("272e33") if row % 2 == 0 else Color("ce4830"))
+				Props.box(gate, local + Vector3(0, 0.5 + row * 0.49, face * 0.325), Vector3(0.60, 0.24, 0.05), Color("272e33") if row % 2 == 0 else Color("ce4830"))
 		solid(gate, local, 0.48, 4.6)
 	Props.box(gate, Vector3(0, 4.5, 0), Vector3(13.1, 0.85, 0.70), Color("ce4830"))
 	for face in [-1.0, 1.0]:
