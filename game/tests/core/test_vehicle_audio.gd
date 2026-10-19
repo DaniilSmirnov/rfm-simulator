@@ -52,6 +52,8 @@ func engine_model() -> void:
 	check(VehicleAudio.doppler(Vector3(50, 0, 0), Vector3(30, 0, 0), ear, Vector3.ZERO) < 0.95, "a receding car sounds lower")
 
 func sound_files() -> void:
+	SoundBank.warm()
+	check(SoundBank.streams.has("engine-v6-on") and SoundBank.streams.has("step-snow-3") and SoundBank.streams.size() >= 60, "every sound file loads while the game sets up")
 	for engine in VehicleAudio.ENGINES:
 		for layer in ["low", "on", "off"]:
 			var stream: AudioStreamWAV = SoundBank.stream("engine-%s-%s" % [engine, layer])
@@ -132,6 +134,7 @@ func cars_around() -> void:
 	game.in_car = false
 	audio.update(1.0 / 60.0, true, false)
 	check(audio.shots.any(func(shot): return shot.stream == SoundBank.stream("car-door")), "getting out shuts a door")
+	check(audio.all_players.size() == 5 + 1 + VehicleAudio.VOICES * 5 + 2 + 6, "pausing reaches every car sound")
 	audio.update(1.0 / 60.0, false, false)
 	check(audio.voices.all(func(entry): return entry.car == 0) and audio.cars.is_empty(), "ending the outing releases every voice")
 	game.queue_free()

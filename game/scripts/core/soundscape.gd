@@ -42,6 +42,7 @@ var ambient_random = RandomNumberGenerator.new()
 
 func _ready() -> void:
 	ambient_random.seed = 7102026
+	SoundBank.warm()
 	bird_clock = ambient_random.randf_range(BIRD_GAP_MIN, BIRD_GAP_MAX)
 	fire_clock = ambient_random.randf_range(FIRE_GAP_MIN, FIRE_GAP_MAX)
 	cicada_clock = ambient_random.randf_range(1.0, CICADA_GAP_MIN)
@@ -74,12 +75,11 @@ func repair() -> void:
 	# Keep the wind loop alive after a stopped session or lost playback.
 	# Birds and fire are intentionally scheduled as sparse one-shots below.
 	var ambience_paused = world_paused()
-	game.wind_audio.stream_paused = ambience_paused
+	SoundBank.set_paused(game.wind_audio, ambience_paused)
 	if not game.wind_audio.playing:
 		game.wind_audio.play()
-	birds.stream_paused = ambience_paused
-	cicadas.stream_paused = ambience_paused
-	game.fire_audio.stream_paused = ambience_paused
+	for node in [birds, cicadas, game.fire_audio]:
+		SoundBank.set_paused(node, ambience_paused)
 	if is_instance_valid(game.grill):
 		game.fire_audio.global_position = game.grill.global_position
 

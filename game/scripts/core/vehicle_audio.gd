@@ -67,6 +67,7 @@ var peer_seats: Dictionary = {}
 var trunks: Dictionary = {}
 var rope_count = 0
 var rng = RandomNumberGenerator.new()
+var all_players: Array = []
 
 func _ready() -> void:
 	rng.seed = 2026101
@@ -85,6 +86,9 @@ func _ready() -> void:
 		siren_cars.append(0)
 	for i in range(6):
 		shots.append(SoundBank.spatial(self, 0.0, 6.0, 140.0))
+	all_players = own_layers.values() + sirens + shots + [starter]
+	for voice in voices:
+		all_players.append_array([voice.low, voice.on, voice.off, voice.tyre, voice.skid])
 
 # ---------------------------------------------------------------- engine model
 
@@ -132,8 +136,8 @@ static func doppler(source: Vector3, velocity: Vector3, ear: Vector3, ear_veloci
 # ---------------------------------------------------------------- frame
 
 func update(delta: float, running: bool, paused: bool) -> void:
-	for node in players():
-		node.stream_paused = paused
+	for node in all_players:
+		SoundBank.set_paused(node, paused)
 	if paused or delta <= 0.0:
 		return
 	if not running:
@@ -149,15 +153,9 @@ func update(delta: float, running: bool, paused: bool) -> void:
 	_watch_seats()
 	_watch_trunks_and_ropes()
 
-func players() -> Array:
-	var list: Array = own_layers.values() + sirens + shots + [starter]
-	for voice in voices:
-		list.append_array([voice.low, voice.on, voice.off, voice.tyre, voice.skid])
-	return list
-
 # Everything stops; seats and lids are re-read without sounds next time.
 func silence() -> void:
-	for node in players():
+	for node in all_players:
 		if node.playing:
 			node.stop()
 	for voice in voices:
@@ -198,7 +196,9 @@ func _follow_listener(delta: float) -> void:
 
 # Starts a loop at a random point, so equal loops on several cars do not phase.
 # A loop starts above 1% gain and stops below 0.2%, so a gain hovering at the
-# edge does not restart it every frame.
+# edge does not restart it every frame. Volume is written only when it moves
+# audibly (each write is a WebAudio call on the Web); pitch every frame, as a
+# Web sample loses it when its loop wraps.
 func _layer(node: Node, sound: String, gain: float, pitch: float, base_db: float) -> void:
 	if gain < (0.002 if node.playing else 0.01):
 		if node.playing:
@@ -208,7 +208,9 @@ func _layer(node: Node, sound: String, gain: float, pitch: float, base_db: float
 	if node.stream != stream:
 		node.stream = stream
 		node.stop()
-	node.volume_db = base_db + linear_to_db(maxf(gain, 0.002))
+	var volume = base_db + linear_to_db(maxf(gain, 0.002))
+	if absf(node.volume_db - volume) > 0.1:
+		node.volume_db = volume
 	node.pitch_scale = clampf(pitch, 0.3, 3.0)
 	if not node.playing and DisplayServer.get_name() != "headless":
 		node.play(rng.randf_range(0.0, 1.0))
