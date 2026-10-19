@@ -63,6 +63,10 @@ func run() -> void:
 					continue
 				if st.biome.has_method("in_village") and st.biome.in_village(st.road_s(p)):
 					continue
+				# A cliff face no car can climb onto (the canyon walls) is no resting spot.
+				var across: Vector3 = st.side(s) * 0.8
+				if st.biome.drive_blocked(p - across, p + across) or st.biome.drive_blocked(p + across, p - across):
+					continue
 				var y = settle(game, p)
 				recovery_supported = recovery_contact(game, p) and recovery_supported
 				# The car origin sits 0.06 m above the four tyre contact points.
