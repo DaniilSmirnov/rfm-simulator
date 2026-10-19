@@ -9,6 +9,25 @@ static func stream(sound: String) -> AudioStream:
 		streams[sound] = load("res://audio/%s.wav" % sound)
 	return streams[sound]
 
+# Every file up front, while the game sets up. The Web build plays them as
+# WebAudio samples, and the first play of each decodes and uploads it: done
+# here, a car coming into earshot does not stall a frame.
+static func warm() -> void:
+	for file in DirAccess.get_files_at("res://audio"):
+		if not file.ends_with(".wav.import"):
+			continue
+		var loaded = stream(file.trim_suffix(".wav.import"))
+		if OS.has_feature("web") and loaded != null and not AudioServer.is_stream_registered_as_sample(loaded):
+			AudioServer.register_stream_as_sample(loaded)
+
+# On the Web, unpausing a sample (Godot 4.4 SampleNode) starts it again on a
+# new source even when it was not paused, and the old source keeps looping
+# unheard forever: written every frame, that piled up hundreds of sources a
+# second. So the flag is written only when it changes.
+static func set_paused(node: Node, paused: bool) -> void:
+	if node.stream_paused != paused:
+		node.stream_paused = paused
+
 # One of the numbered takes `sound-1` … `sound-count`.
 static func take(sound: String, count: int, rng: RandomNumberGenerator) -> AudioStream:
 	return stream("%s-%d" % [sound, rng.randi_range(1, count)])

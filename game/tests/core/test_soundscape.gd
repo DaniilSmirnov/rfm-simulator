@@ -39,7 +39,7 @@ func run() -> void:
 	check(audio.active(), "new outing restores gameplay audio state")
 	await game._shutdown_audio()
 	check(audio.shutting_down, "shutdown disables loop recovery")
-	check(audio.vehicles.players().all(func(player): return not player.playing), "shutdown silences every car sound")
+	check(audio.vehicles.all_players.all(func(player): return not player.playing), "shutdown silences every car sound")
 	game.queue_free()
 	await process_frame
 	print("SOUNDSCAPE RESULT: %d failures" % failures)
