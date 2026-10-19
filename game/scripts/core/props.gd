@@ -145,13 +145,9 @@ static func faceted(parent: Node3D, pos: Vector3, size: Vector3, color: Color, s
 	return part
 
 const CharacterRig = preload("res://scripts/people/character_rig.gd")
-# Baked bodies: summer clothes preloaded, other outfits on first use (character_profiles.gd).
-static var _avatar_scenes: Dictionary = {
-	"res://models/characters/spectator_0.glb": preload("res://models/characters/spectator_0.glb"),
-	"res://models/characters/spectator_1.glb": preload("res://models/characters/spectator_1.glb"),
-	"res://models/characters/spectator_2.glb": preload("res://models/characters/spectator_2.glb"),
-	"res://models/characters/spectator_3.glb": preload("res://models/characters/spectator_3.glb"),
-}
+# Baked bodies by path: summer clothes load with this script, other outfits on
+# first use (character_profiles.gd).
+static var _avatar_scenes: Dictionary = CharacterProfiles.load_models("")
 
 static func player_avatar(variant: int = 0, outfit: String = "") -> Node3D:
 	var index = posmod(variant, SPECTATOR_MODELS.size())

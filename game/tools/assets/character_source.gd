@@ -119,7 +119,7 @@ static func player_avatar(variant: int = 0, outfit: String = "") -> Node3D:
 	if winter:
 		_winter_jacket(root, profile)
 	else:
-		capsule(root, Vector3(0, 1.03, 0), Vector3(0.64, 0.70, 0.40), shirt)
+		capsule(root, Vector3(0, 1.03, 0), Vector3(0.58, 0.70, 0.38) if profile.get("female", false) else Vector3(0.64, 0.70, 0.40), shirt)
 		for side in [-1, 1]:
 			var trim = box(root, Vector3(side * 0.22, 1.30, -0.14), Vector3(0.12, 0.12, 0.15), trim_color)
 			trim.rotation.z = side * 0.25
@@ -186,10 +186,17 @@ static func player_avatar(variant: int = 0, outfit: String = "") -> Node3D:
 		eye.name = "LeftEye" if side < 0 else "RightEye"
 		rounded(head, Vector3(side * 0.15 + 0.014, 0.12, -0.382), Vector3(0.085, 0.095, 0.03), Color("182226"), 8, 4)
 		box(head, Vector3(side * 0.15 + 0.002, 0.14, -0.401), Vector3(0.019, 0.022, 0.009), Color("ffffff"))
-	box(head, Vector3(0, -0.16, -0.265), Vector3(0.22, 0.018, 0.012), Color("875244"))
+	var style = profile.get("hair_style", "short")
+	if profile.get("female", false):
+		box(head, Vector3(0, -0.16, -0.265), Vector3(0.16, 0.034, 0.016), Color("bf4f5c"))
+	else:
+		box(head, Vector3(0, -0.16, -0.265), Vector3(0.22, 0.018, 0.012), Color("875244"))
 	var hair = rounded(head, Vector3(0, 0.38, 0.015), Vector3(0.66, 0.25, 0.54), hair_color, 10, 4)
 	hair.name = "Quiff"
-	for i in range(3 if profile.hat == "" else 0):
+	_face_extras(head, profile, hair_color)
+	if style == "bald":
+		hair.hide()
+	for i in range(3 if profile.hat == "" and style != "bald" else 0):
 		var tuft = rounded(head, Vector3(-0.18 + i * 0.18, 0.465 + i * 0.01, -0.13), Vector3(0.20, 0.24, 0.32), hair_color.lightened(0.06 + i * 0.016), 7, 3)
 		tuft.rotation.z = -0.25
 	if profile.beard:
@@ -201,7 +208,12 @@ static func player_avatar(variant: int = 0, outfit: String = "") -> Node3D:
 		_winter_hat(root, head, profile)
 	elif profile.hat != "":
 		hair.hide()
-		var hat_color = Color("b43c32") if profile.hat == "cap" else Color("3f694b")
+		var hat_color = Color(profile.get("hat_color", "b43c32" if profile.hat == "cap" else "3f694b"))
+		if profile.hat == "panama":
+			rounded(head, Vector3(0, 0.41, 0), Vector3(0.64, 0.30, 0.57), hat_color, 10, 4)
+			cylinder(head, Vector3(0, 0.33, 0), 0.47, 0.47, 0.03, hat_color.darkened(0.06), 12)
+			cylinder(head, Vector3(0, 0.38, 0), 0.325, 0.325, 0.05, Color(profile.trim), 12)
+			return root
 		rounded(head, Vector3(0, 0.38, 0), Vector3(0.70, 0.32, 0.59), hat_color, 10, 4)
 		if profile.hat == "cap":
 			var visor = box(head, Vector3(0, 0.315, -0.37), Vector3(0.53, 0.055, 0.35), hat_color)
@@ -273,3 +285,44 @@ static func _winter_hat(root: Node3D, head: Node3D, profile: Dictionary) -> void
 	if profile.hat == "beanie":
 		# Hood folded down behind the scarf.
 		rounded(root, Vector3(0, 1.34, 0.17), Vector3(0.54, 0.18, 0.36), Color(profile.shirt).lightened(0.08), 8, 4)
+
+# Hair beyond the default quiff, glasses, a moustache and lashes (see the
+# optional look keys in character_profiles.gd). Long hair and the ponytail stay
+# visible under any hat.
+static func _face_extras(head: Node3D, profile: Dictionary, hair_color: Color) -> void:
+	match profile.get("hair_style", "short"):
+		"bald":
+			# A grey fringe around the back of the head.
+			for side in [-1, 1]:
+				rounded(head, Vector3(side * 0.275, 0.10, 0.07), Vector3(0.10, 0.22, 0.30), hair_color, 8, 4)
+			rounded(head, Vector3(0, 0.10, 0.215), Vector3(0.46, 0.22, 0.12), hair_color, 8, 4)
+		"ponytail":
+			rounded(head, Vector3(0, 0.24, 0.30), Vector3(0.16, 0.16, 0.14), Color(profile.trim), 8, 4)
+			var tail = capsule(head, Vector3(0, 0.0, 0.36), Vector3(0.17, 0.44, 0.16), hair_color)
+			tail.rotation.x = 0.28
+		"long":
+			rounded(head, Vector3(0, 0.02, 0.15), Vector3(0.64, 0.86, 0.34), hair_color, 12, 6)
+			for side in [-1, 1]:
+				rounded(head, Vector3(side * 0.285, -0.02, -0.04), Vector3(0.11, 0.64, 0.30), hair_color, 8, 5)
+	if profile.get("female", false):
+		for side in [-1, 1]:
+			for k in range(3):
+				var lash = box(head, Vector3(side * (0.09 + k * 0.05), 0.27 - absf(k - 1) * 0.015, -0.33), Vector3(0.018, 0.05, 0.012), Color("1b1f22"))
+				lash.rotation.z = side * (k - 1) * 0.5
+	if profile.get("mustache", false):
+		for side in [-1, 1]:
+			var half = rounded(head, Vector3(side * 0.07, -0.115, -0.285), Vector3(0.15, 0.06, 0.06), hair_color, 8, 4)
+			half.rotation.z = side * 0.25
+	var glasses = str(profile.get("glasses", ""))
+	if glasses != "":
+		var frame = Color("1e2326")
+		for side in [-1, 1]:
+			var x = side * 0.15
+			if glasses == "shades":
+				rounded(head, Vector3(x + 0.01, 0.12, -0.405), Vector3(0.27, 0.22, 0.03), Color("15191c"), 10, 4)
+			for y in [-0.025, 0.265]:
+				box(head, Vector3(x, y, -0.40), Vector3(0.29, 0.022, 0.02), frame)
+			for dx in [-0.145, 0.145]:
+				box(head, Vector3(x + dx, 0.12, -0.40), Vector3(0.022, 0.31, 0.02), frame)
+			box(head, Vector3(side * 0.30, 0.15, -0.20), Vector3(0.02, 0.022, 0.40), frame)
+		box(head, Vector3(0, 0.15, -0.41), Vector3(0.05, 0.022, 0.02), frame)

@@ -41,7 +41,7 @@ func check_outfits() -> void:
 	for index in range(StageRegistry.count()):
 		var biome = StageRegistry.make_biome(index)
 		check(biome.outfit() == ("winter" if biome.has_snow() else ""), "%s: outfit follows the snow" % StageRegistry.entry(index).id)
-	for i in range(4):
+	for i in range(Props.SPECTATOR_MODELS.size()):
 		var summer = Props.player_avatar(i)
 		var winter = Props.player_avatar(i, "winter")
 		var look = Props.spectator_profile(i, "winter")
@@ -62,7 +62,7 @@ func check_outfits() -> void:
 
 func _initialize() -> void:
 	check_outfits()
-	for i in range(4):
+	for i in range(Props.SPECTATOR_MODELS.size()):
 		var avatar = Props.player_avatar(i)
 		check(avatar.has_node("Head") and avatar.has_node("LeftArm") and avatar.has_node("LeftLeg") and avatar.has_node("RightLeg"), "Animation pivots retained")
 		check(avatar.has_node("RightArm/RightForearm/BeerCan") and avatar.has_node("RightArm/RightForearm/Skewer") and avatar.has_node("LeftLeg/LeftShin") and avatar.has_node("LeftArm/LeftForearm"), "Knee and elbow pivots; held food follows the hand")
