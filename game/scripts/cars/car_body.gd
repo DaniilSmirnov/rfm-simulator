@@ -9,9 +9,9 @@ extends RefCounted
 #   shape: windscreen base, roof front, roof rear and rear-glass base stations,
 #          then the front and rear wheel offsets from the bumpers
 #   pillar (B-pillar z), doors (2 or 4), wheel (CarParts look), wheel_radius
-#   lights: round | twin | square | slim | wide; lamp_tilt; tail: block | band
+#   lights: round | twin | square | slim | wide; lamp_tilt; tail: block | band | pillar
 #   grille, grille_style (slats | chrome_lines | chrome_pair | mesh), lower_grille
-#   trim (bumpers), roof_color, stripe, spare_wheel, roof_rails,
+#   trim (bumpers), plate (number plate colour), roof_color, stripe, spare_wheel, roof_rails,
 #   spoiler (lip | wing | duck), flares, scoop, mudflaps, sunroof, aux_lamps
 const P = preload("res://scripts/core/props.gd")
 const CarParts = preload("res://scripts/cars/car_parts.gd")
@@ -161,13 +161,18 @@ static func _front(root: Node3D, p: Dictionary, f: Dictionary) -> void:
 static func _rear(root: Node3D, p: Dictionary, f: Dictionary) -> void:
 	var tail: float = f.rear + 0.02
 	var y: float = f.deck - 0.20
-	if str(p.get("tail", "block")) == "band":
-		P.box(root, Vector3(0, y, tail), Vector3(f.half * 1.7, 0.12, 0.04), TAIL.darkened(0.1))
-		for side in [-1.0, 1.0]:
-			P.box(root, Vector3(side * f.half * 0.66, y, tail + 0.01), Vector3(0.36, 0.10, 0.03), TAIL)
-	else:
-		for side in [-1.0, 1.0]:
-			P.box(root, Vector3(side * f.half * 0.68, y, tail), Vector3(0.33, 0.24 if p.get("suv", false) else 0.15, 0.045), TAIL)
+	match str(p.get("tail", "block")):
+		"band":
+			P.box(root, Vector3(0, y, tail), Vector3(f.half * 1.7, 0.12, 0.04), TAIL.darkened(0.1))
+			for side in [-1.0, 1.0]:
+				P.box(root, Vector3(side * f.half * 0.66, y, tail + 0.01), Vector3(0.36, 0.10, 0.03), TAIL)
+		"pillar":
+			# Tall lamps up the rear corners of a box-backed wagon.
+			for side in [-1.0, 1.0]:
+				P.box(root, Vector3(side * f.half * 0.84, f.deck, tail), Vector3(0.16, 0.48, 0.045), TAIL)
+		_:
+			for side in [-1.0, 1.0]:
+				P.box(root, Vector3(side * f.half * 0.68, y, tail), Vector3(0.33, 0.24 if p.get("suv", false) else 0.15, 0.045), TAIL)
 	_bumper(root, p, f, tail + 0.025)
 	if p.get("spare_wheel", false):
 		var spare = CarParts.wheel(root, Vector3(0, f.base + 0.22, f.rear + 0.17), 0.36, 0.2, 1.0, p.get("wheel", {}))
@@ -176,7 +181,7 @@ static func _rear(root: Node3D, p: Dictionary, f: Dictionary) -> void:
 
 static func _bumper(root: Node3D, p: Dictionary, f: Dictionary, z: float) -> void:
 	P.box(root, Vector3(0, f.base - 0.19, z), Vector3(float(p.width) * 0.97, 0.15, 0.10), Color(p.get("trim", "303d41")))
-	P.box(root, Vector3(0, f.base - 0.12, z + signf(z) * 0.055), Vector3(0.36, 0.09, 0.015), Color("e8e5d0")).name = "Plate"
+	P.box(root, Vector3(0, f.base - 0.12, z + signf(z) * 0.055), Vector3(0.36, 0.09, 0.015), Color(p.get("plate", "e8e5d0"))).name = "Plate"
 
 static func _extras(root: Node3D, p: Dictionary, f: Dictionary) -> void:
 	var shape: Array = f.shape

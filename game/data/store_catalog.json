@@ -164,5 +164,15 @@
     "enabled": true,
     "purchase_enabled": true,
     "price": 3
+  },
+  {
+    "sku": "car_11",
+    "type": "car",
+    "content_id": 10,
+    "title": "Японский кей-кар",
+    "free": false,
+    "enabled": true,
+    "purchase_enabled": true,
+    "price": 3
   }
 ]
