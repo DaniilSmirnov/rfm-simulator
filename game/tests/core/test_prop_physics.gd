@@ -14,6 +14,9 @@ class Terrain extends Node3D:
 	var trees: Array[Vector3] = []
 	var forest_data: Array[Dictionary] = []
 	var rocks: Array[Dictionary] = []
+	var indexed_tree_count = 0
+	var tree_cells: Dictionary = {}
+	func _rebuild_tree_index() -> void: indexed_tree_count = trees.size()
 	func _init() -> void:
 		solids.stage = self
 		add_child(solids)
@@ -82,6 +85,52 @@ func advance(frames: int) -> void:
 		await physics_frame
 	await process_frame
 
+# A walker who strolls into furniture slides it; only a run or a jump tips it.
+func walk_into(node: Node3D, step: float, players_state: Dictionary) -> void:
+	var start: Vector3 = node.global_position - Vector3.RIGHT * 1.5
+	world.injuries.entries = [{"key": "player:walker", "pos": start}]
+	for i in range(int(2.5 / step)):
+		world.injuries.entries[0].pos += Vector3.RIGHT * step
+		var players: Dictionary = {}
+		for id in players_state:
+			var state: Dictionary = players_state[id].duplicate()
+			state.pos = world.room.a(world.injuries.entries[0].pos)
+			players[id] = state
+		props.update(players, {}, 1.0 / 60.0)
+		await physics_frame
+	world.injuries.entries = []
+	await advance(120)
+
+func tipping() -> void:
+	for yaw in [0.0, PI / 4]:
+		var stroll = chair(Vector3(80, 0, 4 + yaw * 8), "stroll-%d" % int(yaw * 100), Vector3(0, yaw, 0))
+		await advance(60)
+		var start = stroll.global_position
+		await walk_into(stroll, 0.04, {"walker": {"in_car": false}})
+		check(stroll.global_position.distance_to(start) > 0.1, "walking into an upright chair pushes it (yaw %.2f)" % yaw)
+		check(stroll.global_basis.y.dot(Vector3.UP) > 0.95, "walking into an upright chair cannot tip it over (yaw %.2f)" % yaw)
+	var run = chair(Vector3(100, 0, 4), "run")
+	await advance(60)
+	await walk_into(run, 0.12, {"walker": {"in_car": false, "running": true}})
+	check(run.global_basis.y.dot(Vector3.UP) < 0.7, "running into a chair knocks it over")
+	var jump = chair(Vector3(120, 0, 4), "jump")
+	await advance(60)
+	await walk_into(jump, 0.08, {"walker": {"in_car": false, "airborne": true}})
+	check(jump.global_basis.y.dot(Vector3.UP) < 0.7, "jumping into a chair knocks it over")
+	var tipped = chair(Vector3(140, 0.4, 4), "tipped", Vector3(0, 0, PI / 2))
+	props.knock("tipped", Vector3.DOWN)
+	await advance(180)
+	check(tipped.global_basis.y.dot(Vector3.UP) < 0.5, "a sideways chair lies on the ground before it is dragged")
+	var puller = {"pos": world.room.a(props.center(props.records["tipped"]) + Vector3.RIGHT * 2), "tow": true, "in_car": false}
+	var lowest = 1.0
+	for i in range(60):
+		props.update({"helper": puller}, {}, 1.0 / 60.0)
+		await physics_frame
+		if i == 10: lowest = tipped.global_basis.y.dot(Vector3.UP)
+	await advance(60)
+	check(lowest < 0.95, "a dragged tipped chair turns upright gradually, not in one frame")
+	check(tipped.global_basis.y.dot(Vector3.UP) > 0.97, "dragging a tipped chair turns it back upright")
+
 func run() -> void:
 	world = World.new()
 	root.add_child(world)
@@ -123,6 +172,7 @@ func run() -> void:
 		world.injuries.entries[0].pos += Vector3.RIGHT * 0.04
 		await advance(1)
 	check(bump.global_position.distance_to(bump_start) > 0.1, "a moving NPC wakes sleeping props after all props have settled")
+	await tipping()
 	var heavy = chair(Vector3(60, 0, 4), "heavy")
 	props.records["heavy"].mass = 3500.0
 	props.records["heavy"].body.mass = 3500.0

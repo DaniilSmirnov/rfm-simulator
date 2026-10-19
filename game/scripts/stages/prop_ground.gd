@@ -35,17 +35,35 @@ func ensure_at(at: Vector3, reach: float) -> void:
 		if not trunk.global_transform.is_equal_approx(pose):
 			trunk.global_transform = pose
 
-func _tile(key: Vector2i) -> void:
-	var origin = Vector3(key.x * TILE + TILE / 2, 0, key.y * TILE + TILE / 2)
+# The ground under built tiles changed (a shovel dug the snow): a stale tile
+# kept the old snow surface, and a prop placed in the pit sat below it and fell
+# through the world.
+func reshape(area: Rect2) -> void:
+	area = area.grow(STEP)
+	for x in range(floori(area.position.x / TILE), floori(area.end.x / TILE) + 1):
+		for z in range(floori(area.position.y / TILE), floori(area.end.y / TILE) + 1):
+			var key = Vector2i(x, z)
+			if tiles.has(key):
+				tiles[key].get_child(0).shape.map_data = _heights(_origin(key))
+
+func _origin(key: Vector2i) -> Vector3:
+	return Vector3(key.x * TILE + TILE / 2, 0, key.y * TILE + TILE / 2)
+
+func _heights(origin: Vector3) -> PackedFloat32Array:
 	var count = int(TILE / STEP) + 1
 	var heights = PackedFloat32Array()
 	for z in range(count):
 		for x in range(count):
 			heights.append(stage.ground(origin + Vector3(x * STEP - TILE / 2, 0, z * STEP - TILE / 2)))
+	return heights
+
+func _tile(key: Vector2i) -> void:
+	var origin = _origin(key)
+	var count = int(TILE / STEP) + 1
 	var shape = HeightMapShape3D.new()
 	shape.map_width = count
 	shape.map_depth = count
-	shape.map_data = heights
+	shape.map_data = _heights(origin)
 	var tile = _collider(shape, Vector3.ZERO)
 	tile.scale = Vector3(STEP, 1, STEP)
 	tile.global_position = origin

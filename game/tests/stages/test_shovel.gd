@@ -9,10 +9,18 @@ func run() -> void:
 	point = Vector3(key.x + key.z * 0.25, 0, key.y + key.z * 0.25)
 	point.y = stage.terrain_surface_height(point)
 	var original = stage.terrain_surface_height(point)
+	get_root().add_child(stage)
+	stage._attach_solids()
+	stage.solids.physics_ground(point, 1.0)
+	var tile_key = Vector2i(floori(point.x / 16.0), floori(point.z / 16.0))
+	var heights: PackedFloat32Array = stage.solids.prop_ground.tiles[tile_key].get_child(0).shape.map_data
+	var lowest = Array(heights).min()
 	check(stage.snow.dig(stage, point), "shovel clears one snow triangle")
 	check(not stage.snow.dig(stage, point), "same triangle cannot be dug twice")
 	check(stage.snow.loose_depth(stage, point) == 0, "cleared ground has no snow resistance")
 	check(stage.ground(point) < original - 0.3 and is_equal_approx(stage.vehicle_ground(point), stage.ground(point)), "walking and car support match excavation floor")
+	heights = stage.solids.prop_ground.tiles[tile_key].get_child(0).shape.map_data
+	check(Array(heights).min() < lowest - 0.3, "prop physics ground built before digging follows the pit, so furniture placed there does not fall through")
 	var neighbour = Vector3(key.x + key.z * 0.75, 0, key.y + key.z * 0.75)
 	check(not stage.snow.is_dug(stage, neighbour), "other triangle in same square remains snow")
 	var guest = Stage.new(1)
