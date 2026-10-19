@@ -108,9 +108,9 @@ func _rock_node(st: SurfaceTool, node_name: String) -> void:
 	node.material_override = mat
 	stage.add_child(node)
 
-# The castles: bastions and fins built out from the foot of both walls, towers,
-# hoodoos and needles standing free on the floor and on the benches, a few
-# broken remnants on the lip of the rim. Every form is different
+# The castles: rows of blocky towers, bastions and fins built out from the foot
+# of both walls, single blocks and fallen slabs on the floor and the benches.
+# The plateau above stays bare, as it is. Every form is different
 # (canyon_castles.gd), and the mix changes along the valley.
 func _castles(cooperative: bool = false) -> void:
 	var st = SurfaceTool.new()
@@ -135,30 +135,29 @@ func _castles(cooperative: bool = false) -> void:
 
 # Where along the wall a form stands, and which forms grow there.
 const PLACES = {
-	"foot": ["bastion", "bastion", "fin", "fin", "tower", "dome"],
-	"floor": ["tower", "hoodoo", "needle", "tower", "dome"],
-	"bench": ["tower", "needle", "hoodoo", "fin"],
-	"rim": ["hoodoo", "needle", "tower"],
+	"foot": ["castle", "castle", "bastion", "bastion", "fin", "slab"],
+	"floor": ["block", "slab", "castle", "block", "hoodoo"],
+	"bench": ["block", "castle", "fin", "slab"],
 }
 # Height range of each form, in metres; its radius is a share of its height.
 const SIZES = {
-	"bastion": [Vector2(18.0, 42.0), Vector2(0.28, 0.42)],
-	"fin": [Vector2(14.0, 34.0), Vector2(0.16, 0.24)],
-	"tower": [Vector2(10.0, 30.0), Vector2(0.12, 0.2)],
-	"hoodoo": [Vector2(6.0, 13.0), Vector2(0.22, 0.32)],
-	"needle": [Vector2(9.0, 24.0), Vector2(0.09, 0.14)],
-	"dome": [Vector2(8.0, 18.0), Vector2(0.45, 0.6)],
+	"castle": [Vector2(16.0, 40.0), Vector2(0.16, 0.24)],
+	"bastion": [Vector2(18.0, 40.0), Vector2(0.3, 0.42)],
+	"block": [Vector2(9.0, 26.0), Vector2(0.2, 0.32)],
+	"fin": [Vector2(14.0, 32.0), Vector2(0.1, 0.15)],
+	"slab": [Vector2(7.0, 15.0), Vector2(0.4, 0.55)],
+	"hoodoo": [Vector2(6.0, 11.0), Vector2(0.24, 0.32)],
 }
 const CASTLE_SPACING = 5.0
 
 # One form beside the gorge at z; returns its kind, or "" where none fits.
 func _castle(st: SurfaceTool, z: float, side: float, index: int) -> String:
 	var roll = rng.randf()
-	var place = "foot" if roll < 0.55 else ("floor" if roll < 0.75 else ("bench" if roll < 0.92 else "rim"))
+	var place = "foot" if roll < 0.58 else ("floor" if roll < 0.8 else "bench")
 	var kinds: Array = PLACES[place]
 	var kind: String = kinds[rng.randi() % kinds.size()]
 	var size: Array = SIZES[kind]
-	var height = rng.randf_range(size[0].x, size[0].y) * (0.6 if place in ["bench", "rim"] else 1.0)
+	var height = rng.randf_range(size[0].x, size[0].y) * (0.6 if place == "bench" else 1.0)
 	var radius = height * rng.randf_range(size[1].x, size[1].y)
 	var foot: float = Form.wall_foot(z, side)
 	# A form at the foot is half sunk into the wall; its base is the floor.
@@ -166,7 +165,6 @@ func _castle(st: SurfaceTool, z: float, side: float, index: int) -> String:
 	match place:
 		"floor": reach = foot * rng.randf_range(0.15, 0.75)
 		"bench": reach = foot + Form.wall_run(z, side) * rng.randf_range(0.2, 0.45)
-		"rim": reach = Form.rim_edge(z, side) + rng.randf_range(2.0, 9.0)
 	var p = Vector3(Form.axis_x(z) + side * reach, 0.0, z)
 	if absf(p.x) > 192.0 or not open_ground(p, radius * 1.4 + 6.0, 2.0):
 		return ""
@@ -176,13 +174,19 @@ func _castle(st: SurfaceTool, z: float, side: float, index: int) -> String:
 		p = surface(p)
 		if not _level_enough(p, 3.0):
 			return ""
-	# Fins and bastions run along the wall; the rest face any way.
+	# Castles, fins and bastions run along the wall; the rest face any way.
 	var along = atan2(Form.axis_x(z - 4.0) - Form.axis_x(z + 4.0), -8.0) + PI * 0.5
-	var yaw = along + rng.randf_range(-0.3, 0.3) if kind in ["fin", "bastion"] else rng.randf() * TAU
+	var lined = kind in ["castle", "fin", "bastion"]
+	var yaw = along + rng.randf_range(-0.2, 0.2) if lined else rng.randf() * TAU
+	if lined:
+		var axis = Vector3(cos(yaw), 0.0, -sin(yaw)) * Castles.reach(kind, radius, index)
+		for end in [p + axis, p - axis]:
+			if not open_ground(end, radius + 5.0, 0.0):
+				return ""
 	var sink = 1.5 if place == "foot" else 0.8
 	for circle in Castles.build(st, biome, p - Vector3.UP * sink, kind, height + sink, radius, yaw, index):
 		stage.rocks.append(Records.rock(circle.pos + Vector3.UP * sink, float(circle.radius) * 0.85, height))
-	reserved.append({"pos": p, "radius": radius * 1.3})
+	reserved.append({"pos": p, "radius": maxf(radius * 1.3, Castles.reach(kind, radius, index))})
 	return kind
 
 # Ground flat enough for a block to have been left standing on it.

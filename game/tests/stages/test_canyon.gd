@@ -126,7 +126,7 @@ func _check_gorge(stage) -> void:
 	check(shelf, "the descent is a shelf with the wall above it and the gorge below")
 	_check_cliffs(stage)
 	var kinds: Dictionary = stage.canyon.scenery.counts.castle_kinds
-	check(kinds.size() >= 6 and int(stage.canyon.scenery.counts.towers) > 120, "the castles take every form: %s" % str(kinds))
+	check(kinds.size() >= 6 and int(stage.canyon.scenery.counts.towers) > 50, "the castles take every form: %s" % str(kinds))
 
 # Cars keep to the road and the steppe: they cannot drive up a wall.
 func _check_cliffs(stage) -> void:
