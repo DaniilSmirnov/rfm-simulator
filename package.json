@@ -10,6 +10,7 @@
   "scripts": {
     "build": "node scripts/build-all.mjs",
     "test": "node scripts/test-game.mjs",
+    "sounds": "node scripts/generate-sounds.mjs",
     "dev": "wrangler dev",
     "deploy": "node scripts/deploy-cloudflare.mjs",
     "preview": "wrangler preview",

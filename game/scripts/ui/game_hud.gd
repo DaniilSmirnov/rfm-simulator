@@ -521,8 +521,7 @@ func show_result(title: String, body: String) -> void:
 	game.start_button.text = "НОВЫЙ ВЫЕЗД"
 	layout_menu()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	game.engine_audio.stop()
-	game.rally_audio.stop()
+	game.soundscape.vehicles.silence()
 	game.fire_audio.stop()
 
 func die(reason: String) -> void:

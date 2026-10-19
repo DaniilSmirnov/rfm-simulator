@@ -173,8 +173,6 @@ var draw_distance_controls: VBoxContainer
 var draw_distance_buttons: Array[Button] = []
 var start_button: Button
 var minimap: Control
-var engine_audio: AudioStreamPlayer
-var rally_audio: AudioStreamPlayer3D
 var wind_audio: AudioStreamPlayer
 var fire_audio: AudioStreamPlayer3D
 var soundscape: Node
@@ -420,31 +418,6 @@ func _build_ui() -> void:
 	hud.build_ui()
 
 func _setup_audio() -> void:
-	engine_audio = AudioStreamPlayer.new()
-	engine_audio.stream = load("res://audio/engine.wav")
-	engine_audio.volume_db = -22
-	add_child(engine_audio)
-	_play_audio(engine_audio)
-	wind_audio = AudioStreamPlayer.new()
-	wind_audio.stream = load("res://audio/forest.wav")
-	wind_audio.volume_db = -20
-	add_child(wind_audio)
-	_play_audio(wind_audio)
-	rally_audio = AudioStreamPlayer3D.new()
-	rally_audio.stream = load("res://audio/engine.wav")
-	rally_audio.unit_size = 18
-	rally_audio.max_distance = 180
-	rally_audio.volume_db = -6
-	add_child(rally_audio)
-	fire_audio = AudioStreamPlayer3D.new()
-	fire_audio.stream = load("res://audio/fire.wav")
-	fire_audio.max_distance = 24
-	# 20% of the previous cooking/fire linear gain (about -14 dB).
-	fire_audio.volume_db = -26
-	add_child(fire_audio)
-	beer_audio = AudioStreamPlayer.new()
-	beer_audio.volume_db = -10
-	add_child(beer_audio)
 	soundscape = preload("res://scripts/core/soundscape.gd").new()
 	soundscape.game = self
 	add_child(soundscape)
@@ -735,8 +708,6 @@ func _process(delta: float) -> void:
 	toast_time = maxf(0, toast_time - delta)
 	toast_label.visible = toast_time > 0 and not mobile_mode
 	_update_hud()
-	engine_audio.pitch_scale = 0.75 + absf(speed) / 18.0
-	engine_audio.volume_db = -21 if in_car else -35
 	if room.is_authority():
 		_check_finish()
 	if capture_mode and elapsed > 1.3:
@@ -990,10 +961,8 @@ func _capture_menu() -> void:
 
 func _shutdown_audio() -> void:
 	if soundscape != null:
-		soundscape.shutting_down = true
-		for player in [soundscape.birds, soundscape.effects, soundscape.steps]:
-			player.stop()
-	for audio in [engine_audio, rally_audio, wind_audio, fire_audio, beer_audio]:
+		soundscape.stop_all()
+	for audio in [wind_audio, fire_audio, beer_audio]:
 		audio.stop()
 	await get_tree().create_timer(0.15).timeout
 

@@ -71,7 +71,7 @@ func light() -> bool:
 	lit = true
 	fire_time = 0.0
 	if game.soundscape != null:
-		game.soundscape.placement()
+		game.soundscape.placement("light_grill")
 	game.toast("Мангал разожжён. Дождись, пока угли прогорят.")
 	return true
 

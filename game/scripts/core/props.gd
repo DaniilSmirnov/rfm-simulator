@@ -456,8 +456,8 @@ static func player_car(variant: int = 0, bake: bool = true) -> Node3D:
 			car = player_car_camping_hatchback()
 		"sport_sedan":
 			car = player_car_sport_sedan()
-	if car == null:
-		car = player_car_shell(variant)
+	car = car if car != null else player_car_shell(variant)
+	car.set_meta("engine", str(p.engine))
 	return bake_car(car, "player:%d" % variant) if bake else car
 
 # One mesh for the static body and one for the trunk lid; wheels, cargo and

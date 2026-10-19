@@ -201,6 +201,11 @@ func shoulder(_s: float) -> float:
 func loose_surface(_pos: Vector3) -> bool:
 	return true
 
+# What tyres and boots sound like at pos: "gravel", "asphalt", "snow" or
+# "grass" (game/audio tyres-* and step-* sounds).
+func surface_sound(pos: Vector3) -> String:
+	return "gravel" if stage.road_distance(pos) <= stage.WIDTH * 0.55 else "grass"
+
 # Crews follow pre-recorded runs (baked rally tracks) on this stage.
 func uses_baked_tracks() -> bool:
 	return false

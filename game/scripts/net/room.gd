@@ -329,14 +329,7 @@ func _render_guest_world(delta: float) -> void:
 		for stone in game.stones:
 			if not game._advance_gravel(stone, delta):
 				stone.node.hide()
-	var nearest: Node3D = null
-	var nearest_distance = INF
 	for racer in game.racers:
-		if racer.state in ["racing", "offroad", "rock_bounce"] and not world_paused and not game.dead and not game.finished:
-			var distance = racer.node.position.distance_to(game.player_position())
-			if distance < nearest_distance:
-				nearest = racer.node
-				nearest_distance = distance
 		Props.update_course_lights(racer.node, game.elapsed)
 		if world_sync.racer_motion.has(racer.id):
 			var frozen = world_paused or game.dead or game.finished
@@ -345,13 +338,6 @@ func _render_guest_world(delta: float) -> void:
 			racer.node.rotation = pose.rotation
 	game.crews.draw_recovery_ropes()
 	game.park_traffic.render_guest(server_clock(), world_paused or game.dead or game.finished)
-	if nearest != null:
-		game.rally_audio.position = nearest.position
-		game.rally_audio.pitch_scale = 1.8
-		if not game.rally_audio.playing:
-			game._play_audio(game.rally_audio)
-	else:
-		game.rally_audio.stop()
 
 static func a(pos: Vector3) -> Array:
 	return [snappedf(pos.x, 0.01), snappedf(pos.y, 0.01), snappedf(pos.z, 0.01)]

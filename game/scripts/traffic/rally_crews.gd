@@ -138,8 +138,6 @@ func update_racers_step(delta: float) -> void:
 	var to_remove: Array[Dictionary] = []
 	var finished_course: Array[int] = []
 	var parked: Array[Dictionary] = []
-	var nearest: Node3D = null
-	var nearest_d = 9999.0
 	for racer in game.racers:
 		var node: Node3D = racer.node
 		racer.previous = node.position
@@ -310,10 +308,6 @@ func update_racers_step(delta: float) -> void:
 			car_contact(racer, delta)
 		if racer.state in ["stranded", "stopped"]:
 			count_racer(racer)
-		var d = node.position.distance_to(game.player_position())
-		if d < nearest_d and racer.state in ["racing", "offroad"]:
-			nearest = node
-			nearest_d = d
 	for racer in to_remove:
 		racer.node.queue_free()
 		game.racers.erase(racer)
@@ -323,13 +317,6 @@ func update_racers_step(delta: float) -> void:
 		game.racers.erase(racer)
 	for id in finished_course:
 		game.course.vehicle_finished(game, id)
-	if nearest != null:
-		game.rally_audio.position = nearest.position
-		game.rally_audio.pitch_scale = 1.8
-		if not game.rally_audio.playing:
-			game._play_audio(game.rally_audio)
-	else:
-		game.rally_audio.stop()
 
 # A crew running into a car stops; the local player's car takes the damage.
 func car_contact(racer: Dictionary, delta: float) -> void:

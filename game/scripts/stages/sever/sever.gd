@@ -388,6 +388,13 @@ func grip(pos: Vector3) -> float:
 		return 0.3
 	return surface_grip(station, (pos - stage.at(station)).dot(stage.side(station)), road_width(station) * 0.5)
 
+# A snowbound village: snow everywhere but the dirt of the wheel tracks.
+func surface_sound(pos: Vector3) -> String:
+	var station = stage.road_s(pos)
+	if DeepSnow.depth(stage, pos) > 0.02 or stage.road_distance(pos) > road_width(station) * 0.55:
+		return "snow"
+	return "gravel" if conditions(station, (pos - stage.at(station)).dot(stage.side(station))).dirt > 0.5 else "snow"
+
 func terrain_tile_step(p: Vector3) -> float:
 	return 2.0 if stage.road_distance(p) < 20.0 or gully(p) > 0.0 else 4.0
 

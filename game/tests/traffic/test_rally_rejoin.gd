@@ -18,8 +18,6 @@ func scenario(reverse: bool, backwards: bool = false, speed: float = 0.0, fps: i
 	game.car = Node3D.new()
 	game.car.position = Vector3(-170, 2, 5)
 	game.add_child(game.car)
-	game.rally_audio = AudioStreamPlayer3D.new()
-	game.add_child(game.rally_audio)
 	game.in_car = true
 	game.rng.seed = 20261009
 	var r = game._add_course_vehicle(Node3D.new(), 1, "pass", 0, role)
