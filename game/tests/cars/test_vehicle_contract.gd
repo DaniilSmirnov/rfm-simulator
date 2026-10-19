@@ -6,7 +6,7 @@ func _initialize() -> void:
 	call_deferred("run")
 
 func run() -> void:
-	check(Props.PLAYER_MODELS.size() == 10, "ten player vehicles are registered")
+	check(Props.PLAYER_MODELS.size() == 11, "eleven player vehicles are registered")
 	for index in range(Props.PLAYER_MODELS.size()):
 		var car: Node3D = Props.player_car(index)
 		if car == null:
