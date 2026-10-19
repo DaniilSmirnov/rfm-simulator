@@ -131,6 +131,13 @@ func run() -> void:
 	for tree in stage.trees:
 		clear_road = clear_road and stage.road_distance(tree) > 9.0
 	check(clear_road, "no tree grows on the road")
+	# Measured against the centre line itself: in the opening bends the road
+	# runs up to 50° off -z, where a station read from -z put rocks on the road.
+	var rocks_off_road = true
+	for rock in stage.rocks:
+		var s0: float = stage.road_s(rock.pos)
+		rocks_off_road = rocks_off_road and stage.woodland.road_clearance(rock.pos, s0) - float(rock.radius) >= stage.road_width(s0) * 0.5 - 0.001
+	check(rocks_off_road, "no rock lies on the road, even in the opening bends")
 	for structure in ["MineHeadframe", "Homestead", "MineshaftSign"]:
 		var node = stage.get_node_or_null(structure)
 		check(node != null and node.has_meta("baked_parts"), "%s is built as a merged mesh" % structure)

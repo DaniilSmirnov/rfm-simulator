@@ -86,6 +86,14 @@ func run() -> void:
 	for tree in stage.trees:
 		trees_ok = trees_ok and stage.road_distance(tree) >= 9.0 and not alpine.reserved(tree, 1.0)
 	check(trees_ok and stage.trees.size() > 400, "spruce forest keeps off the road and the hamlet (%d trees)" % stage.trees.size())
+	# Loose rocks on the verge stay off the tarmac, also on the lacets.
+	var rocks_off_road = true
+	for rock in stage.rocks:
+		if rock.size() != 3:
+			continue
+		var s0: float = stage.road_s(rock.pos)
+		rocks_off_road = rocks_off_road and stage.woodland.road_clearance(rock.pos, s0) - float(rock.radius) >= stage.road_width(s0) * 0.5 - 0.001
+	check(rocks_off_road, "no rock lies on the road")
 	var hotel: Dictionary = alpine.hamlet[1]
 	var approach = stage.at(float(hotel.s))
 	approach.y = stage.ground(approach)

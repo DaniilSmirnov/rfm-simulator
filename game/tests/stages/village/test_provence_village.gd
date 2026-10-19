@@ -122,6 +122,11 @@ func run() -> void:
 		for point in walker.path:
 			on_pavement = on_pavement and stage.road_distance(point) > stage.road_width(stage.road_s(point)) * 0.5
 	check(on_pavement, "walking villagers never step onto the road")
+	var unobstructed = true
+	for walker in life.walkers:
+		for i in range(walker.path.size() - 1):
+			unobstructed = unobstructed and stage.solids.hit(walker.path[i], walker.path[i + 1], 0.28).is_empty()
+	check(unobstructed, "villagers turn back at parked cars and mopeds instead of walking through them")
 	var walker: Dictionary = life.walkers[0]
 	var before = walker.node.position
 	stage.update_life(0.5, before)
@@ -194,6 +199,31 @@ func run() -> void:
 	remote.apply_harvested([id])
 	check(remote.harvested.has(id) and remote.collectible_parts.VineyardGrapes[first].hidden, "late join replicates harvested bunches")
 	remote.free()
+	# A market stall knocked onto its roof rests on the awning, above the cobbles.
+	var props = game.movable_props
+	props.refresh()
+	var stall: Dictionary = {}
+	for record in props.records.values():
+		if record.node.get_parent().name == "VillageSquare" and absf(record.box.size.x - 2.4) < 0.05 and record.box.size.y > 2.0:
+			stall = record
+	check(not stall.is_empty(), "the square has movable market stalls")
+	if not stall.is_empty():
+		var at: Vector3 = stall.node.global_position
+		props.knock(stall.key, Vector3.DOWN)
+		stall.body.global_transform = Transform3D(Basis(Vector3.RIGHT, PI), at + Vector3.UP * 2.6)
+		stall.body.allow_tip(10.0)
+		stage.solids.prepare_ground()
+		for i in range(240):
+			props.update({}, {}, 1.0 / 60.0)
+			await physics_frame
+		await process_frame
+		# Depth of the deepest part below the ground under it (the stall may lie
+		# across the edge of the square, where the ground falls away).
+		var sunk = -INF
+		for mesh in stall.node.find_children("*", "MeshInstance3D", true, false):
+			var box: AABB = mesh.global_transform * mesh.mesh.get_aabb()
+			sunk = maxf(sunk, stage.ground(box.get_center()) - box.position.y)
+		check(stall.node.global_basis.y.dot(Vector3.UP) < -0.9 and sunk < 0.08, "an upturned market stall rests on its awning instead of sinking through the cobbles (%.2f m deep)" % sunk)
 	var bell = stage.solids.bell
 	game.walker = bell.handle_position() - Vector3(0.8, 0.4, 0)
 	game._update_camera(1)

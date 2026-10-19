@@ -496,7 +496,6 @@ func _parked_vehicles() -> void:
 			"moped":
 				_moped(root, Vector3.ZERO)
 				_moped(root, Vector3(0, 0, 1.1))
-
 			_:
 				_small_car(root, spot[2] == "van", Color("8fb3c4") if int(s) % 3 else Color("d9c46a"))
 		finish(root)
@@ -505,7 +504,6 @@ func _small_car(root: Node3D, van: bool, paint: Color) -> void:
 	# Parked half on the pavement, as is customary in narrow French streets.
 	var body = Node3D.new()
 	root.add_child(body)
-	body.position = Vector3(0.0, 0.0, 0.0)
 	var length = 4.0 if van else 3.8
 	Props.box(body, Vector3(0, 0.62, 0), Vector3(1.48, 0.55, length), paint)
 	if van:
@@ -662,14 +660,16 @@ func _stall(parent: Node3D, p: Vector3, goods: Array, index: int) -> void:
 	parent.add_child(root)
 	root.position = p
 	Props.box(root, Vector3(0, 0.82, 0), Vector3(2.4, 0.08, 1.1), Color("a07a52"))
+	var shapes: Array[AABB] = [AABB(Vector3(-1.2, 0, -0.55), Vector3(2.4, 1.0, 1.1)), AABB(Vector3(-1.2, 2.0, -0.75), Vector3(2.4, 0.3, 1.5))]
 	for x in [-1.1, 1.1]:
 		for z in [-0.5, 0.5]:
 			Props.box(root, Vector3(x, 1.1, z), Vector3(0.06, 2.2, 0.06), Color("6e5a44"))
+			shapes.append(AABB(Vector3(x - 0.03, 1.0, z - 0.03), Vector3(0.06, 1.2, 0.06)))
 	for i in range(6):
 		Props.box(root, Vector3(-1.0 + i * 0.4, 2.25, 0), Vector3(0.4, 0.05, 1.5), Color("efe6d2") if i % 2 else Color(["b33a32", "3d6b8a", "4e7a5a"][index]))
 	for i in range(8):
 		Props.box(root, Vector3(-0.95 + (i % 4) * 0.63, 0.92 + (i / 4) * 0.02, -0.25 + (i / 4) * 0.5), Vector3(0.5, 0.12, 0.38), goods[i % 2])
-	solids.solid(root, Vector3(0, 0.6, 0), Vector3(2.4, 1.2, 1.1), "street_furniture")
+	root.set_meta("prop_shapes", shapes)
 	Movable.register(solids, root, 45, false)
 
 # Monument aux morts: a stone obelisk on a stepped base inside a little railing.

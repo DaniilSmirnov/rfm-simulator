@@ -93,16 +93,26 @@ func _walkers() -> void:
 	for i in range(routes.size()):
 		var item: Array = routes[i]
 		var path: Array[Vector3] = []
+		var stretch: Array[Vector3] = []
 		var s: float = item[0]
 		while s <= item[1]:
 			var half = village.road_width(s) * 0.5
 			var p = village.anchor(s, item[2] * (half + Layout.PAVEMENT * 0.55))
 			s += 2.0
 			# Villagers keep to the pavement; never step onto the racing line.
-			if not village.pavement(s - 2.0) or not stage.solids.clear(p, 0.3):
+			if not village.pavement(s - 2.0):
 				continue
 			p.y = stage.ground(p)
-			path.append(p)
+			# A car or mopeds parked on the pavement end the stretch: the villager
+			# turns back there instead of walking through (and shoving) them.
+			if not stage.solids.clear(p, 0.3) or (not stretch.is_empty() and not stage.solids.hit(stretch.back(), p, 0.3).is_empty()):
+				if stretch.size() > path.size():
+					path = stretch.duplicate()
+				stretch.clear()
+				continue
+			stretch.append(p)
+		if stretch.size() > path.size():
+			path = stretch
 		var avatar = person(i + 1, accessories[i])
 		walkers.append({"id": i + 1, "node": avatar, "path": path, "t": rng.randf() * (path.size() - 1), "direction": 1.0 if i % 2 == 0 else -1.0, "speed": rng.randf_range(0.9, 1.25), "pause": 0.0, "knocked": false})
 
