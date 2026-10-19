@@ -109,7 +109,7 @@ static func clean_state(s):
 		"relief": s.get("relief") == true and not in_car and not seated, "radio": s.get("radio") is bool and s.radio,
 		"ride": ride, "hitch": _member_id(s.get("hitch")) if in_car and ride == "" else "", "broken": s.get("broken") == true,
 		"food_species": s.food_species if str(s.get("food_species", "")) in ["edible", "fly_agaric", "toadstool"] else "edible",
-		"food_kind": s.food_kind if str(s.get("food_kind", "")) in ["meat", "mushroom", "berries", "plov"] else "meat",
+		"food_kind": s.food_kind if str(s.get("food_kind", "")) in ["meat", "mushroom", "berries", "plov", "kuyrdak"] else "meat",
 		"eat": clampf(float(s.eat), -1, duration("eat")) if _number(s.get("eat")) else -1.0,
 		"beer": clampf(float(s.get("beer", 0)), -1, duration("drink")) if _number(s.get("beer")) else 0.0}.merged(_stand(s, in_car or seated))
 

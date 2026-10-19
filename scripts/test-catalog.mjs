@@ -18,7 +18,7 @@ export const groups = Object.freeze({
   "test_furniture.gd", "test_interaction.gd", "test_soundscape.gd", "test_vehicle_audio.gd", "test_perches.gd", "test_people_play.gd", "test_movable_props.gd",
  ],
  simulation: [
-  "test_camp_cooking.gd", "test_course_schedule.gd", "test_service_parks.gd", "test_rally_handling.gd",
+  "test_stage_meals.gd", "test_camp_cooking.gd", "test_course_schedule.gd", "test_service_parks.gd", "test_rally_handling.gd",
   "test_rally_rejoin.gd", "test_rally_smoothness.gd", "test_rally_tracks.gd", "test_rally_traffic.gd", "test_room.gd", "test_room_recovery.gd", "test_direct_link.gd", "test_world_validation.gd", "test_voice_radio.gd", "test_voice_native.gd",
   "test_physics.gd", "test_prop_contact.gd", "test_car_hitbox.gd", "test_food_fleet.gd", "test_foraging.gd", "test_grill_fire.gd", "test_camp_models.gd",
   "test_poison_mushrooms.gd", "test_network_motion.gd", "test_tow_recovery.gd", "test_car_rides.gd",

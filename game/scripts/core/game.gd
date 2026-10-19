@@ -78,7 +78,7 @@ const EAT_DURATION = 3.6
 # Shared actions a guest triggers straight from the keyboard (the rest need a
 # target and go through placement or the interaction prompt).
 const GUEST_KEY_ACTIONS = ["table", "chairs", "grill", "flag", "rally", "collect", "mount_mushroom", "eat_mushroom", "eat_berries", "firewood", "cauldron", "church_bell", "dig_snow"]
-const EAT_ACTIONS = {"meat": "eat", "mushroom": "eat_mushroom", "berries": "eat_berries", "plov": "eat_plov"}
+const EAT_ACTIONS = {"meat": "eat", "mushroom": "eat_mushroom", "berries": "eat_berries", "plov": "eat_plov", "kuyrdak": "eat_plov"}
 var beer_prop: Node3D
 var avatar_variant = 0
 var rope_mesh: MeshInstance3D

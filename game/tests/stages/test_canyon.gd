@@ -203,6 +203,9 @@ func _check_grove(stage, canyon) -> void:
 		level = level and absf(stage.ground(p) - float(park.height)) < 0.01
 	check(level, "its whole paddock is level gravel")
 	check(absf(Form.offset(park.origin)) < Form.floor_half(float(park.origin.z)), "it stands between the walls, on the floor of the gorge")
+	for camp_name in ["SteppeYurtCamp", "GroveYurtCamp"]:
+		var pot = stage.get_node_or_null(camp_name + "/YurtKuyrdak")
+		check(pot != null and pot.get_meta("servings", 0) == 10 and pot.get_node("Rice").visible, "a baked yurt camp has ready kuyrdak: " + camp_name)
 	for node_name in ["CanyonValleyTowers", "SteppeYurtCamp", "GroveYurtCamp", "LedgeMarkers"]:
 		check(stage.get_node_or_null(node_name) != null, "%s is built" % node_name)
 

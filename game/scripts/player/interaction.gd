@@ -188,7 +188,7 @@ func activate() -> void:
 		"mount_cauldron": game.camp_cooking.mount()
 		"mount_firewood": game.camp_cooking.light_under_pot()
 		"plov_cook": game.camp_cooking.start()
-		"plov": game.eat_plov()
+		"plov": game.camp_actions.eat_plov(int(target.value) if target.get("value") is int else -1)
 		"trunk": game.cargo.toggle(target.value)
 		"return_gear": game.cargo.return_item(target.value)
 		"take_gear":
