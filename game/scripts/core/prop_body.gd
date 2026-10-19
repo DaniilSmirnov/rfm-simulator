@@ -17,8 +17,7 @@ const REST_ANGLE = 0.01
 var _rest_pose = Transform3D()
 var _rest_ticks = 0
 var _grounded_at = Vector3.INF
-# Upright furniture keeps its tilt unless something may tip it over: a car, a
-# running or jumping walker (allow_tip). The window stays open while the prop
+# Upright furniture keeps its tilt unless a car may tip it over (allow_tip). The window stays open while the prop
 # tumbles. A prop already lying over settles freely; a walker who drags it
 # turns it back upright.
 const GUARD_ANGLE = 0.35
@@ -35,6 +34,14 @@ var righting = false
 var _rising = false
 var _tip_time = 0.0
 var _guarded = false
+# A pose the prop belongs in (a cauldron over its campfire, see movable_props).
+# return_to() carries it back there along a low arc, upright again.
+const RETURN_SECONDS = 1.2
+const RETURN_LIFT = 0.5
+var home = null
+var _return_from = Transform3D()
+var _return_to = Transform3D()
+var _return_t = -1.0
 
 static func create(r: Dictionary, world_solids, owner_game) -> RigidBody3D:
 	var body = load("res://scripts/core/prop_body.gd").new()
@@ -86,6 +93,8 @@ static func create(r: Dictionary, world_solids, owner_game) -> RigidBody3D:
 	return body
 
 func place() -> void:
+	home = null
+	_return_t = -1.0
 	freeze = true
 	global_transform = record.node.global_transform
 	linear_velocity = Vector3.ZERO
@@ -100,6 +109,30 @@ func wake() -> void:
 	_rest_ticks = 0
 	_grounded_at = global_transform * center_of_mass
 	_ground()
+
+func return_to(target: Transform3D) -> void:
+	_return_from = global_transform
+	_return_to = target
+	_return_t = 0.0
+	linear_velocity = Vector3.ZERO
+	angular_velocity = Vector3.ZERO
+	freeze = true
+
+func returning() -> bool:
+	return _return_t >= 0.0
+
+func _carry_home(delta: float) -> void:
+	_return_t = minf(1.0, _return_t + delta / RETURN_SECONDS)
+	var k: float = smoothstep(0.0, 1.0, _return_t)
+	var pose: Transform3D = _return_from.interpolate_with(_return_to, k)
+	pose.origin.y += sin(PI * k) * RETURN_LIFT
+	global_transform = pose
+	record.node.global_transform = pose
+	record.changed = true
+	record.node.set_meta("prop_dynamic", true)
+	if _return_t >= 1.0:
+		_return_t = -1.0
+		wake()
 
 func allow_tip(seconds: float) -> void:
 	_tip_time = maxf(_tip_time, seconds)
@@ -148,6 +181,9 @@ func _ground() -> void:
 func _physics_process(delta: float) -> void:
 	if not is_instance_valid(record.node) or record.node.is_queued_for_deletion(): return
 	var simulate: bool = game.room.is_authority() and game.playing and not game.paused and not game.dead and not game.finished
+	if returning():
+		if simulate: _carry_home(delta)
+		return
 	# Assign only on change: setting `freeze`, even to its current value, resets
 	# the body mode in the physics server and wakes it, so no prop ever slept.
 	var frozen: bool = record.anchored or not simulate

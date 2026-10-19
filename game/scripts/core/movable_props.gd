@@ -3,22 +3,19 @@ extends RefCounted
 const Specials = preload("res://scripts/core/prop_specials.gd")
 const Registry = preload("res://scripts/core/prop_registry.gd")
 const REACH = 2.5
-# A walker only tips furniture over by running into it or landing on it from a
-# jump; plain walking slides it. Contact is measured from the chest point.
-const TIP_REACH = 0.6
+# Only a car tips furniture over; a walker, running or jumping, just slides it.
 const TIP_SECONDS = 1.0
-# Speed of the shove a run or a jump lands on contact (see knock()).
-const TIP_KNOCK = 2.5
 # The campfire is fixed in place; the cauldron stand straddles it.
 const FIXED_KINDS = ["firewood"]
 const HEARTH_KINDS = ["firewood", "cauldron"]
+# How far off the campfire a resting cauldron still counts as mounted on it.
+const HEARTH_REACH = 0.55
 const Body = preload("res://scripts/core/prop_body.gd")
 var game
 var stage_id = 0
 var records: Dictionary = {}
 var grips: Dictionary = {}
 var pending: Array = []
-var _tip_contacts: Dictionary = {}
 
 func refresh() -> void:
 	if game.stage == null:
@@ -140,7 +137,7 @@ func update(players: Dictionary, occupied: Dictionary, delta: float) -> Dictiona
 			r.velocity = Vector3.ZERO
 		r.changed = true
 	_push_walkers(players, occupied, delta)
-	_permit_tipping(players, occupied)
+	_return_to_hearth()
 	for r in records.values():
 		if r.changed and not r.anchored:
 			_move(r, delta)
@@ -160,29 +157,25 @@ func _push_walkers(players: Dictionary, occupied: Dictionary, delta: float) -> v
 		r.body.wake()
 		r.body.apply_central_impulse(intent.limit_length(1.0) * minf(350.0, r.mass * 8.0) * delta)
 
-# Running into furniture or jumping onto it may knock it over: once per
-# contact, the walker's momentum shoves it and tilting is allowed for a moment.
-func _permit_tipping(players: Dictionary, occupied: Dictionary) -> void:
-	var contacts: Dictionary = {}
-	for id in players:
-		var p: Dictionary = players[id]
-		if occupied.has(str(id)) or p.get("in_car", true) or p.get("seated", false): continue
-		if not p.get("running", false) and not p.get("airborne", false): continue
-		var pos: Vector3 = game.room.v(p.pos)
-		for r in records.values():
-			if not r.has("body") or r.anchored or _distance(r, pos) >= TIP_REACH: continue
-			var contact = "%s|%s" % [id, r.key]
-			contacts[contact] = true
-			r.body.allow_tip(TIP_SECONDS)
-			if _tip_contacts.has(contact): continue
-			var direction: Vector3 = game.room.v(p.get("push", [0, 0, 0]))
-			direction.y = 0
-			if direction.length_squared() < 0.01:
-				direction = center(r) - pos
-				direction.y = 0
-			if direction.length_squared() > 0.0001:
-				knock(r.key, direction.normalized() * TIP_KNOCK)
-	_tip_contacts = contacts
+# A cauldron knocked off its campfire glides back over the fire once it comes
+# to rest. One a player drags or sets down elsewhere stays where it is.
+func _return_to_hearth() -> void:
+	var fire: Dictionary = {}
+	for r in records.values():
+		if r.key.begins_with("camp:firewood:") and is_instance_valid(r.node): fire = r
+	for r in records.values():
+		if not r.key.begins_with("camp:cauldron:") or not r.has("body"): continue
+		var body = r.body
+		if fire.is_empty() or grips.values().has(r.key):
+			body.home = null
+			continue
+		if not body.sleeping or body.returning(): continue
+		var offset: Vector3 = r.node.global_position - fire.node.global_position
+		offset.y = 0
+		if offset.length() < HEARTH_REACH and r.node.global_basis.y.normalized().angle_to(Vector3.UP) < Body.GUARD_ANGLE:
+			body.home = r.node.global_transform
+		elif body.home != null:
+			body.return_to(body.home)
 
 # Contacts between a fixed campfire and the cauldron mounted over it would
 # shove the pot (or, before, flip the fire); the stand straddles the logs.
