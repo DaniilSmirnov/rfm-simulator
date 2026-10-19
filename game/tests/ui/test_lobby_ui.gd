@@ -12,6 +12,21 @@ func run() -> void:
 	check(not game.menu_title.visible and not game.menu_text.visible, "main menu hides duplicate heading and player count")
 	check(game.room.ui.panel.is_visible_in_tree() and not game.start_button.visible, "all starts use the unified room menu")
 	check(game.lobby_ui.images.size() == 3 and game.lobby_ui.images.all(func(image): return image.texture != null), "car, stage and character cards have rendered previews")
+	# Laid out as the menu is drawn: full width, then scaled to the window.
+	game.hud.layout_menu()
+	await process_frame
+	var cut: Array[String] = []
+	for choice in [game.car_choice, game.stage_choice, game.lobby_ui.character_choice]:
+		var start = choice.selected
+		for i in range(choice.item_count):
+			choice.select(i)
+			var label: Label = choice.caption
+			var font_size = label.get_theme_font_size("font_size")
+			var width = label.get_theme_font("font").get_string_size(label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+			if font_size < choice.MIN_FONT_SIZE or (width > label.size.x and (label.autowrap_mode == TextServer.AUTOWRAP_OFF or label.get_line_count() > 2)):
+				cut.append("%s: %d px, %.0f/%.0f, wrap %d, lines %d" % [label.text, font_size, width, label.size.x, label.autowrap_mode, label.get_line_count()])
+		choice.select(start)
+	check(cut.is_empty(), "every car, stage and character name fits between the arrows " + str(cut))
 	var looks = preload("res://scripts/people/character_profiles.gd").playable()
 	check(game.lobby_ui.character_choice.item_count == looks.size() and not "Коллекционер нашивок" in game.lobby_ui.character_choice.items, "every look but the patch collector can be picked")
 	game.lobby_ui.character_choice.cycle(-1)
