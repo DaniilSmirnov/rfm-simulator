@@ -17,11 +17,14 @@ const SPECTATOR_MODELS = [
 	{"name": "Дачник", "skin": "d8a27e", "shirt": "e2d9b8", "trim": "6f8f5a", "pants": "6b5a3e", "hair": "6f6a62", "hat": "panama", "hat_color": "e9e1c8", "sleeves": false, "long_pants": false, "beard": true},
 	{"name": "Болельщица", "skin": "edc3a6", "shirt": "e05a8a", "trim": "fbe9a0", "pants": "334a6e", "hair": "8a4a22", "hat": "", "sleeves": false, "long_pants": true, "beard": false, "female": true, "hair_style": "ponytail"},
 	{"name": "Туристка", "skin": "c99376", "shirt": "3f8fb5", "trim": "f3efe2", "pants": "4b5a3a", "hair": "2a1e1a", "hat": "", "sleeves": true, "long_pants": false, "beard": false, "female": true, "hair_style": "long"},
+	{"name": "Коллекционер нашивок", "skin": "d29a78", "shirt": "d9d2c3", "trim": "4d6b3c", "pants": "3d4a5a", "hair": "5b4a3e", "hat": "", "sleeves": false, "long_pants": true, "beard": false, "mustache": true, "build": "big", "patch_vest": true, "vest": "4d6b3c"},
 ]
 
 # Optional look keys: "hair_style" ("short" default, "bald", "ponytail",
 # "long"), "glasses" ("clear", "shades"), "mustache", "female" (slimmer
-# torso, lashes, lips), "hat_color" for a summer "cap" or "panama".
+# torso, lashes, lips), "hat_color" for a summer "cap" or "panama", "build":
+# "big" (taller and broader), "patch_vest" (a vest of rally patches in colour
+# "vest", worn over every outfit).
 
 # Outfits: clothes a stage dresses everyone in (stage_biome.gd outfit()); ""
 # keeps the summer clothes above. An outfit record per look replaces only the
@@ -43,6 +46,7 @@ const OUTFITS = {
 		{"shirt": "6e4a33", "trim": "e6d8b4", "scarf": "c99a3c", "gloves": "3a2d24", "pants": "3d3a33", "hat": "ushanka", "hat_color": "5b4a3c", "hat_trim": "a08a73"},
 		{"shirt": "e9ecef", "trim": "e05a8a", "scarf": "e05a8a", "gloves": "e05a8a", "pants": "2f3e5a", "hat": "bobble", "hat_color": "e05a8a", "hat_trim": "f7f3ee"},
 		{"shirt": "7a3f8f", "trim": "f3efe2", "scarf": "e7b43c", "gloves": "3a2f45", "pants": "34383e", "hat": "bobble", "hat_color": "3f8fb5", "hat_trim": "f3efe2"},
+		{"shirt": "2c3540", "trim": "d9d2c3", "scarf": "c8202e", "gloves": "26292c", "pants": "2f3640", "hat": "bobble", "hat_color": "c8202e", "hat_trim": "f4f1e8"},
 	],
 }
 

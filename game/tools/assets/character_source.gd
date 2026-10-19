@@ -4,6 +4,9 @@ const FOOD_PORTIONS = 10
 # Joint pivots below the hip and the shoulder (m), see character_rig.gd.
 const KNEE = 0.33
 const ELBOW = 0.22
+# How much higher a "big" build's head sits: a longer torso and neck over the
+# rig's usual shoulders and hips.
+const TALL = 0.13
 const CARGO_KINDS = ["table", "chairs", "grill", "firewood", "cauldron"]
 
 static func material(color: Color) -> StandardMaterial3D:
@@ -106,6 +109,7 @@ static func capsule_triangle(vertices: PackedVector3Array, normals: PackedVector
 static func player_avatar(variant: int = 0, outfit: String = "") -> Node3D:
 	var profile = spectator_profile(variant, outfit)
 	var winter = profile.get("outfit", "") == "winter"
+	var big = profile.get("build", "") == "big"
 	var skin = Color(profile.skin)
 	var shirt = Color(profile.shirt)
 	var trim_color = Color(profile.trim)
@@ -118,6 +122,8 @@ static func player_avatar(variant: int = 0, outfit: String = "") -> Node3D:
 	# Rounded cartoon silhouette; original skin and clothing profiles are retained.
 	if winter:
 		_winter_jacket(root, profile)
+	elif big:
+		capsule(root, Vector3(0, 1.09, 0), Vector3(0.72, 0.84, 0.44), shirt)
 	else:
 		capsule(root, Vector3(0, 1.03, 0), Vector3(0.58, 0.70, 0.38) if profile.get("female", false) else Vector3(0.64, 0.70, 0.40), shirt)
 		for side in [-1, 1]:
@@ -129,8 +135,10 @@ static func player_avatar(variant: int = 0, outfit: String = "") -> Node3D:
 		for angle in [-0.9, -0.45, 0.45, 0.9]:
 			var leaf = box(root, Vector3(0, 1.19, -0.21), Vector3(0.025, 0.17, 0.013), trim_color)
 			leaf.rotation.z = angle
-	rounded(root, Vector3(0, 0.69, 0), Vector3(0.54, 0.30, 0.37) if winter else Vector3(0.52, 0.28, 0.35), pants)
-	if not winter:
+	if profile.get("patch_vest", false):
+		_patch_vest(root, profile, (0.25 if big else 0.22) if winter else (0.22 if big else 0.20), 0.39 if big else 0.34)
+	rounded(root, Vector3(0, 0.69, 0), Vector3(0.58, 0.31, 0.40) if big else (Vector3(0.54, 0.30, 0.37) if winter else Vector3(0.52, 0.28, 0.35)), pants)
+	if not winter and not big:
 		box(root, Vector3(0, 0.77, -0.20), Vector3(0.47, 0.06, 0.03), Color("515c62"))
 	for side in [-1, 1]:
 		var leg = Node3D.new()
@@ -142,6 +150,7 @@ static func player_avatar(variant: int = 0, outfit: String = "") -> Node3D:
 		# the joint stays closed when the knee bends.
 		var leg_color = pants if profile.long_pants else skin
 		var leg_width = (0.20 if winter else 0.18) if profile.long_pants else 0.15
+		leg_width += 0.02 if big else 0.0
 		capsule(leg, Vector3(0, -0.215, 0), Vector3(leg_width, 0.25, 0.19), leg_color)
 		var shin = Node3D.new()
 		shin.name = "LeftShin" if side < 0 else "RightShin"
@@ -158,7 +167,7 @@ static func player_avatar(variant: int = 0, outfit: String = "") -> Node3D:
 		arm.name = "LeftArm" if side < 0 else "RightArm"
 		root.add_child(arm)
 		arm.position = Vector3(side * 0.34, 1.29, 0)
-		capsule(arm, Vector3(0, -0.09, 0), Vector3(0.22, 0.32, 0.23) if winter else Vector3(0.19, 0.31, 0.20), shirt if profile.sleeves else skin)
+		capsule(arm, Vector3(0, -0.09, 0), (Vector3(0.22, 0.32, 0.23) if winter else Vector3(0.19, 0.31, 0.20)) + (Vector3(0.03, 0.01, 0.03) if big else Vector3.ZERO), shirt if profile.sleeves else skin)
 		# Forearm and hand turn at the elbow pivot.
 		var forearm = Node3D.new()
 		forearm.name = "LeftForearm" if side < 0 else "RightForearm"
@@ -179,7 +188,7 @@ static func player_avatar(variant: int = 0, outfit: String = "") -> Node3D:
 	var head = Node3D.new()
 	head.name = "Head"
 	root.add_child(head)
-	head.position = Vector3(0, 1.62, 0)
+	head.position = Vector3(0, 1.62 + (TALL if big else 0.0), 0)
 	capsule(head, Vector3.ZERO, Vector3(0.60, 0.84, 0.52), skin)
 	for side in [-1, 1]:
 		var eye = rounded(head, Vector3(side * 0.15, 0.12, -0.275), Vector3(0.28, 0.31, 0.22), Color("f5f2e7"), 10, 5)
@@ -234,14 +243,18 @@ static func player_avatar(variant: int = 0, outfit: String = "") -> Node3D:
 # medic's coat still fit over it; quilted seams, a zip and a scarf.
 static func _winter_jacket(root: Node3D, profile: Dictionary) -> void:
 	var jacket = Color(profile.shirt)
-	capsule(root, Vector3(0, 1.03, 0), Vector3(0.68, 0.74, 0.44), jacket)
+	var big = profile.get("build", "") == "big"
+	# A big build: wider, deeper and taller.
+	var k = Vector3(1.12, 1.0, 1.14) if big else Vector3.ONE
+	var lift = 0.06 if big else 0.0
+	capsule(root, Vector3(0, 1.03 + lift, 0), Vector3(0.68, 0.74 + lift * 2.0, 0.44) * k, jacket)
 	for y in [0.86, 1.02, 1.18]:
-		rounded(root, Vector3(0, y, 0), Vector3(0.695, 0.035, 0.455), jacket.darkened(0.18), 24, 4)
-	rounded(root, Vector3(0, 0.71, 0), Vector3(0.60, 0.07, 0.41), jacket.darkened(0.25), 24, 4)
-	box(root, Vector3(0, 1.0, -0.226), Vector3(0.03, 0.56, 0.012), Color(profile.trim))
+		rounded(root, Vector3(0, y + lift, 0), Vector3(0.695, 0.035, 0.455) * k, jacket.darkened(0.18), 24, 4)
+	rounded(root, Vector3(0, 0.71, 0), Vector3(0.60, 0.07, 0.41) * k, jacket.darkened(0.25), 24, 4)
+	box(root, Vector3(0, 1.0 + lift, -0.226 * k.z), Vector3(0.03, 0.56, 0.012), Color(profile.trim))
 	var scarf = Color(profile.scarf)
-	rounded(root, Vector3(0, 1.31, -0.03), Vector3(0.64, 0.15, 0.56), scarf, 24, 6)
-	var tail = box(root, Vector3(0.11, 1.13, -0.285), Vector3(0.11, 0.30, 0.035), scarf)
+	rounded(root, Vector3(0, 1.31 + (TALL if big else 0.0), -0.03), Vector3(0.64, 0.15, 0.56) * k, scarf, 24, 6)
+	var tail = box(root, Vector3(0.11, 1.13 + lift, -0.285 * k.z - (0.03 if profile.get("patch_vest", false) else 0.0)), Vector3(0.11, 0.30, 0.035), scarf)
 	tail.rotation.z = 0.12
 	for y in [1.04, 1.10]:
 		box(tail, Vector3(0, y - 1.13, -0.019), Vector3(0.112, 0.022, 0.004), scarf.lightened(0.45))
@@ -326,3 +339,80 @@ static func _face_extras(head: Node3D, profile: Dictionary, hair_color: Color) -
 				box(head, Vector3(x + dx, 0.12, -0.40), Vector3(0.022, 0.31, 0.02), frame)
 			box(head, Vector3(side * 0.30, 0.15, -0.20), Vector3(0.02, 0.022, 0.40), frame)
 		box(head, Vector3(0, 0.15, -0.41), Vector3(0.05, 0.022, 0.02), frame)
+
+# ---------------------------------------------------------------- patch vest
+
+const PATCH_COLORS = ["c8202e", "f4f1e8", "1d3f8a", "f2c230", "1f1f22", "e46a1f", "2f8a4a", "8a2be2", "38a3d6", "d9d2c3", "b5121b", "0f5e3a"]
+
+# The collector's open-front green vest, worn over any clothes, every season,
+# with 34 sewn-on rally patches: plates like the Monte-Carlo plaque, roundels,
+# shields, diamonds and striped badges. `front` is the half-depth of the body
+# under it, `half` its half-width.
+static func _patch_vest(root: Node3D, profile: Dictionary, front: float, half: float) -> void:
+	var cloth = Color(profile.get("vest", "4d6b3c"))
+	var z = front + 0.025
+	var panel = 0.05
+	for side in [-1.0, 1.0]:
+		box(root, Vector3(side * half * 0.56, 1.09, -z), Vector3(half * 0.80, 0.60, panel), cloth)
+		# Shoulder straps and the armhole sides (open above, so arms swing free).
+		box(root, Vector3(side * half * 0.56, 1.42, -0.02), Vector3(half * 0.42, 0.06, front * 2.0 + 0.08), cloth)
+		box(root, Vector3(side * (half + 0.02), 0.92, 0), Vector3(0.05, 0.30, front * 2.0 + 0.08), cloth)
+		box(root, Vector3(side * half * 0.56, 0.78, -z - 0.03), Vector3(half * 0.82, 0.03, 0.012), cloth.darkened(0.3))
+	box(root, Vector3(0, 1.09, z), Vector3(half * 2.0 + 0.04, 0.60, panel), cloth)
+	var rng = RandomNumberGenerator.new()
+	rng.seed = 1969
+	var spots = []
+	# Front: three rows of two on each panel; back: four rows of four;
+	# shoulder straps: one on each side, front and back.
+	for side in [-1.0, 1.0]:
+		for row in range(3):
+			for col in range(2):
+				spots.append([Vector3(side * half * (0.30 + col * 0.50), 1.30 - row * 0.19, -z - panel * 0.5), 0.12, -1.0])
+		spots.append([Vector3(side * half * 0.56, 1.46, -0.12), 0.07, -1.0])
+		spots.append([Vector3(side * half * 0.56, 1.46, 0.08), 0.07, 1.0])
+	for row in range(4):
+		for col in range(4):
+			spots.append([Vector3((col - 1.5) * half * 0.48, 1.33 - row * 0.155, z + panel * 0.5), 0.13, 1.0])
+	for i in range(spots.size()):
+		var spot = spots[i]
+		# Two different colours per badge.
+		var first = rng.randi() % PATCH_COLORS.size()
+		var second = (first + 1 + rng.randi() % (PATCH_COLORS.size() - 1)) % PATCH_COLORS.size()
+		_patch(root, spot[0], spot[1] * rng.randf_range(0.85, 1.0), ["plate", "round", "shield", "diamond", "stripes"][i % 5], Color(PATCH_COLORS[first]), Color(PATCH_COLORS[second]), spot[2])
+
+# One sewn-on badge facing -Z (front) or +Z (back), `size` metres across.
+static func _patch(root: Node3D, at: Vector3, size: float, kind: String, a: Color, b: Color, facing: float) -> void:
+	var patch = Node3D.new()
+	root.add_child(patch)
+	patch.position = at
+	if facing > 0.0:
+		patch.rotation.y = PI
+	var t = 0.008
+	match kind:
+		"plate":
+			# Rally plaque: red shield with an arched top, white field, black number.
+			box(patch, Vector3(0, -size * 0.08, -t), Vector3(size, size * 0.56, t), a)
+			var arch = cylinder(patch, Vector3(0, size * 0.18, -t), size * 0.42, size * 0.42, t, a, 10)
+			arch.rotation.x = PI / 2.0
+			box(patch, Vector3(0, -size * 0.12, -t * 2.0), Vector3(size * 0.78, size * 0.22, t), b)
+			box(patch, Vector3(0, size * 0.16, -t * 2.0), Vector3(size * 0.26, size * 0.22, t), Color("f4f1e8"))
+			box(patch, Vector3(0, size * 0.16, -t * 3.0), Vector3(size * 0.12, size * 0.14, t), Color("1f1f22"))
+		"round":
+			var disc = cylinder(patch, Vector3(0, 0, -t), size * 0.5, size * 0.5, t, a, 12)
+			disc.rotation.x = PI / 2.0
+			var inner = cylinder(patch, Vector3(0, 0, -t * 2.0), size * 0.32, size * 0.32, t, b, 12)
+			inner.rotation.x = PI / 2.0
+		"shield":
+			box(patch, Vector3(0, size * 0.1, -t), Vector3(size * 0.8, size * 0.6, t), a)
+			var tip = box(patch, Vector3(0, -size * 0.2, -t), Vector3(size * 0.57, size * 0.57, t), a)
+			tip.rotation.z = PI / 4.0
+			box(patch, Vector3(0, size * 0.1, -t * 2.0), Vector3(size * 0.16, size * 0.5, t), b)
+		"diamond":
+			var d = box(patch, Vector3(0, 0, -t), Vector3(size * 0.7, size * 0.7, t), a)
+			d.rotation.z = PI / 4.0
+			var core = box(patch, Vector3(0, 0, -t * 2.0), Vector3(size * 0.36, size * 0.36, t), b)
+			core.rotation.z = PI / 4.0
+		_:
+			box(patch, Vector3(0, 0, -t), Vector3(size, size * 0.62, t), a)
+			for y in [-0.16, 0.16]:
+				box(patch, Vector3(0, size * y, -t * 2.0), Vector3(size * 0.9, size * 0.1, t), b)
