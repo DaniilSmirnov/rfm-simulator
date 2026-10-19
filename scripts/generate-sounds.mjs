@@ -7,7 +7,7 @@
 // importer can loop them without a click.
 //
 //   node scripts/generate-sounds.mjs            # every sound
-//   node scripts/generate-sounds.mjs step tyres # only names starting so
+//   node scripts/generate-sounds.mjs step siren # only names starting so
 //
 // The engine reference revs (ENGINE_RPM) are mirrored in
 // game/scripts/cars/vehicle_audio.gd, which pitches the loops to the
@@ -283,9 +283,9 @@ function overrun(spec, options) {
   return mix(out, crackle, rms(out) * 2.2);
 }
 
-// ---------------------------------------------------------------- tyres
+// ---------------------------------------------------------------- one-shots
 
-// Rolling over loose stones: a rain of small pings and crunches over a rumble.
+// Loose stones and grit: a rain of small pings and crunches.
 function grains(length, rnd, { rate, band, q = 1.5, decay, sizeSpread = 1 }) {
   const out = new Float32Array(length);
   const count = Math.round(rate * length / RATE);
@@ -300,67 +300,6 @@ function grains(length, rnd, { rate, band, q = 1.5, decay, sizeSpread = 1 }) {
   return mix(lo, hi, 0.7);
 }
 
-function rumble(length, rnd, freq, wobble = 0.5) {
-  const out = filtered(noise(length, rnd), biquad('lp', freq, 0.9), biquad('lp', freq, 0.9));
-  const swell = drift(length, rnd, 3);
-  for (let i = 0; i < length; i++) out[i] *= 1 - wobble + wobble * 2 * swell[i];
-  return out;
-}
-
-function tyres(kind, seed) {
-  const rnd = random(seed);
-  const seconds = 2.0, n = loopSamples(seconds);
-  let out;
-  if (kind === 'gravel') {
-    out = rumble(n, rnd, 140, 0.5);
-    mix(out, grains(n, rnd, { rate: 900, band: [900, 3200], decay: 0.0012 }), 1.6);
-    mix(out, filtered(noise(n, rnd), biquad('bp', 600, 0.6)), 0.12);
-  } else if (kind === 'asphalt') {
-    out = rumble(n, rnd, 110, 0.3);
-    mix(out, filtered(noise(n, rnd), biquad('bp', 750, 0.7), biquad('lp', 2200, 0.7)), 0.5);
-  } else if (kind === 'snow') {
-    out = rumble(n, rnd, 120, 0.4);
-    mix(out, grains(n, rnd, { rate: 500, band: [700, 1900], q: 2.5, decay: 0.004 }), 1.4);
-    mix(out, filtered(noise(n, rnd), biquad('bp', 350, 0.8)), 0.2);
-  } else if (kind === 'grass') {
-    out = rumble(n, rnd, 90, 0.5);
-    mix(out, filtered(noise(n, rnd), biquad('bp', 2500, 0.5)), 0.12 * 1);
-    mix(out, grains(n, rnd, { rate: 160, band: [300, 1200], decay: 0.003 }), 0.8);
-  } else if (kind === 'water') {
-    out = filtered(noise(n, rnd), biquad('lp', 700, 0.7));
-    mix(out, filtered(noise(n, rnd), biquad('hp', 2500, 0.7)), 0.25);
-    // Bubbles: short rising chirps.
-    for (let k = 0; k < 120; k++) {
-      const at = Math.floor(rnd() * (n - 3000)), f0 = 300 + rnd() * 900, len = 400 + Math.floor(rnd() * 1200);
-      let phase = 0;
-      const amp = 0.2 + rnd() * 0.5;
-      for (let i = 0; i < len; i++) {
-        phase += 2 * Math.PI * f0 * (1 + 1.5 * i / len) / RATE;
-        out[at + i] += Math.sin(phase) * amp * Math.exp(-i / (len * 0.3));
-      }
-    }
-  } else if (kind === 'skid-asphalt') {
-    // Stick-slip squeal: a wavering tone with harmonics and rubber hiss.
-    out = new Float32Array(n);
-    const wobble = drift(n, rnd, 9);
-    let phase = 0;
-    for (let i = 0; i < n; i++) {
-      const f = 820 + 260 * wobble[i] + 30 * (rnd() - 0.5);
-      phase += 2 * Math.PI * f / RATE;
-      out[i] = Math.sin(phase) * 0.6 + Math.sin(phase * 2) * 0.28 + Math.sin(phase * 3) * 0.12;
-      out[i] *= 0.7 + 0.3 * Math.sin(2 * Math.PI * 23 * i / RATE + wobble[i] * 6);
-    }
-    mix(out, filtered(noise(n, rnd), biquad('bp', 1800, 0.8)), 0.35);
-  } else {
-    // skid-gravel: the tyre ploughs and throws a spray of stones.
-    out = rumble(n, rnd, 180, 0.6);
-    mix(out, filtered(noise(n, rnd), biquad('bp', 1200, 0.5)), 0.5);
-    mix(out, grains(n, rnd, { rate: 2200, band: [1100, 3800], decay: 0.0014 }), 2.2);
-  }
-  return closeLoop(out, seconds);
-}
-
-// ---------------------------------------------------------------- one-shots
 
 function thump(length, freq, decay, rnd) {
   const out = new Float32Array(length);
@@ -417,16 +356,22 @@ function engineStart(spec, seed) {
   const rnd = random(seed);
   const seconds = 1.9;
   const out = new Float32Array(samples(seconds));
-  // Starter: geared whine and the compression strokes dragging it down.
+  // Starter: a geared electric motor buzzing, slowed by every compression
+  // stroke, and the dull thud of each piston coming up.
   const crank = samples(0.75);
+  const strokes = 8.5;
+  const motor = new Float32Array(crank);
   let phase = 0;
   for (let i = 0; i < crank; i++) {
     const t = i / RATE;
-    const stroke = 0.5 + 0.5 * Math.sin(2 * Math.PI * 9.5 * t);
-    phase += 2 * Math.PI * (380 + 60 * stroke) / RATE;
-    out[i] += (Math.sin(phase) * 0.22 + Math.sin(phase * 2.01) * 0.08) * (0.6 + 0.4 * stroke) * Math.min(t / 0.03, 1);
+    const stroke = 0.5 + 0.5 * Math.cos(2 * Math.PI * strokes * t);
+    phase += (95 * (1 - 0.2 * stroke) * (0.75 + 0.25 * Math.min(t / 0.12, 1))) / RATE;
+    motor[i] = (2 * (phase % 1) - 1) * (0.55 + 0.45 * stroke) * Math.min(t / 0.02, 1);
   }
-  mix(out, envelope(filtered(noise(crank, rnd), biquad('bp', 200, 1)), t => 0.5 + 0.5 * Math.sin(2 * Math.PI * 9.5 * t)), 0.25);
+  run(motor, biquad('bp', 380, 0.8), biquad('lp', 1400, 0.7));
+  mix(out, motor, 0.5);
+  for (let k = 0; k / strokes < 0.7; k++) mix(out, thump(samples(0.1), 55, 0.03, rnd), 0.55, samples(0.01 + k / strokes));
+  mix(out, envelope(filtered(noise(crank, rnd), biquad('lp', 260, 0.8)), t => 0.5 + 0.5 * Math.cos(2 * Math.PI * strokes * t)), 0.3);
   // Catch: the engine fires, flares and settles to idle.
   const fire = engine(spec, {
     seconds: seconds - 0.62, seed, loop: false,
@@ -690,9 +635,6 @@ for (const [name, spec] of Object.entries(ENGINES)) {
   sounds[`engine-${name}-on`] = () => level(engine(spec, { seconds: 1.2, rpm: ENGINE_RPM.high, load: 1, seed: seed + 1 }), LOOP);
   sounds[`engine-${name}-off`] = () => level(overrun(spec, { seconds: 1.2, rpm: ENGINE_RPM.high, seed: seed + 2 }), { loudness: 0.11 });
 }
-for (const kind of ['gravel', 'asphalt', 'snow', 'grass', 'water', 'skid-asphalt', 'skid-gravel']) {
-  sounds[`tyres-${kind}`] = () => level(tyres(kind, seedOf(kind)), LOOP);
-}
 sounds['engine-start'] = () => level(engineStart(ENGINES.sedan, seedOf('engine-start')));
 sounds['car-door'] = () => level(door(seedOf('car-door')));
 sounds['trunk-open'] = () => level(trunk(true, seedOf('trunk-open')));
@@ -714,7 +656,7 @@ for (let k = 1; k <= 3; k++) sounds[`bird-${k}`] = () => level(bird(k - 1));
 sounds['cicadas'] = () => level(cicadas());
 sounds['church-bell'] = () => level(bell());
 
-export const LOOPS = Object.keys(sounds).filter(name => /^(engine-.*-(low|on|off)|tyres-|siren-)/.test(name));
+export const LOOPS = Object.keys(sounds).filter(name => /^(engine-.*-(low|on|off)|siren-)/.test(name));
 
 const SIDECAR = name => `[remap]
 

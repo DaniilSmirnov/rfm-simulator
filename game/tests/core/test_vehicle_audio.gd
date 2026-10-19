@@ -1,7 +1,7 @@
 extends "res://tests/harness.gd"
 # Car sounds: the engine model (gears, revs, loop crossfade), every engine and
-# tyre loop on disk, the nearest cars getting the 3D voices, sirens on course
-# cars, crashes, doors and the per-stage surface under the tyres.
+# siren loop on disk, the nearest cars getting the 3D voices, sirens on course
+# cars, crashes, doors and the per-stage surface under the boots.
 const VehicleAudio = preload("res://scripts/core/vehicle_audio.gd")
 const SoundBank = preload("res://scripts/core/sound_bank.gd")
 const CarRegistry = preload("res://scripts/cars/car_registry.gd")
@@ -58,7 +58,7 @@ func sound_files() -> void:
 		for layer in ["low", "on", "off"]:
 			var stream: AudioStreamWAV = SoundBank.stream("engine-%s-%s" % [engine, layer])
 			check(stream != null and stream.loop_mode == AudioStreamWAV.LOOP_FORWARD, "engine %s %s loops" % [engine, layer])
-	for sound in ["tyres-gravel", "tyres-asphalt", "tyres-snow", "tyres-grass", "tyres-water", "tyres-skid-asphalt", "tyres-skid-gravel", "siren-police", "siren-ambulance"]:
+	for sound in ["siren-police", "siren-ambulance"]:
 		var stream: AudioStreamWAV = SoundBank.stream(sound)
 		check(stream != null and stream.loop_mode == AudioStreamWAV.LOOP_FORWARD, sound + " loops")
 	for sound in ["engine-start", "car-door", "trunk-open", "trunk-close", "crash-light", "crash-heavy", "body-thud", "rope-hook", "backfire-1", "backfire-2", "backfire-3"]:
@@ -84,7 +84,7 @@ func fleet_engines() -> void:
 		var verge = stage.biome.surface_sound(stage.at(200.0) + stage.side(200.0) * 25.0)
 		stage_sounds = stage_sounds and surface in ["gravel", "asphalt", "snow", "grass"] and verge in ["gravel", "asphalt", "snow", "grass"]
 		stage.free()
-	check(stage_sounds, "every stage names a tyre and footstep surface on and off the road")
+	check(stage_sounds, "every stage names a footstep surface on and off the road")
 
 func cars_around() -> void:
 	var game = load("res://main.tscn").instantiate()
@@ -118,7 +118,6 @@ func cars_around() -> void:
 	check(not nodes[4].get_instance_id() in heard, "a far car waits for a free voice")
 	var voice = audio.voices[heard.find(nodes[0].get_instance_id())]
 	check(voice.on.stream == SoundBank.stream("engine-i5-on") or voice.low.stream == SoundBank.stream("engine-i5-low"), "a voice plays its car's engine")
-	check(voice.tyre.stream == SoundBank.stream("tyres-" + game.stage.biome.surface_sound(nodes[0].global_position)), "tyres sound the stage surface")
 	check(police.get_instance_id() in audio.siren_cars, "the opening police drives with its siren")
 	# A car stopping dead from 24 m/s crashed.
 	for frame in range(30):
@@ -134,7 +133,7 @@ func cars_around() -> void:
 	game.in_car = false
 	audio.update(1.0 / 60.0, true, false)
 	check(audio.shots.any(func(shot): return shot.stream == SoundBank.stream("car-door")), "getting out shuts a door")
-	check(audio.all_players.size() == 5 + 1 + VehicleAudio.VOICES * 5 + 2 + 6, "pausing reaches every car sound")
+	check(audio.all_players.size() == 3 + 1 + VehicleAudio.VOICES * 3 + 2 + 6, "pausing reaches every car sound")
 	audio.update(1.0 / 60.0, false, false)
 	check(audio.voices.all(func(entry): return entry.car == 0) and audio.cars.is_empty(), "ending the outing releases every voice")
 	game.queue_free()
