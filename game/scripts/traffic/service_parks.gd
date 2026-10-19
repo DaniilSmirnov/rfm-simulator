@@ -125,15 +125,15 @@ func vertex(pos: Vector3, height: float) -> float:
 	return level(pos, height)
 
 # Tyres: on the paddock its level surface; around it the biome's tyre height,
-# lifted with the land, so on the road tyres and ground() still agree. The
-# biome's tyre query is costly, and inside the park it is not needed.
+# which already sits on the levelled land (stage.ground(), base_ground() and
+# the terrain vertices all pass through level()), so it is not lifted again.
+# The biome's tyre query is costly, and inside the park it is not needed.
 func vehicle(pos: Vector3, biome) -> float:
-	var land: float = biome.ground(pos)
-	var surface = level(pos, land)
+	var surface = level(pos, biome.ground(pos))
 	var w = weight(pos)
 	if w >= 1.0:
 		return surface
-	return lerpf(biome.vehicle_ground(pos) + surface - land, surface, w)
+	return lerpf(biome.vehicle_ground(pos), surface, w)
 
 # The lane and the aisle continue the road surface; the rest of the paddock is
 # gravel, a little darker in the bays.

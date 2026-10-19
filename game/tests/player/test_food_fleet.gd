@@ -15,7 +15,7 @@ func run() -> void:
 				signature += str(part.mesh.get_aabb(), part.transform)
 		shapes[signature] = true
 		car.free()
-	check(names.size() == 10 and shapes.size() == 10, "ten models have different names and geometry")
+	check(names.size() == Props.PLAYER_MODELS.size() and shapes.size() == Props.PLAYER_MODELS.size(), "every player model has a distinct name and geometry")
 	var host = load("res://main.tscn").instantiate()
 	var guest = load("res://main.tscn").instantiate()
 	root.add_child(host)
