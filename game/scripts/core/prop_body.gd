@@ -145,6 +145,17 @@ func _ground() -> void:
 			actors = solids.prop_ground.get_node("Actors")
 		actors.update(solids.prop_ground.tiles)
 
+# A body pushed under the terrain tiles fell for good (a camp table at -80 m)
+# and stayed awake. Put it back on the ground where it went through.
+func _rescue(center: Vector3) -> void:
+	var ground: float = solids.stage.ground(center)
+	if center.y > ground - 1.0: return
+	global_position.y += ground + record.box.size.y * 0.5 + 0.02 - center.y
+	linear_velocity = Vector3.ZERO
+	angular_velocity = Vector3.ZERO
+	_grounded_at = global_transform * center_of_mass
+	_ground()
+
 func _physics_process(delta: float) -> void:
 	if not is_instance_valid(record.node) or record.node.is_queued_for_deletion(): return
 	var simulate: bool = game.room.is_authority() and game.playing and not game.paused and not game.dead and not game.finished
@@ -205,6 +216,7 @@ func _physics_process(delta: float) -> void:
 		if center.distance_squared_to(_grounded_at) > 1.0:
 			_grounded_at = center
 			_ground()
+			_rescue(center)
 	if active or moving:
 		record.node.global_transform = global_transform
 		if record.has("tree"):
