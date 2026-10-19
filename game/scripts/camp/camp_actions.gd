@@ -4,14 +4,15 @@ extends RefCounted
 # shared_actions.gd with game.acting set (see action_context.gd).
 const Props = preload("res://scripts/core/props.gd")
 const Loc = preload("res://scripts/ui/loc.gd")
+const Ground = preload("res://scripts/camp/camp_ground.gd")
 
 var game
 
 # Use the same surface sampler for the ghost, deployed gear and room snapshots.
 func ground_item(node: Node3D, spot: Vector3, yaw: float) -> void:
 	if game.room.is_guest() and node.get_meta("prop_dynamic", false): return
-	node.position = Vector3(spot.x, game.stage.ground(spot), spot.z)
 	node.basis = game.stage.terrain_basis(spot, yaw, game.stage.ground)
+	node.position = Vector3(spot.x, Ground.height(node, spot, node.basis, game.stage.ground), spot.z)
 	node.set_meta("placement_yaw", yaw)
 	var body = node.get_node_or_null("PropBody")
 	if body != null: body.place()

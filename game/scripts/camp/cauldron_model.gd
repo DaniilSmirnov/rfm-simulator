@@ -6,6 +6,7 @@ static func build(parent: Node3D, recipe: String = "plov") -> Node3D:
 	root.name = "Cauldron"
 	root.set_meta("recipe", recipe)
 	parent.add_child(root)
+	var colliders: Array[MeshInstance3D] = []
 	# Three-legged stand and hollow tapered bowl; the inside stays visible when empty.
 	for i in range(3):
 		var angle = i * TAU / 3
@@ -13,6 +14,7 @@ static func build(parent: Node3D, recipe: String = "plov") -> Node3D:
 		var b = Vector3(cos(angle) * 0.50, 1.24, sin(angle) * 0.50)
 		var leg = Props.cylinder(root, (a + b) / 2, 0.025, 0.025, a.distance_to(b), Color("444c50"), 6)
 		leg.quaternion = Quaternion(Vector3.UP, (b - a).normalized())
+		colliders.append(leg)
 	var vertices = PackedVector3Array()
 	var rim_vertices = PackedVector3Array()
 	for i in range(16):
@@ -37,6 +39,10 @@ static func build(parent: Node3D, recipe: String = "plov") -> Node3D:
 		bowl.mesh = Props.panel_mesh(data)
 		bowl.material_override = metal
 		root.add_child(bowl)
+		colliders.append(bowl)
+	# Axis-aligned boxes around the slanted legs extend below their visible
+	# ends and lift the whole stand above the ground once physics starts.
+	root.set_meta("prop_collision_meshes", colliders)
 	Props.cylinder(root, Vector3(0, 0.88, 0), 0.32, 0.32, 0.025, Color("151d22"), 16).name = "EmptyBottom"
 	for side in [-1, 1]:
 		var handle = MeshInstance3D.new()
