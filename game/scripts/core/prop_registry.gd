@@ -37,6 +37,21 @@ static func register(solids, node: Node3D, mass: float = 15.0, anchored: bool = 
 			obstacle.prop = key
 			found = true
 	if not found:
+		if node.has_meta("prop_collision_meshes"):
+			for mesh in node.get_meta("prop_collision_meshes"):
+				var part: AABB = mesh.transform * mesh.mesh.get_aabb()
+				var body = solids.solid(node, part.get_center(), part.size.max(Vector3.ONE * 0.03), "prop")
+				var collider: CollisionShape3D = body.get_child(0)
+				var hull = ConvexPolygonShape3D.new()
+				var points = PackedVector3Array()
+				for vertex in mesh.mesh.get_faces():
+					points.append(mesh.transform * vertex - part.get_center())
+				hull.points = points
+				collider.shape = hull
+				solids.obstacles.back().movable = true
+				solids.obstacles.back().prop = key
+			solids.indexed_obstacle_count = -1
+			return record
 		var parts: Array[AABB] = []
 		if node.has_meta("prop_shapes"):
 			parts.assign(node.get_meta("prop_shapes"))
