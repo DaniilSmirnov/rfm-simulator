@@ -68,7 +68,6 @@ static func camp(stage, at: Vector3, facing: Vector3, count: int, name: String) 
 	for i in range(3):
 		var roll = Props.cylinder(node, Vector3(-8.5 + i * 0.9, 0.35, 4.2), 0.34, 0.34, 1.7, FELT_SHADE.darkened(0.06), 8)
 		roll.rotation.z = PI * 0.5
-	flag(node, Vector3(-6.0, 0, -4.5))
 	return node
 
 static func _fire_ring(node: Node3D) -> void:
@@ -81,22 +80,3 @@ static func _hitching_rail(node: Node3D, at: Vector3) -> void:
 	rail.rotation.z = PI * 0.5
 	for i in range(3):
 		Props.cylinder(node, at + Vector3(-1.6 + i * 1.6, 1.1, 0.1), 0.02, 0.02, 0.7, ROPE, 4)
-
-# Exact vector artwork on vertical cloth; both sides share the same texture.
-# The former cylinder/box symbols were not in the cloth plane and omitted the eagle.
-static func flag(parent: Node3D, at: Vector3) -> void:
-	Props.cylinder(parent, at + Vector3(0, 3.2, 0), 0.05, 0.04, 6.4, Color("d8d8d2"), 6)
-	var cloth = MeshInstance3D.new()
-	cloth.name = "KazakhstanFlag"
-	cloth.mesh = QuadMesh.new()
-	cloth.mesh.size = Vector2(1.8, 0.9)
-	var material = StandardMaterial3D.new()
-	material.albedo_texture = preload("res://textures/flags/kazakhstan.svg")
-	material.cull_mode = BaseMaterial3D.CULL_DISABLED
-	material.roughness = 1.0
-	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR
-	cloth.material_override = material
-	# A zero-thickness sheet must not shadow itself in the sun cascades.
-	cloth.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	parent.add_child(cloth)
-	cloth.position = at + Vector3(0.95, 5.6, 0)
