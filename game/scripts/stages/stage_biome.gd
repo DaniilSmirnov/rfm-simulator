@@ -82,7 +82,10 @@ func vehicle_ground(pos: Vector3) -> float:
 	var past_edge = stage.road_distance(pos) - stage.road_width(stage.road_s(pos)) * 0.5
 	if past_edge <= 0.0:
 		return height
-	return lerpf(height, minf(height, stage.terrain_surface_height(pos)), smoothstep(0.0, 0.5, past_edge))
+	# ServiceParks.vehicle() lifts this with the park's levelling of the land,
+	# which the drawn terrain vertices already carry.
+	var drawn = stage.terrain_surface_height(pos) - stage.parks.lift(pos, self)
+	return lerpf(height, minf(height, drawn), smoothstep(0.0, 0.5, past_edge))
 
 func walking_ground(pos: Vector3) -> float:
 	return stage.ground(pos)
