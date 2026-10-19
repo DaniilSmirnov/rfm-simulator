@@ -18,7 +18,7 @@
     "skewer": {"fields": {"species": "string", "ready_at": "number"}, "required": ["ready_at"]},
     "effect": {"fields": {"serial": "int", "until": "number", "remaining": "number"}},
     "foraging": {"fields": {"harvested": {"array": "int", "max": 20000}, "inventories": {"map": "stock", "max": 16}, "skewers": {"map": {"array": "skewer", "max": 10}, "max": 2048}, "effects": {"map": "effect", "max": 16}}},
-    "camp_cooking": {"fields": {"fire": "bool", "pos": "vec", "yaw": "number", "fire_owner": "string", "pot": "bool", "pot_pos": {"one": ["vec", []]}, "pot_yaw": "number", "pot_owner": "string", "phase": "string", "cook_time": "number", "servings": "int"}, "required": ["pos"], "empty": true},
+    "camp_cooking": {"fields": {"meals": {"array": "int", "max": 8}, "fire": "bool", "pos": "vec", "yaw": "number", "fire_owner": "string", "pot": "bool", "pot_pos": {"one": ["vec", []]}, "pot_yaw": "number", "pot_owner": "string", "phase": "string", "cook_time": "number", "servings": "int"}, "required": ["pos"], "empty": true},
     "cargo": {"fields": {"opened": {"map": "bool", "max": 32}, "held": {"map": "carry", "max": 16}, "table_owner": "string", "grill_owner": "string"}},
     "course": {"fields": {"pass_index": "int", "phase": "string", "remaining": "number", "zero_index": "int", "active_id": "int", "red_flag": "bool"}},
     "parks": {"fields": {"parked": [{"array": "string", "max": 64}, {"array": "string", "max": 64}]}},

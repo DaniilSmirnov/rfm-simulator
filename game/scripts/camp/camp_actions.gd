@@ -372,16 +372,17 @@ func eat_meat(source_group: int = -2) -> bool:
 	game.toast("Шампур горячий. Приятного аппетита!")
 	return true
 
-func eat_plov() -> bool:
-	if game.cargo.held.has(game.chair_owner()) or not game.camp_cooking.can_eat() or game.eat_time >= 0 or game.drink_time >= 0:
+func eat_plov(source: int = -1) -> bool:
+	if game.cargo.held.has(game.chair_owner()) or not game.camp_cooking.can_eat(source) or game.eat_time >= 0 or game.drink_time >= 0:
 		return false
-	game.eat_kind = "plov"
+	game.eat_kind = "kuyrdak" if source >= 0 else "plov"
+	game.forage_source = source
 	game.eat_time = 0
 	game.eat_committed = false
-	game.meat_prop = Props.meat_hand(game.avatar_variant, "plov", game.stage.outfit)
+	game.meat_prop = Props.meat_hand(game.avatar_variant, game.eat_kind, game.stage.outfit)
 	game.camera.add_child(game.meat_prop)
 	update_eating(0)
-	game.toast("Едим плов из миски. Приятного аппетита!")
+	game.toast("Едим куырдак из миски. Приятного аппетита!" if source >= 0 else "Едим плов из миски. Приятного аппетита!")
 	return true
 
 func eat_foraged(kind: String, source: int = -2) -> bool:
@@ -437,8 +438,8 @@ func update_eating(delta: float) -> void:
 		if game.room.is_authority():
 			if game.eat_kind == "meat":
 				commit_meat()
-			elif game.eat_kind == "plov":
-				game.camp_cooking.consume()
+			elif game.eat_kind in ["plov", "kuyrdak"]:
+				game.camp_cooking.consume(game.forage_source if game.eat_kind == "kuyrdak" else -1)
 			else:
 				game.foraging.consume(game.eat_kind, "", game.forage_source)
 		else:

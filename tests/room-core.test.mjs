@@ -365,15 +365,16 @@ test('cargo actions are authenticated, bounded and idempotent', () => {
 test('cooking and bell commands keep guest identity and repeated requests consume once', () => {
   const { r, h, g } = setup();
   const commands = ['firewood', 'cauldron', 'plov_cook', 'eat_plov', 'church_bell'].map((action, i) => ({
-    seq: i + 1, action, player: h.player, placement: { pos: [1, 2, 3], yaw: 0 }
+    seq: i + 1, action, player: h.player, placement: { pos: [1, 2, 3], yaw: 0, source: 0 }
   }));
-  const body = { token: g.token, state: { ...state(12), food_kind: 'plov', eat: 2.7 }, commands };
+  const body = { token: g.token, state: { ...state(12), food_kind: 'kuyrdak', eat: 2.7 }, commands };
   r.sync(body, 1100);
   r.sync(body, 1200);
   const reply = r.sync({ token: h.token, state: state() }, 1300);
   assert.deepEqual(reply.commands.map(c => c.action), ['firewood', 'cauldron', 'plov_cook', 'eat_plov', 'church_bell']);
   assert.ok(reply.commands.every(c => c.player === g.player && c.state.pos[0] === 12));
-  assert.equal(reply.players.find(p => p.id === g.player).state.food_kind, 'plov');
+  assert.equal(reply.players.find(p => p.id === g.player).state.food_kind, 'kuyrdak');
+  assert.equal(reply.commands.find(c => c.action === 'eat_plov').placement.source, 0);
   r.sync({ token: h.token, state: state(), ack: reply.commands.map(c => c.id) }, 1400);
   r.sync(body, 1500);
   assert.equal(r.data.commands.length, 0);

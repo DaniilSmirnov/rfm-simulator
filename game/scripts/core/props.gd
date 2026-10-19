@@ -527,8 +527,9 @@ static func meat_hand(variant: int = 0, kind: String = "meat", outfit: String = 
 	return root
 
 static func pose_food(node: Node3D, time: float, kind: String = "meat") -> void:
+	var changed = node.get_meta("food_kind", "") != kind
 	node.set_meta("food_kind", kind)
-	node.get_node("PlovBowl").visible = kind == "plov"
+	node.get_node("PlovBowl").visible = kind in ["plov", "kuyrdak"]
 	node.get_node("PlovBowl/Spoon").rotation.x = sin(maxf(0, time) * 8) * 0.25
 	node.get_node("SkewerStick").visible = kind in ["meat", "mushroom"]
 	node.get_node("SkewerHandle").visible = kind in ["meat", "mushroom"]
@@ -537,7 +538,11 @@ static func pose_food(node: Node3D, time: float, kind: String = "meat") -> void:
 		node.get_node("Meat%d" % i).visible = kind == "meat" and remains
 		node.get_node("Mushroom%d" % i).visible = kind == "mushroom" and remains
 		node.get_node("Berry%d" % i).visible = kind == "berries" and remains
-		node.get_node("PlovBowl/RicePiece%d" % i).visible = kind == "plov" and remains
+		node.get_node("PlovBowl/RicePiece%d" % i).visible = kind in ["plov", "kuyrdak"] and remains
+		var piece = node.get_node("PlovBowl/RicePiece%d" % i)
+		if changed:
+			unique_material(piece)
+			piece.material_override.albedo_color = Color("713d27") if kind == "kuyrdak" else Color("e5c16b")
 
 static func food_lift(time: float) -> float:
 	if time < 0:
@@ -716,96 +721,10 @@ static func campfire(parent: Node3D) -> Node3D:
 	return load("res://scripts/camp/campfire_model.gd").build(parent)
 
 static func cauldron(parent: Node3D) -> Node3D:
-	var root = Node3D.new()
-	root.name = "Cauldron"
-	parent.add_child(root)
-	# Three-legged stand and hollow tapered bowl; the inside stays visible when empty.
-	for i in range(3):
-		var angle = i * TAU / 3
-		var a = Vector3(cos(angle) * 0.68, 0.05, sin(angle) * 0.68)
-		var b = Vector3(cos(angle) * 0.50, 1.24, sin(angle) * 0.50)
-		var leg = cylinder(root, (a + b) / 2, 0.025, 0.025, a.distance_to(b), Color("444c50"), 6)
-		leg.quaternion = Quaternion(Vector3.UP, (b - a).normalized())
-	var vertices = PackedVector3Array()
-	var rim_vertices = PackedVector3Array()
-	for i in range(16):
-		var a = i * TAU / 16
-		var b = (i + 1) * TAU / 16
-		var low_a = Vector3(cos(a) * 0.32, 0.86, sin(a) * 0.32)
-		var low_b = Vector3(cos(b) * 0.32, 0.86, sin(b) * 0.32)
-		var high_a = Vector3(cos(a) * 0.55, 1.28, sin(a) * 0.55)
-		var high_b = Vector3(cos(b) * 0.55, 1.28, sin(b) * 0.55)
-		vertices.append_array(PackedVector3Array([low_a, high_a, high_b, low_a, high_b, low_b]))
-		var inner_a = Vector3(cos(a) * 0.50, 1.28, sin(a) * 0.50)
-		var inner_b = Vector3(cos(b) * 0.50, 1.28, sin(b) * 0.50)
-		rim_vertices.append_array(PackedVector3Array([high_a, inner_a, inner_b, high_a, inner_b, high_b]))
-	var metal = material(Color("303a40"))
-	metal.cull_mode = BaseMaterial3D.CULL_DISABLED
-	for data in [vertices, rim_vertices]:
-		var bowl = MeshInstance3D.new()
-		bowl.mesh = panel_mesh(data)
-		bowl.material_override = metal
-		root.add_child(bowl)
-	cylinder(root, Vector3(0, 0.88, 0), 0.32, 0.32, 0.025, Color("151d22"), 16).name = "EmptyBottom"
-	for side in [-1, 1]:
-		box(root, Vector3(side * 0.60, 1.15, 0), Vector3(0.22, 0.055, 0.10), Color("303a40"))
-	var rice = Node3D.new()
-	rice.name = "Rice"
-	root.add_child(rice)
-	var surface = cylinder(rice, Vector3.ZERO, 0.36, 0.465, 0.26, Color("e1ba64"), 16)
-	surface.name = "FoodSurface"
-	unique_material(surface)
-	for i in range(FOOD_PORTIONS):
-		var portion = Node3D.new()
-		portion.name = "Portion_%02d" % i
-		rice.add_child(portion)
-		var angle = i * 2.4
-		var radius = 0.12 + (i % 3) * 0.12
-		portion.position = Vector3(cos(angle) * radius, 0.145, sin(angle) * radius)
-		for j in range(4):
-			var grain = box(portion, Vector3((j % 2) * 0.035, 0.008, (j / 2) * 0.035), Vector3(0.026, 0.020, 0.055), Color("f5d994"))
-			grain.rotation.y = j * 0.7
-		box(portion, Vector3(-0.03, 0.015, 0), Vector3(0.045, 0.035, 0.06), Color("d87e2f"))
-		box(portion, Vector3(0.03, 0.027, -0.025), Vector3(0.06, 0.05, 0.045), Color("895033"))
-	var bubbles = Node3D.new()
-	bubbles.name = "Bubbles"
-	root.add_child(bubbles)
-	for i in range(4):
-		faceted(bubbles, Vector3(cos(i * 2.3) * 0.28, 1.18, sin(i * 2.3) * 0.28), Vector3.ONE * 0.045, Color("fff0bb"), 6, 3)
-	var steam = Node3D.new()
-	steam.name = "Steam"
-	root.add_child(steam)
-	for i in range(5):
-		faceted(steam, Vector3.ZERO, Vector3.ONE * 0.13, Color("dbe0d6"), 6, 3)
-	pose_cauldron(root, "empty", 0, 0, 0)
-	return load("res://scripts/player/perches.gd").mark(root, false)
+	return load("res://scripts/camp/cauldron_model.gd").build(parent)
 
 static func pose_cauldron(root: Node3D, phase: String, progress: float, servings: int, time: float) -> void:
-	root.set_meta("phase", phase)
-	root.set_meta("servings", servings)
-	var rice = root.get_node("Rice")
-	var visible = phase == "cooking" or (phase == "ready" and servings > 0)
-	rice.visible = visible
-	var fraction = lerpf(0.15, 1.0, clampf(progress, 0, 1)) if phase == "cooking" else float(servings) / FOOD_PORTIONS
-	rice.scale = Vector3(lerpf(0.70, 1.0, fraction), maxf(0.05, fraction), lerpf(0.70, 1.0, fraction))
-	rice.position.y = 0.95 + 0.13 * fraction
-	var surface = rice.get_node("FoodSurface")
-	surface.material_override.albedo_color = Color("eee3b5").lerp(Color("e1ba64"), clampf(progress, 0, 1)) if phase == "cooking" else Color("e1ba64")
-	for i in range(FOOD_PORTIONS):
-		rice.get_node("Portion_%02d" % i).visible = phase == "cooking" or i < servings
-	var bubbles = root.get_node("Bubbles")
-	bubbles.visible = phase == "cooking"
-	for i in range(bubbles.get_child_count()):
-		var bubble = bubbles.get_child(i)
-		bubble.position.y = rice.position.y + 0.13 * fraction + 0.03 + sin(time * 8 + i) * 0.014
-		bubble.scale = Vector3.ONE * (0.7 + sin(time * 7 + i * 2) * 0.3)
-	var steam = root.get_node("Steam")
-	steam.visible = visible
-	for i in range(steam.get_child_count()):
-		var puff = steam.get_child(i)
-		var cycle = fposmod(time * 0.45 + i * 0.2, 1.0)
-		puff.position = Vector3(sin(time + i) * 0.16, 1.30 + cycle * 0.65, cos(time * 0.7 + i) * 0.16)
-		puff.scale = Vector3.ONE * sin(cycle * PI)
+	load("res://scripts/camp/cauldron_model.gd").pose(root, phase, progress, servings, time)
 
 static func cargo_point(profile: Dictionary, index: int) -> Vector3:
 	if index == 5:

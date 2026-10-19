@@ -72,19 +72,7 @@ static func camp(stage, at: Vector3, facing: Vector3, count: int, name: String) 
 	return node
 
 static func _fire_ring(node: Node3D) -> void:
-	for i in range(9):
-		var angle = i * TAU / 9.0
-		Props.faceted(node, Vector3(sin(angle), 0.08, cos(angle)) * 1.05, Vector3(0.36, 0.26, 0.34), STONE, 6, 3)
-	Props.cylinder(node, Vector3(0, 0.05, 0), 0.8, 0.8, 0.1, Color("3a3027"), 9)
-	for i in range(3):
-		var log_piece = Props.cylinder(node, Vector3(0, 0.18, 0), 0.09, 0.07, 1.3, Color("5a4430"), 6)
-		log_piece.rotation = Vector3(PI * 0.5, i * 1.05, 0.0)
-	# Tripod over the fire with a soot-black kettle.
-	for i in range(3):
-		var angle = i * TAU / 3.0
-		var leg = Props.cylinder(node, Vector3(sin(angle), 0.9, cos(angle)) * 0.5 + Vector3(0, 0.05, 0), 0.05, 0.04, 2.0, TIMBER.darkened(0.15), 5)
-		leg.rotation = Vector3(cos(angle) * 0.26, 0, -sin(angle) * 0.26)
-	Props.faceted(node, Vector3(0, 1.1, 0), Vector3(0.46, 0.42, 0.46), Color("302924"), 8, 4)
+	load("res://scripts/camp/stage_meals.gd").build(node)
 
 static func _hitching_rail(node: Node3D, at: Vector3) -> void:
 	for side in [-2.4, 2.4]:

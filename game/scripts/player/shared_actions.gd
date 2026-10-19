@@ -48,7 +48,7 @@ static func run(game: Node, context, action: String, placement: Dictionary) -> v
 		"light_grill": game.camp_grill.light()
 		"load_meat": game.camp_grill.load_meat()
 		"plov_cook": game.camp_cooking.start()
-		"eat_plov": game.camp_cooking.consume()
+		"eat_plov": game.camp_cooking.consume(int(placement.get("source", -1)))
 		"eat": game.commit_meat(int(placement.get("source", -2)))
 		"church_bell":
 			if game.stage.solids.bell != null:

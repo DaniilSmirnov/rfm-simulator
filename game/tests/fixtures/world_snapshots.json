@@ -154,6 +154,24 @@
           }
         }
       }
+    },
+    {
+      "name": "shared yurt meals without personal cooking gear",
+      "world": {
+        "camp_cooking": {
+          "pos": [
+            0,
+            0,
+            0
+          ],
+          "fire": false,
+          "pot": false,
+          "meals": [
+            0,
+            10
+          ]
+        }
+      }
     }
   ],
   "invalid": [
@@ -351,6 +369,21 @@
           "inventories": {
             "guest": {}
           }
+        }
+      }
+    },
+    {
+      "name": "non-integer yurt meal inventory",
+      "world": {
+        "camp_cooking": {
+          "pos": [
+            0,
+            0,
+            0
+          ],
+          "meals": [
+            "ten"
+          ]
         }
       }
     }
