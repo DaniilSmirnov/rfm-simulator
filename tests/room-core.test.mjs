@@ -274,7 +274,7 @@ test('Sport sedan model 9 survives joins and restored rooms while out-of-range m
   const restored = new RoomState(structuredClone(r.data));
   const reply = restored.sync({ token: g.token, state: state() }, 1100);
   assert.deepEqual(reply.players.map(p => p.car_model), [9, 9]);
-  const late = restored.add('Late', 1200, false, { car_model: 10 });
+  const late = restored.add('Late', 1200, false, { car_model: 11 });
   assert.equal(late.car_model, late.slot);
 });
 
