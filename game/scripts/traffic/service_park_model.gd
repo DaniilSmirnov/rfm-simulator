@@ -94,12 +94,17 @@ static func tent(stage: Node3D, root: Node3D, center: Vector2, team: Dictionary)
 	P.box(root, at(flag.x, flag.y + 0.25, 2.25), Vector3(0.04, 1.4, 0.1), team.trim)
 	Movable.group(stage.solids, root, first, 5, true)
 
+# One prop per stack, standing on the ground. Separate tyres a centimetre up
+# woke at load, and Godot Physics cannot rest a stack of bodies on the terrain
+# tiles: the bottom tyre sank through and the stack never slept (~20 ms of
+# collision queries per frame on every stage). Keys after the stack stay put.
 static func tyres(stage: Node3D, root: Node3D, spot: Vector2, count: int) -> void:
+	var first = root.get_child_count()
 	for i in range(count):
-		var first = root.get_child_count()
-		P.cylinder(root, at(spot.x, spot.y, 0.12 + i * 0.22), 0.32, 0.32, 0.21, TYRE, 12)
-		var tyre = Movable.group(stage.solids, root, first, 8)
-		tyre.set_meta("prop_roll", true)
+		P.cylinder(root, at(spot.x, spot.y, 0.105 + i * 0.22), 0.32, 0.32, 0.21, TYRE, 12)
+	var tyre = Movable.group(stage.solids, root, first, 8 * count)
+	tyre.set_meta("prop_roll", true)
+	root.set_meta("prop_count", int(root.get_meta("prop_count", 0)) + count - 1)
 
 # The park sign beside the lane and two feather flags at the gate.
 static func _entrance(stage: Node3D, root: Node3D) -> void:

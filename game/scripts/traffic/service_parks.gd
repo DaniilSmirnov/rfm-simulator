@@ -128,6 +128,9 @@ func vertex(pos: Vector3, height: float) -> float:
 # lifted with the land, so on the road tyres and ground() still agree. The
 # biome's tyre query is costly, and inside the park it is not needed.
 func vehicle(pos: Vector3, biome) -> float:
+	# Away from both parks nothing is levelled: skip the second land query.
+	if nearest(pos, APRON + MAX_BLEND).index < 0:
+		return biome.vehicle_ground(pos)
 	var land: float = biome.ground(pos)
 	var surface = level(pos, land)
 	var w = weight(pos)

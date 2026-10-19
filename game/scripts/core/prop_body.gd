@@ -152,7 +152,13 @@ func _physics_process(delta: float) -> void:
 	# the body mode in the physics server and wakes it, so no prop ever slept.
 	var frozen: bool = record.anchored or not simulate
 	if freeze != frozen:
+		var asleep: bool = sleeping
 		freeze = frozen
+		# Unfreezing wakes the body too: every prop in the camps and service
+		# parks woke when play started, and settling on the heightmap tiles some
+		# never slept again. A prop that slept while frozen keeps sleeping.
+		if not frozen and asleep:
+			sleeping = true
 	if frozen: return
 	if _tip_time > 0.0 and angular_velocity.length() < TUMBLE_SPIN:
 		_tip_time -= delta
@@ -205,6 +211,4 @@ func _physics_process(delta: float) -> void:
 			load("res://scripts/core/prop_specials.gd").move_tree(solids.stage, record)
 	if active != moving:
 		moving = active
-		for obstacle in solids.obstacles:
-			if obstacle.get("prop", "") == record.key: obstacle.dynamic = moving
-		solids.indexed_obstacle_count = -1
+		solids.set_dynamic(record.key, moving)

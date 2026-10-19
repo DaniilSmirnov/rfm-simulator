@@ -80,7 +80,7 @@ static func _restore(node: Node, fields: Dictionary, root: Node) -> void:
 static func _script_fields(node: Node, root: Node, multimeshes: Dictionary) -> Dictionary:
 	var fields = {}
 	for property in node.get_property_list():
-		if property.usage & PROPERTY_USAGE_SCRIPT_VARIABLE and property.name not in ["stage", "collision_cells", "moving_obstacle_ids", "indexed_obstacle_count", "moving_pose_tick"]:
+		if property.usage & PROPERTY_USAGE_SCRIPT_VARIABLE and property.name not in ["stage", "collision_cells", "moving_obstacle_ids", "indexed_obstacle_count", "moving_pose_tick", "moving_cells", "moving_expansion"]:
 			fields[property.name] = _encode(node.get(property.name), root, multimeshes)
 	return fields
 
