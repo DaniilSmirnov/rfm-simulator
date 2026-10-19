@@ -30,7 +30,7 @@ func _ground(pos: Vector3) -> Vector3:
 	return pos
 
 func _create(id: int, pos: Vector3) -> Dictionary:
-	var avatar = Model.create()
+	var avatar = Model.create(injuries.game.stage.outfit)
 	injuries.game.add_child(avatar)
 	avatar.position = pos
 	var medic = {"id": id, "avatar": avatar, "helper": -1, "navigation_budget": budget, "key": "", "state": "exiting", "time": 0.0, "clock": 0.0, "moving": false}

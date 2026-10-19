@@ -13,7 +13,7 @@ const RADIO_RAISE = 0.2
 static func create(game: Node, p: Dictionary) -> Dictionary:
 	var car = Props.player_car(int(p.get("car_model", p.get("slot", 0))))
 	game.add_child(car)
-	var avatar = Props.player_avatar(int(p.get("slot", 0)))
+	var avatar = Props.player_avatar(int(p.get("slot", 0)), game.stage.outfit)
 	game.add_child(avatar)
 	var carried_box = Props.carried_gear(avatar, "table")
 	carried_box.hide()

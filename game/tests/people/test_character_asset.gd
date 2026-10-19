@@ -1,6 +1,7 @@
 extends "res://tests/harness.gd"
 const Props = preload("res://scripts/core/props.gd")
 const CharacterRig = preload("res://scripts/people/character_rig.gd")
+const StageRegistry = preload("res://scripts/stages/stage_registry.gd")
 func triangles(node: Node) -> int:
 	var count = node.mesh.get_faces().size() / 3 if node is MeshInstance3D else 0
 	for child in node.get_children():
@@ -19,8 +20,49 @@ func smooth_normals(mesh: Mesh) -> bool:
 				return true
 	return false
 
+func has_colour(mesh: Mesh, hex: String) -> bool:
+	var wanted = Color(hex)
+	var colours = mesh.surface_get_arrays(0)[Mesh.ARRAY_COLOR]
+	if colours == null:
+		# A single-colour part keeps its imported material.
+		colours = [mesh.surface_get_material(0).albedo_color]
+	for colour in colours:
+		# Vertex colours are stored as 8-bit channels.
+		if Vector3(colour.r - wanted.r, colour.g - wanted.g, colour.b - wanted.b).length() < 0.01:
+			return true
+	return false
+
+# The baked body part that turns with a pivot (its own mesh, not its children's).
+func body(pivot: Node) -> Mesh:
+	return pivot.find_children("*", "MeshInstance3D", false, false)[0].mesh
+
+# Snowy stages dress everyone for winter; the same look keeps its face and name.
+func check_outfits() -> void:
+	for index in range(StageRegistry.count()):
+		var biome = StageRegistry.make_biome(index)
+		check(biome.outfit() == ("winter" if biome.has_snow() else ""), "%s: outfit follows the snow" % StageRegistry.entry(index).id)
+	for i in range(Props.SPECTATOR_MODELS.size()):
+		var summer = Props.player_avatar(i)
+		var winter = Props.player_avatar(i, "winter")
+		var look = Props.spectator_profile(i, "winter")
+		check(winter.get_meta("outfit") == "winter" and summer.get_meta("outfit") == "" and winter.get_meta("model") == summer.get_meta("model"), "Winter look %d keeps its name" % i)
+		check(winter.has_node("RightArm/RightForearm/BeerCan") and winter.has_node("LeftLeg/LeftShin") and winter.has_node("Head"), "Winter look %d keeps the rig pivots" % i)
+		var head: Mesh = body(winter.get_node("Head"))
+		check(head != body(summer.get_node("Head")) and has_colour(head, look.skin) and has_colour(head, look.hat_color), "Winter look %d: same face under a warm hat" % i)
+		check(has_colour(body(winter.get_node("RightArm/RightForearm")), look.gloves), "Winter look %d wears mittens" % i)
+		check(not has_colour(body(winter.get_node("LeftLeg")), look.skin), "Winter look %d: no bare legs" % i)
+		summer.free()
+		winter.free()
+	var hand = Props.beer_hand(0, "winter")
+	check(hand.get_child(1).material_override.albedo_color.is_equal_approx(Color(Props.spectator_profile(0, "winter").gloves)), "First-person hand wears the mitten")
+	hand.free()
+	var marshal = Props.course_official("marshal", 0, "winter")
+	check(marshal.get_meta("outfit") == "winter" and marshal.has_node("SafetyVest"), "Marshal wears the vest over the winter jacket")
+	marshal.free()
+
 func _initialize() -> void:
-	for i in range(4):
+	check_outfits()
+	for i in range(Props.SPECTATOR_MODELS.size()):
 		var avatar = Props.player_avatar(i)
 		check(avatar.has_node("Head") and avatar.has_node("LeftArm") and avatar.has_node("LeftLeg") and avatar.has_node("RightLeg"), "Animation pivots retained")
 		check(avatar.has_node("RightArm/RightForearm/BeerCan") and avatar.has_node("RightArm/RightForearm/Skewer") and avatar.has_node("LeftLeg/LeftShin") and avatar.has_node("LeftArm/LeftForearm"), "Knee and elbow pivots; held food follows the hand")

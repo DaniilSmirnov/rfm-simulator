@@ -37,6 +37,8 @@ var biome
 var relief = RoadRelief.new()
 # Shared features a biome switches on.
 var has_snow = false
+# Clothes everyone wears on this stage (biome.outfit()).
+var outfit = ""
 var water: RefCounted # lakes (water.gd), null on dry stages
 # Read-only views of the biome, kept for its own helper scripts, tools and tests.
 var canyon: RefCounted:
@@ -135,6 +137,7 @@ func _init(selected: int = 0) -> void:
 	biome.attach(self)
 	relief.stage = self
 	has_snow = biome.has_snow()
+	outfit = biome.outfit()
 	water = biome.make_water()
 	if water != null:
 		water.stage = self
