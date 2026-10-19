@@ -88,6 +88,14 @@ func apply_shadows(sun: DirectionalLight3D) -> void:
 	sun.shadow_enabled = SHADOW_SPLITS[mode] > 0
 	if not sun.shadow_enabled:
 		return
+	# The default 20 m light-space near-plane margin clips tall casters when
+	# the camera enters their shadow (especially in the first PSSM cascade).
+	# Keep cliff faces/tree crowns ahead of that plane even at walking height.
+	sun.directional_shadow_pancake_size = 128.0
+	sun.directional_shadow_blend_splits = true
+	# Two splits otherwise devote the near map to just 5/7 m, inside the
+	# chase camera's view of the car. Give nearby objects a useful detail area.
+	sun.directional_shadow_split_1 = 0.1 if SHADOW_SPLITS[mode] == 4 else 0.25
 	sun.directional_shadow_max_distance = SHADOW_DISTANCE[mode]
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS if SHADOW_SPLITS[mode] == 4 else DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
 
