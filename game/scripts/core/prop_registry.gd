@@ -42,8 +42,12 @@ static func register(solids, node: Node3D, mass: float = 15.0, anchored: bool = 
 				var part: AABB = mesh.transform * mesh.mesh.get_aabb()
 				var body = solids.solid(node, part.get_center(), part.size.max(Vector3.ONE * 0.03), "prop")
 				var collider: CollisionShape3D = body.get_child(0)
-				collider.shape = mesh.mesh.create_convex_shape()
-				collider.transform = Transform3D(Basis.IDENTITY, -part.get_center()) * mesh.transform
+				var hull = ConvexPolygonShape3D.new()
+				var points = PackedVector3Array()
+				for vertex in mesh.mesh.get_faces():
+					points.append(mesh.transform * vertex - part.get_center())
+				hull.points = points
+				collider.shape = hull
 				solids.obstacles.back().movable = true
 				solids.obstacles.back().prop = key
 			solids.indexed_obstacle_count = -1
