@@ -43,6 +43,11 @@ var plan: PackedVector2Array = PackedVector2Array()
 var surface: PackedFloat32Array = PackedFloat32Array()
 var scenery = Scenery.new()
 var canyon_life = CanyonLife.new()
+# The gorge has no deformable ground. Keep a bounded working set of exact
+# mesh samples for wheel/foot queries after the build cache is released.
+const CONTACT_CACHE_LIMIT = 2048
+var contact_steps: Dictionary = {}
+var contact_heights: Dictionary = {}
 
 # ---------------------------------------------------------------- route
 
@@ -92,10 +97,10 @@ func relief(s: float, lateral: float) -> float:
 # spectator areas are levelled last, so a camp near the road is flat too.
 func base_ground(pos: Vector3) -> float:
 	var land = Form.surface(pos)
-	var near: Dictionary = stage.route_nearest(pos, BLEND)
-	var distance: float = near.distance
+	var nearest: Dictionary = stage.route_nearest(pos, BLEND)
+	var distance: float = nearest.distance
 	if distance < BLEND:
-		var s: float = near.s
+		var s: float = nearest.s
 		var p: Vector3 = stage.at(s)
 		var lateral = (pos - p).dot(stage.side(s))
 		var bench = p.y + relief(s, lateral) * (1.0 - smoothstep(3.7, 9.0, distance))
@@ -105,10 +110,35 @@ func base_ground(pos: Vector3) -> float:
 # ---------------------------------------------------------------- terrain
 
 func cache_terrain() -> bool:
+	contact_steps.clear()
+	contact_heights.clear()
 	return true
+
+func terrain_tiled() -> bool:
+	return true
+
+func terrain_vertex_height(x: float, z: float) -> float:
+	if stage.terrain_cache_enabled:
+		return stage.snapped_vertex_height(x, z)
+	var key = Vector2(x, z)
+	if not contact_heights.has(key):
+		if contact_heights.size() >= CONTACT_CACHE_LIMIT:
+			contact_heights.clear()
+		contact_heights[key] = stage.snapped_vertex_height(x, z)
+	return contact_heights[key]
 
 # Fine triangles where the detail is: the road, and the faces of both walls.
 func terrain_tile_step(p: Vector3) -> float:
+	if stage.terrain_cache_enabled:
+		return _terrain_tile_step(p)
+	var key = Vector2(p.x, p.z)
+	if not contact_steps.has(key):
+		if contact_steps.size() >= CONTACT_CACHE_LIMIT:
+			contact_steps.clear()
+		contact_steps[key] = _terrain_tile_step(p)
+	return contact_steps[key]
+
+func _terrain_tile_step(p: Vector3) -> float:
 	var road = stage.road_distance(p, 34.0)
 	if road < 13.0:
 		return 2.0
@@ -165,8 +195,9 @@ func road_strips() -> int:
 
 # Loose sand off the road, and river gravel where the road crosses the bed.
 func grip(pos: Vector3) -> float:
-	var s = stage.road_s(pos)
-	return 0.48 if stage.road_distance(pos) > road_width(s) * 0.5 or s > GROVE_BEGIN + 40.0 else 0.74
+	var nearest: Dictionary = stage.route_nearest(pos)
+	var s: float = nearest.s
+	return 0.48 if float(nearest.distance) > road_width(s) * 0.5 or s > GROVE_BEGIN + 40.0 else 0.74
 
 func rally_speed(s: float) -> float:
 	if s > TURN_BEGIN and s < TURN_END + 20.0:

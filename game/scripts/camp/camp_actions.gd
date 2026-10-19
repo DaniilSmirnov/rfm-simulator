@@ -4,14 +4,15 @@ extends RefCounted
 # shared_actions.gd with game.acting set (see action_context.gd).
 const Props = preload("res://scripts/core/props.gd")
 const Loc = preload("res://scripts/ui/loc.gd")
+const Ground = preload("res://scripts/camp/camp_ground.gd")
 
 var game
 
 # Use the same surface sampler for the ghost, deployed gear and room snapshots.
 func ground_item(node: Node3D, spot: Vector3, yaw: float) -> void:
 	if game.room.is_guest() and node.get_meta("prop_dynamic", false): return
-	node.position = Vector3(spot.x, game.stage.ground(spot), spot.z)
 	node.basis = game.stage.terrain_basis(spot, yaw, game.stage.ground)
+	node.position = Vector3(spot.x, Ground.height(node, spot, node.basis, game.stage.ground), spot.z)
 	node.set_meta("placement_yaw", yaw)
 	var body = node.get_node_or_null("PropBody")
 	if body != null: body.place()
@@ -372,16 +373,17 @@ func eat_meat(source_group: int = -2) -> bool:
 	game.toast("Шампур горячий. Приятного аппетита!")
 	return true
 
-func eat_plov() -> bool:
-	if game.cargo.held.has(game.chair_owner()) or not game.camp_cooking.can_eat() or game.eat_time >= 0 or game.drink_time >= 0:
+func eat_plov(source: int = -1) -> bool:
+	if game.cargo.held.has(game.chair_owner()) or not game.camp_cooking.can_eat(source) or game.eat_time >= 0 or game.drink_time >= 0:
 		return false
-	game.eat_kind = "plov"
+	game.eat_kind = "kuyrdak" if source >= 0 else "plov"
+	game.forage_source = source
 	game.eat_time = 0
 	game.eat_committed = false
-	game.meat_prop = Props.meat_hand(game.avatar_variant, "plov", game.stage.outfit)
+	game.meat_prop = Props.meat_hand(game.avatar_variant, game.eat_kind, game.stage.outfit)
 	game.camera.add_child(game.meat_prop)
 	update_eating(0)
-	game.toast("Едим плов из миски. Приятного аппетита!")
+	game.toast("Едим куырдак из миски. Приятного аппетита!" if source >= 0 else "Едим плов из миски. Приятного аппетита!")
 	return true
 
 func eat_foraged(kind: String, source: int = -2) -> bool:
@@ -437,8 +439,8 @@ func update_eating(delta: float) -> void:
 		if game.room.is_authority():
 			if game.eat_kind == "meat":
 				commit_meat()
-			elif game.eat_kind == "plov":
-				game.camp_cooking.consume()
+			elif game.eat_kind in ["plov", "kuyrdak"]:
+				game.camp_cooking.consume(game.forage_source if game.eat_kind == "kuyrdak" else -1)
 			else:
 				game.foraging.consume(game.eat_kind, "", game.forage_source)
 		else:

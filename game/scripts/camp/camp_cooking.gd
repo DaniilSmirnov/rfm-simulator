@@ -2,6 +2,7 @@ extends RefCounted
 const Props = preload("res://scripts/core/props.gd")
 const Loc = preload("res://scripts/ui/loc.gd")
 const COOK_SECONDS = 45.0
+var meals = preload("res://scripts/camp/stage_meals.gd").new()
 var game: Node3D
 var fire: Node3D
 var pot: Node3D
@@ -65,10 +66,14 @@ func start() -> bool:
 	update(0)
 	return true
 
-func can_eat() -> bool:
+func can_eat(source: int = -1) -> bool:
+	if source >= 0:
+		return can_act() and meals.can_eat(game, source)
 	return can_act() and pot != null and phase == "ready" and servings > 0 and game.actor_pos().distance_to(pot.position) <= 3.5
 
-func consume() -> bool:
+func consume(source: int = -1) -> bool:
+	if source >= 0:
+		return can_eat(source) and not game.cargo.held.has(game.cargo.actor()) and meals.consume(game, source)
 	if not can_eat() or game.cargo.held.has(game.cargo.actor()):
 		return false
 	servings -= 1
@@ -90,6 +95,7 @@ func update(delta: float, guest: bool = false) -> void:
 		Props.pose_cauldron(pot, phase, cook_time / COOK_SECONDS, servings, game.elapsed)
 
 func animate_flames(visual_time: float) -> void:
+	meals.animate(game, visual_time)
 	if fire == null:
 		return
 	var flames = fire.get_node("Flames")
@@ -98,6 +104,8 @@ func animate_flames(visual_time: float) -> void:
 		flame.scale = Vector3(1 + sin(visual_time * 9 + i) * 0.08, 0.85 + sin(visual_time * 7 + i * 2) * 0.22, 1)
 
 func offers(items: Array, interaction) -> void:
+	if can_act() and not game.packing.active() and not game.cargo.held.has(game.chair_owner()):
+		meals.offers(game, items, interaction)
 	if (fire == null and pot == null) or game.packing.active():
 		return
 	var carry = game.cargo.held.get(game.chair_owner(), {})
@@ -131,10 +139,12 @@ func remove_fire() -> void:
 
 func snapshot() -> Dictionary:
 	if fire == null and pot == null:
-		return {}
-	return {"fire": fire != null, "pos": game.room.a(fire.position if fire != null else pot.position), "yaw": game.camp_actions.item_yaw(fire) if fire != null else 0, "fire_owner": str(fire.get_meta("gear_owner", game.chair_owner())) if fire != null else "", "pot": pot != null, "pot_pos": game.room.a(pot.position) if pot != null else [], "pot_yaw": game.camp_actions.item_yaw(pot) if pot != null else 0, "pot_owner": str(pot.get_meta("gear_owner", game.chair_owner())) if pot != null else "", "phase": phase, "cook_time": cook_time, "servings": servings}
+		return {} if meals.pots(game).is_empty() else {"pos": [0, 0, 0], "fire": false, "pot": false, "meals": meals.snapshot(game)}
+	return {"meals": meals.snapshot(game), "fire": fire != null, "pos": game.room.a(fire.position if fire != null else pot.position), "yaw": game.camp_actions.item_yaw(fire) if fire != null else 0, "fire_owner": str(fire.get_meta("gear_owner", game.chair_owner())) if fire != null else "", "pot": pot != null, "pot_pos": game.room.a(pot.position) if pot != null else [], "pot_yaw": game.camp_actions.item_yaw(pot) if pot != null else 0, "pot_owner": str(pot.get_meta("gear_owner", game.chair_owner())) if pot != null else "", "phase": phase, "cook_time": cook_time, "servings": servings}
 
 func apply_snapshot(data: Dictionary) -> void:
+	if data.has("meals"):
+		meals.apply_snapshot(game, data.meals)
 	if data.is_empty():
 		remove_pot()
 		remove_fire()
