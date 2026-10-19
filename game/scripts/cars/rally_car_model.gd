@@ -100,7 +100,7 @@ static func police() -> Node3D:
 	for side in [-1.0, 1.0]:
 		var x: float = side * (f.half + 0.012)
 		P.box(root, Vector3(x, stripe_y, 0), Vector3(0.012, 0.2, float(p.length) - 0.7), Color("2458aa"))
-		P.label_3d(root, Vector3(side * (f.half + 0.02), stripe_y, 0.1), "ПОЛИЦИЯ", 64, 0.0020, Color.WHITE, side * PI / 2)
+		P.label_3d(root, Vector3(side * (f.half + 0.03), stripe_y, 0.1), "ПОЛИЦИЯ", 64, 0.0020, Color.WHITE, side * PI / 2)
 	var roof_z: float = (float(f.shape[1]) + float(f.shape[2])) * 0.5
 	P.box(root, Vector3(0, f.height + 0.06, roof_z), Vector3(1.1, 0.08, 0.27), Color("27323c"))
 	var blue = P.box(root, Vector3(-0.32, f.height + 0.17, roof_z), Vector3(0.38, 0.15, 0.24), Color("247fff"))
@@ -131,10 +131,11 @@ static func _doors(root: Node3D, p: Dictionary, f: Dictionary, side: float) -> v
 		_:
 			P.box(root, Vector3(skin, f.base - 0.12, 0), Vector3(0.012, 0.07, length), accent)
 	P.box(root, Vector3(skin + side * 0.012, mid_y, door_z), Vector3(0.012, 0.36, 0.62), PANEL)
-	P.label_3d(root, Vector3(skin + side * 0.02, mid_y + 0.01, door_z), str(p.number), 96, 0.0029, Color(p.number_color), yaw)
+	# Captions float 1 cm off their panels, clear of the depth buffer's step.
+	P.label_3d(root, Vector3(skin + side * 0.03, mid_y + 0.01, door_z), str(p.number), 96, 0.0029, Color(p.number_color), yaw)
 	if rear_z - door_z > 0.45:
 		P.box(root, Vector3(skin + side * 0.012, mid_y - 0.04, rear_z), Vector3(0.012, 0.2, 0.56), accent)
-		P.label_3d(root, Vector3(skin + side * 0.02, mid_y - 0.04, rear_z), p.sponsor, 30, 0.0015, Color("172724"), yaw)
+		P.label_3d(root, Vector3(skin + side * 0.03, mid_y - 0.04, rear_z), p.sponsor, 30, 0.0015, Color("172724"), yaw)
 	# Chequered club sticker on the rear wing.
 	for row in range(2):
 		for col in range(4):
@@ -156,8 +157,8 @@ static func _bonnet_and_roof(root: Node3D, p: Dictionary, f: Dictionary) -> void
 	var banner = low.lerp(high, 0.88) + Vector3(0, 0.0, -0.03)
 	P.label_3d(root, banner, p.sponsor, 32, 0.0018, Color("172724"), PI).rotation.x = -atan2(high.y - low.y, high.z - low.z) + PI / 2
 	var roof_z: float = (float(shape[1]) + float(shape[2])) * 0.5
-	P.box(root, Vector3(0, f.height + 0.028, roof_z), Vector3(0.5, 0.012, 0.42), PANEL)
-	var roof_number = P.label_3d(root, Vector3(0, f.height + 0.04, roof_z), str(p.number), 96, 0.0032, Color(p.number_color))
+	P.box(root, Vector3(0, f.height + 0.034, roof_z), Vector3(0.5, 0.012, 0.42), PANEL)
+	var roof_number = P.label_3d(root, Vector3(0, f.height + 0.05, roof_z), str(p.number), 96, 0.0032, Color(p.number_color))
 	roof_number.rotation = Vector3(-PI / 2, 0, 0)
 
 # Taxi checker on the boot lid, behind the rear window and below the roof.

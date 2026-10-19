@@ -34,6 +34,14 @@ var _watch_frames = 0
 var _played = 0.0
 var _warned = false
 
+# Depth range of the play camera: far reaches the stage horizon. Near is 0.1 m
+# rather than the default 0.05 m: the Web build's 24-bit depth buffer gains
+# precision with it, halving depth fighting at every distance, and the walker
+# keeps 0.3 m from walls, so nothing comes that close to the lens.
+static func frame_camera(camera: Camera3D) -> void:
+	camera.near = 0.1
+	camera.far = 1100
+
 func load_settings(is_mobile: bool = false) -> void:
 	has_saved_choice = false
 	software = "--gpu-software" in OS.get_cmdline_user_args()

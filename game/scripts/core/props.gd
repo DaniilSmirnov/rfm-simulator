@@ -191,11 +191,11 @@ static var PLAYER_MODELS: Array = CarRegistry.cars
 static func car_shell(parent: Node3D, sections: Array, color: Color) -> MeshInstance3D:
 	var rows = []
 	for section in sections:
-		var z: float = section.x
 		var w: float = section.y
 		var bottom: float = section.z
 		var top: float = section.w
-		rows.append([Vector3(-w * 0.88, bottom, z), Vector3(-w, bottom + 0.08, z), Vector3(-w, top - 0.06, z), Vector3(-w * 0.88, top, z), Vector3(w * 0.88, top, z), Vector3(w, top - 0.06, z), Vector3(w, bottom + 0.08, z), Vector3(w * 0.88, bottom, z)])
+		var bevel = Vector2(minf(0.08, (top - bottom) * 0.55), minf(0.06, (top - bottom) * 0.4)) # never fold a thin roof skin over itself
+		rows.append([Vector3(-w * 0.88, bottom, section.x), Vector3(-w, bottom + bevel.x, section.x), Vector3(-w, top - bevel.y, section.x), Vector3(-w * 0.88, top, section.x), Vector3(w * 0.88, top, section.x), Vector3(w, top - bevel.y, section.x), Vector3(w, bottom + bevel.x, section.x), Vector3(w * 0.88, bottom, section.x)])
 	var vertices = PackedVector3Array()
 	for i in range(rows.size() - 1):
 		for j in range(8):
@@ -870,7 +870,7 @@ static func judges_car() -> Node3D:
 	car.get_node("BodyShell").material_override.albedo_color = Color("e5e9e6")
 	for side in [-1.0, 1.0]:
 		box(car, Vector3(side * 0.88, 0.75, 0.2), Vector3(0.025, 0.28, 2.15), Color("ee8529"))
-		label_3d(car, Vector3(side * 0.90, 0.77, 0.15), "СУДЬИ", 54, 0.0024, Color("222c31"), side * PI / 2)
+		label_3d(car, Vector3(side * 0.905, 0.77, 0.15), "СУДЬИ", 54, 0.0024, Color("222c31"), side * PI / 2)
 	box(car, Vector3(0, 1.58, 0.1), Vector3(0.95, 0.07, 0.24), Color("293339"))
 	var beacon = cylinder(car, Vector3(0, 1.72, 0.1), 0.12, 0.09, 0.22, Color("ffb52b"), 8)
 	beacon.name = "AmberBeacon"
@@ -1056,7 +1056,7 @@ static func add_player_trunk(root: Node3D, variant: int) -> Node3D:
 			child.hide()
 		else:
 			child.mesh = panel_mesh(fixed)
-	box(root, Vector3(0, p.floor, (p.hinge + p.rear) / 2), Vector3(p.half * 2, 0.06, p.rear - p.hinge), Color("172027")).name = "TrunkWell"
+	box(root, Vector3(0, p.floor, (p.hinge + p.rear - 0.04) / 2), Vector3(p.half * 2, 0.06, p.rear - 0.04 - p.hinge), Color("172027")).name = "TrunkWell" # ends inside the tail, off its plane
 	var boxes = Node3D.new()
 	boxes.name = "TrunkBoxes"
 	root.add_child(boxes)

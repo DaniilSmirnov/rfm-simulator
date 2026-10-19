@@ -71,7 +71,11 @@ func flush(stage: Node3D) -> void:
 	var material = Props.material(Color.WHITE)
 	material.vertex_color_use_as_albedo = true
 	material.vertex_color_is_srgb = true
-	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	# Boxes and cylinders are closed, so their back faces stay culled: trim laid
+	# flat on a wall would otherwise share the wall's plane with its own back
+	# face. Registered meshes such as roof canals are open shells drawn both ways.
+	var open_shell = material.duplicate()
+	open_shell.cull_mode = BaseMaterial3D.CULL_DISABLED
 	var titles = batches.keys()
 	titles.sort()
 	for title in titles:
@@ -95,5 +99,5 @@ func flush(stage: Node3D) -> void:
 			stage.BakedVillage.capture_instances(node, data.poses, data.colors, data.center)
 		if not data.casts_shadow:
 			node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		node.material_override = material
+		node.material_override = material if data.key == "box" or data.key.begins_with("cylinder_") else open_shell
 	batches.clear()

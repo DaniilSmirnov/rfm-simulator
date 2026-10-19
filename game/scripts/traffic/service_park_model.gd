@@ -91,7 +91,7 @@ static func tent(stage: Node3D, root: Node3D, center: Vector2, team: Dictionary)
 	var flag = Vector2(center.x - outward * (half.x + 0.6), center.y - half.y)
 	P.cylinder(root, at(flag.x, flag.y, 1.7), 0.02, 0.02, 3.4, STEEL, 6)
 	P.box(root, at(flag.x, flag.y + 0.25, 2.25), Vector3(0.02, 2.0, 0.5), team.roof)
-	P.box(root, at(flag.x, flag.y + 0.25, 2.25), Vector3(0.025, 1.4, 0.1), team.trim)
+	P.box(root, at(flag.x, flag.y + 0.25, 2.25), Vector3(0.04, 1.4, 0.1), team.trim)
 	Movable.group(stage.solids, root, first, 5, true)
 
 static func tyres(stage: Node3D, root: Node3D, spot: Vector2, count: int) -> void:
@@ -110,7 +110,8 @@ static func _entrance(stage: Node3D, root: Node3D) -> void:
 	for dx in [-1.56, 1.56]:
 		P.box(root, at(sign.x + dx, sign.y, 1.3), Vector3(0.12, 2.6, 0.12), STEEL)
 	P.box(root, at(sign.x, sign.y, 2.2), Vector3(3.0, 0.9, 0.06), Color("f2f0e8"))
-	P.box(root, at(sign.x, sign.y, 2.58), Vector3(3.0, 0.14, 0.07), Color("ce4830"))
+	# The red header overhangs the board by 1 cm on every side.
+	P.box(root, at(sign.x, sign.y, 2.59), Vector3(3.02, 0.16, 0.08), Color("ce4830"))
 	# Readable from the road and from inside the park; the block lettering
 	# (2.5 m wide) stays within the 3 m board.
 	for face in [-1.0, 1.0]:
@@ -122,7 +123,7 @@ static func _entrance(stage: Node3D, root: Node3D) -> void:
 		var x = side * 9.0
 		P.cylinder(root, at(x, 12.5, 1.9), 0.025, 0.025, 3.8, STEEL, 6)
 		P.box(root, at(x, 12.8, 2.5), Vector3(0.02, 2.2, 0.55), Color("ce4830"))
-		P.box(root, at(x, 12.8, 2.5), Vector3(0.025, 1.6, 0.12), Color.WHITE)
+		P.box(root, at(x, 12.8, 2.5), Vector3(0.04, 1.6, 0.12), Color.WHITE)
 		Movable.group(stage.solids, root, first, 6, true)
 
 # Back of the paddock: a service truck, a generator with fuel cans and a
@@ -136,7 +137,8 @@ static func _far_end(stage: Node3D, root: Node3D) -> void:
 	P.box(root, at(truck.x, truck.y + 1.16, 2.0), Vector3(4.6, 0.6, 0.02), Color("ce4830"))
 	for wx in [-1.6, 0.4, 3.4]:
 		for wz in [-1.0, 1.0]:
-			var wheel = P.cylinder(root, at(truck.x + wx, truck.y + wz, 0.42), 0.42, 0.42, 0.3, TYRE, 12)
+			# Tyres stand 2 cm proud of the body sides instead of flush with them.
+			var wheel = P.cylinder(root, at(truck.x + wx, truck.y + wz * 1.02, 0.42), 0.42, 0.42, 0.3, TYRE, 12)
 			wheel.rotation.x = PI / 2
 	stage.solids.solid(root, at(truck.x + 0.85, truck.y, 1.5), Vector3(6.9, 3.0, 2.3), "service")
 	Movable.group(stage.solids, root, first, 3500)
@@ -165,7 +167,8 @@ static func _cones(stage: Node3D, root: Node3D, parks) -> void:
 		for i in range(5):
 			var first = root.get_child_count()
 			var spot = Vector2(side * (parks.LANE_HALF - 0.3), 1.0 + i * 2.6)
-			P.cylinder(root, at(spot.x, spot.y, 0.25), 0.13, 0.03, 0.5, Color("ef6a1f"), 8)
-			P.cylinder(root, at(spot.x, spot.y, 0.3), 0.09, 0.075, 0.08, Color.WHITE, 8)
+			# The cone stands on its base instead of sinking through it.
+			P.cylinder(root, at(spot.x, spot.y, 0.28), 0.13, 0.03, 0.5, Color("ef6a1f"), 8)
+			P.cylinder(root, at(spot.x, spot.y, 0.33), 0.09, 0.075, 0.08, Color.WHITE, 8)
 			P.box(root, at(spot.x, spot.y, 0.015), Vector3(0.34, 0.03, 0.34), Color("2a2d30"))
 			Movable.group(stage.solids, root, first, 2)
