@@ -352,27 +352,28 @@ static func _patch_vest(root: Node3D, profile: Dictionary, front: float, half: f
 	var cloth = Color(profile.get("vest", "4d6b3c"))
 	var z = front + 0.025
 	var panel = 0.05
+	# The vest stops at the inner edge of the arms, so the armholes sit under
+	# the shoulders and the sleeves stay outside it.
+	var edge = half - 0.14
+	var mid = (edge + 0.03) * 0.5
 	for side in [-1.0, 1.0]:
-		box(root, Vector3(side * half * 0.56, 1.09, -z), Vector3(half * 0.80, 0.60, panel), cloth)
-		# Shoulder straps and the armhole sides (open above, so arms swing free).
-		box(root, Vector3(side * half * 0.56, 1.42, -0.02), Vector3(half * 0.42, 0.06, front * 2.0 + 0.08), cloth)
-		box(root, Vector3(side * (half + 0.02), 0.92, 0), Vector3(0.05, 0.30, front * 2.0 + 0.08), cloth)
-		box(root, Vector3(side * half * 0.56, 0.78, -z - 0.03), Vector3(half * 0.82, 0.03, 0.012), cloth.darkened(0.3))
-	box(root, Vector3(0, 1.09, z), Vector3(half * 2.0 + 0.04, 0.60, panel), cloth)
+		box(root, Vector3(side * mid, 1.09, -z), Vector3(edge - 0.03, 0.60, panel), cloth)
+		box(root, Vector3(side * mid, 1.42, -0.02), Vector3(edge - 0.07, 0.06, front * 2.0 + 0.08), cloth)
+		box(root, Vector3(side * mid, 0.78, -z - 0.03), Vector3(edge - 0.01, 0.03, 0.012), cloth.darkened(0.3))
+	box(root, Vector3(0, 1.09, z), Vector3(edge * 2.0, 0.60, panel), cloth)
 	var rng = RandomNumberGenerator.new()
 	rng.seed = 1969
 	var spots = []
-	# Front: three rows of two on each panel; back: four rows of four;
+	# Front: a column of four on each panel; back: five rows of three;
 	# shoulder straps: one on each side, front and back.
 	for side in [-1.0, 1.0]:
-		for row in range(3):
-			for col in range(2):
-				spots.append([Vector3(side * half * (0.30 + col * 0.50), 1.30 - row * 0.19, -z - panel * 0.5), 0.12, -1.0])
-		spots.append([Vector3(side * half * 0.56, 1.46, -0.12), 0.07, -1.0])
-		spots.append([Vector3(side * half * 0.56, 1.46, 0.08), 0.07, 1.0])
-	for row in range(4):
-		for col in range(4):
-			spots.append([Vector3((col - 1.5) * half * 0.48, 1.33 - row * 0.155, z + panel * 0.5), 0.13, 1.0])
+		for row in range(4):
+			spots.append([Vector3(side * mid, 1.31 - row * 0.155, -z - panel * 0.5), 0.12, -1.0])
+		spots.append([Vector3(side * mid, 1.46, -0.12), 0.07, -1.0])
+		spots.append([Vector3(side * mid, 1.46, 0.08), 0.07, 1.0])
+	for row in range(5):
+		for col in range(3):
+			spots.append([Vector3((col - 1) * edge * 0.62, 1.33 - row * 0.12, z + panel * 0.5), 0.11, 1.0])
 	for i in range(spots.size()):
 		var spot = spots[i]
 		# Two different colours per badge.
