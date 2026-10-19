@@ -8,19 +8,22 @@ extends RefCounted
 #
 # Keys are read downstream (decreasing z) and interpolated smoothly.
 
-# The land above the gorge and how deep the gorge is cut below it at world z.
-# The table rises gently towards the Valley of Castles, where the river has
-# sawn deepest, then breaks down into the open Ili valley at the mouth. The
-# bed of the river is their difference, so it falls the whole way down.
-const RIMS = [[80.0, 62.0], [0.0, 62.0], [-120.0, 68.0], [-250.0, 74.0], [-420.0, 75.0], [-500.0, 70.0], [-580.0, 63.0], [-680.0, 50.0], [-800.0, 34.0], [-960.0, 24.0]]
-const DEPTHS = [[80.0, 3.0], [0.0, 15.0], [-60.0, 24.0], [-120.0, 32.0], [-200.0, 40.0], [-300.0, 46.0], [-420.0, 50.0], [-500.0, 46.0], [-580.0, 39.0], [-680.0, 31.0], [-800.0, 22.0], [-960.0, 16.0]]
-# Half-width of its floor at world z: a slot through the castles, a wide
-# gravel bed at the grove, the open Ili valley beyond.
-const HALVES = [[80.0, 5.0], [0.0, 7.0], [-120.0, 11.0], [-250.0, 15.0], [-350.0, 18.0], [-450.0, 25.0], [-520.0, 38.0], [-580.0, 58.0], [-650.0, 84.0], [-800.0, 112.0], [-960.0, 124.0]]
+# The land above the gorge and the gravel bed of the river at world z. The
+# table rises gently towards the Valley of Castles, where the river has sawn
+# deepest (about 70 m below the rim for most of a kilometre), then breaks down
+# into the open Ili valley at the mouth. The bed falls the whole way down.
+const RIMS = [[80.0, 62.0], [0.0, 62.0], [-150.0, 67.0], [-350.0, 74.0], [-600.0, 80.0], [-850.0, 83.0], [-1000.0, 80.0], [-1120.0, 70.0], [-1250.0, 52.0], [-1350.0, 40.0], [-1440.0, 32.0]]
+const BEDS = [[80.0, 59.0], [0.0, 48.0], [-150.0, 36.0], [-300.0, 25.0], [-450.0, 18.0], [-600.0, 14.0], [-800.0, 11.0], [-1000.0, 8.0], [-1150.0, 5.0], [-1300.0, 2.0], [-1440.0, 1.0]]
+# Half-width of its floor at world z: a dry slot 20-50 m wide through the
+# castles, a wide gravel bed at the grove, the open Ili valley beyond.
+const HALVES = [[80.0, 5.0], [0.0, 7.0], [-150.0, 10.0], [-300.0, 13.0], [-450.0, 16.0], [-600.0, 19.0], [-800.0, 22.0], [-950.0, 26.0], [-1050.0, 40.0], [-1130.0, 64.0], [-1220.0, 92.0], [-1320.0, 112.0], [-1440.0, 124.0]]
 # Where the ash grove stands: the reach below the castles where the floor has
 # widened and the walls have dropped back.
-const GROVE_BEGIN = -470.0
-const GROVE_END = -760.0
+const GROVE_BEGIN = -1080.0
+const GROVE_END = -1380.0
+# The reach of the Valley of Castles, where the walls stand highest.
+const CASTLES_BEGIN = -120.0
+const CASTLES_END = -1060.0
 
 # Smooth interpolation of a downstream-keyed table.
 static func keyed(table: Array, z: float) -> float:
@@ -44,14 +47,14 @@ static func offset(pos: Vector3) -> float:
 	return (pos.x - axis_x(pos.z)) / sqrt(1.0 + slope * slope)
 
 static func depth(z: float) -> float:
-	return keyed(DEPTHS, z)
+	return keyed(RIMS, z) - keyed(BEDS, z)
 
 static func floor_half(z: float) -> float:
 	return keyed(HALVES, z) + sin(z * 0.021) * 2.5
 
 # Height of the gravel bed the river runs over.
 static func bed_level(z: float) -> float:
-	return keyed(RIMS, z) - depth(z)
+	return keyed(BEDS, z)
 
 # Height of the steppe table, with its long swell.
 static func rim_level(pos: Vector3) -> float:
@@ -89,11 +92,11 @@ static func wall_profile(t: float, z: float) -> float:
 	return clampf(first + second + third + last, 0.0, 1.0)
 
 # What the wall reaches at the rim: the table, notched where the head of a
-# side ravine bites into it and crowned where a castle was left standing.
+# side ravine bites into it and crowned with low knobs of the caprock.
 # `over` is how far past the top of the wall the sample lies.
 static func crest(z: float, side: float, over: float, rim: float) -> float:
 	var ravine = pow(maxf(0.0, sin(z * 0.029 + side * 1.9)), 12.0) * 14.0
-	var towers = pow(maxf(0.0, sin(z * 0.14 + side * 2.3)), 6.0) * 9.0 + pow(maxf(0.0, sin(z * 0.37)), 8.0) * 3.5
+	var towers = pow(maxf(0.0, sin(z * 0.14 + side * 2.3)), 6.0) * 3.5 + pow(maxf(0.0, sin(z * 0.37)), 8.0) * 1.5
 	return rim - ravine * (1.0 - smoothstep(0.0, 24.0, over)) + towers * (1.0 - smoothstep(0.0, 16.0, over))
 
 # The land itself: steppe table, walls, gravel floor. No road anywhere in it.

@@ -27,7 +27,7 @@ func run() -> void:
 	var jump = stage.at(ff.YELLOW_HOUSE_STATION).y
 	check(jump - stage.at(ff.YELLOW_HOUSE_STATION - 12).y > 1.2 and jump - stage.at(ff.YELLOW_HOUSE_STATION + 12).y > 1.2, "yellow house crest rises and drops sharply")
 	var crests = 0
-	for s in range(8, int(Stage.LENGTH) - 8, 2):
+	for s in range(8, int(stage.length) - 8, 2):
 		var y = stage.at(s).y
 		if y > stage.at(s - 6).y + 0.45 and y > stage.at(s + 6).y + 0.45 and y >= stage.at(s - 2).y and y >= stage.at(s + 2).y:
 			crests += 1
@@ -47,7 +47,7 @@ func run() -> void:
 	check(stage.water.surfaces.size() == 3, "three rendered lake bodies")
 	var lakeside = 0
 	var both_sides = 0
-	for s in range(0, int(Stage.LENGTH), 2):
+	for s in range(0, int(stage.length), 2):
 		var left = false
 		var right = false
 		for lat in range(5, 19):
@@ -62,7 +62,7 @@ func run() -> void:
 	var ford_depth = stage.water.depth(stage.at(ff.FORD_STATION))
 	check(ford_depth > 0.25 and ford_depth < 0.6, "the road fords the strait through %.2f m of water" % ford_depth)
 	var dry_road = true
-	for s in range(0, int(Stage.LENGTH), 3):
+	for s in range(0, int(stage.length), 3):
 		if absf(s - ff.FORD_STATION) > 22.0:
 			for lat in [-3.5, 0.0, 3.5]:
 				dry_road = dry_road and stage.water.depth(stage.at(s) + stage.side(s) * lat) < 0.0

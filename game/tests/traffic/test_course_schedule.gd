@@ -3,7 +3,7 @@ func _initialize() -> void:
 	call_deferred("run")
 func finish_vehicle(game) -> void:
 	var racer = game.racers[-1]
-	racer.s = game.stage.LENGTH - 2.0
+	racer.s = game.stage.length - 2.0
 	racer.node.position = game.race_at(racer.s)
 	racer.previous = racer.node.position
 	racer.slide = 0.0
@@ -76,9 +76,9 @@ func run() -> void:
 		game.course.update(game, 1)
 		check(game.course.pass_index == 2 and game.racers[-1].id == 301 and game.passed == 0 and game.rally_spawn_count == 0, "second pass resets ten-crew counters and uses unique identities")
 		var reverse = game.racers[-1]
-		check(reverse.node.position.distance_to(game.stage.at(game.stage.LENGTH)) < 0.01, "reverse police starts at the original finish")
+		check(reverse.node.position.distance_to(game.stage.at(game.stage.length)) < 0.01, "reverse police starts at the original finish")
 		var forward = -reverse.node.basis.z
-		check(forward.dot(-game.stage.direction(game.stage.LENGTH)) > 0.99, "reverse car faces the opposite direction immediately")
+		check(forward.dot(-game.stage.direction(game.stage.length)) > 0.99, "reverse car faces the opposite direction immediately")
 		finish_vehicle(game)
 		for index in range(3):
 			check(game.course.phase == "zero" and game.course.zero_index == index + 1, "reverse pass repeats the safety convoy")

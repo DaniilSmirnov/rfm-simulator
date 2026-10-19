@@ -104,7 +104,7 @@ func run() -> void:
 	check(flat > 100.0 / 3.6, "a driver who does not lift takes the lip above 100 km/h (%.0f km/h)" % (flat * 3.6))
 
 	var inside = true
-	for s in range(0, int(Stage.LENGTH), 4):
+	for s in range(0, int(stage.length), 4):
 		inside = inside and absf(stage.at(s).x) < 120.0
 	check(inside, "route stays well inside the map")
 

@@ -135,7 +135,7 @@ static func scenery_plan(game, racer: Dictionary, plan: Dictionary) -> Dictionar
 	var obstacle_ahead = -1.0
 	for i in range(1, 13):
 		var ahead = i * 5.0
-		var station: float = minf(game.stage.LENGTH - 0.01, racer.s + ahead)
+		var station: float = minf(game.stage.length - 0.01, racer.s + ahead)
 		var line = lerpf(float(racer.line), float(plan.line), smoothstep(0.0, 26.0, ahead))
 		var point: Vector3 = game.race_at(station) + game.race_side(station) * line
 		point.y = game.stage.ground(point)
@@ -179,7 +179,7 @@ static func _detour_clear(game, racer: Dictionary, target_line: float, distance:
 	var target_key = str(racer.get("target_key", ""))
 	for i in range(1, 7):
 		var ahead = distance * i / 6.0
-		var station: float = minf(game.stage.LENGTH - 0.01, racer.s + ahead)
+		var station: float = minf(game.stage.length - 0.01, racer.s + ahead)
 		var line = lerpf(current, target_line, smoothstep(0.0, minf(14.0, distance * 0.45), ahead))
 		var point: Vector3 = game.race_at(station) + game.race_side(station) * line
 		point.y = game.stage.ground(point)
@@ -204,7 +204,7 @@ static func _pedestrian_detour(game, racer: Dictionary, plan: Dictionary, gap: f
 	var distance = clampf(gap + 14.0, 18.0, 36.0)
 	var base = float(plan.line)
 	var current = float(racer.get("line", 0.0)) + float(racer.get("slide", 0.0))
-	var station: float = minf(game.stage.LENGTH - 0.01, racer.s + distance)
+	var station: float = minf(game.stage.length - 0.01, racer.s + distance)
 	var limit: float = game.stage.road_width(station) * 0.5 + game.stage.shoulder(station) - 0.7
 	var chosen = INF
 	var best = INF
@@ -226,7 +226,7 @@ static func _pedestrian_detour(game, racer: Dictionary, plan: Dictionary, gap: f
 static func priority_plan(game, racer: Dictionary, plan: Dictionary) -> Dictionary:
 	var current = float(racer.get("line", 0.0)) + float(racer.get("slide", 0.0))
 	var station: float = game.race_station(racer.node.position)
-	var road = game.stage.LENGTH - station if game.course.pass_index == 2 else station
+	var road = game.stage.length - station if game.course.pass_index == 2 else station
 	var limit: float = game.stage.road_width(road) * 0.5 + game.stage.shoulder(road) + 1.0
 	var candidates: Array[float] = [float(plan.line), current, 0.0]
 	var step = -limit
@@ -277,7 +277,7 @@ static func _priority_clear(game, racer: Dictionary, target_line: float, distanc
 	var standing = people(game).filter(func(person): return str(person.get("key", "")) != target_key and person.pos.distance_squared_to(previous) < 3600.0)
 	for i in range(1, 7):
 		var ahead = distance * i / 6.0
-		var progress: float = minf(game.stage.LENGTH - 0.01, racer.s + ahead)
+		var progress: float = minf(game.stage.length - 0.01, racer.s + ahead)
 		var line = lerpf(current, target_line, smoothstep(0.0, distance * 0.6, ahead))
 		var point: Vector3 = game.race_at(progress) + game.race_side(progress) * line
 		point.y = game.stage.ground(point)

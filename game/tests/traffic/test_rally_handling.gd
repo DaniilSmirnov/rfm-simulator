@@ -43,7 +43,7 @@ func tour() -> void:
 			for frame in range(4800):
 				var speed = Traffic.recovery_speed(Traffic.competition_target(stage, progress, 1.04, reverse), r)
 				progress += Handling.advance(stage, progress, speed / 24.0, reverse, r.slide)
-				var station = Stage.LENGTH - progress if reverse else progress
+				var station = stage.length - progress if reverse else progress
 				var travel_sign = -1.0 if reverse else 1.0
 				var direction = Handling.direction(stage, station, reverse)
 				var ahead_station = station + travel_sign * 7.0

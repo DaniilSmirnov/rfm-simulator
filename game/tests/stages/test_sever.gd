@@ -23,7 +23,7 @@ func run() -> void:
 	# ---------------------------------------------------------------- route
 	var lowest = INF
 	var highest = -INF
-	for s in range(0, int(Stage.LENGTH), 2):
+	for s in range(0, int(stage.length), 2):
 		lowest = minf(lowest, stage.at(float(s)).y)
 		highest = maxf(highest, stage.at(float(s)).y)
 	check(highest - lowest < 6.0, "plains: the whole route stays within a few metres of height (%.1f m)" % (highest - lowest))
@@ -41,7 +41,7 @@ func run() -> void:
 		monotonic = monotonic and stage.points[i + 1].z < stage.points[i].z
 	check(monotonic, "route keeps advancing down the map")
 	var inside = true
-	for s in range(0, int(Stage.LENGTH), 4):
+	for s in range(0, int(stage.length), 4):
 		inside = inside and absf(stage.at(float(s)).x) < 120.0
 	check(inside, "route stays well inside the map")
 
@@ -50,7 +50,7 @@ func run() -> void:
 	check(snowy > 0.15 and snowy < 0.55, "packed snow grips modestly")
 	check(stage.grip(stage.at(sever.BRIDGE_S)) < snowy, "the bridge deck is icy")
 	var bounded = true
-	for s in range(2, int(Stage.LENGTH) - 2, 3):
+	for s in range(2, int(stage.length) - 2, 3):
 		for lateral in [-2.2, -0.9, 0.0, 0.9, 2.2]:
 			var g = stage.grip(stage.at(float(s)) + stage.side(float(s)) * lateral)
 			bounded = bounded and g >= 0.1 and g <= 0.8

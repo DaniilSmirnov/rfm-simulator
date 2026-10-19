@@ -54,13 +54,13 @@ static func nominal(racer: Dictionary, s: float) -> float:
 	return racer.get("bias", 0.0) + sin(s / 34.0 + racer.get("phase", 0.0)) * 0.24 + sin(s / 71.0 + racer.get("phase", 0.0) * 1.7) * 0.12
 
 static func competition_target(stage: Node3D, progress: float, pace: float = 1.0, reverse: bool = false, nerve_share: float = 0.0) -> float:
-	var station = stage.LENGTH - progress if reverse else progress
+	var station = stage.length - progress if reverse else progress
 	var travel_sign = -1.0 if reverse else 1.0
 	# Braking envelope: arrive at every bend ahead no faster than its speed.
 	var target = INF
 	var ahead = 0.0
 	while ahead <= BRAKE_LOOKAHEAD:
-		var bend = _bend_target(stage, clampf(station + travel_sign * ahead, 0.0, stage.LENGTH - 0.01), travel_sign)
+		var bend = _bend_target(stage, clampf(station + travel_sign * ahead, 0.0, stage.length - 0.01), travel_sign)
 		var taken = bend * (1.0 + BEND_OVERSHOOT * nerve_share)
 		target = minf(target, sqrt(taken * taken + 2.0 * PLAN_BRAKE * ahead))
 		ahead += BRAKE_STEP
@@ -77,7 +77,7 @@ static func _bend_target(stage: Node3D, station: float, travel_sign: float) -> f
 	var key = "bend_targets_rev" if travel_sign < 0 else "bend_targets"
 	if not stage.has_meta(key):
 		var empty: Array = []
-		empty.resize(int(stage.LENGTH) + 1)
+		empty.resize(int(stage.length) + 1)
 		empty.fill(-1.0)
 		stage.set_meta(key, empty)
 	# An Array is shared by reference, so filling it in place updates the cache.
@@ -87,9 +87,9 @@ static func _bend_target(stage: Node3D, station: float, travel_sign: float) -> f
 		return float(table[index])
 	var worst_corner = 0.0
 	for lookahead in SPEED_LOOKAHEAD:
-		var center = clampf(index + travel_sign * lookahead, 0.0, stage.LENGTH - 0.01)
+		var center = clampf(index + travel_sign * lookahead, 0.0, stage.length - 0.01)
 		var before = stage.direction(maxf(0.0, center - 6.0))
-		var after = stage.direction(minf(stage.LENGTH - 0.01, center + 6.0))
+		var after = stage.direction(minf(stage.length - 0.01, center + 6.0))
 		worst_corner = maxf(worst_corner, acos(clampf(before.dot(after), -1.0, 1.0)))
 	var corner_factor = clampf(worst_corner / CORNER_FULL_EFFECT, 0.0, 1.0)
 	var geometry_target = lerpf(CORNER_SPEED, MIN_CORNER_TARGET, pow(corner_factor, 0.75))
@@ -105,7 +105,7 @@ const PARK_ENTRY_SPEED = 8.0
 const PARK_BRAKE = 5.0
 
 static func speed_limit(game: Node3D, racer: Dictionary, s: float) -> float:
-	return minf(_speed_limit(game, racer, s), sqrt(PARK_ENTRY_SPEED * PARK_ENTRY_SPEED + 2.0 * PARK_BRAKE * maxf(0.0, game.stage.LENGTH - s)))
+	return minf(_speed_limit(game, racer, s), sqrt(PARK_ENTRY_SPEED * PARK_ENTRY_SPEED + 2.0 * PARK_BRAKE * maxf(0.0, game.stage.length - s)))
 
 static func _speed_limit(game: Node3D, racer: Dictionary, s: float) -> float:
 	var role = str(racer.get("role", "racer"))
@@ -122,7 +122,7 @@ static func recovery_speed(target: float, racer: Dictionary) -> float:
 	return target * clampf(1.0 - loss, 0.5, 1.0)
 
 static func line_limit(game, progress: float) -> float:
-	var station: float = game.stage.LENGTH - progress if game.course.pass_index == 2 else progress
+	var station: float = game.stage.length - progress if game.course.pass_index == 2 else progress
 	return game.stage.road_width(station) * 0.5 + game.stage.shoulder(station)
 
 static func corner_line(game, racer: Dictionary, base: float) -> float:
@@ -287,7 +287,7 @@ static func _clear_path(game, racer: Dictionary, target: float, distance: float)
 	var route_radius = maxf(box.size.x, box.size.z) * 0.5 + 0.15
 	for i in range(1, 7):
 		var ahead = distance * i / 6.0
-		var s: float = minf(stage.LENGTH - 0.01, racer.s + ahead)
+		var s: float = minf(stage.length - 0.01, racer.s + ahead)
 		var line = lerpf(current, target, smoothstep(0, minf(26, distance * 0.65), ahead))
 		var point = game.race_at(s) + game.race_side(s) * line
 		point.y = stage.ground(point)

@@ -4,30 +4,37 @@ extends RefCounted
 # station is a metre of road however the road turns — including the hairpin,
 # where it doubles back and -z is no longer the station.
 #
-#   0 – 176   along the rim, the gorge opening below on the left
-#   176 – 254 the hairpin at the head of the gorge, back over the lip
-#   254 – 690 the bench cut into the near wall, descending with the river
-#   690 – 840 the gravel floor, down to the ash grove above the Ili
+#   0 – 720       along the rim upstream: the floor road below at first,
+#                 then the bench road slanting down the wall under it
+#   720 – 800     the hairpin at the head of the gorge, back over the lip
+#   800 – 1400    the bench cut into the near wall, descending with the river
+#   1400 – 2100   the dry floor of the Valley of Castles, weaving between the
+#                 castles, out to the ash grove above the Ili
 #
 # The bench is not drawn on the wall by eye: for every step down the gorge the
 # builder asks the wall where it stands at the height the road has reached, so
 # the road follows the hillside and the cut stays shallow.
 const Form = preload("res://scripts/stages/canyon/canyon_form.gd")
 
-const RIM_START = -196.0
+const RIM_START = -720.0
 const RIM_END = -24.0
 const RIM_STEP = 18.0
 # How far back from the lip the rim road runs. It starts well back, where the
-# service park needs solid ground, and comes out onto the very edge for the
-# run up to the turn.
+# service park needs solid ground, comes out to the edge to look down on the
+# floor road, keeps clear of the bench road below it on the way upstream and
+# comes back to the edge for the run up to the turn.
 const RIM_BACK_PARK = 30.0
-const RIM_BACK_FAR = 22.0
+const RIM_BACK_EDGE = 15.0
+const RIM_BACK_CLEAR = 36.0
 const RIM_BACK_NEAR = 18.0
+# Where the bench road is under the rim road and the two must stay apart.
+const BENCH_UNDER_BEGIN = -640.0
+const BENCH_UNDER_END = -130.0
 const HAIRPIN_STEPS = 9
 const DESCENT_STEP = 14.0
-const DESCENT_END_Z = -452.0
-const FLOOR_STEP = 24.0
-const FLOOR_END_Z = -680.0
+const DESCENT_END_Z = -600.0
+const FLOOR_STEP = 22.0
+const FLOOR_END_Z = -1280.0
 const TABLE_STEP = 1.0
 # The road rides this far over the land it is graded into.
 const CAMBER = 0.25
@@ -35,8 +42,10 @@ const SMOOTH_PASSES = 30
 
 static func rim_back(z: float) -> float:
 	var park = smoothstep(RIM_START + 62.0, RIM_START, z)
-	var near = smoothstep(-150.0, RIM_END, z)
-	return lerpf(RIM_BACK_FAR, RIM_BACK_NEAR, near) + park * RIM_BACK_PARK + sin(z * 0.041) * 3.5
+	var under = smoothstep(BENCH_UNDER_BEGIN - 40.0, BENCH_UNDER_BEGIN + 20.0, z) * (1.0 - smoothstep(BENCH_UNDER_END - 20.0, BENCH_UNDER_END + 40.0, z))
+	var edge = lerpf(RIM_BACK_EDGE, RIM_BACK_NEAR, smoothstep(-600.0, -100.0, z))
+	var swing = sin(z * 0.029) * 7.0 * under + sin(z * 0.041) * 2.5
+	return lerpf(edge, RIM_BACK_CLEAR, under) + park * RIM_BACK_PARK + swing
 
 static func rim_point(z: float) -> Vector3:
 	var p = Vector3(Form.axis_x(z) + Form.rim_edge(z, 1.0) + rim_back(z), 0.0, z)
@@ -95,7 +104,7 @@ static func _descent(points: PackedVector3Array) -> void:
 		points.append(Vector3(Form.axis_x(z) + wall_lateral(z, height), height, z))
 		z -= DESCENT_STEP
 
-# The gravel floor: the road swings across the bed between the banks and runs
+# The dry floor: the road swings across the bed between the castles and runs
 # out into the ash grove.
 static func _floor(points: PackedVector3Array) -> void:
 	var z = DESCENT_END_Z - 6.0

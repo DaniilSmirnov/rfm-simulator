@@ -16,7 +16,7 @@ const PROFILES = [Vector4(0.94, 0.5, 7.0, 0.55), Vector4(1.0, 0.9, 10.0, 0.85), 
 func geometry(stage, reverse: bool) -> Array[Dictionary]:
 	var frames: Array[Dictionary] = []
 	for i in range(SAMPLE_COUNT):
-		var station = Stage.LENGTH - i if reverse else float(i)
+		var station = stage.length - i if reverse else float(i)
 		var direction = Handling.direction(stage, station, reverse)
 		var position = Handling.path(stage, station)
 		var ahead = Handling.direction(stage, station + (-1.0 if reverse else 1.0) * 4.0, reverse)
@@ -77,7 +77,7 @@ func station_at_distance(frames: Array[Dictionary], distance: float) -> float:
 	for i in range(1, SAMPLE_COUNT):
 		if frames[i].distance >= distance:
 			return lerpf(i-1, i, (distance-frames[i-1].distance) / maxf(frames[i].distance-frames[i-1].distance, 0.001))
-	return Stage.LENGTH
+	return float(SAMPLE_COUNT - 1)
 
 func split_points(frames: Array[Dictionary]) -> Dictionary:
 	var cuts = PackedFloat32Array()

@@ -245,7 +245,7 @@ static func _build_barriers(stage, root: Node3D) -> void:
 
 # Red-and-white poles mark the road edge for the snow plough.
 static func _build_snow_poles(stage, root: Node3D) -> void:
-	for station in range(8, int(stage.LENGTH) - 8, 17):
+	for station in range(8, int(stage.length) - 8, 17):
 		for side in [-1.0, 1.0]:
 			var s = float(station) + (4.0 if side > 0 else 0.0)
 			var point: Vector3 = stage.at(s) + stage.side(s) * side * (stage.road_width(s) * 0.5 + Banks.ROAD_MARGIN + Banks.WIDTH * 0.82)
@@ -317,7 +317,7 @@ static func _build_rock_cut(stage, root: Node3D) -> void:
 	var cap_colors: Array = []
 	var icicles: Array = []
 	var icicle_colors: Array = []
-	for station in range(6, int(stage.LENGTH) - 6, 6):
+	for station in range(6, int(stage.length) - 6, 6):
 		var s = float(station) + rng.randf_range(-2.0, 2.0)
 		if alpine.corniche(s) < 0.6:
 			continue
