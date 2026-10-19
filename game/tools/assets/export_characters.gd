@@ -55,12 +55,13 @@ func collect(node: Node3D, pose: Transform3D, groups: Dictionary) -> void:
 			collect(child, pose * child.transform, groups)
 
 func _initialize() -> void:
-	for variant in range(4):
-		var avatar = Source.player_avatar(variant)
-		bake(avatar)
-		var state = GLTFState.new()
-		var document = GLTFDocument.new()
-		assert(document.append_from_scene(avatar, state) == OK)
-		assert(document.write_to_filesystem(state, "res://models/characters/spectator_%d.glb" % variant) == OK)
-		avatar.free()
+	for outfit in [""] + Source.CharacterProfiles.OUTFITS.keys():
+		for variant in range(Source.SPECTATOR_MODELS.size()):
+			var avatar = Source.player_avatar(variant, outfit)
+			bake(avatar)
+			var state = GLTFState.new()
+			var document = GLTFDocument.new()
+			assert(document.append_from_scene(avatar, state) == OK)
+			assert(document.write_to_filesystem(state, Source.CharacterProfiles.model_path(variant, outfit)) == OK)
+			avatar.free()
 	quit()

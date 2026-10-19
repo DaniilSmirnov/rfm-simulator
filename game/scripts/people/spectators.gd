@@ -74,7 +74,7 @@ func _add_group(center: Vector3, s: float, id: int, count: int) -> void:
 	var group_index = groups.size() - 1
 	for j in range(count):
 		var variant = (id + j + game.stage.variant) % Props.SPECTATOR_MODELS.size()
-		var avatar = Props.player_avatar(variant)
+		var avatar = Props.player_avatar(variant, game.stage.outfit)
 		add_child(avatar)
 		var offset = Vector3(-1.5, 0, 0.4 + j * 1.6).rotated(Vector3.UP, yaw)
 		avatar.position = grounded(center + offset)

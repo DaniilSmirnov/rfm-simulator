@@ -1,6 +1,9 @@
 # Reference-style spectators
 
-Four editable GLB variants used by players, multiplayer peers, spectators and officials.
+Four editable GLB variants used by players, multiplayer peers, spectators and officials,
+plus the same four looks in each outfit of `scripts/people/character_profiles.gd`
+(`spectator_winter_<n>.glb`: puffer jacket, scarf, mittens, insulated trousers, snow
+boots and a warm hat; worn on snowy stages, see `stage_biome.gd` `outfit()`).
 Body geometry: 11172 / 9900 / 11628 / 10884 triangles. Visual fidelity takes priority over a polygon budget.
 Smooth shading, rounded capsule head and torso, large eyes, thin limbs and rounded fingers follow the supplied cartoon reference; all original skin, clothing and hair profiles are retained.
 Each body has ten mesh nodes: torso, head, upper arms, forearms with hands,

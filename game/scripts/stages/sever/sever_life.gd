@@ -122,13 +122,11 @@ func _smoke(at: Vector3, color: Color, size: float, rise: float) -> CPUParticles
 # ---------------------------------------------------------------- villagers
 
 func person(variant: int, accessory: String) -> Node3D:
-	var avatar = Props.player_avatar(variant)
+	var avatar = Props.player_avatar(variant, stage.outfit)
 	avatar.name = "Villager"
 	root.add_child(avatar)
 	CharacterRig.hand(avatar).get_node("BeerCan").hide()
 	CharacterRig.hand(avatar).get_node("Skewer").hide()
-	var head = avatar.get_node("Head")
-	Props.faceted(head, Vector3(0, 0.2, 0), Vector3(0.32, 0.2, 0.3), Color("4a3b2c"), 8, 4)
 	match accessory:
 		"bucket":
 			var arm = CharacterRig.hand(avatar)

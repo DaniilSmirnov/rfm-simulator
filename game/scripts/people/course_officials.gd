@@ -71,7 +71,7 @@ func build() -> void:
 		if spot.is_empty():
 			push_error("No safe marshal position on stage %d" % stage.variant)
 			continue
-		var marshal = Props.course_official("marshal", i)
+		var marshal = Props.course_official("marshal", i, stage.outfit)
 		red_flag(marshal)
 		add_child(marshal)
 		marshal.position = spot.pos
@@ -151,7 +151,7 @@ func station(s: float, sign: float, title: String) -> void:
 		solid(car, Vector3(0, 0, z), 0.9, 1.6)
 	for i in range(2):
 		# Judges work before and behind the parked car, outside the racing line.
-		var official = Props.course_official("judge", i)
+		var official = Props.course_official("judge", i, stage.outfit)
 		add_child(official)
 		official.position = grounded(car.position + forward * (-3.2 if i == 0 else 3.2))
 		if not stage.solids.hit(official.position, official.position, 0.4, false).is_empty():
