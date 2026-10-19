@@ -65,7 +65,7 @@ func run() -> void:
 		dodged = dodged or racing.avoiding
 	check(verge and not dodged, "a spectator's car on the verge past the start is no reason for a detour")
 	# At the finish it carries on into the other park and backs into its bay.
-	racing.s = Stage.LENGTH - 25.0
+	racing.s = game.stage.length - 25.0
 	racing.node.position = game.race_at(racing.s)
 	racing.previous = racing.node.position
 	racing.line = 0.0

@@ -54,39 +54,56 @@ func run() -> void:
 # The rim, the hairpin and the long way down to the river.
 func _check_route(stage) -> void:
 	check(stage.canyon.winding_route() and stage.winding, "the road doubles back, so stations are searched for")
+	var forest = Stage.new(0)
+	check(stage.length >= 2000.0 and stage.length > forest.length * 2.0, "the longest stage in the game: over two kilometres")
+	forest.free()
 	var start = stage.at(20.0)
-	var finish_point = stage.at(840.0)
-	check(start.y - finish_point.y > 40.0, "the stage drops from the table to the floor of the gorge")
-	check(stage.direction(120.0).z > 0.6, "the rim road runs upstream, along the gorge")
-	check(stage.direction(300.0).z < -0.6, "past the turn the road runs back down the gorge")
-	var apex = stage.at(215.0)
-	check(Vector2(apex.x - start.x, apex.z - start.z).length() < 190.0 and stage.at(215.0).z > stage.at(120.0).z, "the hairpin turns at the head of the gorge")
+	var finish_point = stage.at(stage.length)
+	check(start.y - finish_point.y > 60.0, "the stage drops from the table to the floor of the gorge")
+	check(stage.direction(400.0).z > 0.6, "the rim road runs upstream, along the gorge")
+	check(stage.direction(1000.0).z < -0.6, "past the turn the road runs back down the gorge")
+	var apex = stage.at(760.0)
+	check(apex.z > -60.0 and apex.z > stage.at(600.0).z and apex.z > stage.at(900.0).z, "the hairpin turns at the head of the gorge")
+	var above = 0
+	for s in range(200, 640, 20):
+		var rim = stage.at(s)
+		for t in range(820, 1380, 4):
+			var bench = stage.at(t)
+			if Vector2(rim.x - bench.x, rim.z - bench.z).length() < 60.0 and rim.y - bench.y > 12.0:
+				above += 1
+				break
+	check(above > 12, "the rim road runs above the bench road, one over the other (%d)" % above)
 	var steepest = 0.0
-	for i in range(1, 420):
+	for i in range(1, int(stage.length / 2.0)):
 		var a = stage.at(i * 2.0)
 		var b = stage.at(i * 2.0 + 2.0)
 		steepest = maxf(steepest, absf(b.y - a.y) * 0.5)
 	check(steepest < 0.22, "no part of the road is steeper than a gravel road can be")
 	var on_land = true
-	for i in range(0, 42):
+	for i in range(0, int(stage.length / 20.0) + 1):
 		var p = stage.at(i * 20.0)
 		on_land = on_land and absf(p.y - Form.surface(p)) < 9.0
 	check(on_land, "the road is graded into the hillside, not flown over it")
+	var bounds: Rect2 = stage.canyon.world_bounds()
+	var inside = true
+	for i in range(0, int(stage.length), 10):
+		inside = inside and bounds.grow(-25.0).has_point(Vector2(stage.at(i).x, stage.at(i).z))
+	check(inside, "the whole road lies well inside the land of the stage")
 
 # The gorge itself: narrow and deep at the castles, walled in cliff bands.
 func _check_gorge(stage) -> void:
 	var enclosed = true
-	for z in range(-180, -461, 40):
+	for z in range(-180, -1001, 40):
 		var p = Vector3(Form.axis_x(z), Form.bed_level(z), z)
 		var highest = -INF
 		for side in [-1.0, 1.0]:
 			highest = maxf(highest, stage.ground(Vector3(p.x + side * (Form.rim_edge(z, side) + 4.0), 0.0, z)) - p.y)
 		enclosed = enclosed and highest > 34.0
 	check(enclosed, "the walls stand far above the bed the whole way through the castles")
-	check(Form.floor_half(-300.0) < 22.0 and Form.floor_half(-640.0) > 70.0, "a slot at the castles, a wide gravel floor at the grove")
+	check(Form.floor_half(-300.0) < 22.0 and Form.floor_half(-900.0) < 30.0 and Form.floor_half(-1250.0) > 70.0, "a slot through a kilometre of castles, a wide gravel floor at the grove")
 	var banded = true
 	var climbed = 0.0
-	for z in [-220.0, -300.0, -380.0, -460.0]:
+	for z in [-300.0, -500.0, -700.0, -900.0]:
 		for side in [-1.0, 1.0]:
 			var bands = wall_bands(stage, z, side)
 			banded = banded and bands.x >= 2 and bands.y >= 4
@@ -102,11 +119,31 @@ func _check_gorge(stage) -> void:
 	check(banded, "each wall climbs in cliff bands separated by benches of fallen rock")
 	check(climbed < 6.0, "the walls stop a walker: the gorge cannot be climbed out of")
 	var shelf = true
-	for s in [330.0, 400.0, 460.0]:
+	for s in [900.0, 1000.0, 1100.0]:
 		var p = stage.at(s)
 		shelf = shelf and stage.ground(p + stage.side(s) * 18.0) - p.y > 8.0
 		shelf = shelf and stage.ground(p - stage.side(s) * 18.0) - p.y < -8.0
 	check(shelf, "the descent is a shelf with the wall above it and the gorge below")
+	_check_cliffs(stage)
+	var kinds: Dictionary = stage.canyon.scenery.counts.castle_kinds
+	check(kinds.size() >= 6 and int(stage.canyon.scenery.counts.towers) > 50, "the castles take every form: %s" % str(kinds))
+
+# Cars keep to the road and the steppe: they cannot drive up a wall.
+func _check_cliffs(stage) -> void:
+	var canyon = stage.canyon
+	var stopped = true
+	for z in [-700.0, -850.0, -1000.0]:
+		for side in [-1.0, 1.0]:
+			var foot = Vector3(Form.axis_x(z) + side * (Form.wall_foot(z, side) + Form.wall_run(z, side) * 0.1), 0.0, z)
+			foot.y = stage.vehicle_ground(foot)
+			var into = foot + Vector3(side * 0.3, 0.0, 0.0)
+			stopped = stopped and canyon.drive_blocked(foot, into)
+	check(stopped, "a car cannot drive up the face of the gorge")
+	var free = true
+	for i in range(0, int(stage.length) - 4, 3):
+		free = free and not canyon.drive_blocked(stage.at(i), stage.at(i + 0.3))
+		free = free and not canyon.drive_blocked(stage.at(i + 3.0), stage.at(i + 2.7))
+	check(free, "the road itself is drivable both ways from start to finish")
 
 # The ash grove above the Ili, and the service park standing in it.
 func _check_grove(stage, canyon) -> void:
@@ -129,10 +166,11 @@ func _check_grove(stage, canyon) -> void:
 # Spectators, camps and the life of the steppe.
 func _check_people(stage, canyon) -> void:
 	check(stage.clearings.size() == canyon.CAMPS.size(), "every spectator area is placed")
-	var level = true
-	for clearing in stage.clearings:
-		level = level and canyon.camp_supported(clearing)
-	check(level, "every spectator area is level enough for camp furniture")
+	var tilted: Array = []
+	for i in range(stage.clearings.size()):
+		if not canyon.camp_supported(stage.clearings[i]):
+			tilted.append(canyon.CAMPS[i][0])
+	check(tilted.is_empty(), "every spectator area is level enough for camp furniture %s" % str(tilted))
 	var life = canyon.canyon_life
 	check(life.camels.size() >= 12 and life.eagles.size() >= 6, "camel herds graze the steppe under circling eagles")
 	var on_steppe = true
@@ -156,7 +194,15 @@ func _check_game() -> void:
 		parked = parked and absf(group.car.position.y - game.stage.vehicle_ground(group.car.position)) < 0.01
 	check(game.spectators.groups.size() >= game.stage.clearings.size(), "NPC camps stand at every spectator area")
 	check(parked, "parked NPC cars rest on the ground of the gorge and the steppe")
-	var camp_spot: Vector3 = game.stage.clearings[5] + Vector3(2.5, 0, 0)
+	var astray: Array = []
+	for person in game.spectators.people:
+		var home: Vector3 = person.home
+		if not game.stage.canyon.camp_supported(home) or game.stage.road_distance(home) < 6.0 or absf(home.y - game.stage.ground(home)) > 0.05:
+			astray.append(int(person.station))
+	check(astray.is_empty(), "every spectator stands on level ground off the road, never on a cliff %s" % str(astray))
+	var grove_clearing: Vector3 = game.stage.clearings[-1]
+	var toward_road: Vector3 = game.stage.at(game.stage.road_s(grove_clearing)) - grove_clearing
+	var camp_spot: Vector3 = grove_clearing + Vector3(toward_road.x, 0, toward_road.z).normalized() * 3.0
 	camp_spot.y = game.stage.ground(camp_spot)
 	check(game.place_table(camp_spot) and absf(game.camp.position.y - game.stage.ground(camp_spot)) < 0.001, "a real table rests on the floor of the grove")
 	await game._shutdown_audio()

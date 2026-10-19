@@ -271,7 +271,7 @@ func run() -> void:
 	# with none brakes exactly as before.
 	var tightest = 0.0
 	var slowest_target = INF
-	for station in range(0, int(game.stage.LENGTH), 5):
+	for station in range(0, int(game.stage.length), 5):
 		var calm = game.Traffic.competition_target(game.stage, float(station))
 		if calm < slowest_target:
 			slowest_target = calm

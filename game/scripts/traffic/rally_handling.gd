@@ -73,7 +73,7 @@ static func path(stage, station: float) -> Vector3:
 			else:
 				samples.append(stage.points[segment].lerp(stage.points[segment+1], (distance-distances[segment]) / maxf(0.001, distances[segment+1]-distances[segment])))
 		stage.set_meta("rally_path", {"distances": distances, "samples": samples})
-	var s = clampf(station, 0, stage.LENGTH - 0.001)
+	var s = clampf(station, 0, stage.length - 0.001)
 	var index = int(s / stage.STEP)
 	var cache: Dictionary = stage.get_meta("rally_path")
 	var distance = lerpf(cache.distances[index], cache.distances[index+1], fmod(s, stage.STEP)/stage.STEP)
@@ -84,7 +84,7 @@ static func path(stage, station: float) -> Vector3:
 	return (p0 * pow(1-t, 3) + samples[cell] * (3*t*t*t-6*t*t+4) + samples[cell+1] * (-3*t*t*t+3*t*t+3*t+1) + samples[cell+2] * t*t*t) / 6.0
 
 static func direction(stage, station: float, reverse: bool = false) -> Vector3:
-	var center = clampf(station, 0.1, stage.LENGTH - 0.101)
+	var center = clampf(station, 0.1, stage.length - 0.101)
 	return (path(stage, center + 0.1) - path(stage, center - 0.1)).normalized() * (-1.0 if reverse else 1.0)
 
 static func offset_path(stage, station: float, offset: float) -> Vector3:
@@ -92,13 +92,13 @@ static func offset_path(stage, station: float, offset: float) -> Vector3:
 
 static func metric(stage, station: float, offset: float = 0.0) -> float:
 	var low = maxf(0, station - 0.05)
-	var high = minf(stage.LENGTH - 0.001, station + 0.05)
+	var high = minf(stage.length - 0.001, station + 0.05)
 	var difference = offset_path(stage, high, offset) - offset_path(stage, low, offset) if absf(offset) > 0.001 else path(stage, high) - path(stage, low)
 	return maxf(Vector2(difference.x, difference.z).length() / maxf(high - low, 0.001), 0.1)
 
 static func advance(stage, progress: float, metres: float, reverse: bool, offset: float = 0.0) -> float:
 	var sign_value = -1.0 if reverse else 1.0
-	var station = stage.LENGTH - progress if reverse else progress
+	var station = stage.length - progress if reverse else progress
 	var lateral = offset * sign_value
 	var prediction = metres / metric(stage, station, lateral)
 	prediction = metres / metric(stage, station + sign_value * prediction * 0.5, lateral)

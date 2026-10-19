@@ -82,7 +82,8 @@ const GLADE_SPACING = 30.0
 var snowbank_cells: Dictionary = {}
 # Used only by the offline baker/tests; ordinary gameplay retains no CPU copy.
 var capture_bake_buffers = false
-const LENGTH = 840.0
+# Stage road length in metres, from the biome (stage_biome.route_length()).
+var length = 840.0
 const STEP = 4.0
 const WIDTH = 7.4
 # Five side-lane rows spaced 0.8 m apart, each stone 0.76 m wide.
@@ -135,33 +136,34 @@ func _init(selected: int = 0) -> void:
 	woodland.stage = self
 	biome = StageRegistry.make_biome(variant)
 	biome.attach(self)
+	length = biome.route_length()
 	relief.stage = self
 	has_snow = biome.has_snow()
 	outfit = biome.outfit()
 	water = biome.make_water()
 	if water != null:
 		water.stage = self
-	for i in range(int(LENGTH / STEP) + 1):
+	for i in range(int(length / STEP) + 1):
 		points.append(biome.route(i * STEP))
 	winding = biome.winding_route()
 	if winding:
 		# Index the fine route table: corners and hairpins need metre samples.
 		var samples = PackedVector3Array()
-		for i in range(int(LENGTH) + 1):
+		for i in range(int(length) + 1):
 			samples.append(biome.route(float(i)))
 		route_index.build(samples, 1.0)
 	biome.configure()
 	parks.configure(self)
 
 func at(s: float) -> Vector3:
-	s = clampf(s, 0, LENGTH - 0.001)
+	s = clampf(s, 0, length - 0.001)
 	if winding:
 		return biome.route(s)
 	var index = int(s / STEP)
 	return points[index].lerp(points[index + 1], fmod(s, STEP) / STEP)
 
 func direction(s: float) -> Vector3:
-	return (at(minf(s + 2, LENGTH - 0.01)) - at(maxf(s - 2, 0))).normalized()
+	return (at(minf(s + 2, length - 0.01)) - at(maxf(s - 2, 0))).normalized()
 
 func side(s: float) -> Vector3:
 	return direction(s).cross(Vector3.UP).normalized()
@@ -169,7 +171,7 @@ func side(s: float) -> Vector3:
 func road_s(pos: Vector3) -> float:
 	if winding:
 		return float(route_nearest(pos).s)
-	return clampf(-pos.z, 0, LENGTH)
+	return clampf(-pos.z, 0, length)
 
 func road_distance(pos: Vector3) -> float:
 	if winding:
@@ -413,8 +415,9 @@ func _build_terrain(cooperative: bool = false) -> void:
 	# Shared vertices of neighbouring triangles are coloured once.
 	var colors: Dictionary = {}
 	var tiled = biome.terrain_tiled()
-	for z in range(-920, 81, 4):
-		for x in range(-204, 204, 4):
+	var bounds: Rect2 = biome.world_bounds()
+	for z in range(int(bounds.position.y), int(bounds.end.y) + 1, 4):
+		for x in range(int(bounds.position.x), int(bounds.end.x), 4):
 			if cooperative: await LoadPacer.tick(get_tree())
 			var tile = Vector2i(floori(x / 64.0), floori(z / 64.0)) if tiled else Vector2i.ZERO
 			if not builders.has(tile):
@@ -483,7 +486,7 @@ func _build_road(cooperative: bool = false) -> void:
 			colors[v] = road_surface_color(v, station)
 		return colors[v]
 	var seam_shoulders = biome.road_seam_shoulders()
-	for i in range(int(LENGTH)):
+	for i in range(int(length)):
 		var s = float(i)
 		if cooperative: await LoadPacer.tick(get_tree())
 		var kind = road_surface_kind(s)

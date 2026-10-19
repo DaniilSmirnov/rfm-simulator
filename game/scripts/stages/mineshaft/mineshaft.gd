@@ -73,10 +73,10 @@ func heading_slope(s: float) -> float:
 func lateral_route(s: float) -> float:
 	if lateral_table.is_empty():
 		var x = 0.0
-		for i in range(int((stage.LENGTH + 40.0) / TABLE_STEP) + 2):
+		for i in range(int((stage.length + 40.0) / TABLE_STEP) + 2):
 			lateral_table.append(x)
 			x += heading_slope((i + 0.5) * TABLE_STEP) * TABLE_STEP
-	var f = clampf(s, 0.0, stage.LENGTH + 39.0) / TABLE_STEP
+	var f = clampf(s, 0.0, stage.length + 39.0) / TABLE_STEP
 	var i = int(f)
 	return lerpf(lateral_table[i], lateral_table[i + 1], f - i)
 

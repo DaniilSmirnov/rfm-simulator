@@ -49,7 +49,7 @@ func run() -> void:
 		var worst = 0.0
 		var samples = 0
 		var recovery_supported = true
-		for s in range(60, int(st.LENGTH) - 60, 60):
+		for s in range(60, int(st.length) - 60, 60):
 			for side in [-1.0, 1.0]:
 				var p: Vector3 = st.at(s) + st.side(s) * side * (st.road_width(s) * 0.5 + 6.0)
 				if st.water != null and st.water.depth(p) > 0.0:

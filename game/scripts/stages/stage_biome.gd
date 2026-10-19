@@ -33,6 +33,15 @@ func make_water():
 
 # ---------------------------------------------------------------- route
 
+# Length of the stage road in metres (stations 0..route_length()). Most stages
+# share the default; a longer one also widens world_bounds() to hold it.
+func route_length() -> float:
+	return 840.0
+
+# The rectangle of land that is built, walked and driven on (x, z in metres).
+func world_bounds() -> Rect2:
+	return Rect2(-204.0, -920.0, 408.0, 1000.0)
+
 # Centre line of the road at station s (metres along the route).
 func route(s: float) -> Vector3:
 	return Vector3(0.0, 0.0, -s)
@@ -93,6 +102,11 @@ func walk_floor(_pos: Vector3, height: float) -> float:
 
 # Extra walking obstacles of the stage (cliff lips) at the next foot position.
 func walk_blocked(_next: Vector3, _feet_height: float) -> bool:
+	return false
+
+# Whether a car is stopped moving from `from` to `to`, e.g. by a rock face
+# too steep for tyres to climb. Same answer for the host and every guest.
+func drive_blocked(_from: Vector3, _to: Vector3) -> bool:
 	return false
 
 # Height share (0..1) of the ploughed snowbanks at station s, e.g. 0 on a bridge.
