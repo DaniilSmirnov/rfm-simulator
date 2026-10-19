@@ -82,14 +82,21 @@ static func _hitching_rail(node: Node3D, at: Vector3) -> void:
 	for i in range(3):
 		Props.cylinder(node, at + Vector3(-1.6 + i * 1.6, 1.1, 0.1), 0.02, 0.02, 0.7, ROPE, 4)
 
-# Flag of Kazakhstan on a pole: a sky-blue cloth with a golden sun and bird
-# and the ornament band at the hoist.
+# Exact vector artwork on vertical cloth; both sides share the same texture.
+# The former cylinder/box symbols were not in the cloth plane and omitted the eagle.
 static func flag(parent: Node3D, at: Vector3) -> void:
 	Props.cylinder(parent, at + Vector3(0, 3.2, 0), 0.05, 0.04, 6.4, Color("d8d8d2"), 6)
-	var cloth = at + Vector3(0.95, 5.6, 0)
-	Props.box(parent, cloth, Vector3(1.8, 0.9, 0.03), Color("1c9ac6"))
-	Props.cylinder(parent, cloth + Vector3(0.05, 0.08, 0.02), 0.22, 0.22, 0.02, Color("f4cd3a"), 12)
-	for i in range(5):
-		Props.box(parent, cloth + Vector3(-0.3 + i * 0.16, 0.4, 0.02), Vector3(0.1, 0.05, 0.02), Color("f4cd3a"))
-	for i in range(4):
-		Props.box(parent, cloth + Vector3(-0.82, -0.3 + i * 0.22, 0.02), Vector3(0.1, 0.1, 0.02), Color("f4cd3a"))
+	var cloth = MeshInstance3D.new()
+	cloth.name = "KazakhstanFlag"
+	cloth.mesh = QuadMesh.new()
+	cloth.mesh.size = Vector2(1.8, 0.9)
+	var material = StandardMaterial3D.new()
+	material.albedo_texture = preload("res://textures/flags/kazakhstan.svg")
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	material.roughness = 1.0
+	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR
+	cloth.material_override = material
+	# A zero-thickness sheet must not shadow itself in the sun cascades.
+	cloth.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	parent.add_child(cloth)
+	cloth.position = at + Vector3(0.95, 5.6, 0)
