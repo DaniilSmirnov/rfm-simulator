@@ -36,6 +36,8 @@ func run() -> void:
 	_check_gorge(stage)
 	_check_grove(stage, canyon)
 	_check_people(stage, canyon)
+	_check_render_chunks(stage)
+	_check_contact_cache(stage)
 	var vertices = PackedVector3Array()
 	for piece in RoadChunks.meshes(stage):
 		vertices.append_array(piece.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX])
@@ -50,6 +52,47 @@ func run() -> void:
 	await _check_game()
 	print("CANYON RESULT: %d failures" % failures)
 	finish()
+
+func _check_render_chunks(stage) -> void:
+	var terrain = stage.find_children("TerrainTile_*", "MeshInstance3D", false, false)
+	var local_bounds = true
+	var triangles = 0
+	for node in terrain:
+		var box: AABB = node.mesh.get_aabb()
+		local_bounds = local_bounds and box.size.x <= 64.01 and box.size.z <= 64.01
+		triangles += node.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX].size() / 3
+	check(terrain.size() > 100 and local_bounds and triangles == 171462, "the same canyon terrain is culled in local 64 m chunks (%d triangles)" % triangles)
+	var towers = stage.get_node("CanyonValleyTowers")
+	var local_towers = towers.get_child_count() > 15
+	triangles = 0
+	for node in towers.get_children():
+		var box: AABB = node.mesh.get_aabb()
+		local_towers = local_towers and box.size.x < 180.0 and box.size.z < 180.0
+		triangles += node.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX].size() / 3
+	check(local_towers and triangles == 47952, "all castle geometry is retained with local culling bounds (%d triangles)" % triangles)
+
+func _check_contact_cache(stage) -> void:
+	var exact = true
+	# Compare cold and warm runtime queries with uncached analytic vertices,
+	# across both walls, the road, hairpin, grove and service parks.
+	for station in [10.0, 140.0, 500.0, 760.0, 1000.0, 1650.0, 1950.0, 2030.0]:
+		for lateral in [-40.3, -16.2, -3.1, 0.0, 3.1, 16.2, 40.3]:
+			var p = stage.at(station) + stage.side(station) * lateral
+			stage._set_terrain_cache(true)
+			var expected: float = stage.terrain_surface_height(p)
+			stage._set_terrain_cache(false)
+			for repeat in range(2):
+				exact = exact and absf(stage.terrain_surface_height(p) - expected) < 0.00001
+	check(exact, "cached contact matches exact terrain interpolation before and after warming")
+	var canyon = stage.canyon
+	# Travel far enough to evict both working sets, then revisit an old sample.
+	var point = stage.at(1000.0) + stage.side(1000.0) * 16.2
+	var expected: float = stage.terrain_surface_height(point)
+	for i in range(canyon.CONTACT_CACHE_LIMIT + 8):
+		stage.terrain_vertex_height(float(i % 100) * 4.0 - 200.0, float(i / 100) * -4.0)
+		stage.terrain_tile_step(float(i % 100) * 4.0 - 200.0, float(i / 100) * -4.0)
+	check(canyon.contact_heights.size() <= canyon.CONTACT_CACHE_LIMIT and canyon.contact_steps.size() <= canyon.CONTACT_CACHE_LIMIT, "terrain contact working sets stay bounded while travelling")
+	check(absf(stage.terrain_surface_height(point) - expected) < 0.00001, "eviction and revisiting a cliff do not change contact heights")
 
 # The rim, the hairpin and the long way down to the river.
 func _check_route(stage) -> void:

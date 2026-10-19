@@ -96,7 +96,7 @@ func _triangle(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, color: Color
 		st.set_color(color)
 		st.add_vertex(point)
 
-func _rock_node(st: SurfaceTool, node_name: String) -> void:
+func _rock_node(st: SurfaceTool, node_name: String, parent: Node3D) -> void:
 	st.generate_normals()
 	var node = MeshInstance3D.new()
 	node.name = node_name
@@ -106,15 +106,16 @@ func _rock_node(st: SurfaceTool, node_name: String) -> void:
 	mat.vertex_color_is_srgb = true
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	node.material_override = mat
-	stage.add_child(node)
+	parent.add_child(node)
 
 # The castles: rows of blocky towers, bastions and fins built out from the foot
 # of both walls, single blocks and fallen slabs on the floor and the benches.
 # The plateau above stays bare, as it is. Every form is different
 # (canyon_castles.gd), and the mix changes along the valley.
 func _castles(cooperative: bool = false) -> void:
-	var st = SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	# Whole forms stay intact, but distant sections of the valley can now be
+	# culled independently in the camera and sun-shadow passes.
+	var builders: Dictionary = {}
 	var built = {}
 	var index = 0
 	var z = Form.CASTLES_BEGIN
@@ -122,11 +123,16 @@ func _castles(cooperative: bool = false) -> void:
 		if cooperative: await LoadPacer.tick(stage.get_tree())
 		for side in [-1.0, 1.0]:
 			index += 1
-			var kind = _castle(st, z + rng.randf_range(-3.0, 3.0), side, index)
+			var kind = _castle(builders, z + rng.randf_range(-3.0, 3.0), side, index)
 			if kind != "":
 				built[kind] = int(built.get(kind, 0)) + 1
 		z -= CASTLE_SPACING
-	_rock_node(st, "CanyonValleyTowers")
+	var holder = Node3D.new()
+	holder.name = "CanyonValleyTowers"
+	stage.add_child(holder)
+	for tile in builders:
+		if cooperative: await LoadPacer.tick(stage.get_tree())
+		_rock_node(builders[tile], "Tile_%d_%d" % [tile.x, tile.y], holder)
 	counts["castle_kinds"] = built
 	var total = 0
 	for kind in built:
@@ -151,7 +157,7 @@ const SIZES = {
 const CASTLE_SPACING = 5.0
 
 # One form beside the gorge at z; returns its kind, or "" where none fits.
-func _castle(st: SurfaceTool, z: float, side: float, index: int) -> String:
+func _castle(builders: Dictionary, z: float, side: float, index: int) -> String:
 	var roll = rng.randf()
 	var place = "foot" if roll < 0.58 else ("floor" if roll < 0.8 else "bench")
 	var kinds: Array = PLACES[place]
@@ -184,6 +190,12 @@ func _castle(st: SurfaceTool, z: float, side: float, index: int) -> String:
 			if not open_ground(end, radius + 5.0, 0.0):
 				return ""
 	var sink = 1.5 if place == "foot" else 0.8
+	var tile = Vector2i(floori(p.x / 64.0), floori(p.z / 64.0))
+	if not builders.has(tile):
+		var builder = SurfaceTool.new()
+		builder.begin(Mesh.PRIMITIVE_TRIANGLES)
+		builders[tile] = builder
+	var st: SurfaceTool = builders[tile]
 	for circle in Castles.build(st, biome, p - Vector3.UP * sink, kind, height + sink, radius, yaw, index):
 		stage.rocks.append(Records.rock(circle.pos + Vector3.UP * sink, float(circle.radius) * 0.85, height))
 	reserved.append({"pos": p, "radius": maxf(radius * 1.3, Castles.reach(kind, radius, index))})
