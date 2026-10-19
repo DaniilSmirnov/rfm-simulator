@@ -43,11 +43,27 @@ await writeFile(join(output, 'index.wasm.gz'), packed);
 const pck = await readFile(join(output, 'index.pck'));
 if (pck.subarray(0, 4).toString() !== 'GDPC') throw new Error('Missing or invalid Godot pack.');
 
+// Godot 4.4.1 plays Web samples on AudioBufferSourceNodes and loops them by
+// starting a new node when one ends: a gap every wrap, and from the play
+// offset rather than the loop start. A restart (wrap or unpause) also leaves
+// the old node running with its "ended" listener, so every unpause adds a
+// node that keeps looping unheard. The source nodes loop natively here, the
+// old node is stopped and released, and the pitch carries over to the new one.
+function patchSampleLoops(code) {
+  const buffer = 'this._source.buffer=this.getSample().getAudioBuffer();';
+  const restart = '_restart(){if(this._source!=null){this._source.disconnect()}';
+  const listen = 'this._addEndedListener();const pauseTime=';
+  if (code.split(buffer).length !== 3 || code.split(restart).length !== 2 || code.split(listen).length !== 2) throw new Error('Unexpected Godot Web audio version.');
+  const loop = buffer + '{const sample=this.getSample(),data=this._source.buffer;if(sample.loopMode==="forward"){this._source.loop=true;this._source.loopStart=sample.loopBegin/data.sampleRate;this._source.loopEnd=(sample.loopEnd>sample.loopBegin?sample.loopEnd:data.length)/data.sampleRate}}';
+  const release = '_restart(){if(this._source!=null){if(this._onended!=null)this._source.removeEventListener("ended",this._onended);if(this.isStarted){try{this._source.stop()}catch(_){}}this._source.disconnect()}';
+  return code.replaceAll(buffer, loop).replace(restart, release).replace(listen, 'this._syncPlaybackRate();' + listen);
+}
+
 const jsPath = join(output, 'index.js');
 const js = await readFile(join(rawOutput, 'index.js'), 'utf8');
 const needle = 'return fetch(file).then(function (response) {';
 if (js.split(needle).length !== 2) throw new Error('Unexpected Godot preloader version.');
-await writeFile(jsPath, js.replace(needle, 'return RallyMini.fetch(file).then(function (response) {'));
+await writeFile(jsPath, patchSampleLoops(js.replace(needle, 'return RallyMini.fetch(file).then(function (response) {')));
 const htmlPath = join(output, 'index.html');
 const html = await readFile(join(rawOutput, 'index.html'), 'utf8');
 if (!html.includes('const engine = new Engine(GODOT_CONFIG);')) throw new Error('Unexpected HTML engine config.');

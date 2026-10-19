@@ -1,10 +1,10 @@
 extends Node
 # Cars as this client hears them. The player's own car from the driver's seat:
 # engine (an idle loop and an on/off-throttle pair, pitched to simulated revs
-# and gears), tyres on the surface under them, skids, the starter. Cars around
-# (crews, course and park cars, friends' cars) share a few 3D voices, nearest
-# first, with engine, tyres, sirens, backfires and the Doppler shift of a car
-# passing by. Doors, trunk lids, crashes and tow ropes are one-shots.
+# and gears) and the starter. Cars around (crews, course and park cars,
+# friends' cars) share a few 3D voices, nearest first, with engine, sirens,
+# backfires and the Doppler shift of a car passing by. There are no tyre
+# sounds: rolling noise read as hiss over the engine. Doors, trunk lids, crashes and tow ropes are one-shots.
 # Everything is read from the scene (node motion between frames) and the
 # session state, so host and guests hear the same cars without network data.
 const SoundBank = preload("res://scripts/core/sound_bank.gd")
@@ -37,18 +37,18 @@ const ENGINE_LINGER = 4.0
 const CRASH_DROP = 6.0
 const HEAVY_CRASH_SPEED = 14.0
 const GUEST_CRASH_CONFIRM = 0.3
-const START_SECONDS = 0.75
+# The starter (engine-start) cranks, catches and settles to idle by about
+# 1.5 s; the idle loop fades in under its tail instead of over the cranking.
+const START_SECONDS = 1.7
+const START_TAKEOVER = 1.1
 # Loudness of the layers before their gains (dB).
 const OWN_ENGINE_DB = -15.0
-const OWN_TYRES_DB = -19.0
-const OWN_SKID_DB = -17.0
 const VOICE_ENGINE_DB = -3.0
-const VOICE_TYRES_DB = -7.0
 
 var game
-# Cars around by node instance id: motion, revs, gear, load, surface.
+# Cars around by node instance id: motion, revs, gear, load.
 var cars: Dictionary = {}
-var own: Dictionary = {"rpm": 850.0, "gear": 1, "load": 0.0, "surface": "gravel", "surface_clock": 0.0}
+var own: Dictionary = {"rpm": 850.0, "gear": 1, "load": 0.0}
 var own_layers: Dictionary = {}
 var voices: Array[Dictionary] = []
 var sirens: Array[AudioStreamPlayer3D] = []
@@ -71,15 +71,13 @@ var all_players: Array = []
 
 func _ready() -> void:
 	rng.seed = 2026101
-	for layer in ["low", "on", "off", "tyre", "skid"]:
+	for layer in ["low", "on", "off"]:
 		own_layers[layer] = SoundBank.player(self, -80.0)
 	starter = SoundBank.player(self, -9.0, "engine-start")
 	for i in range(VOICES):
 		var voice = {"car": 0}
 		for layer in ["low", "on", "off"]:
 			voice[layer] = SoundBank.spatial(self, -80.0, 14.0, HEARING)
-		for layer in ["tyre", "skid"]:
-			voice[layer] = SoundBank.spatial(self, -80.0, 8.0, 140.0)
 		voices.append(voice)
 	for i in range(2):
 		sirens.append(SoundBank.spatial(self, -4.0, 24.0, SIREN_REACH))
@@ -88,7 +86,7 @@ func _ready() -> void:
 		shots.append(SoundBank.spatial(self, 0.0, 6.0, 140.0))
 	all_players = own_layers.values() + sirens + shots + [starter]
 	for voice in voices:
-		all_players.append_array([voice.low, voice.on, voice.off, voice.tyre, voice.skid])
+		all_players.append_array([voice.low, voice.on, voice.off])
 
 # ---------------------------------------------------------------- engine model
 
@@ -215,23 +213,6 @@ func _layer(node: Node, sound: String, gain: float, pitch: float, base_db: float
 	if not node.playing and DisplayServer.get_name() != "headless":
 		node.play(rng.randf_range(0.0, 1.0))
 
-func _surface(state: Dictionary, at: Vector3, delta: float) -> String:
-	state.surface_clock = float(state.get("surface_clock", 0.0)) - delta
-	if state.surface_clock <= 0.0:
-		state.surface_clock = 0.25
-		var water = game.stage.water
-		state.surface = "water" if water != null and water.depth(at) > 0.08 else game.stage.biome.surface_sound(at)
-	return state.surface
-
-static func tyre_gain(speed: float) -> float:
-	return pow(clampf(absf(speed) / 24.0, 0.0, 1.0), 0.8)
-
-static func skid_sound(surface: String) -> String:
-	return "tyres-skid-asphalt" if surface == "asphalt" else "tyres-skid-gravel"
-
-static func slip_gain(slip: float, speed: float) -> float:
-	return smoothstep(1.2, 5.0, slip) * clampf(absf(speed) / 4.0, 0.0, 1.0)
-
 # ---------------------------------------------------------------- own car
 
 func _update_own(delta: float) -> void:
@@ -252,16 +233,10 @@ func _update_own(delta: float) -> void:
 	var pedal = absf(throttle) if absf(speed) < 0.5 or signf(throttle) == signf(speed) else 0.0
 	advance_engine(own, speed, pedal, GEARBOX.road, delta)
 	var gains = layer_gains(own.rpm, own.load)
-	var warm = 1.0 - start_hold / START_SECONDS
+	var warm = smoothstep(START_TAKEOVER, START_SECONDS, START_SECONDS - start_hold)
 	var engine = "engine-%s-" % character(game.car)
 	for layer in ["low", "on", "off"]:
 		_layer(own_layers[layer], engine + layer, gains[layer] * warm, own.rpm / (LOW_RPM if layer == "low" else HIGH_RPM), OWN_ENGINE_DB)
-	var surface = _surface(own, game.car.position, delta)
-	var forward = Vector3(-sin(game.heading), 0, -cos(game.heading))
-	var velocity: Vector3 = game.vehicle_motion.velocity
-	var slip = Vector2(velocity.x, velocity.z).length() if absf(speed) < 0.1 else (velocity - forward * velocity.dot(forward)).length()
-	_layer(own_layers.tyre, "tyres-" + surface, tyre_gain(speed) + (0.6 if surface == "water" and absf(speed) > 0.5 else 0.0), 0.8 + 0.4 * clampf(absf(speed) / 30.0, 0.0, 1.0), OWN_TYRES_DB)
-	_layer(own_layers.skid, skid_sound(surface), slip_gain(slip, speed) if surface != "water" else 0.0, 0.9 if surface == "snow" else 1.0, OWN_SKID_DB)
 
 # ---------------------------------------------------------------- cars around
 
@@ -365,7 +340,7 @@ func _assign_voices() -> void:
 func _sound_voice(voice: Dictionary) -> void:
 	if voice.car == 0 or not cars.has(voice.car):
 		voice.car = 0
-		for layer in ["low", "on", "off", "tyre", "skid"]:
+		for layer in ["low", "on", "off"]:
 			if voice[layer].playing:
 				voice[layer].stop()
 		return
@@ -375,13 +350,6 @@ func _sound_voice(voice: Dictionary) -> void:
 	for layer in ["low", "on", "off"]:
 		voice[layer].global_position = car.pos
 		_layer(voice[layer], "engine-%s-%s" % [car.engine, layer], gains[layer], car.rpm / (LOW_RPM if layer == "low" else HIGH_RPM) * shift, VOICE_ENGINE_DB)
-	var surface = _surface(car, car.pos, get_process_delta_time())
-	var forward = -car.node.global_transform.basis.z
-	var slip = (car.velocity - forward * car.velocity.dot(forward)).length()
-	voice.tyre.global_position = car.pos
-	voice.skid.global_position = car.pos
-	_layer(voice.tyre, "tyres-" + surface, tyre_gain(car.speed), (0.8 + 0.4 * clampf(car.speed / 30.0, 0.0, 1.0)) * shift, VOICE_TYRES_DB)
-	_layer(voice.skid, skid_sound(surface), slip_gain(slip, car.speed) if surface != "water" else 0.0, shift, VOICE_TYRES_DB)
 
 # Police opening and closing the stage and the ambulance drive with sirens.
 func _update_sirens() -> void:
