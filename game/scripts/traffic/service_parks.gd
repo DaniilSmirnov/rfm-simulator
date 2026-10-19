@@ -124,6 +124,14 @@ func _off_road(pos: Vector3, index: int) -> float:
 func vertex(pos: Vector3, height: float) -> float:
 	return level(pos, height)
 
+# How far vehicle() lifts the biome's tyre height at this point: the park's
+# levelling of the land, 0 away from both parks.
+func lift(pos: Vector3, biome) -> float:
+	if nearest(pos, APRON + MAX_BLEND).index < 0:
+		return 0.0
+	var land: float = biome.ground(pos)
+	return level(pos, land) - land
+
 # Tyres: on the paddock its level surface; around it the biome's tyre height,
 # lifted with the land, so on the road tyres and ground() still agree. The
 # biome's tyre query is costly, and inside the park it is not needed.
