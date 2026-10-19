@@ -51,23 +51,23 @@ func spawn_course_car(role: String, id: int, zero_index: int = 0) -> void:
 
 func race_station(point: Vector3) -> float:
 	var station = game.stage.road_s(point)
-	return Stage.LENGTH - station if game.course.pass_index == 2 else station
+	return game.stage.length - station if game.course.pass_index == 2 else station
 
 func race_at(progress: float) -> Vector3:
-	var station = clampf(progress, 0, Stage.LENGTH)
-	return RallyHandling.path(game.stage, Stage.LENGTH - station if game.course.pass_index == 2 else station)
+	var station = clampf(progress, 0, game.stage.length)
+	return RallyHandling.path(game.stage, game.stage.length - station if game.course.pass_index == 2 else station)
 
 func race_direction(progress: float) -> Vector3:
-	return RallyHandling.direction(game.stage, Stage.LENGTH - progress if game.course.pass_index == 2 else progress, game.course.pass_index == 2)
+	return RallyHandling.direction(game.stage, game.stage.length - progress if game.course.pass_index == 2 else progress, game.course.pass_index == 2)
 
 func race_side(progress: float) -> Vector3:
 	return race_direction(progress).cross(Vector3.UP).normalized()
 
 func race_speed(progress: float) -> float:
-	return game.stage.rally_speed(Stage.LENGTH - progress if game.course.pass_index == 2 else progress)
+	return game.stage.rally_speed(game.stage.length - progress if game.course.pass_index == 2 else progress)
 
 func add_course_vehicle(node: Node3D, id: int, kind: String, variant: int, role: String = "racer", zero_index: int = 0) -> Dictionary:
-	var focus = clampf(race_station(game.player_position()), 45, Stage.LENGTH - 80)
+	var focus = clampf(race_station(game.player_position()), 45, game.stage.length - 80)
 	if node.get_parent() == null:
 		game.add_child(node)
 	var s = 0.0
@@ -175,7 +175,7 @@ func update_racers_step(delta: float) -> void:
 			var advance = RallyHandling.advance(game.stage, racer.s, delta * actual_speed, game.course.pass_index == 2, racer.line + racer.slide)
 			racer.s += minf(advance, float(traffic.get("advance", INF)))
 			if red_hold:
-				racer.s = minf(racer.s, Stage.LENGTH - 1.0)
+				racer.s = minf(racer.s, game.stage.length - 1.0)
 			# A crew braking just short of lateral clearance must finish its slow
 			# manoeuvre; tying all steering motion to zero forward speed deadlocks it.
 			var lateral_rate = minf(2.8, actual_speed * 0.14)
@@ -232,7 +232,7 @@ func update_racers_step(delta: float) -> void:
 				game.toast("ВЫЛЕТ! Отойди с траектории!")
 			elif s > racer.focus + 45 and not racer.counted:
 				count_racer(racer)
-			if s >= Stage.LENGTH - 1 and not red_hold:
+			if s >= game.stage.length - 1 and not red_hold:
 				# On into the service park at the finish, or off the map.
 				var finished_id: int = racer.id
 				var course_car = racer.get("role", "racer") != "racer"
@@ -478,7 +478,7 @@ func recover_racer(racer: Dictionary) -> void:
 	racer.erase("rejoin_residual")
 	# Restart where the car was brought onto the road, inside the carriageway,
 	# with no old slide/impulse or swept crash path.
-	racer.s = clampf(race_station(racer.node.position), 0, Stage.LENGTH - 2)
+	racer.s = clampf(race_station(racer.node.position), 0, game.stage.length - 2)
 	var side = race_side(racer.s)
 	var half = maxf(0.0, game.stage.road_width(game.stage.road_s(racer.node.position)) * 0.5 - 0.6)
 	var lateral = clampf((racer.node.position - race_at(racer.s)).dot(side), -half, half)

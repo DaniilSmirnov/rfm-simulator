@@ -30,9 +30,9 @@ func run() -> void:
 	for i in range(30):
 		canyon.canyon_life.update(1.0 / 30.0, Vector3(0, 0, 400))
 
-	# The Valley of Castles from the rim: the gorge, its towers and the shelf
-	# road slanting down the far wall.
-	rig.aim(rim(-250.0, -1.0, 3.0, 7.0), Vector3(Form.axis_x(-400.0), Form.bed_level(-400.0) + 12.0, -400.0), 64.0)
+	# The Valley of Castles from the rim: the gorge, its castles and the floor
+	# road weaving between them far below.
+	rig.aim(rim(-640.0, 1.0, -2.0, 12.0), Vector3(Form.axis_x(-860.0), Form.bed_level(-860.0) + 10.0, -860.0), 64.0)
 	await rig.capture("res://textures/previews/stage_3.webp", Vector2i(480, 240))
 	await rig.capture("res://textures/previews/backdrop_3.webp", Vector2i(1280, 720))
 	await rig.capture("res://../docs/screenshots/charyn-overview.webp", Vector2i(1920, 1080))
@@ -40,30 +40,55 @@ func run() -> void:
 	# The rim road, the steppe on one side and the gorge opening on the other.
 	var racer = game.Props.rally_car(2)
 	game.add_child(racer)
-	_place(stage, racer, 96.0)
-	rig.aim(view(stage, 52.0, 16.0, 11.0), stage.at(112.0) + Vector3(0, 0.5, 0), 62.0)
+	var lower = game.Props.rally_car(4)
+	game.add_child(lower)
+	lower.hide()
+	_place(stage, racer, 330.0)
+	rig.aim(view(stage, 286.0, -16.0, 11.0), stage.at(346.0) + Vector3(0, 0.5, 0), 62.0)
 	await rig.capture("res://../docs/screenshots/charyn-rim.webp", Vector2i(1920, 1080))
 
+	# One road over the other: a crew on the rim, another on the bench below.
+	_place(stage, racer, 452.0)
+	_place(stage, lower, 1040.0)
+	rig.aim(rim(-262.0, 1.0, -1.0, 12.0), stage.at(1060.0) + Vector3(0, 2.0, 0), 70.0)
+	await rig.capture("res://../docs/screenshots/charyn-two-levels.webp", Vector2i(1920, 1080))
+	lower.hide()
+
 	# The hairpin at the head of the gorge, seen from the table above it.
-	_place(stage, racer, 206.0)
-	rig.aim(view(stage, 150.0, -34.0, 26.0), stage.at(212.0), 60.0)
+	_place(stage, racer, 762.0)
+	rig.aim(view(stage, 700.0, -30.0, 24.0), stage.at(768.0), 60.0)
 	await rig.capture("res://../docs/screenshots/charyn-hairpin.webp", Vector2i(1920, 1080))
 
 	# The shelf road on the wall, the gorge falling away below it.
-	_place(stage, racer, 430.0)
-	rig.aim(view(stage, 378.0, 3.0, 5.0), stage.at(436.0) + Vector3(0, 0.8, 0), 58.0)
+	_place(stage, racer, 1060.0)
+	rig.aim(view(stage, 1008.0, 3.0, 5.0), stage.at(1066.0) + Vector3(0, 0.8, 0), 58.0)
 	await rig.capture("res://../docs/screenshots/charyn-ledge.webp", Vector2i(1920, 1080))
+
+	# The dry floor between the castles: bastions, fins, towers and hoodoos.
+	_place(stage, racer, 1640.0)
+	rig.aim(view(stage, 1586.0, 2.5, 3.2), stage.at(1660.0) + Vector3(0, 6.0, 0), 66.0)
+	await rig.capture("res://../docs/screenshots/charyn-castles.webp", Vector2i(1920, 1080))
 	racer.hide()
 
 	# The wall itself: cliff bands, benches and castles, from the floor.
-	var floor_spot = Vector3(Form.axis_x(-330.0), 0.0, -330.0)
-	floor_spot.y = Form.bed_level(-330.0) + 2.0
-	rig.aim(floor_spot, Vector3(Form.axis_x(-330.0) - 70.0, Form.rim_level(floor_spot) - 6.0, -340.0), 64.0)
+	var floor_spot = Vector3(Form.axis_x(-820.0), 0.0, -820.0)
+	floor_spot.y = Form.bed_level(-820.0) + 2.0
+	rig.aim(floor_spot, Vector3(Form.axis_x(-820.0) - 70.0, Form.rim_level(floor_spot) - 6.0, -840.0), 64.0)
 	await rig.capture("res://../docs/screenshots/charyn-wall.webp", Vector2i(1920, 1080))
 
+	# Spectators out on the lip of the gorge, the floor road far below.
+	var lip: Vector3 = stage.clearings[1]
+	rig.aim(lip + Vector3(-14.0, 6.0, 18.0), lip + Vector3(0, 1.0, 0), 58.0)
+	await rig.capture("res://../docs/screenshots/charyn-spectators.webp", Vector2i(1920, 1080))
+
 	# The gravel floor running out into the ash grove above the Ili.
-	rig.aim(view(stage, 690.0, 8.0, 7.0), stage.at(806.0) + Vector3(0, 2.0, 0), 62.0)
+	rig.aim(view(stage, 1830.0, 8.0, 7.0), stage.at(1960.0) + Vector3(0, 2.0, 0), 62.0)
 	await rig.capture("res://../docs/screenshots/charyn-grove.webp", Vector2i(1920, 1080))
+
+	# The whole stage from above: the rim road, the hairpin, the bench under
+	# the rim road and the floor of the valley out to the grove.
+	rig.aim(Vector3(-40.0, 1250.0, -655.0), Vector3(-40.0, 0.0, -656.0), 58.0)
+	await rig.capture("res://../docs/screenshots/charyn-map.webp", Vector2i(1080, 1080))
 
 	# The yurt camp on the steppe.
 	var camp = stage.get_node("SteppeYurtCamp")

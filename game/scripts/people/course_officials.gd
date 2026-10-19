@@ -19,7 +19,7 @@ func grounded(point: Vector3) -> Vector3:
 
 func roadside(station: float, preferred_side: float, clearance: float) -> Dictionary:
 	for shift in [0.0, 8.0, -8.0, 16.0, -16.0, 24.0, -24.0, 32.0, -32.0]:
-		var s = clampf(station + shift, 18.0, stage.LENGTH - 24.0)
+		var s = clampf(station + shift, 18.0, stage.length - 24.0)
 		for sign in [preferred_side, -preferred_side]:
 			for distance in [7.2, 8.0, 8.8]:
 				var point = grounded(stage.at(s) + stage.side(s) * sign * distance)
@@ -62,9 +62,9 @@ func build() -> void:
 	name = "CourseOfficials"
 	# Crews wait under the arch before their start, right at the end of the road.
 	arch(1.0, "Rally Fans Map", false)
-	arch(stage.LENGTH - 1.0, "Rally Fans Map", true)
+	arch(stage.length - 1.0, "Rally Fans Map", true)
 	station(24.0, 1.0, "Старт")
-	station(stage.LENGTH - 30.0, -1.0, "Финиш")
+	station(stage.length - 30.0, -1.0, "Финиш")
 	var positions: Array = stage.biome.marshal_stations()
 	for i in range(positions.size()):
 		var spot = roadside(positions[i], 1.0 if i % 2 == 0 else -1.0, 0.6)

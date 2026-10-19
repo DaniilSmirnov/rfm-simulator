@@ -33,7 +33,7 @@ func run() -> void:
 	var mismatches = 0
 	var near = 0
 	for i in range(3000):
-		var s = rng.randf_range(0.0, stage.LENGTH)
+		var s = rng.randf_range(0.0, stage.length)
 		var lateral = rng.randf_range(-3.0, 3.0) if i % 3 == 0 else rng.randf_range(-40.0, 40.0)
 		var pos = stage.at(s) + stage.side(s) * lateral + Vector3(rng.randf_range(-2, 2), 0, rng.randf_range(-2, 2))
 		var fast = stage.route_nearest(pos)

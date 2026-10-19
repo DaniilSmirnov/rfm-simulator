@@ -9,7 +9,7 @@ const ROAD_MARGIN = 0.15
 static func vertex(stage, station: float, edge: float, fraction: float) -> Vector3:
 	var offset: float = stage.road_width(station) * 0.5 + ROAD_MARGIN + WIDTH * fraction
 	var point: Vector3 = stage.at(station) + stage.side(station) * edge * offset
-	var taper = smoothstep(0.0, 6.0, station) * (1.0 - smoothstep(stage.LENGTH - 6.0, stage.LENGTH, station)) * stage.biome.snowbank_mask(station)
+	var taper = smoothstep(0.0, 6.0, station) * (1.0 - smoothstep(stage.length - 6.0, stage.length, station)) * stage.biome.snowbank_mask(station)
 	var height = 0.90 + sin(station * 0.055 + edge * 0.8) * 0.06 + sin(station * 0.019) * 0.04
 	# A squared sine meets the landscape with a horizontal tangent at both toes.
 	point.y = stage.terrain_surface_height(point) - 0.035 + height * pow(sin(PI * fraction), 2.0) * taper * stage.DeepSnow.camp_mask(stage, point)
@@ -17,7 +17,7 @@ static func vertex(stage, station: float, edge: float, fraction: float) -> Vecto
 
 static func mesh(stage, edge: float, cooperative: bool = false) -> ArrayMesh:
 	var stations = PackedFloat32Array([0.0])
-	for i in range(int(stage.LENGTH)):
+	for i in range(int(stage.length)):
 		var length: float = stage.at(i).distance_to(stage.at(i + 1.0))
 		var divisions = maxi(1, ceili(length / SPACING))
 		for j in range(1, divisions + 1):

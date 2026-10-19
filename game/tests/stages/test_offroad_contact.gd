@@ -1,10 +1,15 @@
 extends "res://tests/harness.gd"
 # A car off the road rests on the land that is drawn, on every stage; on the
-# road it keeps the road surface.
+# road it keeps the road surface. Each stage builds a whole world, so the
+# stages are split over this test and test_offroad_contact_late.gd to stay
+# within the runner's time limit.
 const Stage = preload("res://scripts/stages/stage.gd")
 
 func _initialize() -> void:
 	call_deferred("run")
+
+func stages() -> Array:
+	return range(0, 3)
 
 func settle(game, p: Vector3) -> float:
 	game.car.position = p
@@ -35,7 +40,7 @@ func recovery_contact(game, p: Vector3) -> bool:
 	return true
 
 func run() -> void:
-	for stage_index in range(Stage.STAGES.size()):
+	for stage_index in stages():
 		var game = load("res://main.tscn").instantiate()
 		game.defer_world = true
 		root.add_child(game)
@@ -49,7 +54,7 @@ func run() -> void:
 		var worst = 0.0
 		var samples = 0
 		var recovery_supported = true
-		for s in range(60, int(st.LENGTH) - 60, 60):
+		for s in range(60, int(st.length) - 60, 60):
 			for side in [-1.0, 1.0]:
 				var p: Vector3 = st.at(s) + st.side(s) * side * (st.road_width(s) * 0.5 + 6.0)
 				if st.water != null and st.water.depth(p) > 0.0:

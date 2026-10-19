@@ -35,7 +35,7 @@ func plant_forest(cooperative: bool = false) -> void:
 	for i in range(tree_count):
 		if cooperative and i % 400 == 0:
 			await stage.get_tree().process_frame
-		var p = Vector3(stage.rng.randf_range(-150, 150), 0, stage.rng.randf_range(-stage.LENGTH - 65, 50))
+		var p = Vector3(stage.rng.randf_range(-150, 150), 0, stage.rng.randf_range(-stage.length - 65, 50))
 		if stage.road_distance(p) < 9 or stage.parks.contains(p, 4.0):
 			continue
 		if stage.biome.tree_blocked(p):
@@ -56,7 +56,7 @@ func plant_forest(cooperative: bool = false) -> void:
 	stage._rebuild_tree_index()
 	_build_forest(forest)
 	for i in range(100):
-		var s = stage.rng.randf_range(20, stage.LENGTH - 15)
+		var s = stage.rng.randf_range(20, stage.length - 15)
 		var p = stage.at(s) + stage.side(s) * stage.rng.randf_range(-6, 6)
 		if stage.road_distance(p) < 4.3:
 			continue
@@ -269,7 +269,7 @@ func build_woodland(cooperative: bool = false) -> void:
 	for i in range(30000):
 		if cooperative and i % 400 == 0:
 			await stage.get_tree().process_frame
-		var p = Vector3(detail_rng.randf_range(-145, 145), 0, detail_rng.randf_range(-stage.LENGTH, 0))
+		var p = Vector3(detail_rng.randf_range(-145, 145), 0, detail_rng.randf_range(-stage.length, 0))
 		if not woodland_spot(p):
 			continue
 		p.y = stage.terrain_surface_height(p) - 0.015
@@ -279,7 +279,7 @@ func build_woodland(cooperative: bool = false) -> void:
 	for i in range(4000):
 		if cooperative and i % 400 == 0:
 			await stage.get_tree().process_frame
-		var along = detail_rng.randf_range(20, stage.LENGTH - 20)
+		var along = detail_rng.randf_range(20, stage.length - 20)
 		var p = stage.at(along) + stage.side(along) * detail_rng.randf_range(13, 125) * (-1 if i % 2 else 1)
 		var radius = detail_rng.randf_range(0.8, 2.4)
 		if not woodland_spot(p, radius) or stage.obstacle_hit(p, p, radius + 0.3) >= 0 or not stage.rock_hit(p, p, radius, false).is_empty():
@@ -294,7 +294,7 @@ func build_woodland(cooperative: bool = false) -> void:
 	for i in range(1600):
 		if cooperative and i % 400 == 0:
 			await stage.get_tree().process_frame
-		var p = Vector3(detail_rng.randf_range(-135, 135), 0, detail_rng.randf_range(-stage.LENGTH, 0))
+		var p = Vector3(detail_rng.randf_range(-135, 135), 0, detail_rng.randf_range(-stage.length, 0))
 		if not woodland_spot(p):
 			continue
 		var radius = detail_rng.randf_range(0.12, 0.35)
@@ -315,7 +315,7 @@ func build_woodland(cooperative: bool = false) -> void:
 	for i in range(2000):
 		if cooperative and i % 400 == 0:
 			await stage.get_tree().process_frame
-		var p = Vector3(detail_rng.randf_range(-140, 140), 0, detail_rng.randf_range(-stage.LENGTH, 0))
+		var p = Vector3(detail_rng.randf_range(-140, 140), 0, detail_rng.randf_range(-stage.length, 0))
 		var patch = sin(p.x * 0.075 + p.z * 0.027) * sin(p.z * 0.054)
 		if patch < -0.35 or not woodland_spot(p, 1.4) or not stage.rock_hit(p, p, 1.1, false).is_empty():
 			continue
@@ -361,7 +361,7 @@ func build_woodland(cooperative: bool = false) -> void:
 	for i in range(300):
 		if cooperative and i % 400 == 0:
 			await stage.get_tree().process_frame
-		var along = detail_rng.randf_range(20, stage.LENGTH - 20)
+		var along = detail_rng.randf_range(20, stage.length - 20)
 		var p = stage.at(along) + stage.side(along) * detail_rng.randf_range(10, 38) * (-1 if i % 2 else 1)
 		if not woodland_spot(p) or not stage.rock_hit(p, p, 0.5, false).is_empty():
 			continue
@@ -384,7 +384,7 @@ func build_woodland(cooperative: bool = false) -> void:
 	for i in range(110):
 		if cooperative and i % 400 == 0:
 			await stage.get_tree().process_frame
-		var along = detail_rng.randf_range(20, stage.LENGTH - 20)
+		var along = detail_rng.randf_range(20, stage.length - 20)
 		var p = stage.at(along) + stage.side(along) * detail_rng.randf_range(12, 45) * (-1 if i % 2 else 1)
 		if not woodland_spot(p, 0.8) or not stage.rock_hit(p, p, 0.8, false).is_empty():
 			continue

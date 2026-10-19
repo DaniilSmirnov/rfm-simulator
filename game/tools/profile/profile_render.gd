@@ -5,6 +5,8 @@ extends SceneTree
 # and which subtrees own the visible surfaces, so a regression points at its
 # source. Needs a real renderer; numbers from a software GL are for comparing
 # before/after, not device frame rates. See docs/RENDER_PERFORMANCE.md.
+# Optional station=<metres> and frozen hold the same chase-camera view for
+# comparisons without AI movement or automatic quality changes.
 const MODES = {"near": 0, "medium": 1, "far": 2}
 
 func _initialize() -> void:
@@ -23,6 +25,7 @@ func run() -> void:
 	game.select_stage(stage_index)
 	game.rng.seed = 20261008
 	await game.start_game()
+	game.draw_distance.has_saved_choice = true
 	game.draw_distance.mode = MODES.get(distance, 1)
 	game.draw_distance.apply(game.stage)
 	if "noshadow" in args:
@@ -34,6 +37,16 @@ func run() -> void:
 		var racer = game.racers.back()
 		racer.s = 120.0 + i * 25.0
 		racer.node.position = game.race_at(racer.s)
+	for arg in args:
+		if arg.begins_with("station="):
+			var station = clampf(arg.trim_prefix("station=").to_float(), 0.0, game.stage.length)
+			game.car.position = game.stage.at(station)
+			game.car.position.y = game.stage.vehicle_ground(game.car.position)
+			var direction: Vector3 = game.stage.direction(station)
+			game.car.rotation.y = atan2(-direction.x, -direction.z)
+			game._update_camera(1.0)
+	if "frozen" in args:
+		game.set_process(false)
 	for frame in range(40):
 		await process_frame
 	var keys = {

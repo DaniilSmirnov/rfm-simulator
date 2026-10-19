@@ -18,7 +18,7 @@ func run() -> void:
 		gentle = gentle and absf(b.x - a.x) / absf(b.z - a.z) < 1.3
 	check(monotonic and gentle, "route keeps advancing down the map; bends stay within the stage's road model")
 	var tightest = INF
-	for i in range(int(stage.LENGTH)):
+	for i in range(int(stage.length)):
 		var k = absf(alpine.curvature(float(i)))
 		if k > 0.0: tightest = minf(tightest, 1.0 / k)
 	check(tightest > 14.0 and tightest < 24.0, "lacet hairpins are tight but wider than the snowbanks (%.1f m)" % tightest)
@@ -27,7 +27,7 @@ func run() -> void:
 		if float(bend.radius) < 32.0: lacets += 1
 	check(lacets >= 10, "two ladders of tight lacets (%d bends)" % lacets)
 	var col_height = stage.at(alpine.COL_STATION).y
-	check(col_height - stage.at(0).y > 25.0 and col_height - stage.at(stage.LENGTH).y > 15.0, "road climbs to the col and descends to the finish")
+	check(col_height - stage.at(0).y > 25.0 and col_height - stage.at(stage.length).y > 15.0, "road climbs to the col and descends to the finish")
 	check(alpine.rally_speed(float(alpine.bends[3].s)) < alpine.rally_speed(60.0) - 4.0, "crews brake for the lacets and run fast on the corniche")
 	# ---------------------------------------------------------------- surface
 	var dry = stage.grip(stage.at(40.0) + stage.side(40.0) * 0.95)
@@ -43,7 +43,7 @@ func run() -> void:
 	check(glazed < 0.25, "black ice on the shaded col is the slipperiest surface (%.2f)" % glazed)
 	var bounded = true
 	var clean = true
-	for s in range(2, int(stage.LENGTH) - 2, 2):
+	for s in range(2, int(stage.length) - 2, 2):
 		for lateral in [-3.5, -2.0, -0.9, 0.0, 0.9, 2.0, 3.5]:
 			var p = stage.at(float(s)) + stage.side(float(s)) * lateral
 			var g = stage.grip(p)

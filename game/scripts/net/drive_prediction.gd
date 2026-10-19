@@ -143,7 +143,7 @@ func step(c: Dictionary, stage, model: int) -> void:
 			impact_timer = 0.4
 			emit_event({"kind": "impact", "speed": solid.closing})
 		var tree = Hitbox.tree(stage, previous, next, car_shape)
-		var blocked = tree >= 0
+		var blocked = tree >= 0 or stage.biome.drive_blocked(previous, next)
 		if blocked and motion.velocity.length() > 5 and not stage.fallen.has(tree):
 			emit_event({"kind": "tree", "index": tree, "velocity": motion.velocity})
 		for contact in context.get("contacts", []):

@@ -11,9 +11,9 @@ const LIFE_RANGE = 140.0
 const SHY_DISTANCE = 17.0
 # Station, side and distance of each camel herd, all of them out on the
 # steppe table where the grazing is, never down in the gorge.
-const HERDS = [[36.0, -1.0, 56.0], [112.0, -1.0, 46.0], [168.0, -1.0, 62.0], [214.0, -1.0, 44.0]]
+const HERDS = [[50.0, -1.0, 56.0], [260.0, -1.0, 50.0], [480.0, -1.0, 60.0], [650.0, -1.0, 46.0]]
 # World z of the thermals the eagles turn in, over the gorge.
-const THERMALS = [-180.0, -330.0, -470.0, -620.0]
+const THERMALS = [-180.0, -420.0, -660.0, -900.0]
 
 var stage
 var biome

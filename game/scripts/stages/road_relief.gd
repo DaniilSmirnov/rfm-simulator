@@ -45,7 +45,7 @@ func _init(owner = null) -> void:
 func enabled() -> bool:
 	if _state < 0:
 		_state = 0
-		for s in range(0, int(stage.LENGTH) + 1, 8):
+		for s in range(0, int(stage.length) + 1, 8):
 			if stage.biome.road_ruts(float(s)):
 				_state = 1
 				break
@@ -102,7 +102,7 @@ func site(s: float) -> Dictionary:
 
 func _find_site(index: int) -> Dictionary:
 	var nominal = PUDDLE_FIRST + index * PUDDLE_SPACING
-	if nominal > stage.LENGTH - 8.0 or stage.biome.rut_strength(nominal) < 0.6:
+	if nominal > stage.length - 8.0 or stage.biome.rut_strength(nominal) < 0.6:
 		return {}
 	var lat = PUDDLE_SIDE * (1.0 if index % 2 == 0 else -1.0)
 	var best = INF
@@ -166,7 +166,7 @@ func build_water(parent: Node3D) -> void:
 		_water_material.roughness = 0.06
 		_water_material.metallic_specular = 0.9
 	var index = 0
-	while PUDDLE_FIRST + index * PUDDLE_SPACING <= stage.LENGTH:
+	while PUDDLE_FIRST + index * PUDDLE_SPACING <= stage.length:
 		var puddle = site(PUDDLE_FIRST + index * PUDDLE_SPACING)
 		index += 1
 		if puddle.is_empty():

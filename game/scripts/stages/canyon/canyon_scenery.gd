@@ -13,19 +13,16 @@ const DetailLayer = preload("res://scripts/stages/detail_layer.gd")
 const MeshMerge = preload("res://scripts/core/mesh_merge.gd")
 const Form = preload("res://scripts/stages/canyon/canyon_form.gd")
 const Yurt = preload("res://scripts/stages/canyon/yurt.gd")
+const Castles = preload("res://scripts/stages/canyon/canyon_castles.gd")
 const LoadPacer = preload("res://scripts/core/load_pacer.gd")
 
 # Station, side and distance of the two yurt camps: the herders' camp on the
 # steppe by the rim road, and the warden's camp in the grove by the river.
-const STEPPE_CAMP = [96.0, -1.0, 44.0]
-const GROVE_CAMP = [744.0, 1.0, 40.0]
+const STEPPE_CAMP = [300.0, -1.0, 46.0]
+const GROVE_CAMP = [1900.0, -1.0, 38.0]
 # Where the road is a shelf and its edge is marked with whitewashed blocks.
-const LEDGE_BEGIN = 262.0
-const LEDGE_END = 566.0
-# The reach of the gorge the castles stand in.
-const CASTLE_BEGIN = -120.0
-const CASTLE_END = -540.0
-
+const LEDGE_BEGIN = 808.0
+const LEDGE_END = 1386.0
 var stage
 var biome
 var rng = RandomNumberGenerator.new()
@@ -49,7 +46,8 @@ func surface(p: Vector3) -> Vector3:
 	return p
 
 func random_point() -> Vector3:
-	return Vector3(rng.randf_range(-196, 196), 0, rng.randf_range(-910, 60))
+	var bounds: Rect2 = biome.world_bounds()
+	return Vector3(rng.randf_range(bounds.position.x + 8.0, bounds.end.x - 8.0), 0, rng.randf_range(bounds.position.y + 10.0, bounds.end.y - 20.0))
 
 # A point somewhere on the gravel floor between the walls.
 func random_floor_point(from_z: float, to_z: float) -> Vector3:
@@ -98,7 +96,7 @@ func _triangle(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, color: Color
 		st.set_color(color)
 		st.add_vertex(point)
 
-func _rock_node(st: SurfaceTool, node_name: String) -> void:
+func _rock_node(st: SurfaceTool, node_name: String, parent: Node3D) -> void:
 	st.generate_normals()
 	var node = MeshInstance3D.new()
 	node.name = node_name
@@ -108,91 +106,100 @@ func _rock_node(st: SurfaceTool, node_name: String) -> void:
 	mat.vertex_color_is_srgb = true
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	node.material_override = mat
-	stage.add_child(node)
+	parent.add_child(node)
 
-# A castle: a fluted tower, stepped where the softer marl has weathered back,
-# standing on a skirt of its own debris and narrowing to a broken top.
-func _tower(st: SurfaceTool, origin: Vector3, height: float, radius: float, seed_index: int) -> void:
-	var sectors = 13
-	var rings = 11
-	for ring in range(rings):
-		var low = float(ring) / rings
-		var high = float(ring + 1) / rings
-		var lower = radius * _taper(low, seed_index)
-		var upper = radius * _taper(high, seed_index)
-		var color = _tower_color(origin.y + low * height, seed_index)
-		for sector in range(sectors):
-			var angle = sector * TAU / sectors
-			var next_angle = (sector + 1) * TAU / sectors
-			var u = _flute(angle, seed_index)
-			var v = _flute(next_angle, seed_index)
-			var a = origin + u * lower + Vector3.UP * low * height
-			var b = origin + v * lower + Vector3.UP * low * height
-			var c = origin + u * upper + Vector3.UP * high * height
-			var d = origin + v * upper + Vector3.UP * high * height
-			_triangle(st, a, b, c, color)
-			_triangle(st, b, d, c, color)
-			if ring == rings - 1:
-				_triangle(st, c, origin + Vector3.UP * height, d, color.lightened(0.07))
-
-func _taper(t: float, seed_index: int) -> float:
-	var skirt = 1.0 + 0.7 * exp(-t * 6.0)
-	var body = 1.0 - 0.52 * smoothstep(0.0, 1.0, t)
-	# Terraces where the softer beds have weathered back out of the tower.
-	var steps = 1.0 + 0.1 * sin(t * 17.0 + seed_index) + 0.05 * sin(t * 41.0)
-	return skirt * body * steps
-
-# Deep vertical gullies down the face of the tower.
-func _flute(angle: float, seed_index: int) -> Vector3:
-	var groove = 1.0 + sin(angle * 5.0 + seed_index) * 0.24 + cos(angle * 9.0 - seed_index * 0.4) * 0.11
-	return Vector3(cos(angle) * groove, 0, sin(angle) * groove)
-
-# One tower's banding: the strata of the wall, read from a narrow palette —
-# hard bands on a small shape look like paint rather than stone.
-func _tower_color(height: float, seed_index: int) -> Color:
-	var stone = Color("b0704a").lerp(Color("9a6043"), float(seed_index % 5) / 4.0)
-	return stone.lightened(sin(height * 0.9 + seed_index) * 0.05 + sin(height * 0.21) * 0.07)
-
-# The castles: a crowd of them at the foot of both walls through the Valley of
-# Castles, more standing back on the benches and along the rim.
+# The castles: rows of blocky towers, bastions and fins built out from the foot
+# of both walls, single blocks and fallen slabs on the floor and the benches.
+# The plateau above stays bare, as it is. Every form is different
+# (canyon_castles.gd), and the mix changes along the valley.
 func _castles(cooperative: bool = false) -> void:
-	var st = SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var built = 0
+	# Whole forms stay intact, but distant sections of the valley can now be
+	# culled independently in the camera and sun-shadow passes.
+	var builders: Dictionary = {}
+	var built = {}
 	var index = 0
-	var z = CASTLE_BEGIN
-	while z > CASTLE_END:
+	var z = Form.CASTLES_BEGIN
+	while z > Form.CASTLES_END:
 		if cooperative: await LoadPacer.tick(stage.get_tree())
 		for side in [-1.0, 1.0]:
 			index += 1
-			if _castle(st, z, side, index):
-				built += 1
-		z -= 7.0
-	_rock_node(st, "CanyonValleyTowers")
-	counts["towers"] = built
+			var kind = _castle(builders, z + rng.randf_range(-3.0, 3.0), side, index)
+			if kind != "":
+				built[kind] = int(built.get(kind, 0)) + 1
+		z -= CASTLE_SPACING
+	var holder = Node3D.new()
+	holder.name = "CanyonValleyTowers"
+	stage.add_child(holder)
+	for tile in builders:
+		if cooperative: await LoadPacer.tick(stage.get_tree())
+		_rock_node(builders[tile], "Tile_%d_%d" % [tile.x, tile.y], holder)
+	counts["castle_kinds"] = built
+	var total = 0
+	for kind in built:
+		total += int(built[kind])
+	counts["towers"] = total
 
-# One castle beside the gorge at z: at the foot of the wall, on a bench of it
-# or back on the rim, whichever this one is.
-func _castle(st: SurfaceTool, z: float, side: float, index: int) -> bool:
-	var run: float = Form.wall_run(z, side)
+# Where along the wall a form stands, and which forms grow there.
+const PLACES = {
+	"foot": ["castle", "castle", "bastion", "bastion", "fin", "slab"],
+	"floor": ["block", "slab", "castle", "block", "hoodoo"],
+	"bench": ["block", "castle", "fin", "slab"],
+}
+# Height range of each form, in metres; its radius is a share of its height.
+const SIZES = {
+	"castle": [Vector2(16.0, 40.0), Vector2(0.16, 0.24)],
+	"bastion": [Vector2(18.0, 40.0), Vector2(0.3, 0.42)],
+	"block": [Vector2(9.0, 26.0), Vector2(0.2, 0.32)],
+	"fin": [Vector2(14.0, 32.0), Vector2(0.1, 0.15)],
+	"slab": [Vector2(7.0, 15.0), Vector2(0.4, 0.55)],
+	"hoodoo": [Vector2(6.0, 11.0), Vector2(0.24, 0.32)],
+}
+const CASTLE_SPACING = 5.0
+
+# One form beside the gorge at z; returns its kind, or "" where none fits.
+func _castle(builders: Dictionary, z: float, side: float, index: int) -> String:
+	var roll = rng.randf()
+	var place = "foot" if roll < 0.58 else ("floor" if roll < 0.8 else "bench")
+	var kinds: Array = PLACES[place]
+	var kind: String = kinds[rng.randi() % kinds.size()]
+	var size: Array = SIZES[kind]
+	var height = rng.randf_range(size[0].x, size[0].y) * (0.6 if place == "bench" else 1.0)
+	var radius = height * rng.randf_range(size[1].x, size[1].y)
 	var foot: float = Form.wall_foot(z, side)
-	var kind = index % 3
-	var reach = foot - rng.randf_range(0.0, 5.0)
-	if kind == 1:
-		reach = foot + run * rng.randf_range(0.2, 0.42)
-	elif kind == 2:
-		reach = Form.rim_edge(z, side) + rng.randf_range(3.0, 22.0)
+	# A form at the foot is half sunk into the wall; its base is the floor.
+	var reach = foot + radius * rng.randf_range(0.1, 0.5)
+	match place:
+		"floor": reach = foot * rng.randf_range(0.15, 0.75)
+		"bench": reach = foot + Form.wall_run(z, side) * rng.randf_range(0.2, 0.45)
 	var p = Vector3(Form.axis_x(z) + side * reach, 0.0, z)
-	if absf(p.x) > 192.0 or not open_ground(p, 15.0, 3.0):
-		return false
-	p = surface(p)
-	if not _level_enough(p, 2.6 if kind != 0 else 4.5):
-		return false
-	var height = rng.randf_range(10.0, 30.0) if kind == 0 else rng.randf_range(6.0, 15.0)
-	var radius = height * rng.randf_range(0.13, 0.22)
-	_tower(st, p - Vector3.UP * 1.2, height, radius, index)
-	stage.rocks.append(Records.rock(p, radius * 0.8, height))
-	return true
+	if absf(p.x) > 192.0 or not open_ground(p, radius * 1.4 + 6.0, 2.0):
+		return ""
+	if place == "foot":
+		p.y = stage.terrain_surface_height(Vector3(Form.axis_x(z) + side * (foot - 1.0), 0.0, z))
+	else:
+		p = surface(p)
+		if not _level_enough(p, 3.0):
+			return ""
+	# Castles, fins and bastions run along the wall; the rest face any way.
+	var along = atan2(Form.axis_x(z - 4.0) - Form.axis_x(z + 4.0), -8.0) + PI * 0.5
+	var lined = kind in ["castle", "fin", "bastion"]
+	var yaw = along + rng.randf_range(-0.2, 0.2) if lined else rng.randf() * TAU
+	if lined:
+		var axis = Vector3(cos(yaw), 0.0, -sin(yaw)) * Castles.reach(kind, radius, index)
+		for end in [p + axis, p - axis]:
+			if not open_ground(end, radius + 5.0, 0.0):
+				return ""
+	var sink = 1.5 if place == "foot" else 0.8
+	var tile = Vector2i(floori(p.x / 64.0), floori(p.z / 64.0))
+	if not builders.has(tile):
+		var builder = SurfaceTool.new()
+		builder.begin(Mesh.PRIMITIVE_TRIANGLES)
+		builders[tile] = builder
+	var st: SurfaceTool = builders[tile]
+	for circle in Castles.build(st, biome, p - Vector3.UP * sink, kind, height + sink, radius, yaw, index):
+		stage.rocks.append(Records.rock(circle.pos + Vector3.UP * sink, float(circle.radius) * 0.85, height))
+	reserved.append({"pos": p, "radius": maxf(radius * 1.3, Castles.reach(kind, radius, index))})
+	return kind
 
 # Ground flat enough for a block to have been left standing on it.
 func _level_enough(p: Vector3, limit: float) -> bool:
@@ -206,9 +213,9 @@ func _level_enough(p: Vector3, limit: float) -> bool:
 func _talus(cooperative: bool = false) -> void:
 	var poses: Array = []
 	var colors: Array = []
-	for i in range(1100):
+	for i in range(1900):
 		if cooperative: await LoadPacer.tick(stage.get_tree())
-		var z = rng.randf_range(-700.0, -60.0)
+		var z = rng.randf_range(Form.GROVE_BEGIN - 60.0, -60.0)
 		var side = 1.0 if i % 2 == 0 else -1.0
 		var foot: float = Form.wall_foot(z, side)
 		var p = Vector3(Form.axis_x(z) + side * (foot + rng.randf_range(-11.0, 6.0)), 0.0, z)
@@ -235,7 +242,7 @@ func _steppe_cover(cooperative: bool = false) -> void:
 	var bush_c: Array = []
 	var stone_p: Array = []
 	var stone_c: Array = []
-	for i in range(16000):
+	for i in range(22000):
 		if cooperative: await LoadPacer.tick(stage.get_tree())
 		var p = random_point()
 		if not open_ground(p, 5.0, 0.0):
@@ -269,9 +276,9 @@ func _floor_cover(cooperative: bool = false) -> void:
 	var grass_c: Array = []
 	var stone_p: Array = []
 	var stone_c: Array = []
-	for i in range(9000):
+	for i in range(14000):
 		if cooperative: await LoadPacer.tick(stage.get_tree())
-		var p = random_floor_point(-40.0, -860.0)
+		var p = random_floor_point(-40.0, Form.GROVE_END - 40.0)
 		if absf(p.x) > 196.0 or not open_ground(p, 6.0, 0.0):
 			continue
 		p = surface(p)
@@ -356,9 +363,9 @@ func _ledge_markers() -> void:
 # The snow line of the Tien Shan, far beyond the steppe: blue with distance,
 # with snow only on the summits.
 func horizon() -> void:
-	for i in range(11):
+	for i in range(14):
 		var far = i % 3 == 2
-		var p = Vector3(stage.rng.randf_range(430, 660), 30, -i * 96.0 + 20.0) if not far else Vector3(stage.rng.randf_range(-620, 620), 30, -1120.0 - stage.rng.randf_range(0, 200))
+		var p = Vector3(stage.rng.randf_range(430, 660), 30, -i * 110.0 + 20.0) if not far else Vector3(stage.rng.randf_range(-620, 620), 30, -1620.0 - stage.rng.randf_range(0, 200))
 		var height = stage.rng.randf_range(120, 250)
 		var radius = stage.rng.randf_range(190, 330)
 		# cylinder() centres its mesh: the snow cap sits on the cone's own taper.

@@ -63,7 +63,7 @@ func open_ground(p: Vector3, road: float, padding: float) -> bool:
 	return true
 
 func random_point() -> Vector3:
-	return Vector3(rng.randf_range(-185, 185), 0, rng.randf_range(-stage.LENGTH - 60, 50))
+	return Vector3(rng.randf_range(-185, 185), 0, rng.randf_range(-stage.length - 60, 50))
 
 func surface(p: Vector3) -> Vector3:
 	p.y = stage.terrain_surface_height(p)

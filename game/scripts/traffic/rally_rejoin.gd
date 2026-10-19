@@ -43,9 +43,9 @@ static func step(game, racer: Dictionary, dt: float) -> bool:
 	if racer.rejoin_plan <= 0:
 		racer.rejoin_plan = 0.2
 		racer.erase("rejoin_goal")
-		var station: float = clampf(game.race_station(node.position), 0, game.stage.LENGTH - 1)
+		var station: float = clampf(game.race_station(node.position), 0, game.stage.length - 1)
 		for ahead in [12.0, 6.0, 20.0, 0.0, -6.0]:
-			var target: Vector3 = game.race_at(clampf(station + ahead, 0, game.stage.LENGTH - 1))
+			var target: Vector3 = game.race_at(clampf(station + ahead, 0, game.stage.length - 1))
 			target.y = game.stage.ground(target) + 0.06
 			if clear(game, racer, node.position, target):
 				racer.rejoin_goal = target
@@ -70,7 +70,7 @@ static func step(game, racer: Dictionary, dt: float) -> bool:
 	var turn = clampf(error * 1.5, -0.8, 0.8) * clampf(absf(speed) / 2.0, 0, 1)
 	node.position += motion.velocity * dt
 	motion.suspension(node, game.stage, dt, node.rotation.y + turn * dt)
-	var station: float = clampf(game.race_station(node.position), 0, game.stage.LENGTH - 1)
+	var station: float = clampf(game.race_station(node.position), 0, game.stage.length - 1)
 	var center: Vector3 = game.race_at(station)
 	var offset: float = (node.position - center).dot(game.race_side(station))
 	var road_direction: Vector3 = game.race_direction(station)

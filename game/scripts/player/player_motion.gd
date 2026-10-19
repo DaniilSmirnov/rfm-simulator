@@ -80,7 +80,7 @@ func drive(delta: float) -> void:
 		var hit = tree_index >= 0
 		if hit and game.vehicle_motion.velocity.length() > 5 and not game.stage.fallen.has(tree_index):
 			knock_tree(tree_index, game.vehicle_motion.velocity)
-		if contact_blocked(previous, next, true):
+		if contact_blocked(previous, next, true) or game.stage.biome.drive_blocked(previous, next):
 			hit = true
 		if hit:
 			game.condition = maxf(0, game.condition - game.vehicle_motion.velocity.length() * 1.4)

@@ -47,9 +47,9 @@ func configure(owner) -> void:
 	stage = owner
 	ends.clear()
 	for index in range(2):
-		var station = 0.0 if index == 0 else stage.LENGTH
+		var station = 0.0 if index == 0 else stage.length
 		var road_end: Vector3 = stage.at(station)
-		var along: Vector3 = stage.direction(0.0) if index == 0 else stage.direction(stage.LENGTH - 0.01)
+		var along: Vector3 = stage.direction(0.0) if index == 0 else stage.direction(stage.length - 0.01)
 		var forward = -along if index == 0 else along
 		forward.y = 0.0
 		forward = forward.normalized()
@@ -116,13 +116,21 @@ func level(pos: Vector3, height: float) -> float:
 # 1 away from the stage road, 0 on and beside it once past its very end.
 func _off_road(pos: Vector3, index: int) -> float:
 	var station: float = stage.road_s(pos)
-	var into_stage = station if index == 0 else stage.LENGTH - station
+	var into_stage = station if index == 0 else stage.length - station
 	return 1.0 - (1.0 - smoothstep(5.0, 10.0, stage.road_distance(pos))) * smoothstep(1.0, 6.0, into_stage)
 
 # Terrain vertices lie a quarter metre below ground() in the land, but at the
 # park's level on its surface, so tyres and feet meet the drawn gravel.
 func vertex(pos: Vector3, height: float) -> float:
 	return level(pos, height)
+
+# How far vehicle() lifts the biome's tyre height at this point: the park's
+# levelling of the land, 0 away from both parks.
+func lift(pos: Vector3, biome) -> float:
+	if nearest(pos, APRON + MAX_BLEND).index < 0:
+		return 0.0
+	var land: float = biome.ground(pos)
+	return level(pos, land) - land
 
 # Tyres: on the paddock its level surface; around it the biome's tyre height,
 # lifted with the land, so on the road tyres and ground() still agree. The
@@ -158,7 +166,8 @@ func z_range() -> Vector2:
 	return z_limits
 
 func _z_limits() -> Vector2:
-	var low = -stage.LENGTH + 5.0
+	# A winding road can be longer than the land is deep: keep to the land.
+	var low = maxf(-stage.length + 5.0, stage.biome.world_bounds().position.y + 20.0)
 	var high = 10.0
 	for index in range(ends.size()):
 		for corner in [Vector2(-HALF_WIDTH, LANE + DEPTH), Vector2(HALF_WIDTH, LANE + DEPTH), Vector2(-HALF_WIDTH, LANE), Vector2(HALF_WIDTH, LANE)]:
