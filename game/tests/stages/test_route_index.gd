@@ -32,6 +32,7 @@ func run() -> void:
 	rng.seed = 20261010
 	var mismatches = 0
 	var near = 0
+	var limited = 0
 	for i in range(3000):
 		var s = rng.randf_range(0.0, stage.length)
 		var lateral = rng.randf_range(-3.0, 3.0) if i % 3 == 0 else rng.randf_range(-40.0, 40.0)
@@ -42,7 +43,13 @@ func run() -> void:
 			near += 1
 		if fast.s != full.s or fast.distance != full.distance:
 			mismatches += 1
+		# Within a limit the answer is the same; beyond it, no station at all.
+		var bounded = stage.route_nearest(pos, 12.0)
+		var expected = full if full.distance < 12.0 else {"s": 0.0, "distance": INF}
+		if bounded.s != expected.s or bounded.distance != expected.distance:
+			limited += 1
 	check(mismatches == 0, "indexed nearest station equals the full search (%d mismatches)" % mismatches)
+	check(limited == 0, "nearest within a limit agrees with the full search (%d mismatches)" % limited)
 	check(near > 800, "most samples were answered from the cells (%d)" % near)
 	stage.free()
 	print("ROUTE INDEX RESULT: %d failures" % failures)
