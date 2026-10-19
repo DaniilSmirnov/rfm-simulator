@@ -47,6 +47,7 @@ static func animate(game: Node, peer: Dictionary, delta: float, clock: float, fr
 	Props.animate_wheels(peer.car)
 	if game.injuries.holds(peer.avatar):
 		peer.avatar.visible = true
+		peer.label.position = name_anchor(peer.avatar)
 		return
 	var avatar_pose = peer.avatar_motion.render(clock, frozen)
 	peer.avatar.position = avatar_pose.position
@@ -86,7 +87,12 @@ static func animate(game: Node, peer: Dictionary, delta: float, clock: float, fr
 	CharacterRig.pose(peer.avatar, pose)
 	_hold_radio(peer)
 	game.player.relief.draw_peer(peer, state)
-	peer.label.position = _seat_label(game, peer, state) if state.in_car else peer.avatar.position + Vector3(0, 2.3, 0)
+	peer.label.position = _seat_label(game, peer, state) if state.in_car else name_anchor(peer.avatar)
+
+# The name floats 2.3 m over the feet of someone standing, and over the body of
+# someone lying (knocked down, thrown or collapsed), wherever it ended up.
+static func name_anchor(avatar: Node3D) -> Vector3:
+	return avatar.position + avatar.basis * Vector3(0, 0.9, 0) + Vector3(0, 1.4, 0)
 
 # The radio rises to the mouth while the member is on air and goes down after.
 # Hands busy with carried gear keep it hidden; it takes over from food and drink.

@@ -1,4 +1,5 @@
 extends "res://tests/harness.gd"
+const PeerView = preload("res://scripts/net/peer_view.gd")
 # Knockdowns (injuries.gd): a car throws a person, the body flies on engine
 # physics and lies, the stage is red-flagged, an ambulance drives from the
 # start, parks, treats, and the person stands up and limps.
@@ -179,9 +180,19 @@ func run() -> void:
 	guest.in_car = false
 	var spot: Vector3 = game.race_at(200.0)
 	spot.y = game.stage.ground(spot)
-	game.room.peers = {"friend": {"id": "friend", "state": {"pos": game.room.a(spot), "car": [150, 0, 0], "in_car": false}}}
+	var friend = PeerView.create(game, {"id": "friend", "name": "Friend", "slot": 1, "state": {"pos": game.room.a(spot), "car": [150, 0, 0], "in_car": false}})
+	game.room.peers = {"friend": friend}
+	friend.state = {"pos": game.room.a(spot), "car": [150, 0, 0], "in_car": false}
 	game.injuries.vehicle_sweep(spot + Vector3(0, 0, 3), spot - Vector3(0, 0, 3), Vector3(0, 0, -15), game.injuries.CREW_SPEED)
 	check(game.injuries.is_down("player:friend"), "the host knocks a guest down")
+	# The friend's name follows the thrown body, not the spot where they were hit.
+	for i in range(30):
+		await physics_frame
+		game.injuries.update(1.0 / 60.0)
+		PeerView.animate(game, friend, 1.0 / 60.0, 0.0, true, false)
+	var body: Vector3 = friend.avatar.position + friend.avatar.basis * Vector3(0, 0.9, 0)
+	check(Vector2(friend.label.position.x - body.x, friend.label.position.z - body.z).length() < 0.05 and friend.label.position.y > body.y + 1.0, "a knocked-down friend's name hangs over their body")
+	check(Vector2(friend.avatar.position.x - spot.x, friend.avatar.position.z - spot.z).length() > 1.0, "the friend's body was thrown away from the impact")
 	guest.room.apply_world(game.room.world_state())
 	check(guest.injuries.down and guest.injuries.local_avatar != null, "the guest learns it was knocked down")
 	guest.injuries.update(0.1)
@@ -189,6 +200,7 @@ func run() -> void:
 	guest._update_hud()
 	check(guest.info_label.text.contains("ТЕБЯ СБИЛИ"), "the guest HUD shows the knockdown")
 	check(guest.course.red_flag or game.course.red_flag, "the red flag reaches the room")
+	PeerView.remove(friend)
 	game.room.peers.clear()
 	for g in [game, guest]:
 		await g._shutdown_audio()
