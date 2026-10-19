@@ -1,118 +1,85 @@
 extends Node
-# Short deterministic PCM effects are shared by all players; no per-frame synthesis.
+# Sounds of the outing apart from the cars (vehicle_audio.gd): wind, birds,
+# cicadas, the grill fire, footsteps on the surface underfoot, knocks, camp
+# gear being set down, eating. Most files come from scripts/generate-sounds.mjs.
 # Background birds and cooking fire are deliberately sparse instead of looping.
 # Their gain also stays at 20% of the previous linear amplitude.
+const SoundBank = preload("res://scripts/core/sound_bank.gd")
 const BIRDS_VOLUME_DB = -37.0
-const BIRD_CLIP_SECONDS = 0.35
+const BIRD_TAKES = 3
 const BIRD_GAP_MIN = 20.0
 const BIRD_GAP_MAX = 40.0
 const FIRE_BURST_SECONDS = 1.5
 # Provençal summer: short cicada choruses on the vineyard stage only.
 const CICADA_VOLUME_DB = -31.0
-const CICADA_CLIP_SECONDS = 1.8
 const CICADA_GAP_MIN = 6.0
 const CICADA_GAP_MAX = 14.0
 const CICADA_STAGE = 2
 const FIRE_GAP_MIN = 18.0
 const FIRE_GAP_MAX = 30.0
+const STEP_TAKES = 3
+# Gear put down: what it is made of.
+const METAL_GEAR = ["grill", "cauldron", "light_grill"]
 var game: Node
 var shutting_down = false
 var birds: AudioStreamPlayer
 var cicadas: AudioStreamPlayer
-var cicada_clock = 0.0
 var effects: AudioStreamPlayer
 var steps: AudioStreamPlayer
+var vehicles: Node
 var step_clock = 0.0
 var repair_clock = 0.0
 var last_position = Vector3.ZERO
 var last_impact = 0.0
+var was_airborne = false
 var eating_before = false
 var effect_clock = 0.0
 var bird_clock = 0.0
 var fire_clock = 0.0
 var fire_burst_clock = 0.0
+var cicada_clock = 0.0
 var ambient_random = RandomNumberGenerator.new()
-var clips: Dictionary = {}
-
-func tone(kind: String, seconds: float) -> AudioStreamWAV:
-	var rate = 22050
-	var count = int(seconds * rate)
-	var bytes = PackedByteArray()
-	bytes.resize(count * 2)
-	var random = RandomNumberGenerator.new()
-	random.seed = 7102026
-	for i in range(count):
-		var t = float(i) / rate
-		var value = 0.0
-		if kind == "cicadas":
-			# A rasping 4.3 kHz buzz pulsed at 28 Hz, swelling in and fading out.
-			var pulse = pow(0.5 + 0.5 * sin(TAU * 28.0 * t), 2.0)
-			var swell = sin(PI * t / seconds)
-			value = (sin(TAU * 4300.0 * t) * 0.7 + random.randf_range(-1, 1) * 0.3) * pulse * swell * 0.16
-		elif kind == "birds":
-			var phase = fmod(t, 2.0)
-			if phase < 0.30:
-				value = sin(TAU * (1800 * phase + 1500 * phase * phase)) * sin(PI * phase / 0.30) * 0.18
-		else:
-			var envelope = exp(-t * (22.0 if kind == "step" else 9.0))
-			value = (random.randf_range(-1, 1) * 0.5 + sin(TAU * t * (110 if kind in ["step", "impact"] else 340)) * 0.25) * envelope
-		bytes.encode_s16(i * 2, int(clampf(value, -1, 1) * 32767))
-	var stream = AudioStreamWAV.new()
-	stream.format = AudioStreamWAV.FORMAT_16_BITS
-	stream.mix_rate = rate
-	stream.data = bytes
-	return stream
 
 func _ready() -> void:
-	clips.step = tone("step", 0.18)
-	clips.place = tone("place", 0.4)
-	clips.impact = tone("impact", 0.3)
-	clips.eat = tone("eat", 0.22)
 	ambient_random.seed = 7102026
 	bird_clock = ambient_random.randf_range(BIRD_GAP_MIN, BIRD_GAP_MAX)
 	fire_clock = ambient_random.randf_range(FIRE_GAP_MIN, FIRE_GAP_MAX)
 	cicada_clock = ambient_random.randf_range(1.0, CICADA_GAP_MIN)
-	cicadas = AudioStreamPlayer.new()
-	cicadas.stream = tone("cicadas", CICADA_CLIP_SECONDS)
-	cicadas.volume_db = CICADA_VOLUME_DB
-	add_child(cicadas)
-	birds = AudioStreamPlayer.new()
-	birds.stream = tone("birds", BIRD_CLIP_SECONDS)
-	birds.volume_db = BIRDS_VOLUME_DB
-	add_child(birds)
-	effects = AudioStreamPlayer.new()
-	effects.stream = clips.place
-	effects.volume_db = -17
+	game.wind_audio = SoundBank.player(game, -20.0, "forest")
+	game._play_audio(game.wind_audio)
+	# 20% of the previous cooking/fire linear gain (about -14 dB).
+	game.fire_audio = SoundBank.spatial(game, -26.0, 10.0, 24.0, "fire")
+	game.beer_audio = SoundBank.player(game, -10.0)
+	cicadas = SoundBank.player(self, CICADA_VOLUME_DB, "cicadas")
+	birds = SoundBank.player(self, BIRDS_VOLUME_DB, "bird-1")
+	effects = SoundBank.player(self, -17.0)
 	effects.max_polyphony = 4
-	add_child(effects)
-	steps = AudioStreamPlayer.new()
-	steps.stream = clips.step
-	steps.volume_db = -23
-	add_child(steps)
+	steps = SoundBank.player(self, -23.0)
+	steps.max_polyphony = 2
+	vehicles = preload("res://scripts/core/vehicle_audio.gd").new()
+	vehicles.game = game
+	add_child(vehicles)
 
 func active() -> bool:
 	return game.playing and not game.paused and not game.dead and not game.finished and not (game.room.is_guest() and game.room.world_paused)
+
+func world_paused() -> bool:
+	return game.paused or (game.room.is_guest() and game.room.world_paused)
 
 func repair() -> void:
 	if shutting_down:
 		return
 	if DisplayServer.get_name() == "headless":
 		return
-	# Keep true loops alive after a stopped session or lost playback.
+	# Keep the wind loop alive after a stopped session or lost playback.
 	# Birds and fire are intentionally scheduled as sparse one-shots below.
-	var running = active()
-	for player in [game.engine_audio, game.wind_audio]:
-		var wanted = running if player == game.engine_audio else true
-		player.stream_paused = game.paused or (game.room.is_guest() and game.room.world_paused)
-		if wanted and not player.playing:
-			player.play()
-		elif not wanted and player.playing:
-			player.stop()
-	var ambience_paused = game.paused or (game.room.is_guest() and game.room.world_paused)
+	var ambience_paused = world_paused()
+	game.wind_audio.stream_paused = ambience_paused
+	if not game.wind_audio.playing:
+		game.wind_audio.play()
 	birds.stream_paused = ambience_paused
 	cicadas.stream_paused = ambience_paused
 	game.fire_audio.stream_paused = ambience_paused
-	game.rally_audio.stream_paused = not running
 	if is_instance_valid(game.grill):
 		game.fire_audio.global_position = game.grill.global_position
 
@@ -123,20 +90,35 @@ func update(delta: float) -> void:
 	if repair_clock <= 0:
 		repair_clock = 0.5
 		repair()
+	vehicles.update(delta, active(), world_paused())
 	_update_sparse_ambience(delta)
 	effect_clock = maxf(0.0, effect_clock - delta)
 	if active() and game.impact_shake > last_impact + 0.12 and effect_clock <= 0:
-		effect("impact")
+		vehicles.impact(game.impact_shake)
 		effect_clock = 0.25
 	last_impact = game.impact_shake
 	var eating = game.eat_time >= 0.0
 	if active() and eating and not eating_before:
-		effect("eat")
+		_effect("eat")
 	eating_before = eating
-	if not active() or game.in_car or game.seated or game.jump_height > 0.05:
+	_update_steps(delta)
+
+func _update_steps(delta: float) -> void:
+	if not active() or game.in_car or game.seated:
 		step_clock = 0
 		last_position = game.walker
+		was_airborne = false
 		return
+	var airborne = game.jump_height > 0.05
+	if airborne:
+		was_airborne = true
+		last_position = game.walker
+		return
+	if was_airborne:
+		# Landing from a jump: both feet at once.
+		was_airborne = false
+		_step(-18.0)
+		step_clock = 0.3
 	var moved = game.walker.distance_to(last_position)
 	last_position = game.walker
 	if moved < 0.005:
@@ -144,17 +126,25 @@ func update(delta: float) -> void:
 		return
 	step_clock -= delta
 	if step_clock <= 0:
-		game._play_audio(steps)
+		_step(-23.0)
 		step_clock = 0.32 if Input.is_action_pressed("sprint") else 0.48
 
+func _step(volume_db: float) -> void:
+	var surface = game.stage.biome.surface_sound(game.walker)
+	steps.stream = SoundBank.take("step-" + surface, STEP_TAKES, ambient_random)
+	steps.volume_db = volume_db
+	steps.pitch_scale = ambient_random.randf_range(0.92, 1.08)
+	game._play_audio(steps)
+
 func _update_sparse_ambience(delta: float) -> void:
-	var paused = game.paused or (game.room.is_guest() and game.room.world_paused)
-	if paused:
+	if world_paused():
 		return
 
 	if game.selected_stage != 1:
 		bird_clock -= delta
 		if bird_clock <= 0.0:
+			birds.stream = SoundBank.take("bird", BIRD_TAKES, ambient_random)
+			birds.pitch_scale = ambient_random.randf_range(0.94, 1.06)
 			game._play_audio(birds)
 			bird_clock = ambient_random.randf_range(BIRD_GAP_MIN, BIRD_GAP_MAX)
 	elif birds.playing:
@@ -188,13 +178,24 @@ func _update_sparse_ambience(delta: float) -> void:
 		fire_burst_clock = FIRE_BURST_SECONDS
 		fire_clock = ambient_random.randf_range(FIRE_GAP_MIN, FIRE_GAP_MAX)
 
-func placement() -> void:
+# Gear set down, the grill lit, snow dug: what it was decides the sound.
+func placement(kind: String = "") -> void:
 	if shutting_down:
 		return
-	effect("place")
+	if kind == "snow":
+		_effect("step-snow-%d" % ambient_random.randi_range(1, STEP_TAKES))
+	else:
+		_effect("place-metal" if kind in METAL_GEAR else "place-wood")
 
-func effect(kind: String) -> void:
+func _effect(sound: String) -> void:
 	if shutting_down:
 		return
-	effects.stream = clips[kind]
+	effects.stream = SoundBank.stream(sound)
+	effects.pitch_scale = ambient_random.randf_range(0.95, 1.05)
 	game._play_audio(effects)
+
+func stop_all() -> void:
+	shutting_down = true
+	for player in [birds, cicadas, effects, steps]:
+		player.stop()
+	vehicles.silence()

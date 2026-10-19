@@ -402,6 +402,14 @@ func grip(pos: Vector3) -> float:
 	var station = stage.road_s(pos)
 	return surface_grip(station, (pos - stage.at(station)).dot(stage.side(station)), stage.road_width(station) * 0.5)
 
+# Snow off the road and on snowy stretches; tarmac where the tracks are clear.
+func surface_sound(pos: Vector3) -> String:
+	if DeepSnow.depth(stage, pos) > 0.02 or stage.road_distance(pos) > stage.WIDTH * 0.55:
+		return "snow"
+	var station = stage.road_s(pos)
+	var mix = conditions(station, (pos - stage.at(station)).dot(stage.side(station)), stage.road_width(station) * 0.5)
+	return "snow" if mix.snow + mix.ice > 0.5 else "asphalt"
+
 func terrain_tile_step(p: Vector3) -> float:
 	return 2.0 if stage.road_distance(p) < 30.0 else 4.0
 

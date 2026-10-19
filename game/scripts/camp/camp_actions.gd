@@ -64,7 +64,7 @@ func dig_snow(spot: Vector3) -> void:
 		game.cargo.animate_shovel()
 		return
 	if game.stage.snow.dig(game.stage, spot):
-		game.soundscape.placement()
+		game.soundscape.placement("snow")
 		if local_actor: game.cargo.animate_shovel()
 	elif local_actor: game.toast("Здесь уже расчищено или раскопок слишком много.")
 
@@ -136,7 +136,7 @@ func confirm_placement() -> void:
 		match kind:
 			"table", "chairs", "grill", "firewood", "cauldron": game.cargo.deploy(kind, spot, yaw)
 			"flag": place_flag(spot, yaw)
-	game.soundscape.placement()
+	game.soundscape.placement(kind)
 	cancel_placement()
 
 func near_camp() -> bool:

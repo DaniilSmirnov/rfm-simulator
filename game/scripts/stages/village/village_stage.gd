@@ -411,6 +411,13 @@ func road_seam_shoulders() -> bool:
 func loose_surface(pos: Vector3) -> bool:
 	return loose(pos)
 
+# Tarmac and cobbles in and around the village, gravel on the terraces.
+func surface_sound(pos: Vector3) -> String:
+	var nearest: Dictionary = stage.route_nearest(pos)
+	if nearest.distance > road_width(nearest.s) * 0.6:
+		return "grass"
+	return "gravel" if surface(nearest.s) == "gravel" else "asphalt"
+
 func uses_baked_tracks() -> bool:
 	return true
 

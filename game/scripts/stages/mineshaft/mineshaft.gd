@@ -212,6 +212,10 @@ func road_color(p: Vector3, s: float) -> Color:
 	var centre = exp(-pow(lateral / 0.55, 2.0))
 	return base.darkened(track * 0.14).lightened(centre * 0.06 + shade)
 
+# Red outback dirt and stones, on the road and off it.
+func surface_sound(_pos: Vector3) -> String:
+	return "gravel"
+
 func road_strips() -> int:
 	return 6
 

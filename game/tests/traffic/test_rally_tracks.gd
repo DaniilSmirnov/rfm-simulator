@@ -19,8 +19,6 @@ func harness(reverse: bool = false):
 	game.car = Node3D.new()
 	game.car.position = Vector3(-300, 2, 100)
 	game.add_child(game.car)
-	game.rally_audio = AudioStreamPlayer3D.new()
-	game.add_child(game.rally_audio)
 	game.in_car = true
 	game.course.pass_index = 2 if reverse else 1
 	game.rng.seed = 12345

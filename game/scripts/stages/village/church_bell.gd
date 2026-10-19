@@ -1,5 +1,6 @@
 extends Node3D
 const Props = preload("res://scripts/core/props.gd")
+const SoundBank = preload("res://scripts/core/sound_bank.gd")
 var pivot: Node3D
 var rope: MeshInstance3D
 var handle: MeshInstance3D
@@ -16,10 +17,10 @@ func build() -> void:
 	handle = Props.cylinder(self, Vector3(0.35, -2.7, 0), 0.06, 0.06, 0.18, Color("73513b"), 8)
 	audio = AudioStreamPlayer3D.new()
 	add_child(audio)
-	audio.stream = bell_sound()
+	audio.stream = SoundBank.stream("church-bell")
 	audio.max_distance = 160
 	audio.unit_size = 15
-	audio.volume_db = -10
+	audio.volume_db = -13
 func handle_position() -> Vector3:
 	return to_global(Vector3(0.35, -2.7, 0))
 func pull(player: Vector3) -> bool:
@@ -44,19 +45,3 @@ func _process(delta: float) -> void:
 	var pull_offset = sin(minf(elapsed / 0.5, 1.0) * PI) * 0.25
 	rope.position.y = -1.45 - pull_offset
 	handle.position.y = -2.7 - pull_offset
-func bell_sound() -> AudioStreamWAV:
-	# Original additive synthesis: no third-party sound assets.
-	var rate = 22050
-	var bytes = PackedByteArray()
-	bytes.resize(rate * 4 * 2)
-	for i in range(rate * 4):
-		var t = float(i) / rate
-		var sample = 0.0
-		for partial in [1.0, 2.03, 2.71, 4.14]:
-			sample += sin(TAU * 360 * partial * t) * exp(-t * (0.9 + partial * 0.3)) * 0.16
-		bytes.encode_s16(i * 2, int(sample * minf(t * 120, 1.0) * 32767))
-	var stream = AudioStreamWAV.new()
-	stream.format = AudioStreamWAV.FORMAT_16_BITS
-	stream.mix_rate = rate
-	stream.data = bytes
-	return stream
