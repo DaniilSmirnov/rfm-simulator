@@ -98,7 +98,8 @@ func _fence_run(a: Vector3, b: Vector3) -> void:
 		var pa = a + Vector3.UP * (stage.ground(a) - a.y + y)
 		var pb = b + Vector3.UP * (stage.ground(b) - b.y + y)
 		var along = pb - pa
-		rails.append(Transform3D(Basis(along, Vector3.UP * 0.07, across * 0.05), (pa + pb) * 0.5 - across * 0.04))
+		# Backed onto the pickets and 1.25 cm proud of the posts' faces.
+		rails.append(Transform3D(Basis(along, Vector3.UP * 0.07, across * 0.06), (pa + pb) * 0.5 - across * 0.0425))
 		rail_colors.append(FENCE.darkened(0.1))
 
 # ---------------------------------------------------------------- landmarks

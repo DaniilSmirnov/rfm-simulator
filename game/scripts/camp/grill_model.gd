@@ -166,7 +166,8 @@ static func grill_meat_mesh(count: int) -> Mesh:
 					var z = -0.2 + k * 0.1
 					var piece = P.box(holder, Vector3(_skewer_x(i), 0.985, z), Vector3(0.05, 0.05, 0.07), Color("8c4527").lightened(float((i + k) % 3) * 0.05))
 					piece.rotation = Vector3(float(k % 2) * 0.2, float(i % 2) * 0.25, float((i + k) % 3 - 1) * 0.15)
-					P.box(holder, Vector3(_skewer_x(i), 1.011, z), Vector3(0.044, 0.006, 0.06), Color("3a2116"))
+					# The char tilts with its chunk: half buried in the top, half proud.
+					P.box(piece, Vector3(0, 0.025, 0), Vector3(0.044, 0.01, 0.06), Color("3a2116"))
 					if k < 4:
 						P.box(holder, Vector3(_skewer_x(i), 0.98, z + 0.05), Vector3(0.042, 0.042, 0.016), Color("e4dcc4"))
 			var baked = MeshMerge.bake(holder)

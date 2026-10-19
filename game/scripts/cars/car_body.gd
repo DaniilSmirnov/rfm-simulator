@@ -122,18 +122,21 @@ static func _arch(root: Node3D, x: float, radius: float, z: float, paint: Color)
 static func _front(root: Node3D, p: Dictionary, f: Dictionary) -> void:
 	var nose: float = f.front - 0.02
 	var lamp_y: float = f.bonnet - 0.24
+	# Lamp lenses stand 1 cm ahead of the grille and its chrome (front faces at
+	# nose - 0.04), so where they overlap no two faces share a depth.
+	var lens: float = nose - 0.05
 	var style = str(p.get("lights", "square"))
 	for side in [-1.0, 1.0]:
 		var x: float = side * f.half * 0.66
 		match style:
 			"round":
-				_disc(root, Vector3(x, lamp_y, nose), 0.10, LAMP)
+				_disc(root, Vector3(x, lamp_y, lens + 0.025), 0.10, LAMP)
 			"twin":
-				_disc(root, Vector3(side * f.half * 0.78, lamp_y, nose), 0.08, LAMP)
-				_disc(root, Vector3(side * f.half * 0.55, lamp_y, nose), 0.08, LAMP)
+				_disc(root, Vector3(side * f.half * 0.78, lamp_y, lens + 0.025), 0.08, LAMP)
+				_disc(root, Vector3(side * f.half * 0.55, lamp_y, lens + 0.025), 0.08, LAMP)
 			_:
 				var size = Vector3(0.48 if style == "wide" else 0.38, 0.09 if style == "slim" else 0.15, 0.04)
-				var lamp = P.box(root, Vector3(x, lamp_y + (0.02 if style == "slim" else 0.0), nose), size, LAMP)
+				var lamp = P.box(root, Vector3(x, lamp_y + (0.02 if style == "slim" else 0.0), lens + 0.02), size, LAMP)
 				lamp.rotation.z = side * float(p.get("lamp_tilt", 0.0))
 		P.box(root, Vector3(side * f.half * 0.86, f.base - 0.09, nose - 0.01), Vector3(0.12, 0.05, 0.03), Color("e8be6c"))
 	P.box(root, Vector3(0, lamp_y, nose - 0.01), Vector3(float(p.get("grille", 0.8)), 0.14, 0.03), Color("1f2e33")).name = "Grille"

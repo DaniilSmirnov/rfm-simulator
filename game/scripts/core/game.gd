@@ -308,7 +308,7 @@ func _ready() -> void:
 	camera = Camera3D.new()
 	add_child(camera)
 	camera.fov = 68
-	camera.far = 1100
+	draw_distance.frame_camera(camera)
 	camera.current = true
 	camera.position = stage.at(45) + Vector3(22, 15, 12)
 	camera.look_at(stage.at(70))

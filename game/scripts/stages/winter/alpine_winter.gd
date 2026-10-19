@@ -275,7 +275,8 @@ func build_ice(cooperative: bool = false) -> void:
 					var lateral = lerpf(-half, half, float(corner[1]) / steps_l)
 					var mask = ice(s, lateral) * (1.0 - smoothstep(half - 0.9, half - 0.2, absf(lateral)))
 					visible = visible or mask > 0.03
-					corners.append([stage.road_surface_vertex(s, lateral) + Vector3.UP * 0.012, mask])
+					# 3 cm clears the road mesh between the glaze's own samples.
+					corners.append([stage.road_surface_vertex(s, lateral) + Vector3.UP * 0.03, mask])
 				if not visible:
 					continue
 				for k in [0, 1, 2, 2, 1, 3]:
