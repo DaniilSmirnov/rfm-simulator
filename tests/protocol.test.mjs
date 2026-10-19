@@ -118,6 +118,9 @@ test('car registry: one record per catalog car, same names, known drive and mode
     assert.ok(!car.handling?.drive || ['front', 'rear', 'all'].includes(car.handling.drive), car.name + ' drive');
     assert.ok(!car.model || car.model === 'shell' ? car.shape?.length === 6 : true, car.name + ' needs a shape');
   }
+  // The lobby shows textures/previews/car_<id>.webp (tools/screenshots/export_menu_previews.gd).
+  const previews = await readdir(new URL('../game/textures/previews/', import.meta.url));
+  for (const i of cars.keys()) assert.ok(previews.includes(`car_${i}.webp`), cars[i].name + ' has a menu preview');
   // Car look, handling and trunk come from cars.json, not from index checks.
   for (const file of ['game/scripts/core/props.gd', 'game/scripts/cars/player_handling.gd']) {
     const code = (await read(file)).replace(/#.*$/gm, '');

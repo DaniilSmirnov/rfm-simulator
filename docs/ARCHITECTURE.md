@@ -132,6 +132,9 @@
    своей модели — `model` и ветка в `Props.player_car()`.
 2. Добавить товар `type: "car"` с тем же `content_id` и названием в
    `data/store_catalog.json`.
+3. Снять превью для меню: `xvfb-run godot --path game --script
+   res://tools/screenshots/export_menu_previews.gd -- --cars-only` пишет
+   `textures/previews/car_<id>.webp` для всех машин одним кадром.
 
 Раллийная машина — запись в конец `cars` в `data/rally_cars.json` и её номер в
 `spawn_order`. Кода не нужно. Проверить взглядом:

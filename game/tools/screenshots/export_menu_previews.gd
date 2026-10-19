@@ -53,8 +53,10 @@ func capture(game: Node, index: int, name: String) -> void:
 		cameras[index].far = 500
 		target = game.stage.village.square.center + Vector3(0, game.stage.village.square.height, 0)
 		cameras[index].position = target + Vector3(-40, 42, 52)
+	var hidden: Array = []
 	if index == 0:
 		frame_car(game.car, cameras[index])
+		hidden = hide_blockers(game, game.car, cameras[index].global_position)
 	else:
 		cameras[index].look_at(target)
 	previews[index].render_target_update_mode = SubViewport.UPDATE_ONCE
@@ -63,6 +65,21 @@ func capture(game: Node, index: int, name: String) -> void:
 	await RenderingServer.frame_post_draw
 	var image = previews[index].get_texture().get_image()
 	image.save_webp("res://textures/previews/%s.webp" % name, false, 0.85)
+	for node in hidden:
+		node.show()
+
+# Hide scenery (start arch, flags, signs) standing between the camera and the car.
+func hide_blockers(game: Node, car: Node3D, eye: Vector3) -> Array:
+	var hidden: Array = []
+	var target = car.global_position + Vector3(0, 0.9, 0)
+	for node in game.find_children("*", "GeometryInstance3D", true, false):
+		if not node.is_visible_in_tree() or car.is_ancestor_of(node) or not node.has_method("get_aabb"):
+			continue
+		var box: AABB = node.global_transform * node.get_aabb()
+		if box.size.length() < 40.0 and not box.has_point(target) and box.intersects_segment(eye, target):
+			node.hide()
+			hidden.append(node)
+	return hidden
 
 # Fit every actual model, including roof cargo, with consistent front-quarter framing.
 func frame_car(car: Node3D, camera: Camera3D) -> void:
