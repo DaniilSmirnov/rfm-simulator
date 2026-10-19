@@ -272,7 +272,7 @@ func _member_entry(id: String, state: Dictionary, state_time: int) -> Dictionary
 # A member entry as the server would list it, with the roster filled in.
 func _full_entry(entry: Dictionary) -> Dictionary:
 	var member: Dictionary = room.members.get(str(entry.get("id", "")), {})
-	return {"id": entry.id, "name": member.get("name", ""), "slot": member.get("slot", 0), "car_model": member.get("car_model", 0), "state_time": entry.get("state_time", 0), "state": NetProtocol.clean_state(NetProtocol.expand_state(entry.state))}
+	return {"id": entry.id, "name": member.get("name", ""), "slot": member.get("slot", 0), "car_model": member.get("car_model", 0), "character": member.get("character", member.get("slot", 0)), "state_time": entry.get("state_time", 0), "state": NetProtocol.clean_state(NetProtocol.expand_state(entry.state))}
 
 func _receive(from: String, message: Dictionary) -> void:
 	match str(message.get("t", "")):
@@ -297,7 +297,7 @@ func _receive_state(from: String, raw) -> void:
 	if state == null:
 		return
 	var member: Dictionary = room.members[from]
-	room._update_peer({"id": from, "name": member.name, "slot": member.slot, "car_model": member.car_model, "state_time": int(room.server_clock() * 1000.0), "state": state})
+	room._update_peer({"id": from, "name": member.name, "slot": member.slot, "car_model": member.car_model, "character": member.get("character", member.slot), "state_time": int(room.server_clock() * 1000.0), "state": state})
 
 static func _timestamp(value) -> bool:
 	return (value is int or value is float) and is_finite(float(value)) and absf(float(value)) <= 9007199254740991.0

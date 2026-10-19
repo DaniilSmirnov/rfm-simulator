@@ -11,7 +11,8 @@ func run() -> void:
 	var products = JSON.parse_string(FileAccess.get_file_as_string("res://data/store_catalog.json"))
 	var stage_count = RallyStage.STAGES.size()
 	var car_count = RallyProps.PLAYER_MODELS.size()
-	check(products is Array and products.size() == stage_count + car_count, "every stage and vehicle has a VK catalog entry")
+	var looks = preload("res://scripts/people/character_profiles.gd").playable()
+	check(products is Array and products.size() == stage_count + car_count + looks.size(), "every stage, vehicle and playable character has a VK catalog entry")
 	if not products is Array:
 		quit(1)
 		return
@@ -42,6 +43,11 @@ func run() -> void:
 			if kind == "stage":
 				check(service.can_use(kind, idx, true),
 					"guest can enter a host-owned stage %d without own purchase" % idx)
+	# Characters are free for everyone for now; a spectator-only look is not sold.
+	for look in range(RallyProps.SPECTATOR_MODELS.size()):
+		var entry = service.product("character", look)
+		check(entry.is_empty() != (look in looks), "character %d is in the catalog only if playable" % look)
+		check(service.can_use("character", look) == (look in looks) and not entry.get("purchase_enabled", false), "character %d is free in VK" % look)
 	service.entitlements = {"mode":"unrestricted","skus":[]}
 	for stage in range(stage_count):
 		check(service.can_use("stage",stage),"standalone stage %d remains freely accessible" % stage)

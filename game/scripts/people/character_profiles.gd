@@ -17,14 +17,15 @@ const SPECTATOR_MODELS = [
 	{"name": "Дачник", "skin": "d8a27e", "shirt": "e2d9b8", "trim": "6f8f5a", "pants": "6b5a3e", "hair": "6f6a62", "hat": "panama", "hat_color": "e9e1c8", "sleeves": false, "long_pants": false, "beard": true},
 	{"name": "Болельщица", "skin": "edc3a6", "shirt": "e05a8a", "trim": "fbe9a0", "pants": "334a6e", "hair": "8a4a22", "hat": "", "sleeves": false, "long_pants": true, "beard": false, "female": true, "hair_style": "ponytail"},
 	{"name": "Туристка", "skin": "c99376", "shirt": "3f8fb5", "trim": "f3efe2", "pants": "4b5a3a", "hair": "2a1e1a", "hat": "", "sleeves": true, "long_pants": false, "beard": false, "female": true, "hair_style": "long"},
-	{"name": "Коллекционер нашивок", "skin": "d29a78", "shirt": "d9d2c3", "trim": "4d6b3c", "pants": "3d4a5a", "hair": "5b4a3e", "hat": "", "sleeves": false, "long_pants": true, "beard": false, "mustache": true, "build": "big", "patch_vest": true, "vest": "4d6b3c"},
+	{"name": "Коллекционер нашивок", "skin": "d29a78", "shirt": "d9d2c3", "trim": "4d6b3c", "pants": "3d4a5a", "hair": "5b4a3e", "hat": "", "sleeves": false, "long_pants": true, "beard": false, "mustache": true, "build": "big", "patch_vest": true, "vest": "4d6b3c", "playable": false},
 ]
 
 # Optional look keys: "hair_style" ("short" default, "bald", "ponytail",
 # "long"), "glasses" ("clear", "shades"), "mustache", "female" (slimmer
 # torso, lashes, lips), "hat_color" for a summer "cap" or "panama", "build":
 # "big" (taller and broader), "patch_vest" (a vest of rally patches in colour
-# "vest", worn over every outfit).
+# "vest", worn over every outfit), "playable": false (a spectator only, not
+# offered in the menu).
 
 # Outfits: clothes a stage dresses everyone in (stage_biome.gd outfit()); ""
 # keeps the summer clothes above. An outfit record per look replaces only the
@@ -69,6 +70,21 @@ static func forearm_colors(look: Dictionary) -> Array:
 static func model_path(variant: int, outfit: String = "") -> String:
 	var index = posmod(variant, SPECTATOR_MODELS.size())
 	return "res://models/characters/spectator_%d.glb" % index if not OUTFITS.has(outfit) else "res://models/characters/spectator_%s_%d.glb" % [outfit, index]
+
+# Looks a player can pick, in menu order: the index of a look is its
+# "character" content_id in store_catalog.json and in room membership. The
+# stage still chooses the clothes, so a pick is worn in summer or winter dress.
+static func playable() -> Array[int]:
+	var looks: Array[int] = []
+	for variant in range(SPECTATOR_MODELS.size()):
+		if SPECTATOR_MODELS[variant].get("playable", true):
+			looks.append(variant)
+	return looks
+
+# The menu card image of a look in an outfit (tools/screenshots/export_menu_previews.gd).
+static func preview_path(variant: int, outfit: String = "") -> String:
+	var index = posmod(variant, SPECTATOR_MODELS.size())
+	return "res://textures/previews/character_%d.webp" % index if not OUTFITS.has(outfit) else "res://textures/previews/character_%s_%d.webp" % [outfit, index]
 
 # Every look's body in an outfit, by path.
 static func load_models(outfit: String) -> Dictionary:

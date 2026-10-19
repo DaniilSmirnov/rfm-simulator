@@ -38,7 +38,7 @@ var token = ""
 var is_host = false
 var connected = false
 var peers: Dictionary = {}
-# Membership as the server reports it: id -> {"name", "slot", "car_model"}.
+# Membership as the server reports it: id -> {"name", "slot", "car_model", "character"}.
 var members: Dictionary = {}
 var host_id = ""
 var world_paused = false
@@ -97,8 +97,8 @@ func is_authority() -> bool:
 # ---------------------------------------------------------------- joining
 
 func connect_room(id: String) -> void:
-	if game.platform_service != null and (not game.platform_service.can_use("car", game.car_choice.selected) or (id == "" and not game.platform_service.can_use("stage", game.stage_choice.selected))):
-		ui.status.text = "Выбери доступную машину и СУ."
+	if game.platform_service != null and (not game.platform_service.can_use("car", game.car_choice.selected) or not game.platform_service.can_use("character", game.avatar_variant) or (id == "" and not game.platform_service.can_use("stage", game.stage_choice.selected))):
+		ui.status.text = "Выбери доступную машину, персонажа и СУ."
 		return
 	if busy or connected or game.loading_world:
 		return
@@ -111,7 +111,7 @@ func connect_room(id: String) -> void:
 	room_id = id
 	ui.status.text = "Подключаемся…"
 	ui.set_entry_enabled(false)
-	transport.request("create" if id == "" else "join", room_id, {"name": ui.name_input.text, "car_model": game.selected_car, "stage": game.selected_stage, "protocol": NetProtocol.version()})
+	transport.request("create" if id == "" else "join", room_id, {"name": ui.name_input.text, "car_model": game.selected_car, "character": game.avatar_variant, "stage": game.selected_stage, "protocol": NetProtocol.version()})
 
 func room_endpoint(kind: String) -> String:
 	return transport.endpoint(kind, room_id)
@@ -183,7 +183,8 @@ func _joined(data: Dictionary) -> void:
 		# New guests and lobby hosts spawn at the start; a player already
 		# watching the stage keeps their current parking and camp position.
 		var lane = int(data.get("slot", 0))
-		game.avatar_variant = posmod(lane, Props.SPECTATOR_MODELS.size())
+		# The look picked in the menu, as the server accepted it; others see the same.
+		game.avatar_variant = int(data.get("character", game.avatar_variant))
 		game.heading = game.stage.parks.park_visitor(game.car, lane)
 	game.toast(Loc.t("Комната %s · %s. Передай ID друзьям!") % [room_id, Loc.t(game.car.get_meta("model"))])
 	if game.invite_after_room_create:
@@ -269,7 +270,7 @@ func _guest_world(world, stamp: float, players: Array, membership: bool) -> void
 func _update_members(players: Array) -> void:
 	members.clear()
 	for p in players:
-		members[str(p.id)] = {"name": p.get("name", ""), "slot": int(p.get("slot", 0)), "car_model": int(p.get("car_model", 0))}
+		members[str(p.id)] = {"name": p.get("name", ""), "slot": int(p.get("slot", 0)), "car_model": int(p.get("car_model", 0)), "character": int(p.get("character", p.get("slot", 0)))}
 	direct.sync_members(host_id, members.keys())
 	voice.sync_members(members.keys())
 

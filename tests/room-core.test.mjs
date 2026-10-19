@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { RoomState, MAX_PLAYERS, STAGE_COUNT } from '../server/room-core.mjs';
+import { RoomState, MAX_PLAYERS, STAGE_COUNT, CHARACTERS } from '../server/room-core.mjs';
 const state = (x = 0) => ({ pos: [x, 1, 2], car: [3, 4, 5], heading: 1, yaw: 2, pitch: 0, in_car: false, tow: false, beer: -1 });
 const racer = () => ({id:1,variant:0,pos:[0,0,0],yaw:0,state:'racing'});
 const drive = () => ({ack:0,pos:[0,0,0],yaw:0,velocity:[0,0,0],vertical:0,grounded:true,pitch:0,roll:0,steering:0,yaw_rate:0,longitudinal:0});
@@ -41,6 +41,21 @@ test('host stage and individual car choices persist through joins, sync and rest
   const late = restored.add('Late', 1300, false, { stage: 0, car_model: Infinity });
   assert.equal(late.stage, 1);
   assert.equal(late.car_model, late.slot);
+});
+test('each player keeps the character picked in the menu; unknown looks fall back by slot', () => {
+  const r = new RoomState();
+  const h = r.add('Host', 1000, true, { character: 9 });
+  const g = r.add('Guest', 1000, false, { character: 4 });
+  // The patch collector (look 11) is a spectator only, never a player.
+  const collector = r.add('Collector', 1000, false, { character: 11 });
+  const old = r.add('Old build', 1000, false, {});
+  assert.deepEqual([h.character, g.character], [9, 4]);
+  assert.equal(CHARACTERS.includes(11), false);
+  assert.equal(collector.character, CHARACTERS[collector.slot]);
+  assert.equal(old.character, CHARACTERS[old.slot]);
+  const restored = new RoomState(structuredClone(r.data));
+  const reply = restored.sync({ token: g.token, state: { ...state(), character: 0 } }, 1200);
+  assert.deepEqual(reply.players.map(p => p.character), [9, 4, CHARACTERS[2], CHARACTERS[3]]);
 });
 test('create, join, private tokens and roster without token leaks', () => {
   const { r, h, g } = setup();

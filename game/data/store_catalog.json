@@ -174,5 +174,104 @@
     "enabled": true,
     "purchase_enabled": true,
     "price": 3
+  },
+  {
+    "sku": "character_01",
+    "type": "character",
+    "content_id": 0,
+    "title": "Шашлычник",
+    "free": true,
+    "enabled": true,
+    "purchase_enabled": false
+  },
+  {
+    "sku": "character_02",
+    "type": "character",
+    "content_id": 1,
+    "title": "Болельщик",
+    "free": true,
+    "enabled": true,
+    "purchase_enabled": false
+  },
+  {
+    "sku": "character_03",
+    "type": "character",
+    "content_id": 2,
+    "title": "Бородатый механик",
+    "free": true,
+    "enabled": true,
+    "purchase_enabled": false
+  },
+  {
+    "sku": "character_04",
+    "type": "character",
+    "content_id": 3,
+    "title": "Лесной турист",
+    "free": true,
+    "enabled": true,
+    "purchase_enabled": false
+  },
+  {
+    "sku": "character_05",
+    "type": "character",
+    "content_id": 4,
+    "title": "Фотограф",
+    "free": true,
+    "enabled": true,
+    "purchase_enabled": false
+  },
+  {
+    "sku": "character_06",
+    "type": "character",
+    "content_id": 5,
+    "title": "Дед-болельщик",
+    "free": true,
+    "enabled": true,
+    "purchase_enabled": false
+  },
+  {
+    "sku": "character_07",
+    "type": "character",
+    "content_id": 6,
+    "title": "Студент",
+    "free": true,
+    "enabled": true,
+    "purchase_enabled": false
+  },
+  {
+    "sku": "character_08",
+    "type": "character",
+    "content_id": 7,
+    "title": "Фанат в очках",
+    "free": true,
+    "enabled": true,
+    "purchase_enabled": false
+  },
+  {
+    "sku": "character_09",
+    "type": "character",
+    "content_id": 8,
+    "title": "Дачник",
+    "free": true,
+    "enabled": true,
+    "purchase_enabled": false
+  },
+  {
+    "sku": "character_10",
+    "type": "character",
+    "content_id": 9,
+    "title": "Болельщица",
+    "free": true,
+    "enabled": true,
+    "purchase_enabled": false
+  },
+  {
+    "sku": "character_11",
+    "type": "character",
+    "content_id": 10,
+    "title": "Туристка",
+    "free": true,
+    "enabled": true,
+    "purchase_enabled": false
   }
 ]

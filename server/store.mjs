@@ -14,6 +14,7 @@ export function validateRoomSelection(body, host, entitlements = vkEntitlements(
   const car = body.car_model ?? 0;
   const stage = body.stage ?? 0;
   if (!canUseContent('car', car, entitlements)) return 'Эта машина пока недоступна в VK.';
+  if (!canUseContent('character', body.character ?? 0, entitlements)) return 'Этот персонаж пока недоступен в VK.';
   if (host && !canUseStage(stage, entitlements)) return 'Этот спецучасток пока недоступен в VK.';
   return null;
 }

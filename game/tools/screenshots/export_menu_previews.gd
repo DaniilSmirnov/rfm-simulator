@@ -1,14 +1,17 @@
 extends SceneTree
+const CharacterProfiles = preload("res://scripts/people/character_profiles.gd")
+const CharacterRig = preload("res://scripts/people/character_rig.gd")
 var previews: Array[SubViewport] = []
 var cameras: Array[Camera3D] = []
 # Regenerate menu images from game geometry, outside the runtime menu.
+# --cars-only, --stages-only and --characters-only limit what is written.
 func _initialize() -> void:
 	call_deferred("run")
 func run() -> void:
 	var game = load("res://main.tscn").instantiate()
 	game.defer_world = false
 	root.add_child(game)
-	for i in range(2):
+	for i in range(3):
 		var viewport = SubViewport.new()
 		viewport.size = Vector2i(480, 240)
 		viewport.world_3d = game.get_world_3d()
@@ -23,12 +26,21 @@ func run() -> void:
 		cameras.append(camera)
 	game.set_process(false)
 	game.room.set_process(false)
-	for i in range(0 if "--stages-only" in OS.get_cmdline_user_args() else game.Props.PLAYER_MODELS.size()):
+	var args = OS.get_cmdline_user_args()
+	var only = Array(args).filter(func(arg): return arg.ends_with("-only"))
+	for i in range(game.Props.PLAYER_MODELS.size() if only.is_empty() or "--cars-only" in only else 0):
 		game.select_player_car(i)
 		await capture(game, 0, "car_%d" % i)
-	for i in range(0 if "--cars-only" in OS.get_cmdline_user_args() else game.Stage.STAGES.size()):
+	# Characters stand on the first stage of each outfit (summer, winter).
+	var dressed = {}
+	for i in range(0 if only == ["--cars-only"] else game.Stage.STAGES.size()):
 		game.select_stage(i)
-		await capture(game, 1, "stage_%d" % i)
+		if only.is_empty() or "--stages-only" in only:
+			await capture(game, 1, "stage_%d" % i)
+		if (only.is_empty() or "--characters-only" in only) and not dressed.has(game.stage.outfit):
+			dressed[game.stage.outfit] = true
+			for look in CharacterProfiles.playable():
+				await capture_character(game, look)
 	await game._shutdown_audio()
 	quit()
 func capture(game: Node, index: int, name: String) -> void:
@@ -67,6 +79,33 @@ func capture(game: Node, index: int, name: String) -> void:
 	image.save_webp("res://textures/previews/%s.webp" % name, false, 0.85)
 	for node in hidden:
 		node.show()
+
+# A look in the stage's clothes, waist up and facing the camera: the face sits
+# in the middle, so the low phone card still shows it.
+func capture_character(game: Node, look: int) -> void:
+	var avatar = game.Props.player_avatar(look, game.stage.outfit)
+	game.add_child(avatar)
+	var spot: Vector3 = game.stage.at(150)
+	spot += (game.stage.at(151) - spot).cross(Vector3.UP).normalized() * 5.0
+	spot.y = game.stage.ground(spot)
+	avatar.position = spot
+	# Bodies face -Z: turn them to the camera, a little to the side.
+	avatar.rotation.y = PI - 0.35
+	CharacterRig.pose(avatar, {})
+	var target = spot + Vector3(0, 1.62, 0)
+	cameras[2].fov = 36
+	cameras[2].far = 80
+	cameras[2].position = target + Vector3(0, 0.1, 3.1)
+	cameras[2].look_at(target)
+	var hidden = hide_blockers(game, avatar, cameras[2].global_position)
+	previews[2].render_target_update_mode = SubViewport.UPDATE_ONCE
+	await process_frame
+	await process_frame
+	await RenderingServer.frame_post_draw
+	previews[2].get_texture().get_image().save_webp(CharacterProfiles.preview_path(look, game.stage.outfit), false, 0.85)
+	for node in hidden:
+		node.show()
+	avatar.free()
 
 # Hide scenery (start arch, flags, signs) standing between the camera and the car.
 func hide_blockers(game: Node, car: Node3D, eye: Vector3) -> Array:

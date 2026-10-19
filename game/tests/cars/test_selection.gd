@@ -91,10 +91,11 @@ func run() -> void:
 	host.room.transport.request_kind = "create"
 	host.room._response(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), JSON.stringify({"player": "host", "token": "h", "host": true, "room": "ABC123", "slot": 0, "car_model": 5, "stage": 1}).to_utf8_buffer())
 	guest.room.transport.request_kind = "join"
-	guest.room._response(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), JSON.stringify({"player": "guest", "token": "g", "host": false, "slot": 1, "car_model": 2, "stage": 1}).to_utf8_buffer())
+	guest.room._response(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), JSON.stringify({"player": "guest", "token": "g", "host": false, "slot": 1, "car_model": 2, "character": 9, "stage": 1}).to_utf8_buffer())
 	check(guest.stage.winter and guest.playing and not guest.selection_controls.visible, "guest enters host winter stage before gameplay")
 	check(guest.stage.trails.is_empty(), "winter stage keeps its original forest without spectator footpaths")
 	check(guest.car.get_meta("model") == "Лесной внедорожник" and host.car.get_meta("model") == "Дорожный седан", "room handshake preserves individual car choices")
+	check(guest.avatar_variant == 9 and host.avatar_variant == 0, "room handshake keeps the character the server accepted")
 	check(host.stage.trees == guest.stage.trees and host.stage.points == guest.stage.points, "winter forest and terrain match on every client")
 	var winter_tree_height_ok = true
 	for tree in host.stage.trees:
@@ -107,8 +108,9 @@ func run() -> void:
 	check(summer_sample.terrain_surface_height(forest_position) <= summer_sample.ground(forest_position) + 1.0, "rendered terrain height follows the sampled mesh rather than the continuous height function")
 	summer_sample.free()
 
-	host.room._update_peers([{"id": "guest", "name": "Друг", "slot": 1, "car_model": 2, "state": guest.room.local_state()}])
+	host.room._update_peers([{"id": "guest", "name": "Друг", "slot": 1, "car_model": 2, "character": 9, "state": guest.room.local_state()}])
 	check(host.room.peers.guest.car.get_meta("model") == "Лесной внедорожник", "peer model uses selected car instead of room slot")
+	check(host.room.peers.guest.avatar.get_meta("variant") == 9 and host.room.peers.guest.avatar.get_meta("outfit") == "winter", "peer walks as their chosen character, dressed for the winter stage")
 	guest.select_player_car(9)
 	host.room._update_peers([{"id": "sport_guest", "name": "Друг на Sport sedan", "slot": 1, "car_model": 9, "state": guest.room.local_state()}])
 	check(host.room.peers.sport_guest.car.get_meta("model") == "Спортивный седан" and baked(host.room.peers.sport_guest.car).has("BodyShellSportSedan"), "friends receive dedicated Sport sedan geometry")

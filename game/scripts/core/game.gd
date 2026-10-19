@@ -471,7 +471,7 @@ func prepare_world() -> void:
 	loading_screen.hide_loading()
 
 func start_game() -> void:
-	if platform_service != null and (not platform_service.can_use("car", car_choice.selected) or not platform_service.can_use("stage", stage_choice.selected, room.is_guest())):
+	if platform_service != null and (not platform_service.can_use("car", car_choice.selected) or not platform_service.can_use("stage", stage_choice.selected, room.is_guest()) or not platform_service.can_use("character", avatar_variant)):
 		toast("Выбранный контент недоступен в VK. Дождитесь загрузки прав или выберите бесплатный вариант.")
 		return
 	if playing:
