@@ -185,6 +185,7 @@ func loop() -> void:
 			t0 = Time.get_ticks_usec()
 			var message = JSON.parse_string(bytes.get_string_from_utf8())
 			add("guest_parse_world", Time.get_ticks_usec() - t0)
+			_replay_reason(message)
 			var pending = guest.room.prediction.pending.size()
 			var ticks = guest.room.prediction.backlog_ticks()
 			t0 = Time.get_ticks_usec()
@@ -212,6 +213,25 @@ func loop() -> void:
 		_watch("motion_guest_sees_host", guest, "host", host.car.position, previous_view, delta)
 	for action in ["forward", "left", "right"]:
 		Input.action_release(action)
+
+# Whether this packet will make the guest replay its input, and the first
+# field that differs from the prediction when it does.
+func _replay_reason(message) -> void:
+	var p = guest.room.prediction
+	if not message is Dictionary or not message.get("world") is Dictionary or not p.active:
+		return
+	var drive = message.world.get("driving", {}).get("guest", {})
+	if drive.is_empty() or int(drive.ack) < p.ack:
+		return
+	var later = p.pending.filter(func(c): return int(c.seq) > int(drive.ack))
+	var expected = p.snapshot() if later.is_empty() else p.predicted.get(int(drive.ack))
+	var replay = expected == null or not p.matches(expected, drive)
+	add("guest_replay_share", 1.0 if replay else 0.0)
+	if replay and expected != null:
+		for key in drive:
+			if key != "ack" and str(drive[key]) != str(expected.get(key)) and not p.matches(expected.merged({key: drive[key]}, true), expected):
+				add("replay_field_" + key, 1.0)
+				break
 
 func _queue(queue: Array, t: float, bytes: PackedByteArray) -> void:
 	# Unordered channel: each packet takes its own latency; the queue is kept
