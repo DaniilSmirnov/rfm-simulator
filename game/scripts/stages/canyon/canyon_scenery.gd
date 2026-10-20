@@ -368,7 +368,10 @@ func horizon() -> void:
 		var p = Vector3(stage.rng.randf_range(430, 660), 30, -i * 110.0 + 20.0) if not far else Vector3(stage.rng.randf_range(-620, 620), 30, -1620.0 - stage.rng.randf_range(0, 200))
 		var height = stage.rng.randf_range(120, 250)
 		var radius = stage.rng.randf_range(190, 330)
-		# cylinder() centres its mesh: the snow cap sits on the cone's own taper.
+		# cylinder() centres its mesh: the snow cap sits on the cone's own taper,
+		# raised a few metres so its faces never share depth with the cone's
+		# (they shimmered half a kilometre away on the 24-bit depth buffer).
 		var cap = height * 0.18
+		var lift = height * 0.015
 		RallyProps.cylinder(stage, p, radius, 0, height, Color("6f8296"), 6)
-		RallyProps.cylinder(stage, p + Vector3.UP * (height - cap) * 0.5, radius * cap / height, 0, cap, Color("dbe6ee"), 6)
+		RallyProps.cylinder(stage, p + Vector3.UP * ((height - cap) * 0.5 + lift), radius * cap / height * 1.04, 0, cap, Color("dbe6ee"), 6)
