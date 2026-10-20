@@ -101,6 +101,11 @@ func place() -> void:
 	global_transform = record.node.global_transform
 	linear_velocity = Vector3.ZERO
 	angular_velocity = Vector3.ZERO
+	# Once guarded, a prop stays guarded until a car tips it, so a pose set
+	# here decides afresh: a chair placed lying over settles lying over.
+	_slope_at = Vector3.INF
+	_strain = 0.0
+	_guard(not record.has("tree") and _lean() < GUARD_ANGLE)
 	if game.room.is_authority() and not record.anchored: wake()
 
 func wake() -> void:
