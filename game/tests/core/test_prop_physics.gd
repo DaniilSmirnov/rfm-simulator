@@ -85,7 +85,7 @@ func advance(frames: int) -> void:
 		await physics_frame
 	await process_frame
 
-# A walker who strolls into furniture slides it; only a run or a jump tips it.
+# A walker slides furniture, even running or jumping into it; only cars tip it.
 func walk_into(node: Node3D, step: float, players_state: Dictionary) -> void:
 	var start: Vector3 = node.global_position - Vector3.RIGHT * 1.5
 	world.injuries.entries = [{"key": "player:walker", "pos": start}]
@@ -112,11 +112,11 @@ func tipping() -> void:
 	var run = chair(Vector3(100, 0, 4), "run")
 	await advance(60)
 	await walk_into(run, 0.12, {"walker": {"in_car": false, "running": true}})
-	check(run.global_basis.y.dot(Vector3.UP) < 0.7, "running into a chair knocks it over")
+	check(run.global_basis.y.dot(Vector3.UP) > 0.95, "running into a chair cannot knock it over")
 	var jump = chair(Vector3(120, 0, 4), "jump")
 	await advance(60)
 	await walk_into(jump, 0.08, {"walker": {"in_car": false, "airborne": true}})
-	check(jump.global_basis.y.dot(Vector3.UP) < 0.7, "jumping into a chair knocks it over")
+	check(jump.global_basis.y.dot(Vector3.UP) > 0.95, "jumping into a chair cannot knock it over")
 	var tipped = chair(Vector3(140, 0.4, 4), "tipped", Vector3(0, 0, PI / 2))
 	props.knock("tipped", Vector3.DOWN)
 	await advance(180)
@@ -130,6 +130,32 @@ func tipping() -> void:
 	await advance(60)
 	check(lowest < 0.95, "a dragged tipped chair turns upright gradually, not in one frame")
 	check(tipped.global_basis.y.dot(Vector3.UP) > 0.97, "dragging a tipped chair turns it back upright")
+
+# A cauldron knocked off its campfire glides back onto it; dragged away, it stays.
+func hearth() -> void:
+	# Only the horizontal offset to the fire counts: keep its collider clear.
+	chair(Vector3(200, -3, 4), "camp:firewood:a")
+	props.records["camp:firewood:a"].anchored = true
+	var pot = chair(Vector3(200, 0, 4), "camp:cauldron:a")
+	await advance(120)
+	var home: Transform3D = pot.global_transform
+	props.knock("camp:cauldron:a", Vector3(8, 0, 3))
+	await advance(20)
+	check(pot.global_position.distance_to(home.origin) > 0.6, "a knocked cauldron leaves its campfire")
+	var step = 0.0
+	var previous = pot.global_position
+	for i in range(420):
+		await advance(1)
+		step = maxf(step, pot.global_position.distance_to(previous))
+		previous = pot.global_position
+	check(pot.global_position.distance_to(home.origin) < 0.1 and pot.global_basis.y.dot(Vector3.UP) > 0.97, "a knocked cauldron returns upright onto its campfire")
+	check(step < 0.25, "a cauldron returns to its campfire smoothly, not in one jump (%.2f m)" % step)
+	var puller = {"pos": world.room.a(props.center(props.records["camp:cauldron:a"]) + Vector3.RIGHT * 2), "tow": true, "in_car": false}
+	for i in range(90):
+		props.update({"helper": puller}, {}, 1.0 / 60.0)
+		await physics_frame
+	await advance(240)
+	check(pot.global_position.distance_to(home.origin) > 0.6, "a cauldron a player drags off the fire stays where it was left")
 
 func run() -> void:
 	world = World.new()
@@ -173,6 +199,7 @@ func run() -> void:
 		await advance(1)
 	check(bump.global_position.distance_to(bump_start) > 0.1, "a moving NPC wakes sleeping props after all props have settled")
 	await tipping()
+	await hearth()
 	var heavy = chair(Vector3(60, 0, 4), "heavy")
 	props.records["heavy"].mass = 3500.0
 	props.records["heavy"].body.mass = 3500.0
