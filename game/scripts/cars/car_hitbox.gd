@@ -86,7 +86,9 @@ static func solids(solids, start: Vector3, end: Vector3, car: Dictionary, ignore
 		var live = object.body is RigidBody3D or object.get("movable", false)
 		if live: solids._cache_live_pose(object)
 		var pose: Transform3D = object.live_pose if live else object.collision_pose
-		var hit = sweep(start, end, car, pose, object.half)
+		var half: Vector3 = object.half
+		if apart(start + car.offset, end + car.offset, pose.origin, car.half.length() + pose.basis.x.length() * half.x + pose.basis.y.length() * half.y + pose.basis.z.length() * half.z): continue
+		var hit = sweep(start, end, car, pose, half)
 		if hit.is_empty() or (not best.is_empty() and hit.time >= best.time): continue
 		hit.merge({"kind": object.kind, "id": object.id, "prop": object.get("prop", "")})
 		best = hit
@@ -174,4 +176,15 @@ static func blocked(start: Vector3, end: Vector3, car: Dictionary, other: Dictio
 		return not circle(start, end, car, position, 0.3).is_empty()
 	var box: AABB = other.get("box", player(0))
 	var basis = Basis(Vector3.UP, float(other.get("yaw", 0)))
-	return not sweep(start, end, car, Transform3D(basis, position + basis * box.get_center()), box.size * 0.5).is_empty()
+	var center = position + basis * box.get_center()
+	if apart(start + car.offset, end + car.offset, center, car.half.length() + box.size.length() * 0.5): return false
+	return not sweep(start, end, car, Transform3D(basis, center), box.size * 0.5).is_empty()
+
+# Bounding spheres: true when a car centre moving start -> end stays farther
+# than `reach` from `center`, so the exact sweep cannot report a contact.
+# Cheap enough to run before every sweep; most candidates are rejected here.
+static func apart(start: Vector3, end: Vector3, center: Vector3, reach: float) -> bool:
+	var segment = end - start
+	var t = clampf((center - start).dot(segment) / maxf(segment.length_squared(), 0.0000001), 0.0, 1.0)
+	reach += 0.05
+	return (start + segment * t).distance_squared_to(center) > reach * reach

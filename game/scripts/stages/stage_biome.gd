@@ -128,8 +128,21 @@ func terrain_tile_step(_p: Vector3) -> float:
 
 # Height of a rendered terrain vertex. The default snaps fine roadside tiles to
 # the coarse neighbouring edges so no cracks open at T-junctions.
+# After the build the terrain no longer changes, but cars probe it every
+# physics tick (four suspension samples off the road), for the player and, on
+# a room host, for every guest: a small memo of the vertices near the cars.
+const VERTEX_MEMO_LIMIT = 4096
+var _vertex_memo: Dictionary = {}
+
 func terrain_vertex_height(x: float, z: float) -> float:
-	return stage.snapped_vertex_height(x, z)
+	if stage.terrain_cache_enabled:
+		return stage.snapped_vertex_height(x, z)
+	var key = Vector2(x, z)
+	if not _vertex_memo.has(key):
+		if _vertex_memo.size() >= VERTEX_MEMO_LIMIT:
+			_vertex_memo.clear()
+		_vertex_memo[key] = stage.snapped_vertex_height(x, z)
+	return _vertex_memo[key]
 
 # Split the terrain into 64 m tiles (snow deformation, culling of big maps).
 func terrain_tiled() -> bool:

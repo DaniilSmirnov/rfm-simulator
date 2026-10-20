@@ -2,8 +2,20 @@ extends RefCounted
 # Wire shapes are shared with the Worker; validation precedes all world mutation.
 static var types: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://data/world_schema.json")).types
 
+# One packet passes through several appliers (direct link, room, prediction,
+# providers) that each check it. While a checked world is being applied, the
+# room marks it trusted so the nested checks do not walk it again.
+static var _trusted = null
+
 static func valid(world) -> bool:
+	if world != null and is_same(world, _trusted):
+		return true
 	return _bounded(world, [32768]) and _matches(world, "world")
+
+# Marks a world that valid() accepted for the duration of its application;
+# trust(null) ends it.
+static func trust(world) -> void:
+	_trusted = world
 
 static func _usable(world: Dictionary) -> bool:
 	if not world is Dictionary or world.size() > 96: return false

@@ -74,6 +74,27 @@ func run() -> void:
 	host.accept(merged.pending, stage, 3)
 	merged.reconcile(host.snapshot(), stage, 3)
 	check(merged.pending.is_empty() and merged.node.position.distance_to(host.node.position) < 0.00001, "host reproduces merged input exactly")
+	# A host state equal to the prediction drops acknowledged input without
+	# replaying the rest; a different one replays from the host's state.
+	plain.reset(stage.at(60), 0)
+	host.reset(stage.at(60), 0)
+	for i in range(20):
+		plain.predict(3, 1.0, 0.25, false, stage, 3)
+	host.accept(plain.pending.slice(0, 10), stage, 3)
+	var ahead = plain.node.position
+	# A replay would now hit this contact; keeping the prediction does not.
+	plain.context = {"contacts": [{"position": plain.node.position + Vector3(0, 0, -1)}]}
+	plain.reconcile(host.wire_snapshot(), stage, 3)
+	check(plain.ack == 10 and plain.pending.size() == 10 and plain.node.position == ahead and plain.visual_offset == Vector3.ZERO, "matching host state keeps the prediction without a replay")
+	plain.context = {}
+	host.accept(plain.pending, stage, 3)
+	var moved = host.wire_snapshot()
+	moved.pos = [moved.pos[0] + 0.3, moved.pos[1], moved.pos[2]]
+	plain.reconcile(moved, stage, 3)
+	check(plain.pending.is_empty() and absf(plain.node.position.x - moved.pos[0]) < 0.00001 and absf(plain.visual_offset.x + 0.3) < 0.01, "a host state that differs is replayed and smoothed")
+	check(plain.predicted.keys() == [plain.ack], "predicted states are kept only for unacknowledged input")
+	plain.reconcile(moved, stage, 3)
+	check(absf(plain.visual_offset.x + 0.3) < 0.01, "the corrected state is the new reference for the same acknowledgement")
 	client.node.position += Vector3(1, 0, 0)
 	var rendered = client.node.position
 	client.reconcile(host.snapshot(), stage, 9)

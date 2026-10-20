@@ -115,6 +115,24 @@ func run() -> void:
 	reply.world.elapsed = 10.2
 	game.room._response(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), JSON.stringify(reply).to_utf8_buffer())
 	check(absf(game.elapsed - 10.2) < 0.001, "new world snapshot still applies shared state")
+	# A guest car driven on the host is stamped by its simulated ticks, so
+	# input bursts that arrive with jitter still give evenly spaced samples.
+	var Prediction = load("res://scripts/net/drive_prediction.gd")
+	var rng = RandomNumberGenerator.new()
+	rng.seed = 3
+	var stamp_time = 100.0 - Prediction.STAMP_LAG
+	var worst_spacing = 0.0
+	var behind = true
+	for i in range(1, 300):
+		var arrival = 100.0 + i / 30.0 + rng.randf() * 0.04
+		var next_stamp = Prediction.stamp(stamp_time, 4, arrival)
+		if i > 1:
+			worst_spacing = maxf(worst_spacing, absf((next_stamp - stamp_time) - 4.0 / 120.0))
+		behind = behind and next_stamp <= arrival and next_stamp > arrival - 0.25
+		stamp_time = next_stamp
+	check(worst_spacing <= Prediction.STAMP_DRIFT + 0.0001, "jittered input bursts keep simulation stamps evenly spaced")
+	check(behind, "simulation stamps stay just behind the arrival clock")
+	check(Prediction.stamp(stamp_time, 0, stamp_time + 5.0) == stamp_time + 5.0 - Prediction.STAMP_LAG, "a stall resets the stamp to the clock")
 	await game._shutdown_audio()
 	game.queue_free()
 	await process_frame
