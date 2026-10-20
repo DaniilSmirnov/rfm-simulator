@@ -350,7 +350,7 @@ func _ledge_markers() -> void:
 	var s = LEDGE_BEGIN
 	while s < LEDGE_END:
 		var p = stage.at(s) - stage.side(s) * (stage.road_width(s) * 0.5 + 1.2)
-		p.y = stage.ground(p) + 0.42
+		p.y = stage.RoadCut.ground(stage, p) + 0.42
 		var block = Props.box(markers, p, Vector3(0.44, 0.84, 0.44), Color("e7e2d4"))
 		block.rotation.y = rng.randf_range(-0.2, 0.2)
 		Props.box(markers, p + Vector3(0, 0.3, 0), Vector3(0.46, 0.2, 0.46), Color("a33a28"))

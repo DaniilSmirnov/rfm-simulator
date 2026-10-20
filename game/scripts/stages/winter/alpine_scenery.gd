@@ -70,7 +70,7 @@ static func inside_sign(stage, s: float) -> float:
 static func edge_point(stage, s: float, sign: float, extra: float) -> Vector3:
 	var offset = stage.road_width(s) * 0.5 + Banks.ROAD_MARGIN + Banks.WIDTH + extra
 	var p: Vector3 = stage.at(s) + stage.side(s) * sign * offset
-	p.y = stage.ground(p)
+	p.y = stage.RoadCut.ground(stage, p)
 	return p
 
 # ---------------------------------------------------------------- helpers
@@ -357,7 +357,7 @@ static func _build_rock_cut(stage, root: Node3D) -> void:
 # A cascade frozen solid against the rock wall above the first corniche.
 static func _build_waterfall(stage, root: Node3D) -> void:
 	var p = waterfall_position(stage)
-	p.y = stage.ground(p)
+	p.y = stage.RoadCut.ground(stage, p)
 	var toward = stage.at(WATERFALL_STATION) - p
 	toward.y = 0.0
 	toward = toward.normalized()
@@ -556,15 +556,15 @@ static func _build_fans(stage, root: Node3D) -> void:
 		along.y = 0.0
 		along = along.normalized()
 		var snowman = clearing + along * (5.2 if i % 2 == 0 else -5.2)
-		snowman.y = stage.ground(snowman)
+		snowman.y = stage.RoadCut.ground(stage, snowman)
 		_snowman(stage, root, snowman, atan2(-along.x, -along.z) + (0.6 if i % 2 == 0 else -0.6), i)
 		var flag = clearing - along * (4.0 if i % 2 == 0 else -4.0)
-		flag.y = stage.ground(flag)
+		flag.y = stage.RoadCut.ground(stage, flag)
 		var palette: Array = palettes[i % palettes.size()]
 		alpine.flag_spots.append({"pos": flag, "colors": [palette[0], palette[1], palette[2]], "vertical": palette[3], "yaw": atan2(along.x, along.z)})
 		if i % 2 == 1:
 			var flare = clearing + (stage.at(s) - clearing).normalized() * 3.5
-			flare.y = stage.ground(flare)
+			flare.y = stage.RoadCut.ground(stage, flare)
 			alpine.flare_spots.append(flare)
 	# Flags on the col, by the hotel terrace and the chapel.
 	for item in alpine.hamlet:
@@ -574,12 +574,12 @@ static func _build_fans(stage, root: Node3D) -> void:
 		var toward: Vector3 = stage.at(s) - item.pos
 		toward.y = 0.0
 		var spot: Vector3 = item.pos + toward.normalized() * (float(item.size.z) * 0.5 + 3.2) + toward.normalized().cross(Vector3.UP) * 3.0
-		spot.y = stage.ground(spot)
+		spot.y = stage.RoadCut.ground(stage, spot)
 		var palette: Array = palettes[(alpine.flag_spots.size() + 1) % palettes.size()]
 		alpine.flag_spots.append({"pos": spot, "colors": [palette[0], palette[1], palette[2]], "vertical": palette[3], "yaw": atan2(toward.x, toward.z) + PI * 0.5})
 	var terrace: Dictionary = alpine.hamlet[1]
 	var flare_spot: Vector3 = terrace.pos + (stage.at(float(terrace.s)) - terrace.pos).normalized() * 9.0
-	flare_spot.y = stage.ground(flare_spot)
+	flare_spot.y = stage.RoadCut.ground(stage, flare_spot)
 	alpine.flare_spots.append(flare_spot)
 
 static func _snowman(stage, root: Node3D, p: Vector3, yaw: float, index: int) -> void:

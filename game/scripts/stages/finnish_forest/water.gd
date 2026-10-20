@@ -210,7 +210,8 @@ func world_point(s: float, lat: float) -> Vector3:
 func _build_surface(body: Dictionary) -> void:
 	var st = SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var visible_level: float = body.level - 0.2 # rendered terrain sits 0.25 m below ground()
+	# The shore is drawn at ground() (road_cut.gd), so boats and ducks ride the visible water.
+	var visible_level: float = body.level - 0.02
 	var rows = int((body.s1 - body.s0) / GRID)
 	var columns = int((body.lat1 - body.lat0) / GRID)
 	var depths: Dictionary = {}

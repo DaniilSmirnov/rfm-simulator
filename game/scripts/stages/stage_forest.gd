@@ -62,7 +62,7 @@ func plant_forest(cooperative: bool = false) -> void:
 			continue
 		if stage.biome.roadside_rock_blocked(p):
 			continue
-		p.y = stage.ground(p)
+		p.y = stage.RoadCut.ground(stage, p)
 		var radius = stage.rng.randf_range(0.3, 1)
 		# road_distance() reads the station from -z and overstates the gap in bends
 		# that run far off -z: rocks there lay on the road, and cars knocked the
@@ -284,7 +284,7 @@ func build_woodland(cooperative: bool = false) -> void:
 		var radius = detail_rng.randf_range(0.8, 2.4)
 		if not woodland_spot(p, radius) or stage.obstacle_hit(p, p, radius + 0.3) >= 0 or not stage.rock_hit(p, p, radius, false).is_empty():
 			continue
-		p.y = stage.ground(p)
+		p.y = stage.RoadCut.ground(stage, p)
 		var height = detail_rng.randf_range(0.7, 2.5)
 		boulder_poses.append(Transform3D(Basis(Vector3.UP, detail_rng.randf() * TAU).scaled(Vector3(radius * 2, height, radius * 1.7)), p + Vector3(0, height * 0.35, 0)))
 		boulder_colors.append(Color("697064").lightened(detail_rng.randf_range(-0.12, 0.12)))
@@ -319,7 +319,7 @@ func build_woodland(cooperative: bool = false) -> void:
 		var patch = sin(p.x * 0.075 + p.z * 0.027) * sin(p.z * 0.054)
 		if patch < -0.35 or not woodland_spot(p, 1.4) or not stage.rock_hit(p, p, 1.1, false).is_empty():
 			continue
-		p.y = stage.ground(p) - 0.22
+		p.y = stage.terrain_surface_height(p) + 0.03
 		var height = detail_rng.randf_range(0.55, 1.35)
 		var cell = Vector2i(floori(p.x / 4.0), floori(p.z / 4.0))
 		if not ground_exclusions.has(cell):
@@ -367,7 +367,7 @@ func build_woodland(cooperative: bool = false) -> void:
 			continue
 		for j in range(3):
 			var at = p + Vector3(detail_rng.randf_range(-0.45, 0.45), 0, detail_rng.randf_range(-0.45, 0.45))
-			at.y = stage.ground(at) + 0.02
+			at.y = stage.RoadCut.ground(stage, at) + 0.02
 			var size = detail_rng.randf_range(0.10, 0.22)
 			var species = "fly_agaric" if i % 10 == 4 else ("toadstool" if i % 10 == 7 else "edible")
 			var cap_layer = "FlyAgaricCaps" if species == "fly_agaric" else ("ToadstoolCaps" if species == "toadstool" else "MushroomCaps")
@@ -388,7 +388,7 @@ func build_woodland(cooperative: bool = false) -> void:
 		var p = stage.at(along) + stage.side(along) * detail_rng.randf_range(12, 45) * (-1 if i % 2 else 1)
 		if not woodland_spot(p, 0.8) or not stage.rock_hit(p, p, 0.8, false).is_empty():
 			continue
-		p.y = stage.ground(p) - 0.23
+		p.y = stage.terrain_surface_height(p) + 0.02
 		var radius = detail_rng.randf_range(0.45, 0.9)
 		var height = detail_rng.randf_range(0.35, 0.75)
 		mound_poses.append(Transform3D(Basis.from_scale(Vector3(radius, height, radius)), p + Vector3(0, height * 0.5, 0)))
@@ -476,7 +476,7 @@ func clearing_signs() -> void:
 	for i in range(stage.clearings.size()):
 		var first = stage.get_child_count()
 		var c: Vector3 = stage.clearings[i] + stage.direction(stage.road_s(stage.clearings[i])) * 8.0
-		c.y = stage.ground(c)
+		c.y = stage.RoadCut.ground(stage, c)
 		RallyProps.cylinder(stage, c + Vector3(0, 1.2, 0), 0.07, 0.07, 2.4, Color("d5bc8e"), 5)
 		var sign = RallyProps.box(stage, c + Vector3(0, 2.15, 0), Vector3(2, 0.65, 0.12), Color("e5d9b9"))
 		var label = Label3D.new()

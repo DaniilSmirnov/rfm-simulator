@@ -422,7 +422,7 @@ func _dry_stone_walls() -> void:
 			var lateral = run[2] * (village.road_width(s) * 0.5 + 3.4)
 			var p = village.anchor(s + 1.5, lateral)
 			if architecture.open_ground(p, 0.6) and not _near_clearing(p, 7.0) and fposmod(s, 27.0) < 21.0:
-				p.y = stage.ground(p)
+				p.y = stage.RoadCut.ground(stage, p)
 				var wall = Node3D.new()
 				root.add_child(wall)
 				wall.position = p

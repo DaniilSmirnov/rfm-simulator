@@ -83,8 +83,8 @@ func ground(pos: Vector3) -> float:
 	return stage.base_ground(pos)
 
 # Tyres rest on what is drawn: the road ribbon follows ground() across the
-# carriageway, but beyond its edge the land mesh lies about 0.25 m lower
-# (terrain vertices are cut below ground(), see Stage.terrain_surface_height).
+# carriageway, but just beyond its edge the land mesh lies up to 0.25 m lower
+# (terrain vertices are cut below ground() near the road, see road_cut.gd).
 # Blend over half a metre past the edge so a wheel rolls off the road.
 func vehicle_ground(pos: Vector3) -> float:
 	var height = stage.ground(pos)

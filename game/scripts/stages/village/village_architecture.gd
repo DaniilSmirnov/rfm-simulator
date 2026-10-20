@@ -83,7 +83,7 @@ func node(name: String, p: Vector3, yaw: float) -> Node3D:
 	return root
 
 func grounded(p: Vector3) -> Vector3:
-	p.y = stage.ground(p)
+	p.y = stage.RoadCut.ground(stage, p)
 	return p
 
 func finish(root: Node3D) -> void:
