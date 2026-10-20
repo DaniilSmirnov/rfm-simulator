@@ -21,6 +21,7 @@ func frames(count: int) -> void:
 
 func run() -> void:
 	var game = load("res://main.tscn").instantiate()
+	game.defer_world = true
 	root.add_child(game)
 	await frames(2)
 	if "--vk" in OS.get_cmdline_user_args():
@@ -70,7 +71,7 @@ func run() -> void:
 		game.loading_screen.caption.text = "Деревья и подлесок"
 		game.loading_screen.bar.value = 46
 	await frames(int(arg("frames", "40")))
-	await RenderingServer.frame_post_draw
+	RenderingServer.force_draw(false)
 	root.get_viewport().get_texture().get_image().save_png(arg("out", "res://../ui.png"))
 	await game._shutdown_audio()
 	quit()

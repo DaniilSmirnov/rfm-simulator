@@ -17,7 +17,7 @@ var car_purchase_button: Button
 var purchase_button: Button
 var check_purchase: Button
 var purchase_status: Label
-var return_button: Button
+var quit_dialog: Control
 var quit_button: Button
 var host_pause: PanelContainer
 var help_button: Button
@@ -251,15 +251,12 @@ func _apply_volume(percent: float) -> void:
 # ---------------------------------------------------------------- assembly
 
 func finish(parent: Control) -> void:
-	return_button = UiKit.button(parent, "В ГЛАВНОЕ МЕНЮ", "ghost", 44)
-	return_button.name = "ReturnButton"
-	return_button.pressed.connect(game.return_to_main_menu)
-	return_button.hide()
 	# Only a desktop window has nowhere else to close the game from.
 	quit_button = UiKit.button(parent, "ВЫЙТИ ИЗ ИГРЫ", "ghost", 44)
 	quit_button.name = "QuitButton"
-	quit_button.pressed.connect(_quit_game)
+	quit_button.pressed.connect(_confirm_quit)
 	quit_button.visible = OS.has_feature("pc") and not OS.has_feature("web")
+	_build_quit_dialog()
 	help_dialog = _link_dialog("SupportDialog", "Помощь и поддержка", _help_message(), [["СКОПИРОВАТЬ АДРЕС", "primary", _copy_support_email]])
 	about_dialog = _link_dialog("AboutDialog", UiKit.BRAND_NAME, _about_message(), [["ОТКРЫТЬ САЙТ", "primary", func(): UiKit.open_url(UiKit.BRAND_URL)], ["СКОПИРОВАТЬ", "secondary", func(): _copy(UiKit.BRAND_URL, Loc.t("Ссылка скопирована: %s") % UiKit.BRAND_URL)]])
 	# Backdrop fills the viewport independently of the inset HUD root.
@@ -357,13 +354,33 @@ func _process(_delta: float) -> void:
 		# Phones keep the entry block short: the status line shows only news.
 		game.room.ui.status.visible = not (game.mobile_mode and game.room.ui.status.text == game.room.ui.default_hint)
 		host_pause.visible = game.room.is_guest() and game.room.world_paused and not game.paused and not result
-	return_button.visible = game.playing
 	if not game.mobile_mode:
 		game.mobile_top.visible = game.playing
 	else:
 		var active_hud = game.playing and not game.paused and not result and not host_pause.visible
 		game.mobile_top.visible = active_hud
 		game.mobile_bottom.visible = active_hud and not game.info_label.text.is_empty()
+
+func _build_quit_dialog() -> void:
+	var modal = UiKit.modal(game.hud.dialog_layer, "QuitDialog")
+	quit_dialog = modal.root
+	UiKit.label(modal.content, "Выйти из игры?", "heading")
+	UiKit.wrap(UiKit.label(modal.content, "Игра закроется, и ты покинешь выезд.", "body"))
+	var row = UiKit.hbox(modal.content, 10)
+	var cancel = UiKit.expand(UiKit.button(row, "ОСТАТЬСЯ", "secondary", 44))
+	cancel.name = "CancelQuit"
+	cancel.pressed.connect(func():
+		quit_dialog.hide()
+		quit_button.grab_focus()
+	)
+	var confirm = UiKit.expand(UiKit.button(row, "ВЫЙТИ ИЗ ИГРЫ", "primary", 44))
+	confirm.name = "ConfirmQuit"
+	confirm.pressed.connect(_quit_game)
+
+func _confirm_quit() -> void:
+	quit_dialog.show()
+	game.hud.fit_modal(quit_dialog)
+	quit_dialog.find_child("CancelQuit", true, false).grab_focus()
 
 # Leaving tells the room right away instead of waiting for it to time out.
 func _quit_game() -> void:

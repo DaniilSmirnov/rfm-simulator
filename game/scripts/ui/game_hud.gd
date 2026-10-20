@@ -303,7 +303,7 @@ func layout_menu() -> void:
 	update_menu()
 	var area = dialog_area.size
 	var main = not game.playing
-	var width = (900.0 if main else 560.0) if not game.mobile_mode else (860.0 if main else 600.0)
+	var width = (1100.0 if main else 560.0) if not game.mobile_mode else (1100.0 if main else 600.0)
 	game.menu.custom_minimum_size.x = width
 	var extent = game.menu.get_combined_minimum_size()
 	var factor = minf(1.0, minf(maxf(area.x - 24, 1) / extent.x, maxf(area.y - 24, 1) / extent.y))
