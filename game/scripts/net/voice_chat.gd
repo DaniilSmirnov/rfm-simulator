@@ -96,6 +96,16 @@ func _set_ptt(value: bool) -> void:
 
 func _tick() -> void:
 	var result: Dictionary = backend.tick(_levels())
+	# The browser page answered that it has no voice (no WebRTC there).
+	if result.get("joined", true) == false:
+		_set_ptt(false)
+		joined = false
+		supported = false
+		pending.clear()
+		connected_peers = 0
+		if label != null:
+			label.hide()
+		return
 	if not result.is_empty():
 		connected_peers = int(result.get("connected", 0))
 		for envelope in result.get("signals", []):

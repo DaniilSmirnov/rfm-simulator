@@ -124,6 +124,20 @@ test('push-to-talk asks for the microphone once and gates the shared track', asy
   assert.deepEqual(tick(voice).events, [{ type: 'mic', value: 'pending' }, { type: 'mic', value: 'ready' }]);
 });
 
+test('the engine bridge runs a batch of calls in order and returns every tick', async () => {
+  const { voice, tracks } = load();
+  const first = voice.bridge([['syncMembers', ['a', 'b']], ['join', { localId: 'a', session: 'room-a-session' }], ['setPtt', true], ['tick', []]]);
+  assert.equal(first.joined, true);
+  assert.equal(first.results.length, 1);
+  assert.deepEqual(first.results[0].events, [{ type: 'mic', value: 'pending' }]);
+  await flush();
+  assert.equal(tracks.length, 1, 'push-to-talk through the bridge opens the microphone');
+  const second = voice.bridge([['tick', [{ id: 'b', distance: 12 }]], ['unknown'], 'junk', ['tick']]);
+  assert.equal(second.results.length, 2);
+  assert.equal(second.results[0].signals[0].data.kind, 'offer');
+  assert.equal(JSON.stringify(voice.bridge([['leave']])), '{"results":[],"joined":false}');
+});
+
 test('a refused microphone leaves the radio receive-only', async () => {
   const clients = room(['a', 'b'], { mic: 'deny' });
   await relay(clients);

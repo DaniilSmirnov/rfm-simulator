@@ -336,6 +336,19 @@
     return JSON.stringify(poll());
   }
 
+  // One batch from Godot, in order. onSignal is not awaited, as before.
+  const CALLS = { join, leave, syncMembers, onSignal, setPtt, mute };
+  function bridge(calls) {
+    const results = [];
+    for (const call of Array.isArray(calls) ? calls : []) {
+      if (!Array.isArray(call)) continue;
+      const [method, ...args] = call;
+      if (method === 'tick') results.push(JSON.parse(tick(JSON.stringify(args[0] ?? []))));
+      else if (Object.hasOwn(CALLS, method)) Promise.resolve(CALLS[method](...args)).catch(error => report(method, error));
+    }
+    return { results, joined: state.joined };
+  }
+
   function report(stage, error) { events.push({ type: 'error', stage, message: String(error?.message || error) }); }
 
   addEventListener('blur', releasePtt);
@@ -343,5 +356,5 @@
   document.addEventListener('visibilitychange', () => { if (document.hidden) releasePtt(); });
   for (const name of ['pointerdown', 'keydown', 'touchend']) addEventListener(name, resumeAudio, { capture: true, passive: true });
 
-  window.RallyVoice = { join, leave, syncMembers, onSignal, setPtt, update, mute, poll, tick, quality, state };
+  window.RallyVoice = { join, leave, syncMembers, onSignal, setPtt, update, mute, poll, tick, bridge, quality, state };
 })();
