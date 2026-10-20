@@ -1,5 +1,6 @@
 extends Node3D
 # Shared collision tiles for the sampled terrain, rocks and instanced trunks.
+const RoadCut = preload("res://scripts/stages/road_cut.gd")
 const TILE = 16
 const STEP = 0.5
 var stage
@@ -49,12 +50,18 @@ func reshape(area: Rect2) -> void:
 func _origin(key: Vector2i) -> Vector3:
 	return Vector3(key.x * TILE + TILE / 2, 0, key.y * TILE + TILE / 2)
 
+# Beside the road the land is drawn below ground() (road_cut.gd): a prop
+# knocked onto the verge rests on what is drawn, not in the air above it.
+# On snowy stages the verge is a snowbank, drawn where ground() puts it.
 func _heights(origin: Vector3) -> PackedFloat32Array:
 	var count = int(TILE / STEP) + 1
 	var heights = PackedFloat32Array()
+	var cut: bool = stage.has_method("route_nearest") and not stage.has_snow
+	var memo: Dictionary = {}
 	for z in range(count):
 		for x in range(count):
-			heights.append(stage.ground(origin + Vector3(x * STEP - TILE / 2, 0, z * STEP - TILE / 2)))
+			var p = origin + Vector3(x * STEP - TILE / 2, 0, z * STEP - TILE / 2)
+			heights.append(stage.ground(p) - (RoadCut.under(stage, p, memo) if cut else 0.0))
 	return heights
 
 func _tile(key: Vector2i) -> void:

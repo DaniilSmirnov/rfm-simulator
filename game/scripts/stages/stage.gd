@@ -29,6 +29,7 @@ const StageSolids = preload("res://scripts/stages/stage_solids.gd")
 const LoadPacer = preload("res://scripts/core/load_pacer.gd")
 const RoadChunks = preload("res://scripts/stages/road_chunks.gd")
 const RoadRelief = preload("res://scripts/stages/road_relief.gd")
+const RoadCut = preload("res://scripts/stages/road_cut.gd")
 const WorldSync = preload("res://scripts/net/world_sync.gd")
 # Everything that differs between stages lives in the biome (stage_biome.gd);
 # this file is the shared machinery around it.
@@ -222,9 +223,8 @@ func blend_trails(pos: Vector3, height: float) -> float:
 	return height
 
 # Trees must touch the *rendered* terrain, not the continuous ground()
-# function. Terrain is triangulated in 4 m cells (2 m near forest roads)
-# and its vertices are 0.25 m below ground(). Reproduce that interpolation
-# exactly to avoid suspended trunks on slopes and relief crests.
+# function: 4 m cells (2 m near roads), cut below it around the road (road_cut.gd).
+# Reproduce that interpolation exactly to avoid suspended trunks on slopes and crests.
 # The 2 m roadside tiles meet 4 m terrain tiles at T-junctions.
 # On those boundaries, snap the fine tile's midpoint to the coarse edge.
 # Otherwise the ground() midpoint can be above/below the straight 4 m edge,
@@ -253,7 +253,7 @@ func _terrain_tile_step(cell_x: float, cell_z: float) -> float:
 
 func terrain_base_vertex_height(x: float, z: float) -> float:
 	var p = Vector3(x, 0, z)
-	return parks.vertex(p, biome.base_ground(p) - 0.25)
+	return parks.vertex(p, biome.base_ground(p) - RoadCut.depth(self, p))
 
 func terrain_vertex_height(x: float, z: float) -> float:
 	if terrain_cache_enabled:

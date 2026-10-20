@@ -87,7 +87,7 @@ func _fence_run(a: Vector3, b: Vector3) -> void:
 	var across = (b - a).normalized().cross(Vector3.UP).normalized()
 	for i in range(pickets + 1):
 		var p = a.lerp(b, float(i) / pickets)
-		p.y = stage.ground(p)
+		p.y = stage.RoadCut.ground(stage, p)
 		var post = i % 10 == 0 or i == pickets
 		var size = Vector3(0.12, 1.25, 0.12) if post else Vector3(0.09, 1.05, 0.025)
 		posts.append(Transform3D(Basis((b - a).normalized() * size.x, Vector3.UP * size.y, across * size.z), p + Vector3.UP * (size.y * 0.5 - 0.05)))
@@ -110,7 +110,7 @@ func _fence_run(a: Vector3, b: Vector3) -> void:
 func _well(root: Node3D) -> void:
 	var pos = biome.place(biome.WELL.s, biome.WELL.side, biome.WELL.offset)
 	var node = _anchor(root, "CraneWell", pos, stage.at(biome.WELL.s) - pos)
-	node.position.y = stage.ground(pos)
+	node.position.y = stage.RoadCut.ground(stage, pos)
 	Carpentry.log_frame(node, Vector3(0, -0.3, 0), 1.2, 1.2, 1.25, LOGS)
 	Props.box(node, Vector3(0, 0.98, 0), Vector3(1.0, 0.04, 1.0), Color("2b2723"))
 	var pivot = Vector3(0, 4.1, -4.0)
@@ -135,7 +135,7 @@ func _granary(root: Node3D) -> void:
 	var b = biome.BARN
 	var pos = biome.place(b.s, b.side, b.offset)
 	var node = _anchor(root, "VillageBarn", pos, stage.at(b.s) - pos)
-	node.position.y = stage.ground(pos) + 0.45
+	node.position.y = stage.RoadCut.ground(stage, pos) + 0.45
 	for x in [-2.2, 2.2]:
 		for z in [-1.8, 0.0, 1.8]:
 			Props.box(node, Vector3(x, -0.4, z), Vector3(0.5, 0.9, 0.5), Color("7c7a74"))
@@ -152,7 +152,7 @@ func _granary(root: Node3D) -> void:
 func _village_sign(root: Node3D) -> void:
 	var pos = biome.place(biome.SIGN_S, 1.0, 5.5)
 	var node = _anchor(root, "VillageSign", pos, stage.at(biome.SIGN_S) - pos)
-	node.position.y = stage.ground(pos)
+	node.position.y = stage.RoadCut.ground(stage, pos)
 	for x in [-1.1, 1.1]:
 		Props.cylinder(node, Vector3(x, 1.0, 0), 0.08, 0.08, 2.0, Color("4f4336"), 6)
 	var board = Props.box(node, Vector3(0, 1.75, 0), Vector3(2.8, 0.7, 0.1), Color("e4ddc8"))
@@ -162,7 +162,7 @@ func _village_sign(root: Node3D) -> void:
 
 # A haystack (стог) stacked round a pole, as left in the fields for winter.
 func _haystack(root: Node3D, pos: Vector3) -> void:
-	pos.y = stage.ground(pos)
+	pos.y = stage.RoadCut.ground(stage, pos)
 	var node = Node3D.new()
 	node.name = "Haystack"
 	root.add_child(node)

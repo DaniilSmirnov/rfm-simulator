@@ -424,7 +424,7 @@ func _build_jump_boards() -> void:
 	for metres in [20, 30, 40, 50, 60]:
 		var s = YELLOW_HOUSE_STATION + float(metres)
 		var p = stage.at(s) + stage.side(s) * -YELLOW_HOUSE_SIDE * 6.6
-		p.y = stage.ground(p)
+		p.y = stage.RoadCut.ground(stage, p)
 		Props.cylinder(boards, p + Vector3(0, 0.6, 0), 0.05, 0.05, 1.2, Color("d9d4c6"), 5)
 		var board = Props.box(boards, p + Vector3(0, 1.25, 0), Vector3(0.9, 0.5, 0.06), Color("f4f2ea"))
 		var direction = stage.direction(s)
