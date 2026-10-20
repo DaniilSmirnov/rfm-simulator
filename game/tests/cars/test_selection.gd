@@ -39,18 +39,17 @@ func run() -> void:
 	host.car_choice.cycle(-1)
 	check(host.selected_car == 10 and host.car.get_meta("model") == "Японский кей-кар", "previous arrow wraps to the kei car")
 	host.select_player_car(8)
-	var obj_asset_script = load("res://scripts/cars/camping_hatchback_asset.gd")
-	check(obj_asset_script.PARTS.size() == 8, "camping hatchback supports eight independently imported OBJ parts")
+	check(host.car.get_meta("model_source", "") == "camping_hatchback_procedural", "camping hatchback is built from original procedural geometry")
 	check(host.car.get_meta("roof_cargo", "") == "inflatable_boat", "camping hatchback retains inflatable roof boat configuration")
 	var camping_lid = host.car.get_node_or_null("TrunkHinge")
-	var imported_lid_names = ["BodyShellHatchback_Lid", "Camping_glass_Lid", "Camping_trim_Lid", "Camping_lights_Lid"]
-	var imported_hatch_complete = camping_lid != null
+	var camping_lid_names = ["BodyShellHatchback_Lid", "Camping_glass_Lid", "Camping_trim_Lid", "Camping_lights_Lid"]
+	var camping_hatch_complete = camping_lid != null
 	# The lid parts are baked into one mesh on the hinge; their bounds stay in its meta.
 	var lid_parts: Dictionary = baked(camping_lid) if camping_lid != null else {}
-	for lid_name in imported_lid_names:
-		imported_hatch_complete = imported_hatch_complete and lid_parts.has(lid_name)
-	check(imported_hatch_complete and camping_lid.get_node_or_null("BakedLid") != null, "imported hatch moves rear body, glass, trim and lamps together")
-	var rear_hatch_only = imported_hatch_complete
+	for lid_name in camping_lid_names:
+		camping_hatch_complete = camping_hatch_complete and lid_parts.has(lid_name)
+	check(camping_hatch_complete and camping_lid.get_node_or_null("BakedLid") != null, "camping hatch moves rear body, glass, trim and lamps together")
+	var rear_hatch_only = camping_hatch_complete
 	for lid_name in lid_parts:
 		var box: AABB = lid_parts[lid_name]
 		if box.position.z + camping_lid.position.z < 1.19:
@@ -58,14 +57,14 @@ func run() -> void:
 	check(rear_hatch_only, "2112 trunk lid contains only the rear hatch, never passenger cabin panels")
 	var body_parts = baked(host.car)
 	var boat_static = body_parts.has("Camping_boat")
-	check(body_parts.has("Camping_headlights") and body_parts.Camping_headlights.get_center().z < -1.0, "imported OBJ parts rotate 180 degrees to match game driving direction")
-	check(lid_parts.has("Camping_glass_Lid"), "rear glazing remains attached to the hatch after correcting forward axis")
+	check(body_parts.has("Camping_headlights") and body_parts.Camping_headlights.get_center().z < -1.0, "camping hatchback headlamps face the driving direction")
+	check(lid_parts.has("Camping_glass_Lid"), "rear glazing remains attached to the hatch")
 	check(boat_static and not lid_parts.has("Camping_boat_Lid"), "inflatable roof boat remains fixed when trunk opens")
 	var original_hatch_position = camping_lid.transform if camping_lid != null else Transform3D.IDENTITY
 	RallyProps.update_player_trunk(host.car, true, [true, true, true, true, true], 1.0)
-	check(camping_lid != null and camping_lid.rotation.x < -0.8 and host.car.get_node("TrunkBoxes").visible, "imported rear hatch opens and exposes stored cargo")
+	check(camping_lid != null and camping_lid.rotation.x < -0.8 and host.car.get_node("TrunkBoxes").visible, "camping rear hatch opens and exposes stored cargo")
 	RallyProps.update_player_trunk(host.car, false, [true, true, true, true, true], 1.0)
-	check(camping_lid != null and absf(camping_lid.rotation.x) < 0.01, "imported rear hatch closes completely")
+	check(camping_lid != null and absf(camping_lid.rotation.x) < 0.01, "camping rear hatch closes completely")
 	check(baked(host.car).has("BodyShellHatchback") and host.car.get_node_or_null("RoofHatchback") != null, "2112 has dedicated body, short roof and sloped-glasshouse geometry")
 	host.car_choice.select(10)
 	host.car_choice.cycle(1)
