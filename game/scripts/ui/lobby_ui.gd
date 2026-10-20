@@ -18,6 +18,7 @@ var purchase_button: Button
 var check_purchase: Button
 var purchase_status: Label
 var return_button: Button
+var quit_button: Button
 var host_pause: PanelContainer
 var help_button: Button
 var language_button: Button
@@ -254,6 +255,11 @@ func finish(parent: Control) -> void:
 	return_button.name = "ReturnButton"
 	return_button.pressed.connect(game.return_to_main_menu)
 	return_button.hide()
+	# Only a desktop window has nowhere else to close the game from.
+	quit_button = UiKit.button(parent, "ВЫЙТИ ИЗ ИГРЫ", "ghost", 44)
+	quit_button.name = "QuitButton"
+	quit_button.pressed.connect(_quit_game)
+	quit_button.visible = OS.has_feature("pc") and not OS.has_feature("web")
 	help_dialog = _link_dialog("SupportDialog", "Помощь и поддержка", _help_message(), [["СКОПИРОВАТЬ АДРЕС", "primary", _copy_support_email]])
 	about_dialog = _link_dialog("AboutDialog", UiKit.BRAND_NAME, _about_message(), [["ОТКРЫТЬ САЙТ", "primary", func(): UiKit.open_url(UiKit.BRAND_URL)], ["СКОПИРОВАТЬ", "secondary", func(): _copy(UiKit.BRAND_URL, Loc.t("Ссылка скопирована: %s") % UiKit.BRAND_URL)]])
 	# Backdrop fills the viewport independently of the inset HUD root.
@@ -358,6 +364,14 @@ func _process(_delta: float) -> void:
 		var active_hud = game.playing and not game.paused and not result and not host_pause.visible
 		game.mobile_top.visible = active_hud
 		game.mobile_bottom.visible = active_hud and not game.info_label.text.is_empty()
+
+# Leaving tells the room right away instead of waiting for it to time out.
+func _quit_game() -> void:
+	quit_button.disabled = true
+	if game.room != null and game.room.connected:
+		game.room.leave()
+	await game._shutdown_audio()
+	game.get_tree().quit()
 
 func vote_price(price: int) -> String:
 	var ending = "ГОЛОСОВ"
