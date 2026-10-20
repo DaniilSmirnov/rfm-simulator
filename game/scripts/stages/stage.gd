@@ -225,15 +225,15 @@ func blend_trails(pos: Vector3, height: float) -> float:
 # Trees must touch the *rendered* terrain, not the continuous ground()
 # function: 4 m cells (2 m near roads), cut below it around the road (road_cut.gd).
 # Reproduce that interpolation exactly to avoid suspended trunks on slopes and crests.
-# The 2 m roadside tiles meet 4 m terrain tiles at T-junctions.
-# On those boundaries, snap the fine tile's midpoint to the coarse edge.
-# Otherwise the ground() midpoint can be above/below the straight 4 m edge,
-# creating visible cracks (and floating trees).
+# The 2 m roadside tiles meet 4 m terrain tiles at T-junctions. On those boundaries,
+# snap the fine tile's midpoint to the coarse edge, or the ground() midpoint off the
+# straight 4 m edge opens visible cracks (and floating trees).
 # The village is baked offline: memoise tile steps and vertex heights while its
 # terrain, road and planting are generated (cleared after the build).
 var terrain_cache_enabled = false
 var _tile_step_cache: Dictionary = {}
 var _vertex_height_cache: Dictionary = {}
+var road_cut_memo: Dictionary = {} # RoadCut.depth() per terrain vertex
 
 func _set_terrain_cache(enabled: bool) -> void:
 	terrain_cache_enabled = enabled

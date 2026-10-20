@@ -11,8 +11,18 @@ const HOLD = 1.0
 const REACH = 7.0
 const SLACK = 0.02
 
-# How far the terrain vertex at p is drawn below the land.
+# How far the terrain vertex at p is drawn below the land. A vertex is asked
+# about ten times while a stage builds (each triangle it is in, seams, trees,
+# props), so the answer is kept; the land mesh is drawn once, so is its cut.
 static func depth(stage, p: Vector3) -> float:
+	var key = Vector2(p.x, p.z)
+	var known = stage.road_cut_memo.get(key)
+	if known == null:
+		known = _depth(stage, p)
+		stage.road_cut_memo[key] = known
+	return known
+
+static func _depth(stage, p: Vector3) -> float:
 	# road_distance() overstates the gap in bends of a straight-indexed route.
 	var nearest: Dictionary = stage.route_nearest(p, REACH + 20.0)
 	if nearest.distance >= REACH + 20.0: return 0.0
