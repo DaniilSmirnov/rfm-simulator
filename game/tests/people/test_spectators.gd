@@ -10,10 +10,10 @@ func run() -> void:
 	for variant in range(RallyStage.STAGES.size()):
 		game.select_stage(variant)
 		var crowd = game.spectators
-		# Two people at every clearing camp plus one at each of four roadside
-		# spots outside the village.
+		# Two people at every clearing camp, plus one at each of four roadside
+		# spots on stages that keep them (not the village or the canyon).
 		var camps = game.stage.clearings.size()
-		var roadside = 0 if game.stage.provence else 4
+		var roadside = 4 if game.stage.biome.roadside_spectators() else 0
 		check(crowd.groups.size() == camps + roadside, "NPC camps populate stage %d" % variant)
 		check(crowd.people.size() == camps * 2 + roadside, "NPC spectators populate stage %d" % variant)
 		var clear_road = true

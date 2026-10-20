@@ -97,7 +97,7 @@ func relief(s: float, lateral: float) -> float:
 # spectator areas are levelled last, so a camp near the road is flat too.
 func base_ground(pos: Vector3) -> float:
 	var land = Form.surface(pos)
-	var nearest: Dictionary = stage.route_nearest(pos)
+	var nearest: Dictionary = stage.route_nearest(pos, BLEND)
 	var distance: float = nearest.distance
 	if distance < BLEND:
 		var s: float = nearest.s
@@ -139,7 +139,7 @@ func terrain_tile_step(p: Vector3) -> float:
 	return contact_steps[key]
 
 func _terrain_tile_step(p: Vector3) -> float:
-	var road = stage.road_distance(p)
+	var road = stage.road_distance(p, 34.0)
 	if road < 13.0:
 		return 2.0
 	var across = Form.offset(p)

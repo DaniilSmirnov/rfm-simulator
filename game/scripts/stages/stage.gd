@@ -173,9 +173,9 @@ func road_s(pos: Vector3) -> float:
 		return float(route_nearest(pos).s)
 	return clampf(-pos.z, 0, length)
 
-func road_distance(pos: Vector3) -> float:
+func road_distance(pos: Vector3, limit: float = INF) -> float:
 	if winding:
-		return float(route_nearest(pos).distance)
+		return float(route_nearest(pos, limit).distance)
 	var p = at(road_s(pos))
 	return Vector2(pos.x - p.x, pos.z - p.z).length()
 
@@ -777,10 +777,10 @@ func detail_batch(name: String, mesh: Mesh, poses: Array, colors: Array, layer: 
 	woodland.detail_batch(name, mesh, poses, colors, layer)
 
 # Nearest station and plan distance on the indexed route (route_index.gd).
-func route_nearest(pos: Vector3) -> Dictionary:
+func route_nearest(pos: Vector3, limit: float = INF) -> Dictionary:
 	if route_index.starts.is_empty():
 		route_index.build(points, STEP)
-	return route_index.nearest(flat(pos))
+	return route_index.nearest(flat(pos), limit)
 
 func rally_speed(s: float) -> float:
 	return biome.rally_speed(s)

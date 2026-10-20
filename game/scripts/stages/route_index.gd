@@ -8,8 +8,10 @@ extends RefCounted
 #   around the query lies outside them, at least ROUTE_CELL away, so a hit
 #   closer than that is final. Most queries (cars, people) are near the road.
 # - groups of GROUP_SIZE consecutive segments with bounding boxes, for the
-#   rest: groups that cannot beat the best distance are skipped.
+#   rest: groups that cannot beat the best distance are skipped, a block of
+#   BLOCK_SIZE groups at a time where the whole block is too far.
 const GROUP_SIZE = 8
+const BLOCK_SIZE = 8
 const ROUTE_CELL = 4.0
 
 var step = 1.0
@@ -18,6 +20,8 @@ var deltas = PackedVector2Array()
 var inverse_lengths = PackedFloat64Array()
 var group_low = PackedVector2Array()
 var group_high = PackedVector2Array()
+var block_low = PackedVector2Array()
+var block_high = PackedVector2Array()
 var cells: Dictionary = {}
 var _last_group = 0
 
@@ -28,6 +32,8 @@ func build(samples: PackedVector3Array, sample_step: float) -> void:
 	inverse_lengths.clear()
 	group_low.clear()
 	group_high.clear()
+	block_low.clear()
+	block_high.clear()
 	cells.clear()
 	for i in range(samples.size() - 1):
 		var a = Vector2(samples[i].x, samples[i].z)
@@ -50,9 +56,19 @@ func build(samples: PackedVector3Array, sample_step: float) -> void:
 		else:
 			group_low[group] = group_low[group].min(a).min(b)
 			group_high[group] = group_high[group].max(a).max(b)
+	for group in range(group_low.size()):
+		var block = int(group / BLOCK_SIZE)
+		if group % BLOCK_SIZE == 0:
+			block_low.append(group_low[group])
+			block_high.append(group_high[group])
+		else:
+			block_low[block] = block_low[block].min(group_low[group])
+			block_high[block] = block_high[block].max(group_high[group])
 
-# {"s": station, "distance": plan distance} of the point p (x, z).
-func nearest(p: Vector2) -> Dictionary:
+# {"s": station, "distance": plan distance} of the point p (x, z). With a
+# `limit`, a point farther than that from the whole route gets distance INF
+# and station 0 at a fraction of the cost: land far off a long route.
+func nearest(p: Vector2, limit: float = INF) -> Dictionary:
 	var best = INF
 	var station = 0.0
 	var home = Vector2i((p / ROUTE_CELL).floor())
@@ -69,17 +85,22 @@ func nearest(p: Vector2) -> Dictionary:
 					station = candidate
 	if best < ROUTE_CELL * ROUTE_CELL:
 		return {"s": station, "distance": sqrt(best)}
-	best = INF
+	best = limit * limit
 	station = 0.0
 	# Successive queries are spatially coherent: start from the last winning group.
 	var seed = clampi(_last_group, 0, group_low.size() - 1)
-	for pass_index in range(group_low.size() + 1):
-		var group = seed if pass_index == 0 else pass_index - 1
-		if pass_index > 0 and group == seed:
+	var group = -1
+	while group < group_low.size():
+		# The seed group first, then the rest in order, a block at a time.
+		var current = seed if group < 0 else group
+		group += 1
+		var block = int(current / BLOCK_SIZE)
+		if current != seed and current % BLOCK_SIZE == 0 and p.distance_squared_to(p.clamp(block_low[block], block_high[block])) > best:
+			group = current + BLOCK_SIZE
 			continue
-		if p.distance_squared_to(p.clamp(group_low[group], group_high[group])) > best:
+		if (current == seed and group > 0) or p.distance_squared_to(p.clamp(group_low[current], group_high[current])) > best:
 			continue
-		for i in range(group * GROUP_SIZE, mini((group + 1) * GROUP_SIZE, starts.size())):
+		for i in range(current * GROUP_SIZE, mini((current + 1) * GROUP_SIZE, starts.size())):
 			var a = starts[i]
 			var segment = deltas[i]
 			var ratio = clampf((p - a).dot(segment) * inverse_lengths[i], 0.0, 1.0)
@@ -88,5 +109,7 @@ func nearest(p: Vector2) -> Dictionary:
 			if distance < best or (distance == best and candidate < station):
 				best = distance
 				station = candidate
+	if best >= limit * limit:
+		return {"s": 0.0, "distance": INF}
 	_last_group = int(station / step) / GROUP_SIZE
 	return {"s": station, "distance": sqrt(best)}

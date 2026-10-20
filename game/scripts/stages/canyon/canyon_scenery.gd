@@ -57,7 +57,7 @@ func random_floor_point(from_z: float, to_z: float) -> Vector3:
 
 # Open ground away from the road, the spectator areas and the camps.
 func open_ground(p: Vector3, road: float, padding: float) -> bool:
-	if stage.road_distance(p) < road or stage.parks.contains(p, 6.0):
+	if stage.road_distance(p, road) < road or stage.parks.contains(p, 6.0):
 		return false
 	for c in stage.clearings:
 		if Vector2(p.x - c.x, p.z - c.z).length() < 10.0 + padding:
