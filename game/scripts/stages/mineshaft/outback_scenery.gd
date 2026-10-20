@@ -284,7 +284,7 @@ func _kangaroo_signs() -> void:
 # A sign post on the verge facing oncoming crews at station `s`.
 func _roadside_post(signs: Node3D, s: float, side: float) -> Node3D:
 	var p = stage.at(s) + stage.side(s) * side * (stage.road_width(s) * 0.5 + 1.6)
-	p.y = stage.ground(p)
+	p.y = stage.RoadCut.ground(stage, p)
 	var post = Node3D.new()
 	signs.add_child(post)
 	post.position = p
@@ -371,7 +371,7 @@ func _jump_sign() -> void:
 	var s = biome.LIP - 120.0
 	var side = 1.0
 	var p = stage.at(s) + stage.side(s) * side * (stage.road_width(s) * 0.5 + 3.0)
-	p.y = stage.ground(p)
+	p.y = stage.RoadCut.ground(stage, p)
 	var sign = _anchor("MineshaftSign", p, -stage.direction(s))
 	for x in [-1.6, 1.6]:
 		Props.cylinder(sign, Vector3(x, 1.3, 0), 0.12, 0.12, 2.6, TIMBER, 6)
@@ -392,7 +392,7 @@ func _scorecards() -> void:
 	for i in range(scores.size()):
 		var s: float = biome.LIP + 4.0 + i * 3.2
 		var p = stage.at(s) + stage.side(s) * -(stage.road_width(s) * 0.5 + 4.5 + (i % 2) * 0.8)
-		p.y = stage.ground(p)
+		p.y = stage.RoadCut.ground(stage, p)
 		var card = _anchor("Card%d" % i, p, stage.side(s))
 		card.reparent(cards)
 		Props.cylinder(card, Vector3(0, 0.75, 0), 0.03, 0.03, 1.5, TIMBER, 5)
