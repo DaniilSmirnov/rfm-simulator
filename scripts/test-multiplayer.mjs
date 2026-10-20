@@ -176,9 +176,11 @@ try {
   await client('host');await until(()=>latest('host')?.connected,'host connects',web?120000:60000);
   await client('guest',latest('host').room);await until(()=>latest('guest')?.active,'prediction handshake',web?120000:60000);
   if(socketMode)await until(()=>['host','guest'].every(role=>logs.some(line=>line.startsWith(`[${role}] `)&&/(^|\] )ROOM_SOCKET open$/.test(line.slice(role.length+3)))),'both clients on WebSocket',web?60000:30000);
-  // The radio joins through the page transport (the engine has no JS bridge)
-  // and its WebRTC link is set up over the room's voice signaling.
-  if(web)await until(async()=>(await Promise.all(Object.values(pages).map(page=>page.evaluate(()=>window.RallyVoice?.state.joined===true&&[...RallyVoice.state.peers.values()].some(peer=>peer.connected))))).every(Boolean),'radio joined and connected between the browser clients',60000);
+  // The radio joins through the page transport (the engine has no JS bridge).
+  // Its WebRTC link is set up over the room socket's voice signaling, so the
+  // HTTP-only run checks the join and the socket run checks the link.
+  const radio=connected=>until(async()=>(await Promise.all(Object.values(pages).map(page=>page.evaluate(connected=>window.RallyVoice?.state.joined===true&&(!connected||[...RallyVoice.state.peers.values()].some(peer=>peer.connected)),connected)))).every(Boolean),connected?'radio joined and connected between the browser clients':'radio joined in both browser clients',60000);
+  if(web)await radio(socketMode);
   if(directMode)await until(()=>latest('host')?.direct>0 && latest('guest')?.direct_healthy,'direct link open and carrying the world',60000);
   command('host','resume');command('guest','forward');
   const start=latest('guest').pos;
