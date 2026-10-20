@@ -206,6 +206,10 @@ jobs:
           - {target: macos-universal, os: macos-14}
           - {target: android-arm64, os: ubuntu-24.04}
           - {target: android-arm32, os: ubuntu-24.04}
+    env:
+      # Bump to rebuild every library without a source change, for example
+      # after a toolchain change in the install step below.
+      VOICE_BUILD_EPOCH: "1"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -213,7 +217,17 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      # The library depends only on its sources, the pinned deps and the build
+      # script. A run that changes none of them reuses the library built for
+      # them earlier and skips the toolchain and the build.
+      - name: Restore a built library
+        id: lib
+        uses: actions/cache/restore@v4
+        with:
+          path: game/addons/rally_voice/bin
+          key: voice-lib-${{ matrix.target }}-${{ env.VOICE_BUILD_EPOCH }}-${{ hashFiles('native/voice/**', 'scripts/build-voice.mjs') }}
       - name: Install build tools
+        if: steps.lib.outputs.cache-hit != 'true'
         shell: bash
         run: |
           case "${{ matrix.target }}" in
@@ -223,11 +237,13 @@ jobs:
             android-*) sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends ninja-build ;;
           esac
       - uses: actions/cache@v4
+        if: steps.lib.outputs.cache-hit != 'true'
         with:
           path: .cache/voice
           key: voice-${{ matrix.target }}-${{ hashFiles('native/voice/deps.json') }}-${{ hashFiles('native/voice/**') }}
           restore-keys: voice-${{ matrix.target }}-${{ hashFiles('native/voice/deps.json') }}-
       - name: Build the extension
+        if: steps.lib.outputs.cache-hit != 'true'
         shell: bash
         run: node scripts/build-voice.mjs --target=${{ matrix.target }}
       - name: Check the library
@@ -240,6 +256,12 @@ jobs:
             linux-*) ! objdump -T $lib | grep -oE "GLIBC_2\.(29|[3-9][0-9])" ;;
             macos-*) lipo -info $lib | grep -q "x86_64 arm64\|arm64 x86_64" ;;
           esac
+      - name: Save the built library
+        if: steps.lib.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: game/addons/rally_voice/bin
+          key: ${{ steps.lib.outputs.cache-primary-key }}
       - uses: actions/upload-artifact@v4
         with:
           name: voice-${{ matrix.target }}
