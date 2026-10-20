@@ -138,16 +138,52 @@ func allow_tip(seconds: float) -> void:
 	_tip_time = maxf(_tip_time, seconds)
 	_guard(false)
 
-# Axis locks act on world axes: X and Z tilt, Y keeps yaw free. Assigning a
-# lock wakes the body, so only on change.
+# The guard keeps upright furniture from tipping without locking its tilt.
+# Axis locks did that before, but a body that cannot tilt rests on one or two
+# corners of the terrain tiles: camp tables, benches, service-park gear and NPC
+# cars crept across the ground at 0.05-0.5 m/s and never slept. Now a prop
+# leans freely onto the slope it stands on (up to LEAN_FREE off that slope)
+# and is only turned back once it leans further.
+const LEAN_FREE = 0.25
+const SLOPE_REACH = 0.6
+const TILT_DAMP = 0.85
+var _slope_at = Vector3.INF
+var _slope_up = Vector3.UP
+
 func _guard(on: bool) -> void:
-	if _guarded == on: return
 	_guarded = on
-	axis_lock_angular_x = on
-	axis_lock_angular_z = on
+
+func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
+	if not _guarded: return
+	var up: Vector3 = state.transform.basis.y.normalized()
+	var slope: Vector3 = _slope(state.transform * center_of_mass)
+	var spin: Vector3 = state.angular_velocity
+	var yaw: Vector3 = slope * spin.dot(slope)
+	var lean: float = up.angle_to(slope)
+	var axis: Vector3 = up.cross(slope)
+	if lean < LEAN_FREE or axis.length_squared() < 0.000001:
+		# Damped rocking. Assigning a velocity wakes the body, so a slow one is
+		# left alone and can fall asleep.
+		if (spin - yaw).length_squared() > 0.0025:
+			state.angular_velocity = yaw + (spin - yaw) * TILT_DAMP
+		return
+	state.angular_velocity = yaw + axis.normalized() * minf((lean - LEAN_FREE) * RIGHTING_GAIN, RIGHTING_SPEED)
 
 func _tilt() -> float:
 	return global_basis.y.normalized().angle_to(Vector3.UP)
+
+# Tilt against the ground under the prop, sampled again once it has moved.
+func _lean() -> float:
+	return global_basis.y.normalized().angle_to(_slope(global_transform * center_of_mass))
+
+func _slope(center: Vector3) -> Vector3:
+	if center.distance_squared_to(_slope_at) > 0.25:
+		_slope_at = center
+		var stage = solids.stage
+		var x := Vector3(SLOPE_REACH, 0, 0)
+		var z := Vector3(0, 0, SLOPE_REACH)
+		_slope_up = Vector3(stage.ground(center - x) - stage.ground(center + x), 2.0 * SLOPE_REACH, stage.ground(center - z) - stage.ground(center + z)).normalized()
+	return _slope_up
 
 func _upright_spin() -> Vector3:
 	var up: Vector3 = global_basis.y.normalized()
@@ -216,7 +252,7 @@ func _physics_process(delta: float) -> void:
 	elif _rising and _tilt() < UPRIGHT_ANGLE:
 		_rising = false
 	if not sleeping:
-		_guard(not record.has("tree") and _tip_time <= 0.0 and not _rising and _tilt() < GUARD_ANGLE)
+		_guard(not record.has("tree") and _tip_time <= 0.0 and not _rising and _lean() < GUARD_ANGLE)
 	if pull_velocity.length_squared() > 0.0001 or _rising:
 		if sleeping: wake()
 	if pull_velocity.length_squared() > 0.0001:
