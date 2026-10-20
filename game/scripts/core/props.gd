@@ -450,8 +450,7 @@ static func player_car(variant: int = 0, bake: bool = true) -> Node3D:
 		"granta":
 			car = load("res://scripts/cars/granta_model.gd").build()
 		"niva":
-			# A missing import falls back to the procedural body below.
-			car = load("res://scripts/cars/niva_asset.gd").build()
+			car = load("res://scripts/cars/niva_model.gd").build()
 		"camping_hatchback":
 			car = player_car_camping_hatchback()
 		"sport_sedan":
