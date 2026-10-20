@@ -81,7 +81,9 @@ static func _table(stage, parent: Node3D, at: Vector3) -> void:
 		for z in [-0.23, 0.23]:
 			var bowl = center + Vector3(x, 0.07, z)
 			Props.cylinder(parent, bowl, 0.06, 0.105, 0.06, Color("d1c1a3"), 12)
-			Props.cylinder(parent, bowl + Vector3.UP * 0.025, 0.092, 0.092, 0.01, Color("583822"), 12)
+			# The tea stands 4 mm proud of the bowl's closed top: flush, the two
+			# faces fought over the same depth and flickered.
+			Props.cylinder(parent, bowl + Vector3.UP * 0.029, 0.092, 0.092, 0.01, Color("583822"), 12)
 	Props.faceted(parent, center + Vector3(0.20, 0.10, 0), Vector3(0.34, 0.10, 0.27), Color("c99754"), 10, 4)
 	var kettle = center + Vector3(-0.24, 0.15, 0)
 	Props.faceted(parent, kettle, Vector3(0.26, 0.23, 0.24), Color("777e79"), 10, 5)
