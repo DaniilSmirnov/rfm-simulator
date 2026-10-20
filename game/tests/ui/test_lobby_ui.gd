@@ -15,6 +15,11 @@ func run() -> void:
 	# Laid out as the menu is drawn: full width, then scaled to the window.
 	game.hud.layout_menu()
 	await process_frame
+	check(game.menu.custom_minimum_size.x == 1100, "main menu gives selection cards more width")
+	game.lobby_ui.quit_button.pressed.emit()
+	check(game.lobby_ui.quit_dialog.visible and not game.lobby_ui.quit_button.disabled, "quit asks for confirmation before shutdown")
+	game.lobby_ui.quit_dialog.find_child("CancelQuit", true, false).pressed.emit()
+	check(not game.lobby_ui.quit_dialog.visible and not game.lobby_ui.quit_button.disabled, "cancel keeps the game open and allows another attempt")
 	var cut: Array[String] = []
 	for choice in [game.car_choice, game.stage_choice, game.lobby_ui.character_choice]:
 		var start = choice.selected
@@ -117,7 +122,7 @@ func run() -> void:
 	game.playing = true
 	game.lobby_ui._process(0)
 	check(not game.lobby_ui.background.visible and game.lobby_ui.background.texture == null, "gameplay releases menu background texture")
-	check(game.lobby_ui.return_button.visible and not game.lobby_ui.host_pause.visible, "own pause offers return to main menu")
+	check(game.menu.find_child("ReturnButton", true, false) == null and not game.lobby_ui.host_pause.visible, "pause has no redundant return button")
 	game.menu.show()
 	game.hud.update_menu()
 	check(game.hud.menu_dim.visible and game.hud.links.visible and game.hud.settings.visible and not game.hud.brand.visible, "pause dims the stage and keeps settings and links")
