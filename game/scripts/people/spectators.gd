@@ -54,9 +54,18 @@ func _add_group(center: Vector3, s: float, id: int, count: int) -> void:
 	var yaw = atan2(-forward.x, -forward.z)
 	var car = Props.player_car((id * 3 + game.stage.variant) % Props.PLAYER_MODELS.size())
 	add_child(car)
-	car.position = center + forward * 3.2
+	# 0.8 m clear of the table: at 0.4 m a car settling on a hillside
+	# shouldered the table over.
+	car.position = center + forward * 3.6
 	car.position.y = game.stage.vehicle_ground(car.position)
 	car.rotation.y = yaw
+	# Park it square to the slope, as it settles there anyway.
+	var ahead: Vector3 = forward * 1.3
+	var aside: Vector3 = forward.cross(Vector3.UP) * 0.8
+	var climb: float = game.stage.ground(car.position + ahead) - game.stage.ground(car.position - ahead)
+	var lean: float = game.stage.ground(car.position + aside) - game.stage.ground(car.position - aside)
+	var up: Vector3 = (Vector3.UP - forward * climb / 2.6 - aside.normalized() * lean / 1.6).normalized()
+	car.basis = Basis(Quaternion(Vector3.UP, up)) * car.basis
 	var table = Node3D.new()
 	add_child(table)
 	Props.table(table, id)

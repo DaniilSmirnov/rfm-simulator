@@ -3,7 +3,8 @@ extends "res://tests/harness.gd"
 # grills and cars settle, people standing or sitting still get no pushing
 # collider, and standing trunks are not re-posed every tick. Before this the
 # camps never slept and the physics step alone took 50-95 ms (2-5 fps).
-const CAMP_AWAKE_LIMIT = 99
+# Locked, 19 camp props were still awake here after four seconds.
+const CAMP_AWAKE_LIMIT = 12
 const PropActors = preload("res://scripts/core/prop_actors.gd")
 class ExhaustiveSolids:
 	extends "res://scripts/stages/stage_solids.gd"
@@ -50,7 +51,7 @@ func run() -> void:
 	for body in game.find_children("PropBody*", "RigidBody3D", true, false):
 		if not str(body.record.key).begins_with("npc:"): continue
 		if body.moving: awake_camps += 1
-		if body._lean() > body.GUARD_ANGLE: fallen += 1
+		if body._lean() > body.TIPPED_ANGLE: fallen += 1
 	check(awake_camps <= CAMP_AWAKE_LIMIT, "NPC camp props settle and sleep (%d awake)" % awake_camps)
 	check(fallen == 0, "NPC camp props stay on their feet on sloping ground (%d fallen)" % fallen)
 	check(sunk == 0, "no prop sinks through the terrain (%d below ground)" % sunk)
