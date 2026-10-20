@@ -3,6 +3,8 @@ extends "res://tests/harness.gd"
 # grills and cars settle, people standing or sitting still get no pushing
 # collider, and standing trunks are not re-posed every tick. Before this the
 # camps never slept and the physics step alone took 50-95 ms (2-5 fps).
+# Locked, 19 camp props were still awake here after four seconds.
+const CAMP_AWAKE_LIMIT = 12
 const PropActors = preload("res://scripts/core/prop_actors.gd")
 class ExhaustiveSolids:
 	extends "res://scripts/stages/stage_solids.gd"
@@ -41,6 +43,17 @@ func run() -> void:
 		var center: Vector3 = body.global_transform * body.center_of_mass
 		if center.y < game.stage.ground(center) - 1.0: sunk += 1
 	check(awake_parks == 0, "service-park props stay asleep until touched (%d awake)" % awake_parks)
+	# Tilt axis locks kept the camps' tables, chairs and cars on one or two
+	# corners of the terrain tiles, so they crept and never slept. Free to lean
+	# onto the slope, they settle and still stay on their feet.
+	var awake_camps = 0
+	var fallen = 0
+	for body in game.find_children("PropBody*", "RigidBody3D", true, false):
+		if not str(body.record.key).begins_with("npc:"): continue
+		if body.moving: awake_camps += 1
+		if body._lean() > body.TIPPED_ANGLE: fallen += 1
+	check(awake_camps <= CAMP_AWAKE_LIMIT, "NPC camp props settle and sleep (%d awake)" % awake_camps)
+	check(fallen == 0, "NPC camp props stay on their feet on sloping ground (%d fallen)" % fallen)
 	check(sunk == 0, "no prop sinks through the terrain (%d below ground)" % sunk)
 	# Awake props are bucketed per tick and swap in and out of the static grid
 	# one by one; queries must match a full scan whatever their state.

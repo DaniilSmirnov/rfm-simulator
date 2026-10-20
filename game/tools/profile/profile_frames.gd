@@ -7,7 +7,7 @@ extends SceneTree
 # race. --fixed-fps gives every frame one 1/60 s step and no real-time wait,
 # so the wall time of a frame is what it costs. Prints mean/p50/p95/p99/max,
 # frames over 16.7/33/50 ms, the slowest frames with their process/physics
-# split, and how many props are awake. See docs/CPU_PERFORMANCE.md.
+# split, and how many props are awake (at the end and on average). See docs/CPU_PERFORMANCE.md.
 const WARMUP = 60
 
 var game: Node
@@ -19,6 +19,8 @@ var last := 0
 var samples: Array = []
 var slow: Array = []
 var nodes_before := 0
+var awake_samples: Array = []
+var prop_bodies: Array = []
 
 func _initialize() -> void:
 	call_deferred("run")
@@ -53,6 +55,7 @@ func run() -> void:
 		game.car.position.y = game.stage.ground(game.car.position) + 0.3
 		var heading = game.stage.direction(s)
 		game.car.rotation.y = atan2(-heading.x, -heading.z)
+	prop_bodies = game.find_children("PropBody*", "RigidBody3D", true, false)
 	nodes_before = int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT))
 	started = true
 
@@ -68,6 +71,8 @@ func _process(_delta: float) -> bool:
 		var physics_us = Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000000.0
 		slow.append([wall, frame, int(process_us), int(physics_us)])
 	last = now
+	if frame >= WARMUP and frame % 30 == 0:
+		awake_samples.append(_props().awake_total)
 	frame += 1
 	if frame >= WARMUP + frames:
 		_report()
@@ -115,11 +120,21 @@ func _report() -> void:
 		text += " f%d:%.1fms(proc %.1f phys %.1f)" % [entry[1], entry[0] / 1000.0, entry[2] / 1000.0, entry[3] / 1000.0]
 	print(text)
 	# Awake props cost a physics body each and collision queries for everyone.
+	var props = _props()
+	var mean_awake = 0.0
+	for awake_count in awake_samples:
+		mean_awake += awake_count
+	print("FRAME_PROPS bodies=%d awake_mean=%.1f awake=%s" % [props.bodies, mean_awake / maxf(1.0, awake_samples.size()), props.awake])
+
+func _props() -> Dictionary:
 	var awake: Dictionary = {}
 	var bodies = 0
-	for body in game.find_children("PropBody*", "RigidBody3D", true, false):
+	var total = 0
+	for body in prop_bodies:
+		if not is_instance_valid(body): continue
 		bodies += 1
 		if body.moving:
+			total += 1
 			var key = str(body.record.key).get_slice(":", 0)
 			awake[key] = awake.get(key, 0) + 1
-	print("FRAME_PROPS bodies=%d awake=%s" % [bodies, awake])
+	return {"bodies": bodies, "awake": awake, "awake_total": total}
