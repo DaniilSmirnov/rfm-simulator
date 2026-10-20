@@ -75,8 +75,34 @@ func relay(rounds: int = 6) -> void:
 
 func run() -> void:
 	await mesh_rules()
+	await microphone_release()
 	await real_links()
 	finish()
+
+# The microphone bus comes with the project, so the radio never adds a bus
+# while the mixer runs; the input closes a moment after the key is released.
+func microphone_release() -> void:
+	var bus = AudioServer.get_bus_index(VoiceNative.MIC_BUS)
+	check(bus > 0 and AudioServer.get_bus_effect(bus, 0) is AudioEffectCapture, "the radio microphone bus ships in the bus layout")
+	var count = AudioServer.bus_count
+	var node = client("mic")
+	node.audio_enabled = true
+	node.encoder_factory = func(): return RefCounted.new()
+	node.join({"localId": "mic", "session": "session-mic"})
+	node.set_ptt(true)
+	check(node.mic == "pending" and node.capture != null and node.mic_player != null, "pressing the key opens the microphone")
+	check(AudioServer.bus_count == count, "opening the microphone adds no bus")
+	node.set_ptt(true)
+	node.set_ptt(false)
+	node._pump_microphone()
+	check(node.mic_player != null, "a short pause keeps the microphone open")
+	node.released_at -= VoiceNative.MIC_HANG_MSEC + 1
+	node._pump_microphone()
+	check(node.mic == "idle" and node.mic_player == null and node.capture == null, "the microphone closes after the key is released")
+	node.set_ptt(true)
+	check(node.mic == "pending" and node.mic_player != null, "the next press opens it again")
+	node.leave()
+	await process_frame
 
 func mesh_rules() -> void:
 	var ids = ["a", "b", "c"]
