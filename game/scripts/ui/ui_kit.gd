@@ -12,6 +12,7 @@ const BRAND_URL = "https://rallyfansmap.ru/"
 const BRAND_NAME = "Rally Fans Map"
 const GAME_NAME = "Rally Fans Simulator"
 const LOGO = "res://branding/rfm-icon.svg"
+const BRAND_FONT = preload("res://branding/fonts/RallySansExtended-Black.ttf")
 
 # Palette: deep forest surfaces, warm amber action, Rally Fans Map orange
 # only for the logo.
@@ -169,8 +170,10 @@ static func brand(parent: Node, logo_size: float = 56) -> HBoxContainer:
 	names.alignment = BoxContainer.ALIGNMENT_CENTER
 	var title = label(names, GAME_NAME, "title")
 	title.name = "Title"
+	title.add_theme_font_override("font", BRAND_FONT)
 	var by = label(names, Loc.t("от %s") % BRAND_NAME, "muted")
 	by.name = "Byline"
+	by.add_theme_font_override("font", BRAND_FONT)
 	return row
 
 # A modal window: full-screen dim that swallows input, a panel centred in the
