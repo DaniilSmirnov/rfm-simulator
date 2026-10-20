@@ -30,6 +30,8 @@ var prop_index_frame = -1
 var indexed_obstacle_count = -1
 # Awake props are re-measured once per physics tick, not once per collision query.
 var moving_pose_tick = -1
+var moving_cells: Dictionary = {}
+var moving_expansion = 1.0
 const MOVING_MARGIN = 0.3
 var collision_radius_factor = 1.0
 
@@ -111,21 +113,60 @@ func index() -> void:
 			continue
 		if object.get("movable", false):
 			movable_obstacle_ids.append(id)
-			_cache_live_pose(object)
-			object.indexed_global_pose = object.live_global_pose
-		var pose = relative_pose(object.body)
-		object["collision_pose"] = pose
-		object["collision_inverse"] = pose.affine_inverse()
-		var bounds = pose * AABB(-object.half, object.half * 2.0)
-		var expansion = pose.basis.x.abs() + pose.basis.y.abs() + pose.basis.z.abs()
-		collision_radius_factor = maxf(collision_radius_factor, maxf(expansion.x, maxf(expansion.y, expansion.z)))
-		for x in range(floori(bounds.position.x / COLLISION_CELL), floori(bounds.end.x / COLLISION_CELL) + 1):
-			for z in range(floori(bounds.position.z / COLLISION_CELL), floori(bounds.end.z / COLLISION_CELL) + 1):
-				var key = Vector2i(x, z)
-				if not collision_cells.has(key):
-					collision_cells[key] = []
-				collision_cells[key].append(id)
+		_insert_static(id)
 	indexed_obstacle_count = obstacles.size()
+
+func _insert_static(id: int) -> void:
+	var object: Dictionary = obstacles[id]
+	if object.get("movable", false):
+		_cache_live_pose(object)
+		object.indexed_global_pose = object.live_global_pose
+	var pose = relative_pose(object.body)
+	object["collision_pose"] = pose
+	object["collision_inverse"] = pose.affine_inverse()
+	var bounds = pose * AABB(-object.half, object.half * 2.0)
+	var expansion = pose.basis.x.abs() + pose.basis.y.abs() + pose.basis.z.abs()
+	collision_radius_factor = maxf(collision_radius_factor, maxf(expansion.x, maxf(expansion.y, expansion.z)))
+	var cells = []
+	for x in range(floori(bounds.position.x / COLLISION_CELL), floori(bounds.end.x / COLLISION_CELL) + 1):
+		for z in range(floori(bounds.position.z / COLLISION_CELL), floori(bounds.end.z / COLLISION_CELL) + 1):
+			var key = Vector2i(x, z)
+			if not collision_cells.has(key):
+				collision_cells[key] = []
+			collision_cells[key].append(id)
+			cells.append(key)
+	object["cells"] = cells
+
+func _remove_static(id: int) -> void:
+	for key in obstacles[id].get("cells", []):
+		collision_cells.get(key, []).erase(id)
+	obstacles[id]["cells"] = []
+
+# A prop woke up or fell asleep: move its boxes between the static cells and
+# the per-tick moving buckets. Rebuilding the whole index for every such change
+# cost 3-7 ms, and a few creeping props changed state almost every frame.
+func set_dynamic(prop: String, dynamic: bool) -> void:
+	var indexed = indexed_obstacle_count == obstacles.size()
+	for id in range(obstacles.size()):
+		var object: Dictionary = obstacles[id]
+		if object.get("prop", "") != prop or bool(object.get("dynamic", false)) == dynamic:
+			continue
+		object.dynamic = dynamic
+		if not indexed or object.body is RigidBody3D or not is_instance_valid(object.body):
+			indexed = false
+			continue
+		if dynamic:
+			_remove_static(id)
+			movable_obstacle_ids.erase(id)
+			moving_obstacle_ids.append(id)
+		else:
+			moving_obstacle_ids.erase(id)
+			if object.get("movable", false):
+				movable_obstacle_ids.append(id)
+			_insert_static(id)
+	if not indexed:
+		indexed_obstacle_count = -1
+	moving_pose_tick = -1
 
 func candidates(start: Vector3, end: Vector3, radius: float) -> Array:
 	if indexed_obstacle_count != obstacles.size():
@@ -136,9 +177,12 @@ func candidates(start: Vector3, end: Vector3, radius: float) -> Array:
 		prop_index_frame = Engine.get_process_frames()
 		for id in movable_obstacle_ids:
 			var object: Dictionary = obstacles[id]
-			if not is_instance_valid(object.body) or object.body.global_transform != object.indexed_global_pose:
+			if not is_instance_valid(object.body):
 				index()
 				break
+			if object.body.global_transform != object.indexed_global_pose:
+				_remove_static(id)
+				_insert_static(id)
 	var padding = radius * collision_radius_factor
 	var low = start.min(end) - Vector3.ONE * padding
 	var high = start.max(end) + Vector3.ONE * padding
@@ -150,19 +194,37 @@ func candidates(start: Vector3, end: Vector3, radius: float) -> Array:
 	var tick = Engine.get_physics_frames()
 	if moving_pose_tick != tick:
 		moving_pose_tick = tick
-		for id in moving_obstacle_ids:
-			var object: Dictionary = obstacles[id]
-			if is_instance_valid(object.body): _cache_live_pose(object)
-	for id in moving_obstacle_ids:
-		var object: Dictionary = obstacles[id]
-		if not is_instance_valid(object.body): continue
-		if not object.has("live_bounds"): _cache_live_pose(object)
-		var bounds: AABB = object.live_bounds.grow(radius * float(object.live_expansion) + MOVING_MARGIN)
-		if bounds.end.x >= low.x and bounds.position.x <= high.x and bounds.end.z >= low.z and bounds.position.z <= high.z:
-			seen[id] = true
+		_bucket_moving()
+	# Awake props (a knocked-over camp, a whole service park) go into cells once
+	# per tick; a query visits only the cells it overlaps instead of every one.
+	var reach = radius * moving_expansion + MOVING_MARGIN
+	for x in range(floori((low.x - reach) / COLLISION_CELL), floori((high.x + reach) / COLLISION_CELL) + 1):
+		for z in range(floori((low.z - reach) / COLLISION_CELL), floori((high.z + reach) / COLLISION_CELL) + 1):
+			for id in moving_cells.get(Vector2i(x, z), []):
+				if seen.has(id): continue
+				var object: Dictionary = obstacles[id]
+				var bounds: AABB = object.live_bounds.grow(radius * float(object.live_expansion) + MOVING_MARGIN)
+				if bounds.end.x >= low.x and bounds.position.x <= high.x and bounds.end.z >= low.z and bounds.position.z <= high.z:
+					seen[id] = true
 	var ids = seen.keys()
 	ids.sort()
 	return ids
+
+func _bucket_moving() -> void:
+	moving_cells.clear()
+	moving_expansion = 1.0
+	for id in moving_obstacle_ids:
+		var object: Dictionary = obstacles[id]
+		if not is_instance_valid(object.body): continue
+		_cache_live_pose(object)
+		moving_expansion = maxf(moving_expansion, float(object.live_expansion))
+		var bounds: AABB = object.live_bounds
+		for x in range(floori(bounds.position.x / COLLISION_CELL), floori(bounds.end.x / COLLISION_CELL) + 1):
+			for z in range(floori(bounds.position.z / COLLISION_CELL), floori(bounds.end.z / COLLISION_CELL) + 1):
+				var key = Vector2i(x, z)
+				if not moving_cells.has(key):
+					moving_cells[key] = []
+				moving_cells[key].append(id)
 
 # Hundreds of props stand still during NPC pathfinding. Reuse their geometry
 # until the actual transform changes, including edits outside the drag system.

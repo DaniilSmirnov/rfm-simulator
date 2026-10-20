@@ -75,7 +75,7 @@ static func tent(stage: Node3D, root: Node3D, center: Vector2, team: Dictionary)
 	Movable.group(stage.solids, root, first, 35)
 	first = root.get_child_count()
 	var chest = Vector2(bench_x, center.y + 1.9)
-	P.box(root, at(chest.x, chest.y, 0.55), Vector3(0.6, 0.9, 0.75), Color("c3302b"))
+	P.box(root, at(chest.x, chest.y, 0.5), Vector3(0.6, 1.0, 0.75), Color("c3302b"))
 	for row in range(5):
 		P.box(root, at(chest.x - outward * 0.305, chest.y, 0.22 + row * 0.16), Vector3(0.01, 0.025, 0.6), Color("d9dcdc"))
 	stage.solids.solid(root, at(chest.x, chest.y, 0.5), Vector3(0.6, 1.0, 0.75), "service")
@@ -84,7 +84,7 @@ static func tent(stage: Node3D, root: Node3D, center: Vector2, team: Dictionary)
 	tyres(stage, root, Vector2(center.x - outward * 0.6, center.y + 2.4), 4)
 	tyres(stage, root, Vector2(center.x - outward * 1.5, center.y + 2.4), 3)
 	first = root.get_child_count()
-	P.box(root, at(center.x - outward * 0.5, center.y - 2.3, 0.08), Vector3(0.35, 0.12, 0.9), Color("b8241e"))
+	P.box(root, at(center.x - outward * 0.5, center.y - 2.3, 0.06), Vector3(0.35, 0.12, 0.9), Color("b8241e"))
 	Movable.group(stage.solids, root, first, 12)
 	first = root.get_child_count()
 	# A feather flag at the front corner.
@@ -94,12 +94,17 @@ static func tent(stage: Node3D, root: Node3D, center: Vector2, team: Dictionary)
 	P.box(root, at(flag.x, flag.y + 0.25, 2.25), Vector3(0.04, 1.4, 0.1), team.trim)
 	Movable.group(stage.solids, root, first, 5, true)
 
+# One prop per stack, standing on the ground. Separate tyres a centimetre up
+# woke at load, and Godot Physics cannot rest a stack of bodies on the terrain
+# tiles: the bottom tyre sank through and the stack never slept (~20 ms of
+# collision queries per frame on every stage). Keys after the stack stay put.
 static func tyres(stage: Node3D, root: Node3D, spot: Vector2, count: int) -> void:
+	var first = root.get_child_count()
 	for i in range(count):
-		var first = root.get_child_count()
-		P.cylinder(root, at(spot.x, spot.y, 0.12 + i * 0.22), 0.32, 0.32, 0.21, TYRE, 12)
-		var tyre = Movable.group(stage.solids, root, first, 8)
-		tyre.set_meta("prop_roll", true)
+		P.cylinder(root, at(spot.x, spot.y, 0.105 + i * 0.22), 0.32, 0.32, 0.21, TYRE, 12)
+	var tyre = Movable.group(stage.solids, root, first, 8 * count)
+	tyre.set_meta("prop_roll", true)
+	root.set_meta("prop_count", int(root.get_meta("prop_count", 0)) + count - 1)
 
 # The park sign beside the lane and two feather flags at the gate.
 static func _entrance(stage: Node3D, root: Node3D) -> void:
