@@ -1,13 +1,7 @@
-# Camping hatchback OBJ asset for Rally Fans Simulator
+# Camping hatchback model
 
-Source: user-supplied `vaz-2112_low-poly.glb`, with unbranded flat materials and low-poly inflatable roof boat.
+The camping hatchback (player car 8, a low-poly wedge five-door with an inflatable boat on the roof) has no model files. It is built at load time by `game/scripts/cars/camping_hatchback_model.gd` from cross-sections, lamps, trim and boat geometry written by hand for this project, and is called from `player_car_camping_hatchback()` in `game/scripts/core/props.gd`.
 
-All eight OBJ files are in metres, Y up, vehicle front toward -Z (Godot orientation). Materials are in `camping_hatchback.mtl`. Place ALL files under:
+Provenance: original work for Rally Fans Simulator. No third-party mesh, texture or measurement file was used, and the model carries no logos, badges or trademarks. It replaces an earlier OBJ conversion of a user-supplied third-party model, which has been removed together with its license obligation.
 
-`game/models/cars/camping_hatchback/`
-
-The loader is `game/scripts/cars/camping_hatchback_asset.gd`, invoked by the updated `player_car_camping_hatchback()` factory in `game/scripts/core/props.gd`. When models are absent, the existing procedural asset remains in use.
-
-Parts: body, glass, lights, trim, wheels_rubber, wheels_metal, boat, rack. The boat model is separate and sits above the roof, with visible seats and cross-tube edges. Truck compartment remains driven by the existing `add_player_trunk` implementation.
-
-Check import using Godot 4.4 and verify model orientation / roof clearance in the selection screen. The original license for the user-provided model still applies.
+Body, glass, trim and rear lamps are separate single-surface meshes so `RallyProps.add_player_trunk()` can cut the rear hatch (from `trunk_lid_start_z = 1.20`) out of each one. Wheels use `CarParts.wheel()` and roll about `LEFT`; the roof rack and boat stay fixed under `CarModelDetails`.

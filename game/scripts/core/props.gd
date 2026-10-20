@@ -1,6 +1,6 @@
 extends RefCounted
 class_name RallyProps
-const CampingHatchbackAsset = preload("res://scripts/cars/camping_hatchback_asset.gd")
+const CampingHatchbackModel = preload("res://scripts/cars/camping_hatchback_model.gd")
 const CarParts = preload("res://scripts/cars/car_parts.gd")
 const MeshMerge = preload("res://scripts/core/mesh_merge.gd")
 const BlockText = preload("res://scripts/core/block_text.gd")
@@ -246,100 +246,8 @@ static func quad_panel(parent: Node3D, points: PackedVector3Array, color: Color)
 	return panel
 
 static func player_car_camping_hatchback() -> Node3D:
-	var imported = CampingHatchbackAsset.build()
-	if imported != null:
-		return add_player_trunk(imported, 8)
-	var root = Node3D.new()
-	root.name = "PlayerCar_8"
-	root.set_meta("model", "Походный хэтчбек")
-	root.set_meta("variant", 8)
-	root.set_meta("roof_cargo", "inflatable_boat")
-	var paint = Color("283f87")
-	var trim = Color("202b31")
-	var glass = Color("253d49")
-	# Low, long hatchback profile: flat bonnet, rising windscreen, short roof and sharply
-	# raked rear hatch glass. The cabin is deliberately not a tall box.
-	var body = car_shell(root, [
-		Vector4(-2.08, 0.73, 0.40, 0.79),
-		Vector4(-1.68, 0.84, 0.39, 0.94),
-		Vector4(-1.02, 0.84, 0.39, 1.00),
-		Vector4(0.26, 0.84, 0.39, 1.00),
-		Vector4(1.30, 0.80, 0.39, 0.88),
-		Vector4(2.08, 0.70, 0.40, 0.80)
-	], paint)
-	body.name = "BodyShellHatchback"
-	# Roof cap and angular window belt, following the real sloped glasshouse.
-	var roof = car_shell(root, [
-		Vector4(-0.72, 0.67, 1.34, 1.47),
-		Vector4(-0.55, 0.69, 1.39, 1.49),
-		Vector4(0.24, 0.68, 1.39, 1.49),
-		Vector4(0.38, 0.65, 1.32, 1.44)
-	], paint)
-	roof.name = "RoofHatchback"
-	for side in [-1.0, 1.0]:
-		var x = side * 0.705
-		# Separate front/rear door glass and small rear quarter glass, with body-color pillars.
-		quad_panel(root, PackedVector3Array([
-			Vector3(x, 1.29, -0.60), Vector3(x, 1.29, -0.03),
-			Vector3(side * 0.67, 1.40, -0.14), Vector3(side * 0.67, 1.40, -0.47)
-		]), glass)
-		quad_panel(root, PackedVector3Array([
-			Vector3(x, 1.29, 0.06), Vector3(x, 1.28, 0.48),
-			Vector3(side * 0.66, 1.39, 0.30), Vector3(side * 0.67, 1.40, 0.06)
-		]), glass)
-		quad_panel(root, PackedVector3Array([
-			Vector3(x, 1.25, 0.54), Vector3(side * 0.62, 1.14, 0.99),
-			Vector3(side * 0.65, 1.33, 0.56), Vector3(side * 0.66, 1.38, 0.40)
-		]), glass)
-		# A-, B-, C-pillars trace the rising belt and the steep rear hatch rake.
-		car_beam(root, Vector3(side * 0.76, 1.00, -0.96), Vector3(side * 0.68, 1.43, -0.61), 0.075, paint)
-		car_beam(root, Vector3(side * 0.71, 1.28, -0.03), Vector3(side * 0.67, 1.42, -0.03), 0.055, paint)
-		car_beam(root, Vector3(side * 0.69, 1.40, 0.48), Vector3(side * 0.61, 1.18, 1.08), 0.08, paint)
-		car_beam(root, Vector3(side * 0.61, 1.18, 1.08), Vector3(side * 0.56, 0.91, 1.48), 0.08, paint)
-		box(root, Vector3(side * 0.86, 1.03, -0.08), Vector3(0.045, 0.07, 1.55), trim)
-		box(root, Vector3(side * 0.91, 1.10, -0.94), Vector3(0.22, 0.13, 0.18), trim)
-		box(root, Vector3(side * 0.86, 0.78, -0.92), Vector3(0.045, 0.035, 0.16), Color("aeb9ba"))
-		for z in [-1.33, 1.34]:
-			CarParts.wheel(root, Vector3(side * 0.87, 0.39, z), 0.39, 0.28, side, {"style": "steel", "count": 6, "color": "323b40", "detail": "15191b"})
-	# Large slanted windscreen; the rear glass is a long fastback panel into the hatch.
-	quad_panel(root, PackedVector3Array([
-		Vector3(-0.66, 1.40, -0.62), Vector3(0.66, 1.40, -0.62),
-		Vector3(0.77, 1.02, -1.00), Vector3(-0.77, 1.02, -1.00)
-	]), glass)
-	quad_panel(root, PackedVector3Array([
-		Vector3(-0.65, 1.40, 0.35), Vector3(0.65, 1.40, 0.35),
-		Vector3(0.68, 0.91, 1.52), Vector3(-0.68, 0.91, 1.52)
-	]), glass)
-	# Front fascia: broad trapezoid lamp housings, narrow grille and integrated bumper.
-	box(root, Vector3(0, 0.48, -2.10), Vector3(1.58, 0.16, 0.12), trim)
-	box(root, Vector3(0, 0.72, -2.115), Vector3(0.70, 0.16, 0.035), Color("17252b"))
-	for side in [-1.0, 1.0]:
-		quad_panel(root, PackedVector3Array([
-			Vector3(side * 0.31, 0.72, -2.135), Vector3(side * 0.78, 0.73, -2.135),
-			Vector3(side * 0.78, 0.91, -2.12), Vector3(side * 0.35, 0.88, -2.12)
-		]), Color("e8e5d2"))
-		box(root, Vector3(side * 0.53, 0.95, -1.89), Vector3(0.15, 0.035, 0.32), paint)
-	# Rear hatch has the characteristic broad red light panel, segmented at the centre.
-	box(root, Vector3(0, 0.62, 2.105), Vector3(1.48, 0.24, 0.055), Color("242b2e"))
-	for side in [-1.0, 1.0]:
-		box(root, Vector3(side * 0.50, 0.65, 2.14), Vector3(0.47, 0.17, 0.035), Color("ad3b37"))
-		box(root, Vector3(side * 0.50, 0.76, 2.14), Vector3(0.47, 0.035, 0.035), Color("d1d0bd"))
-	box(root, Vector3(0, 0.65, 2.14), Vector3(0.38, 0.14, 0.035), Color("353a3b"))
-	box(root, Vector3(0, 0.45, 2.10), Vector3(1.55, 0.15, 0.12), trim)
-	# Door seams and handles emphasize the five-door body rather than a generic shell.
-	for side in [-1.0, 1.0]:
-		for z in [-0.03, 0.53]:
-			box(root, Vector3(side * 0.847, 0.96, z), Vector3(0.018, 0.025, 0.13), Color("aeb9ba"))
-	# Roof rack, visible above the roofline and below the inflatable boat.
-	for z in [-0.62, 0.62]:
-		box(root, Vector3(0, 1.56, z), Vector3(1.32, 0.07, 0.12), trim)
-	# Inflatable boat hull, dark inner well and yellow tie-down straps.
-	faceted(root, Vector3(0, 1.93, 0), Vector3(0.72, 0.30, 1.70), Color("747d7e"), 10, 5)
-	faceted(root, Vector3(0, 2.06, 0), Vector3(0.47, 0.12, 1.38), Color("354448"), 10, 4)
-	for z in [-0.62, 0.62]:
-		box(root, Vector3(0, 1.91, z), Vector3(1.48, 0.045, 0.10), Color("e0b83f"))
-		box(root, Vector3(0, 1.83, z), Vector3(0.055, 0.38, 0.055), Color("202a2d"))
-	return add_player_trunk(root, 8)
+	return add_player_trunk(CampingHatchbackModel.build(), 8)
+
 static func player_car_sport_sedan() -> Node3D:
 	var root = Node3D.new()
 	root.name = "PlayerCar_9"
