@@ -32,6 +32,10 @@ builds Mbed TLS (with `MBEDTLS_SSL_DTLS_SRTP`) and Opus as static libraries, the
 links libdatachannel and godot-cpp into one library in
 `game/addons/rally_voice/bin`. That directory is not committed: CI builds every
 platform in the `native-voice` job and passes the libraries to the export jobs.
+The job caches each built library under a key made from `native/voice/**` and
+`scripts/build-voice.mjs`, so a run that changes neither restores the library
+and skips the toolchain and the build. Bump `VOICE_BUILD_EPOCH` in
+`.github/workflows/check.yml` to force a rebuild after a toolchain change.
 
 ## Packaging
 
