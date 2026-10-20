@@ -1,17 +1,16 @@
 extends "res://tests/harness.gd"
 
 const Props = preload("res://scripts/core/props.gd")
-const NivaAsset = preload("res://scripts/cars/niva_asset.gd")
+const NivaModel = preload("res://scripts/cars/niva_model.gd")
 
 
 func _initialize() -> void:
 	call_deferred("run")
 
 func run() -> void:
-	check(NivaAsset.has_asset(), "Niva v6 original, static body and tailgate OBJ are available")
 	var car: Node3D = Props.player_car(2)
 	root.add_child(car)
-	check(car.get_meta("model_source", "") == "niva_v6_obj", "variant 2 uses imported Niva v6, not procedural fallback")
+	check(car.get_meta("model_source", "") == "niva_procedural", "variant 2 uses its own off-roader model, not the generic shell")
 	# The static body and the tailgate are each baked into one vertex-coloured mesh.
 	var body: MeshInstance3D = car.get_node_or_null("Baked") as MeshInstance3D
 	var hinge: Node3D = car.get_node_or_null("TrunkHinge")
@@ -23,7 +22,7 @@ func run() -> void:
 	for part in car.get_node("NivaStaticParts").get_children():
 		if part.has_meta("rolling_wheel_radius"):
 			wheels.append(part)
-	check(wheels.size() == 8, "four Niva wheels each have rubber and metal meshes with rotating pivots")
+	check(wheels.size() == 4, "four Niva wheels roll on their own pivots")
 	if not wheels.is_empty():
 		Props.animate_wheels(car)
 		var wheel_start: Quaternion = wheels[0].quaternion
@@ -34,9 +33,9 @@ func run() -> void:
 		Props.animate_wheels(car)
 		check(wheels[0].quaternion.is_equal_approx(wheel_start), "Niva wheel rotation reverses while backing up")
 	if hinge != null and door != null:
-		check(hinge.position.distance_to(NivaAsset.HINGE) < 0.001, "rear door hinge located at upper edge of tailgate")
+		check(hinge.position.distance_to(NivaModel.HINGE) < 0.001, "rear door hinge located at upper edge of tailgate")
 		var door_bounds: AABB = hinge.get_meta("baked_parts").NivaTailgate_Lid
-		door_bounds.position += NivaAsset.HINGE
+		door_bounds.position += NivaModel.HINGE
 		check(door_bounds.position.z > 1.37 and door_bounds.end.z <= 1.90, "animated door does not contain rear seats, side windows or roof")
 		check(door_bounds.position.x >= -0.69 and door_bounds.end.x <= 0.69, "animated hatch excludes side wings and rear lamp mounts")
 		check(door_bounds.position.y > 0.74, "animated hatch excludes rear bumper and wheel arches")
