@@ -16,6 +16,11 @@ const RETRY_MSEC = 20000
 const MAX_ATTEMPTS = 3
 # No microphone frames this long after opening it means no usable input.
 const MIC_TIMEOUT_MSEC = 2500
+# The microphone closes this long after the key is released. An open input
+# can switch Bluetooth headsets to their hands-free profile and keeps the
+# driver capturing, so the game's own sound must not pay for it between
+# transmissions.
+const MIC_HANG_MSEC = 1500
 const MAX_QUEUE = 128
 const PLAYBACK_BUFFER = 0.1
 
@@ -39,6 +44,7 @@ var events: Array = []
 var mic := "idle"
 var pressed := false
 var mic_opened_at := 0
+var released_at := 0
 var mic_player: AudioStreamPlayer
 var capture: AudioEffectCapture
 var encoder: RefCounted
@@ -284,8 +290,10 @@ func set_ptt(value: bool) -> void:
 	pressed = value and joined
 	if pressed and mic == "idle":
 		_open_mic()
-	if not pressed and encoder != null:
-		encoder.reset()
+	if not pressed:
+		released_at = Time.get_ticks_msec()
+		if encoder != null:
+			encoder.reset()
 
 func _open_mic() -> void:
 	_set_mic("pending")
@@ -310,14 +318,15 @@ func _start_capture() -> void:
 		_set_mic("unavailable")
 		return
 	encoder = encoder_factory.call()
+	# The bus ships in default_bus_layout.tres: AudioServer.add_bus() changes
+	# the bus list without locking the mixer, so adding it mid-game races the
+	# audio thread. Its capture effect runs before the -80 dB fader: we never
+	# hear ourselves.
 	var bus = AudioServer.get_bus_index(MIC_BUS)
-	if bus < 0:
-		AudioServer.add_bus()
-		bus = AudioServer.bus_count - 1
-		AudioServer.set_bus_name(bus, MIC_BUS)
-		AudioServer.add_bus_effect(bus, AudioEffectCapture.new())
-		# The capture effect runs before the fader: we never hear ourselves.
-		AudioServer.set_bus_volume_db(bus, -80.0)
+	if bus < 0 or AudioServer.get_bus_effect_count(bus) == 0 or not AudioServer.get_bus_effect(bus, 0) is AudioEffectCapture:
+		push_warning("Radio microphone bus is missing from the bus layout")
+		_set_mic("unavailable")
+		return
 	capture = AudioServer.get_bus_effect(bus, 0)
 	capture.clear_buffer()
 	mic_player = AudioStreamPlayer.new()
@@ -345,6 +354,10 @@ func _set_mic(value: String) -> void:
 # Drains the microphone every frame; while the key is held it is sent to everyone.
 func _pump_microphone() -> void:
 	if capture == null:
+		return
+	if not pressed and Time.get_ticks_msec() - released_at > MIC_HANG_MSEC:
+		_close_mic()
+		_set_mic("idle")
 		return
 	var available = capture.get_frames_available()
 	if available <= 0:

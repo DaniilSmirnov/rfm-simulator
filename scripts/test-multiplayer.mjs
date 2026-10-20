@@ -22,6 +22,7 @@ const workerPort = 8793;
 const processes = [];
 let browserFactory;
 const browsers = [];
+const pages = {};
 let relay;
 let errors = [];
 const samples = {};
@@ -167,6 +168,7 @@ try {
       const context=await browser.newContext({locale:'ru-RU',viewport:{width:844,height:390},...(role==='guest'?{isMobile:true,hasTouch:true}: {})});
       const page=await context.newPage();page.on('console',m=>observe(role,m.text()));page.on('pageerror',e=>errors.push(String(e)));page.on('crash',()=>errors.push(role+' renderer crashed'));
       await page.goto(`${origin}/?role=${role}${room?'&room='+room:''}`,{waitUntil:'domcontentloaded'});
+      pages[role]=page;
       return page;
     }
     launch([godot,'--headless','--path','game','--max-fps','60','res://tests/network_client.tscn','--','--smoke-test',`--network-role=${role}`,`--room-server=${origin}/${role}`, ...transportArgs, ...(room?[`--network-room=${room}`]:[])],role);
@@ -174,6 +176,9 @@ try {
   await client('host');await until(()=>latest('host')?.connected,'host connects',web?120000:60000);
   await client('guest',latest('host').room);await until(()=>latest('guest')?.active,'prediction handshake',web?120000:60000);
   if(socketMode)await until(()=>['host','guest'].every(role=>logs.some(line=>line.startsWith(`[${role}] `)&&/(^|\] )ROOM_SOCKET open$/.test(line.slice(role.length+3)))),'both clients on WebSocket',web?60000:30000);
+  // The radio joins through the page transport (the engine has no JS bridge)
+  // and its WebRTC link is set up over the room's voice signaling.
+  if(web)await until(async()=>(await Promise.all(Object.values(pages).map(page=>page.evaluate(()=>window.RallyVoice?.state.joined===true&&[...RallyVoice.state.peers.values()].some(peer=>peer.connected))))).every(Boolean),'radio joined and connected between the browser clients',60000);
   if(directMode)await until(()=>latest('host')?.direct>0 && latest('guest')?.direct_healthy,'direct link open and carrying the world',60000);
   command('host','resume');command('guest','forward');
   const start=latest('guest').pos;

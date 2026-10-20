@@ -349,3 +349,18 @@ test('native room editor transport is local and does not wait for platform autho
  c.RallyPlatform.target='standalone';
  assert.equal((await c.fetch('/__rally_room_input',{method:'POST',body:'{}'})).status,404);
 });
+
+test('radio calls reach the page voice module without network',async()=>{
+ const {context:c,forwarded}=await setup('standalone');
+ const seen=[];
+ c.RallyVoice={bridge:calls=>{seen.push(...calls);return {results:[],joined:true};}};
+ const r=await c.fetch('/__rally_voice',{method:'POST',body:JSON.stringify({calls:[['setPtt',true]]})});
+ assert.deepEqual(await r.json(),{results:[],joined:true});
+ assert.deepEqual(seen,[['setPtt',true]]);
+ assert.equal(forwarded.length,0);
+ assert.equal((await c.fetch('/__rally_voice')).status,405);
+ assert.equal((await c.fetch('/__rally_voice',{method:'POST',body:'{}'})).status,400);
+ delete c.RallyVoice;
+ assert.equal((await c.fetch('/__rally_voice',{method:'POST',body:'{"calls":[]}'})).status,404);
+ assert.equal(forwarded.length,0);
+});

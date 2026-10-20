@@ -20,6 +20,17 @@
         return Response.json(window.RallyRoomInput.sync(state));
       } catch { return Response.json({error:'Invalid state'}, {status:400}); }
     }
+    if (url.origin === origin && url.pathname === '/__rally_voice') {
+      if (request.method !== 'POST') return Response.json({error:'POST required'}, {status:405});
+      if (!window.RallyVoice) return Response.json({error:'Unavailable'}, {status:404});
+      try {
+        const raw = await request.text();
+        if (raw.length > 262144) return Response.json({error:'Message too large'}, {status:413});
+        const {calls} = JSON.parse(raw);
+        if (!Array.isArray(calls)) return Response.json({error:'Invalid calls'}, {status:400});
+        return Response.json(window.RallyVoice.bridge(calls));
+      } catch { return Response.json({error:'Invalid calls'}, {status:400}); }
+    }
     if (url.origin === origin && url.pathname === '/__rally_viewport') {
       if (request.method !== 'GET') return Response.json({error:'GET required'}, {status:405});
       if (!window.RallyViewport) return Response.json({error:'Viewport unavailable'}, {status:503});

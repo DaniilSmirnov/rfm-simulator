@@ -45,6 +45,11 @@ writes a `.gdextension` next to it and loads it with
 - Builds without the library (the web, tests) start without extension errors.
 - The library loads only when someone uses the radio.
 
+The microphone plays into the `RadioMic` bus from `game/default_bus_layout.tres`
+(an `AudioEffectCapture` before a -80 dB fader). The bus is never added at
+runtime, because `AudioServer.add_bus()` does not lock the mixer. The input
+closes 1.5 s after the key is released and opens again on the next press.
+
 Microphone access: `audio/driver/enable_input` (off on the web), `RECORD_AUDIO`
 on Android (asked on the first press), and `NSMicrophoneUsageDescription`, the
 audio-input entitlement and disabled library validation on macOS.
