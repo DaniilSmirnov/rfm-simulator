@@ -171,7 +171,6 @@ func _joined(data: Dictionary) -> void:
 	if is_host:
 		room_id = data.room
 	connected = true
-	transport.open_socket(str(data.get("socket", "")))
 	voice.join()
 	if converting_solo:
 		_adopt_local_host_state()
@@ -186,6 +185,11 @@ func _joined(data: Dictionary) -> void:
 		# The look picked in the menu, as the server accepted it; others see the same.
 		game.avatar_variant = int(data.get("character", game.avatar_variant))
 		game.heading = game.stage.parks.park_visitor(game.car, lane)
+	# The room is not polled while the stage loads, so a socket opened before
+	# the load would send its hello too late: the server drops sockets that do
+	# not say hello within 10 s, and a slow load left the first seconds on HTTP.
+	if connected:
+		transport.open_socket(str(data.get("socket", "")))
 	game.toast(Loc.t("Комната %s · %s. Передай ID друзьям!") % [room_id, Loc.t(game.car.get_meta("model"))])
 	if game.invite_after_room_create:
 		game.invite_after_room_create = false
