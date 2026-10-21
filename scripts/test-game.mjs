@@ -2,7 +2,7 @@ import {spawnSync} from 'node:child_process';
 import {mkdir, writeFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import {getGodot, root} from './godot.mjs';
-import {groups,nodeSuites,groupDescriptions,slowTests,verifyRegistry,testPaths} from './test-catalog.mjs';
+import {groups,nodeSuites,groupDescriptions,slowTests,verifyRegistry,testPaths,partition} from './test-catalog.mjs';
 
 const project=join(root,'game');
 const argv=process.argv.slice(2);
@@ -10,6 +10,10 @@ const flag=name=>argv.find(a=>a.startsWith(name+'='))?.split('=')[1];
 const shard=flag('--shard')||'all';
 const only=flag('--only');
 const listOnly=argv.includes('--list');
+// --part=K/N runs the K-th of N balanced slices of the shard; part 1 also runs
+// the shard's Node suites. CI runs every part of every shard in parallel.
+const [part,parts]=(flag('--part')||'1/1').split('/').map(Number);
+if(!(parts>=1 && part>=1 && part<=parts)) throw Error('Invalid --part, expected K/N: '+flag('--part'));
 if (!['all',...Object.keys(groups)].includes(shard)) throw Error('Unknown test shard: '+shard);
 const paths=await testPaths(join(project,'tests'));
 const registry=verifyRegistry([...paths.keys()]);
@@ -19,8 +23,9 @@ if (listOnly){
 }
 if (only && !Object.values(groups).some(files=>files.includes(only))) throw Error('Unknown test: '+only);
 
-const selected=only ? [only] : (shard==='all' ? Object.values(groups).flat() : groups[shard]);
-const activeShards=only ? [] : (shard==='all'?Object.keys(groups):[shard]);
+const shardFiles=only ? [only] : (shard==='all' ? Object.values(groups).flat() : groups[shard]);
+const selected=partition(shardFiles,parts)[part-1];
+const activeShards=only||part>1 ? [] : (shard==='all'?Object.keys(groups):[shard]);
 const godot=await getGodot();
 const results=[];
 const execute=(name,command,args,timeoutMs)=>{
@@ -79,9 +84,9 @@ if(!importOK) {
 }
 const outdir=join(root,'.cache','test-results');
 await mkdir(outdir,{recursive:true});
-const filename=only?'only-'+only.replace(/\.gd$/,''):shard;
-const report={shard,selected: selected.length,registry,generated_at:new Date().toISOString(),results,
+const filename=only?'only-'+only.replace(/\.gd$/,''):shard+(parts>1?'-'+part+'of'+parts:'');
+const report={shard,part:part+'/'+parts,selected: selected.length,registry,generated_at:new Date().toISOString(),results,
  passed:results.filter(t=>t.pass).length,failed:results.filter(t=>!t.pass).length};
 await writeFile(join(outdir,filename+'.json'),JSON.stringify(report,null,2)+'\n');
-console.log('TEST SHARD '+shard+': '+report.passed+' passed, '+report.failed+' failed. Report: .cache/test-results/'+filename+'.json');
+console.log('TEST SHARD '+shard+(parts>1?' part '+part+'/'+parts:'')+': '+report.passed+' passed, '+report.failed+' failed. Report: .cache/test-results/'+filename+'.json');
 if(report.failed)process.exitCode=1;

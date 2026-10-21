@@ -60,6 +60,28 @@ export const slowTests = new Set([
  "test_selection.gd", "test_world_loading.gd", "test_baked_village.gd",
  "test_provence_village.gd", "test_stage_solids.gd", "test_service_parks.gd", "test_service_park_layout.gd",
 ]);
+// Rough CI seconds per test (2026-10-21), only to balance --part=K/N splits.
+// Unlisted tests count as 10 s, or 60 s when they are in slowTests.
+export const seconds = Object.freeze({
+ "test_course_schedule.gd": 147, "test_prop_physics.gd": 72, "test_selection.gd": 36, "test_knockdown.gd": 35,
+ "test_camp_cooking.gd": 30, "test_tow_recovery.gd": 30, "test_service_parks.gd": 28, "test_room.gd": 28,
+ "test_food_fleet.gd": 28, "test_foraging.gd": 28, "test_grill_fire.gd": 28, "test_ambulance_medics.gd": 28,
+ "test_rally_traffic.gd": 25, "test_direct_link.gd": 25, "test_poison_mushrooms.gd": 25, "test_world_loading.gd": 24,
+ "test_ambulance_right_of_way.gd": 22, "test_movable_props.gd": 22, "test_party.gd": 20, "test_cargo_selection_order.gd": 19,
+ "test_rally_tracks.gd": 18, "test_trunk.gd": 18, "test_vk_access.gd": 18, "test_furniture.gd": 18, "test_packing.gd": 17,
+});
+// Splits a shard into n parts of similar length: longest test first, each to
+// the part that is shortest so far. Deterministic, and every test lands in
+// exactly one part.
+export function partition(files, n) {
+ const cost=f=>seconds[f]??(slowTests.has(f)?60:10);
+ const parts=Array.from({length:n},()=>({total:0,files:[]}));
+ for(const file of [...files].sort((a,b)=>cost(b)-cost(a)||a.localeCompare(b))){
+  const part=parts.reduce((best,p)=>p.total<best.total?p:best);
+  part.total+=cost(file);part.files.push(file);
+ }
+ return parts.map(p=>files.filter(f=>p.files.includes(f)));
+}
 export function verifyRegistry(files) {
  const seen = new Map();
  for (const [group,tests] of Object.entries(groups)) {

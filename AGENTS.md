@@ -34,7 +34,7 @@ node scripts/test-game.mjs --shard=core
 npm test
 ```
 
-The available shards are `core`, `simulation`, and `world`; `--only` runs one Godot test without the Node suites. Use `node scripts/test-game.mjs --list` to inspect the registry without downloading Godot. New functional Godot tests extend `res://tests/harness.gd`, have unique filenames, and must be registered in `scripts/test-catalog.mjs`.
+The available shards are `core`, `simulation`, and `world`; `--only` runs one Godot test without the Node suites. Use `node scripts/test-game.mjs --list` to inspect the registry without downloading Godot. New functional Godot tests extend `res://tests/harness.gd`, have unique filenames, and must be registered in `scripts/test-catalog.mjs`. `--part=K/N` runs the K-th of N balanced slices of a shard (part 1 also runs its Node suites); CI runs every slice on its own runner, see the `tests` matrix in `.github/workflows/check.yml`.
 
 Run Godot imports and bakes sequentially within one checkout; the test runner prepares shared generated assets. Use `package.json` for build commands and the CI workflow for exported-browser, multiplayer, Worker integration, and native startup checks relevant to the change.
 
