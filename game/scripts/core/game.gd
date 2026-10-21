@@ -656,6 +656,7 @@ func _process(delta: float) -> void:
 	if soundscape != null: soundscape.update(delta)
 	camp_cooking.animate_flames(Time.get_ticks_msec() / 1000.0)
 	camp_grill.animate(Time.get_ticks_msec() / 1000.0)
+	if room.is_guest(): movable_props.apply_pending(); movable_props.render_guest() # also while paused: snapshots still arrive
 	if not playing or paused or dead or finished or (room.is_guest() and room.world_paused):
 		return
 	if room.is_authority():
@@ -687,7 +688,6 @@ func _process(delta: float) -> void:
 	Props.animate_wheels(car)
 	cargo.update(delta)
 	movable_props.refresh()
-	if room.is_guest(): movable_props.apply_pending(); movable_props.render_guest()
 	camp_cooking.update(delta, room.is_guest())
 	injuries.update(delta)
 	spectators.update(elapsed, delta, room.is_guest())
