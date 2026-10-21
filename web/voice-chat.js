@@ -196,7 +196,8 @@
   async function onSignal(from, data) {
     if (!state.joined || !data || data.space !== 'voice' || typeof data.kind !== 'string') return;
     const id = String(from);
-    if (data.kind === 'bye') { drop(id, false); return; }
+    // A bye from a member who is still listed asks for a fresh call.
+    if (data.kind === 'bye') { drop(id, false); state.attempts.delete(id); return; }
     // The server only relays between members of this room, so an offer from
     // someone the roster does not list yet is a newcomer: the roster lags.
     if (!state.members.includes(id)) {
@@ -205,7 +206,8 @@
     }
     let peer = state.peers.get(id);
     // A new session from a known member means they reloaded: start over.
-    if (peer && data.kind === 'offer' && peer.remoteSession && data.session !== peer.remoteSession) { drop(id, false); peer = null; }
+    // The caller dialling again before the link came up (after a bye) starts over.
+    if (peer && data.kind === 'offer' && ((peer.remoteSession && data.session !== peer.remoteSession) || (state.localId > id && peer.pc.remoteDescription && !peer.connected))) { drop(id, false); peer = null; }
     if (!peer) {
       if (data.kind !== 'offer') return;
       peer = ensurePeer(id, false);
@@ -305,6 +307,18 @@
     if (state.mic !== 'denied' && state.mic !== 'unavailable') setMic('idle');
   }
 
+  // Our room socket has just opened: calls relayed before it were lost. Every
+  // link that is not up starts over, and a bye makes the other side call again.
+  function ringAgain() {
+    if (!state.joined) return;
+    for (const id of state.members) {
+      if (state.peers.get(id)?.connected) continue;
+      drop(id, false);
+      state.attempts.delete(id);
+      send(id, { kind: 'bye' });
+    }
+  }
+
   function update(list) {
     for (const entry of Array.isArray(list) ? list : []) {
       const peer = state.peers.get(String(entry.id));
@@ -337,7 +351,7 @@
   }
 
   // One batch from Godot, in order. onSignal is not awaited, as before.
-  const CALLS = { join, leave, syncMembers, onSignal, setPtt, mute };
+  const CALLS = { join, leave, syncMembers, onSignal, setPtt, mute, ringAgain };
   function bridge(calls) {
     const results = [];
     for (const call of Array.isArray(calls) ? calls : []) {
@@ -356,5 +370,5 @@
   document.addEventListener('visibilitychange', () => { if (document.hidden) releasePtt(); });
   for (const name of ['pointerdown', 'keydown', 'touchend']) addEventListener(name, resumeAudio, { capture: true, passive: true });
 
-  window.RallyVoice = { join, leave, syncMembers, onSignal, setPtt, update, mute, poll, tick, bridge, quality, state };
+  window.RallyVoice = { join, leave, syncMembers, onSignal, setPtt, ringAgain, update, mute, poll, tick, bridge, quality, state };
 })();

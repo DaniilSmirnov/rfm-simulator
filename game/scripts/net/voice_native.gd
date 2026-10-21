@@ -159,6 +159,8 @@ func on_signal(from: String, data: Dictionary) -> void:
 	var id = str(from)
 	if kind == "bye":
 		_drop(id, false)
+		# A bye from a member who is still listed asks for a fresh call.
+		attempts.erase(id)
 		return
 	# The server only relays between members, so an unlisted offer is a newcomer.
 	if not id in members:
@@ -167,7 +169,7 @@ func on_signal(from: String, data: Dictionary) -> void:
 		members.append(id)
 	var peer: Dictionary = peers.get(id, {})
 	var remote_session = str(data.get("session", ""))
-	if kind == "offer" and not peer.is_empty() and (peer.remote_session != "" and remote_session != peer.remote_session or peer.offering):
+	if kind == "offer" and not peer.is_empty() and (peer.remote_session != "" and remote_session != peer.remote_session or peer.offering or local_id > id and peer.described and not peer.connected):
 		# A reload starts over; two offers at once keep the polite side's peer.
 		if peer.offering and local_id < id:
 			return
@@ -205,6 +207,18 @@ func on_signal(from: String, data: Dictionary) -> void:
 				link.add_ice_candidate(entry.candidate, entry.mid)
 			else:
 				peer.candidates.append(entry)
+
+# Our room socket has just opened: calls relayed before it were lost. Every
+# link that is not up starts over, and a bye makes the other side call again.
+func ring_again() -> void:
+	if not joined:
+		return
+	for id in members:
+		if peers.has(id) and peers[id].connected:
+			continue
+		_drop(id, false)
+		attempts.erase(id)
+		_send(id, {"kind": "bye"})
 
 # ---------------------------------------------------------------- links
 

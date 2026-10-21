@@ -163,6 +163,19 @@ func mesh_rules() -> void:
 	nodes.a.peers.b.link.events.append({"type": "state", "state": "failed"})
 	nodes.a._poll_links()
 	check(not nodes.a.peers.has("b") and nodes.a.attempts.has("b"), "a failed link is dropped and counted")
+	# Calls relayed before the callee's room socket opened were lost, and the
+	# caller gave up. When the socket opens, the callee's bye makes it ring again.
+	nodes.b._drop("a", false)
+	nodes.a.attempts["b"] = {"count": VoiceNative.MAX_ATTEMPTS, "retry_at": 0}
+	nodes.a.sync_members(nodes.a.members)
+	check(not nodes.a.peers.has("b"), "a caller out of attempts stops dialling")
+	nodes.b.ring_again()
+	var byes = nodes.b.tick([]).signals.filter(func(s): return s.to == "a")
+	check(byes.size() == 1 and byes[0].data.kind == "bye", "an opened socket asks members without a link to ring again")
+	nodes.a.on_signal("b", byes[0].data)
+	nodes.a.sync_members(nodes.a.members)
+	await relay()
+	check(nodes.a.peers.has("b") and nodes.a.peers.b.connected and nodes.b.peers.a.connected, "the caller rings again after the bye")
 	for id in nodes:
 		nodes[id].leave()
 		nodes[id].queue_free()
