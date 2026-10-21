@@ -23,6 +23,7 @@ func run() -> void:
 	game.hud.update_menu()
 	await process_frame
 	check(shown(game.start_button) and game.start_button.text == "ИГРАТЬ", "main menu offers «Играть»")
+	check(game.title_label.text == "Rally Fans Simulator Demo", "the title says Demo")
 	check(game.lobby_ui.quit_button.visible and game.lobby_ui.quit_button.text == "ВЫЙТИ ИЗ ИГРЫ", "main menu offers «Выйти из игры» on desktop")
 	check(not shown(game.selection_controls), "no stage, car or character selection")
 	check(not shown(game.room.ui.panel), "no room creation or joining")
