@@ -68,17 +68,23 @@ static func create(r: Dictionary, world_solids, owner_game) -> RigidBody3D:
 	body.global_transform = r.node.global_transform
 	if r.has("tree"):
 		world_solids.stage.fallen[r.tree].dynamic = true
-		var direction: Vector3 = world_solids.stage.fallen[r.tree].direction
-		var length: float = world_solids.stage.forest_data[r.tree].height * 0.64
+		var stage = world_solids.stage
+		var f: Dictionary = stage.fallen[r.tree]
+		var axis: Vector3 = Basis(Vector3.UP.cross(f.direction).normalized(), float(f.get("lie", PI * 0.5))) * Vector3.UP
+		var length: float = stage.forest_data[r.tree].height * 0.64
 		var collider = CollisionShape3D.new()
 		var shape = CapsuleShape3D.new()
 		shape.radius = 0.2
 		shape.height = maxf(0.7, length)
 		collider.shape = shape
 		body.add_child(collider)
-		collider.position = direction * length * 0.5 + Vector3.UP * 0.2
-		collider.basis = Basis(Quaternion(Vector3.UP, direction))
+		collider.position = axis * length * 0.5 + Vector3.UP * 0.2
+		collider.basis = Basis(Quaternion(Vector3.UP, axis))
 		body.center_of_mass = collider.position
+		# A round trunk on a hillside rolled away as soon as it landed. It only
+		# turns about the vertical while dragged.
+		body.axis_lock_angular_x = true
+		body.axis_lock_angular_z = true
 	for obstacle in world_solids.obstacles:
 		if obstacle.get("prop", "") != r.key: continue
 		var old: Node3D = obstacle.body
@@ -90,7 +96,8 @@ static func create(r: Dictionary, world_solids, owner_game) -> RigidBody3D:
 	var center: Vector3 = body.global_transform * body.center_of_mass
 	var bottom: float = (r.node.global_transform * r.box).position.y
 	var floor: float = world_solids.walking_floor(center, center.y)
-	if not r.anchored and owner_game.room.is_authority() and (r.has("tree") or r.key.begins_with("camp:") or bottom > floor + 0.001):
+	# A felled tree already lies on the ground it fell onto and waits for a drag.
+	if not r.anchored and owner_game.room.is_authority() and not r.has("tree") and (r.key.begins_with("camp:") or bottom > floor + 0.001):
 		body.wake()
 	return body
 
@@ -277,6 +284,11 @@ func _physics_process(delta: float) -> void:
 		_strain = _strain + delta if _guarded and lean >= LEAN_FREE else 0.0
 	if pull_velocity.length_squared() > 0.0001 or _rising:
 		if sleeping: wake()
+	elif record.has("tree") and not sleeping:
+		# Let go, a trunk stays where it was dragged instead of sliding downhill.
+		linear_velocity = Vector3.ZERO
+		angular_velocity = Vector3.ZERO
+		sleeping = true
 	if pull_velocity.length_squared() > 0.0001:
 		var planar = Vector3(linear_velocity.x, 0, linear_velocity.z)
 		var force = (pull_velocity - planar) * mass * 20.0

@@ -229,7 +229,7 @@ func run() -> void:
 	world.stage.add_child(trunk)
 	var fallen = {"key": "tree:0", "tree": 0, "node": trunk, "mass": 120.0, "anchored": false, "box": AABB(Vector3.ZERO, Vector3(5.12, 0.7, 0.7))}
 	var trunk_body = Movables.Body.create(fallen, world.stage.solids, world)
-	check(not trunk_body.sleeping, "a newly fallen uphill trunk checks native support before sleeping")
+	check(trunk_body.sleeping and trunk_body.axis_lock_angular_x and trunk_body.axis_lock_angular_z, "a newly fallen trunk on a slope lies still and cannot roll")
 	trunk.free()
 	world.stage.trees.clear()
 	world.stage.forest_data.clear()

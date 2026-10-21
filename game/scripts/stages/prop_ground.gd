@@ -28,10 +28,7 @@ func ensure_at(at: Vector3, reach: float) -> void:
 		var trunk: StaticBody3D = trunks[index]
 		var base: Vector3 = stage.trees[index]
 		var length = float(stage.forest_data[index].height) * 0.64 if index < stage.forest_data.size() else 8.0
-		var fallen: Dictionary = stage.fallen.get(index, {})
-		var direction: Vector3 = fallen.get("direction", Vector3.UP)
-		var angle = smoothstep(0, 1.3, float(fallen.get("age", 0))) * PI * 0.5
-		var axis = Vector3.UP.lerp(direction, sin(angle)).normalized()
+		var axis: Vector3 = stage.fallen_basis(index) * Vector3.UP
 		var pose = Transform3D(Basis(Quaternion(Vector3.UP, axis)), base + axis * length * 0.5)
 		if not trunk.global_transform.is_equal_approx(pose):
 			trunk.global_transform = pose

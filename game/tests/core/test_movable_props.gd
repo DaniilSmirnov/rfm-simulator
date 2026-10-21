@@ -118,13 +118,21 @@ func tree_and_lamp(game) -> void:
 	props.refresh()
 	check(props.records.has("tree:0"), "fallen instanced tree exposes a drag target")
 	var tree: Dictionary = props.records["tree:0"]
-	check(not tree.body.sleeping, "a newly fallen tree checks native support before sleeping")
+	check(tree.body.sleeping, "a felled tree lies where it fell until someone drags it")
+	var length: float = stage.forest_data[0].height * 0.64
+	var tip: Vector3 = point + stage.fallen_basis(0) * Vector3.UP * length
+	check(absf(tip.y - stage.ground(tip)) < 0.3, "a felled trunk lies along the ground it fell onto")
 	var helper = {"pos": game.room.a(props.center(tree) + Vector3(2, 0, 0)), "in_car": false, "tow": true}
 	for i in range(30):
 		props.update({"local": helper}, {}, 1.0 / 60.0)
 		await physics_frame
 	await process_frame
 	check(tree.body.linear_velocity.x > 0.1 and stage.trees[0].distance_to(point) > 0.01 and stage.trees[0].is_equal_approx(tree.node.position), "dragging changes tree collision and rendering origin together")
+	var dragged: Vector3 = stage.trees[0]
+	for i in range(30):
+		props.update({}, {}, 1.0 / 60.0)
+		await physics_frame
+	check(stage.trees[0].distance_to(dragged) < 0.05 and tree.body.global_basis.y.angle_to(Vector3.UP) < 0.01, "a released trunk stays put instead of rolling")
 	var snapshot: Array = stage.tree_snapshot()
 	var moved: Vector3 = stage.trees[0]
 	stage.trees[0] = point

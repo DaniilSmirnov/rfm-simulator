@@ -567,16 +567,30 @@ func fell(index: int, direction_hint: Vector3) -> bool:
 	var dir = Vector3(direction_hint.x, 0, direction_hint.z).normalized()
 	if dir.length_squared() < 0.5:
 		dir = Vector3.FORWARD
-	fallen[index] = {"direction": dir, "age": 0.0, "origin": trees[index]}
+	fallen[index] = {"direction": dir, "age": 0.0, "origin": trees[index], "lie": lie_angle(trees[index], dir, forest_data[index].height * 0.64)}
 	return true
+
+# How far a felled trunk turns from upright: it comes to rest along the ground
+# it falls onto, past level downhill and short of it uphill, instead of lying
+# level and being left to a rigid body that rolled it down the slope.
+const MAX_LIE_PITCH = 0.7
+func lie_angle(base: Vector3, direction: Vector3, length: float) -> float:
+	var rise: float = ground(base + direction * length) - ground(base)
+	return PI * 0.5 - clampf(atan2(rise, length), -MAX_LIE_PITCH, MAX_LIE_PITCH)
+
+# The pose of a felled trunk around its base: the fall so far, then any turn
+# a drag gave it.
+func fallen_basis(index: int) -> Basis:
+	var f: Dictionary = fallen[index]
+	var angle: float = smoothstep(0, 1.3, f.age) * float(f.get("lie", PI * 0.5))
+	return Basis.from_euler(f.get("prop_rotation", Vector3.ZERO)) * Basis(Vector3.UP.cross(f.direction).normalized(), angle)
 
 func update_fallen(delta: float) -> void:
 	for index in fallen:
 		var tree_data: Dictionary = forest_data[index]
 		var f: Dictionary = fallen[index]
 		f.age = minf(1.3, f.age + delta)
-		var angle = smoothstep(0, 1.3, f.age) * PI * 0.5
-		var basis = Basis.from_euler(f.get("prop_rotation", Vector3.ZERO)) * Basis(Vector3.UP.cross(f.direction).normalized(), angle)
+		var basis = fallen_basis(index)
 		if f.get("rendered_age", -1.0) == f.age and f.get("basis", Basis.IDENTITY).is_equal_approx(basis):
 			continue
 		f.rendered_age = f.age
@@ -623,7 +637,7 @@ func tree_snapshot() -> Array:
 	var result = []
 	for index in fallen:
 		var f: Dictionary = fallen[index]
-		result.append({"id": index, "dir": [f.direction.x, 0, f.direction.z], "age": f.age, "pos": [trees[index].x, trees[index].y, trees[index].z]})
+		result.append({"id": index, "dir": [f.direction.x, 0, f.direction.z], "age": f.age, "lie": f.get("lie", PI * 0.5), "pos": [trees[index].x, trees[index].y, trees[index].z]})
 	return result
 
 func apply_trees(snapshot: Array) -> void:
@@ -634,6 +648,7 @@ func apply_trees(snapshot: Array) -> void:
 		fell(index, Vector3(f.dir[0], 0, f.dir[2]))
 		fallen[index].direction = Vector3(f.dir[0], 0, f.dir[2]).normalized()
 		fallen[index].age = maxf(fallen[index].age, float(f.age))
+		fallen[index].lie = float(f.lie) if f.has("lie") else lie_angle(fallen[index].origin, fallen[index].direction, forest_data[index].height * 0.64)
 		if f.has("pos"):
 			trees[index] = Vector3(f.pos[0], f.pos[1], f.pos[2])
 			fallen[index].erase("rendered_age")
@@ -653,9 +668,7 @@ func obstacle_hit(start: Vector3, end: Vector3, radius: float, allow_escape: boo
 		var d = c
 		var width = 0.2
 		if fallen.has(index):
-			var f: Dictionary = fallen[index]
-			var axis = Vector3.UP.rotated(Vector3.UP.cross(f.direction).normalized(), smoothstep(0, 1.3, f.age) * PI * 0.5)
-			d += flat(Basis.from_euler(f.get("prop_rotation", Vector3.ZERO)) * axis) * forest_data[index].height * 0.64
+			d += flat(fallen_basis(index) * Vector3.UP) * forest_data[index].height * 0.64
 			width = 0.35
 		var padding = radius + width
 		# A growing fallen trunk can overlap a parked car. Permit motion out of
