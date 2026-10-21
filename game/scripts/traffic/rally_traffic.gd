@@ -219,7 +219,10 @@ static func plan(game: Node3D, racer: Dictionary) -> Dictionary:
 	# Passing lines never leave the usable width: on open roads this keeps the
 	# historic ±2.95 m, in narrow village streets it stays off the pavements.
 	var reach = maxf(1.0, line_limit(game, s) - 0.8)
-	var candidates = [base, -minf(2.95, reach), minf(2.95, reach), -minf(1.5, reach), minf(1.5, reach)]
+	# Holding the present line is a candidate too: a parked car on the pavement
+	# can be too close to the planned line yet clear of the one driven now, and
+	# with no other line open in a narrow street the crew would stop beside it.
+	var candidates = [base, clampf(current, -reach, reach), -minf(2.95, reach), minf(2.95, reach), -minf(1.5, reach), minf(1.5, reach)]
 	if racer.get("role", "") == "ambulance":
 		reach += 2.0 # Search the verge too; terrain/solid probes must approve it.
 		for edge in [reach, maxf(0.0, reach - 0.75), maxf(0.0, reach - 1.5)]:
