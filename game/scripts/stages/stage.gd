@@ -31,6 +31,7 @@ const RoadChunks = preload("res://scripts/stages/road_chunks.gd")
 const RoadRelief = preload("res://scripts/stages/road_relief.gd")
 const RoadCut = preload("res://scripts/stages/road_cut.gd")
 const WorldSync = preload("res://scripts/net/world_sync.gd")
+const FallenTrees = preload("res://scripts/stages/fallen_trees.gd")
 # Everything that differs between stages lives in the biome (stage_biome.gd);
 # this file is the shared machinery around it.
 var biome
@@ -565,16 +566,8 @@ func fell(index: int, direction_hint: Vector3) -> bool:
 	var dir = Vector3(direction_hint.x, 0, direction_hint.z).normalized()
 	if dir.length_squared() < 0.5:
 		dir = Vector3.FORWARD
-	fallen[index] = {"direction": dir, "age": 0.0, "origin": trees[index], "lie": lie_angle(trees[index], dir, forest_data[index].height * 0.64)}
+	fallen[index] = {"direction": dir, "age": 0.0, "origin": trees[index], "lie": FallenTrees.lie_angle(self, trees[index], dir, forest_data[index].height * 0.64)}
 	return true
-
-# How far a felled trunk turns from upright: it comes to rest along the ground
-# it falls onto, past level downhill and short of it uphill, instead of lying
-# level and being left to a rigid body that rolled it down the slope.
-const MAX_LIE_PITCH = 0.7
-func lie_angle(base: Vector3, direction: Vector3, length: float) -> float:
-	var rise: float = ground(base + direction * length) - ground(base)
-	return PI * 0.5 - clampf(atan2(rise, length), -MAX_LIE_PITCH, MAX_LIE_PITCH)
 
 # The pose of a felled trunk around its base: the fall so far, then any turn
 # a drag gave it.
@@ -584,29 +577,7 @@ func fallen_basis(index: int) -> Basis:
 	return Basis.from_euler(f.get("prop_rotation", Vector3.ZERO)) * Basis(Vector3.UP.cross(f.direction).normalized(), angle)
 
 func update_fallen(delta: float) -> void:
-	for index in fallen:
-		var tree_data: Dictionary = forest_data[index]
-		var f: Dictionary = fallen[index]
-		f.age = minf(1.3, f.age + delta)
-		var basis = fallen_basis(index)
-		if f.get("rendered_age", -1.0) == f.age and f.get("basis", Basis.IDENTITY).is_equal_approx(basis):
-			continue
-		f.rendered_age = f.age
-		f.basis = basis
-		if detail_tree_visuals.has(index):
-			for part in detail_tree_visuals[index]:
-				var pose: Transform3D = part.pose
-				pose.origin = trees[index] + basis * (pose.origin - f.origin) - part.center
-				pose.basis = basis * pose.basis
-				part.mesh.set_instance_transform(part.instance, pose)
-			continue
-		var h: float = tree_data.height
-		for layer in range(forest_layers.size()):
-			var radius = 0.2 if layer == 0 else h * (0.28 - (layer - 1) * 0.055)
-			var height = h * (0.64 if layer == 0 else 0.49)
-			var y = h * (0.32 if layer == 0 else 0.47 + (layer - 1) * 0.18)
-			var slot: Vector2i = forest_chunk_slots[index]
-			forest_layers[layer][slot.x].set_instance_transform(slot.y, Transform3D(basis * Basis.from_scale(Vector3(radius, height, radius)), trees[index] - forest_chunk_centers[slot.x] + Vector3(0, 0.2, 0) + basis * Vector3(0, y, 0)))
+	FallenTrees.update(self, delta)
 
 func sync_providers(game) -> Array:
 	var list: Array = []
@@ -646,7 +617,7 @@ func apply_trees(snapshot: Array) -> void:
 		fell(index, Vector3(f.dir[0], 0, f.dir[2]))
 		fallen[index].direction = Vector3(f.dir[0], 0, f.dir[2]).normalized()
 		fallen[index].age = maxf(fallen[index].age, float(f.age))
-		fallen[index].lie = float(f.lie) if f.has("lie") else lie_angle(fallen[index].origin, fallen[index].direction, forest_data[index].height * 0.64)
+		fallen[index].lie = float(f.lie) if f.has("lie") else FallenTrees.lie_angle(self, fallen[index].origin, fallen[index].direction, forest_data[index].height * 0.64)
 		if f.has("pos"):
 			trees[index] = Vector3(f.pos[0], f.pos[1], f.pos[2])
 			fallen[index].erase("rendered_age")
