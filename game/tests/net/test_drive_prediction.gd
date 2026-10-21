@@ -130,6 +130,13 @@ func run() -> void:
 	stage.trees.append(client.node.position + Vector3(0, 0, -1))
 	client.predict(1, 1, 0, false, stage, 0)
 	check(client.events.any(func(e): return e.kind == "tree") and client.condition < 100, "tree collision emits falling-tree event and damage")
+	# Pressed against the trunk the car keeps its condition, with or without throttle.
+	var crashed = client.condition
+	client.events.clear()
+	for throttle in [1.0, 0.0]:
+		for i in range(20):
+			client.predict(5, throttle, 0, false, stage, 0)
+	check(client.condition == crashed and not client.events.any(func(e): return e.kind == "impact"), "resting against a tree causes no repeated damage")
 	stage.trees.clear()
 	client.reset(stage.at(12), 0)
 	client.motion.velocity = Vector3(0, 0, -12)

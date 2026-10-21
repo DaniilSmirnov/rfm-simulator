@@ -21,6 +21,7 @@ function setup({ supported = true, vkMobile = false } = {}) {
     setAttribute(name, value) { this.attrs[name] = String(value); },
     addEventListener(name, fn) { this.listeners ??= {}; this.listeners[name] = fn; },
     appendChild(node) { this.children.push(node); if (node.id) byId.set(node.id, node); },
+    getBoundingClientRect() { return { top: 12, bottom: 56, height: 44 }; },
   });
 
   const head = makeNode('head');
@@ -79,4 +80,9 @@ test('fullscreen button stays visible on browsers without Fullscreen API', async
 test('VK mobile hides fullscreen button while desktop keeps it', () => {
   assert.equal(setup({vkMobile:true}).button, undefined);
   assert.ok(setup({vkMobile:false}).button);
+});
+
+test('fullscreen button reports the top strip it covers', () => {
+  assert.equal(setup().context.RallyFullscreen.reservedTop(), 56);
+  assert.equal(setup({vkMobile:true}).context.RallyFullscreen.reservedTop(), 0);
 });

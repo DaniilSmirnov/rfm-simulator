@@ -40,7 +40,7 @@ static func build(stage, biome, root: Node3D, item: Array, rng: RandomNumberGene
 	var roof: Color = ROOFS[rng.randi() % ROOFS.size()]
 	var walls = PODKLET + floors * STOREY
 	Carpentry.log_frame(node, Vector3.ZERO, w, d, walls, logs)
-	_yard(node, w, d, yard, walls)
+	_yard(stage, node, w, d, yard, walls)
 	var front = d * 0.5 + 0.8
 	var ridge = Carpentry.gable_roof(node, walls, w, -d * 0.5 - yard - 0.5, front, PITCH, roof)
 	# Street gable: boards with the window of the attic room (светёлка).
@@ -64,7 +64,7 @@ static func build(stage, biome, root: Node3D, item: Array, rng: RandomNumberGene
 	Props.box(node, Vector3(chimney.x, (walls + chimney_top) * 0.5, chimney.z), Vector3(0.62, chimney_top - walls, 0.62), Color("8a4b3a"))
 	Props.box(node, Vector3(chimney.x, chimney_top + 0.06, chimney.z), Vector3(0.76, 0.12, 0.76), SNOW)
 	biome.chimneys.append(node.position + node.basis * Vector3(chimney.x, chimney_top + 0.2, chimney.z))
-	_porch(node, w, -d * 0.5 - 1.0, roof, logs)
+	_porch(stage, node, w, -d * 0.5 - 1.0, roof, logs)
 	stage.solids.solid(node, Vector3(0, walls * 0.5, -yard * 0.5), Vector3(w + 0.3, walls, d + yard), "building")
 	return node
 
@@ -82,7 +82,7 @@ static func _level(stage, node: Node3D, half_x: float, front: float, back: float
 	Props.box(node, Vector3(0, 0.08 - depth * 0.5, (front + back) * 0.5), Vector3(half_x * 2.0, depth + 0.16, front - back), Color("6a6660"))
 
 # The covered farmyard: plank walls the height of the house under the same roof.
-static func _yard(node: Node3D, w: float, d: float, yard: float, walls: float) -> void:
+static func _yard(stage, node: Node3D, w: float, d: float, yard: float, walls: float) -> void:
 	var z = -d * 0.5 - yard * 0.5
 	Props.box(node, Vector3(0, walls * 0.5, z), Vector3(w, walls, yard), BOARDS)
 	for sx in [-1.0, 1.0]:
@@ -98,6 +98,7 @@ static func _yard(node: Node3D, w: float, d: float, yard: float, walls: float) -
 	# Firewood stacked along the other yard wall.
 	Props.box(node, Vector3(-w * 0.5 - 0.42, 0.75, z), Vector3(0.7, 1.5, yard * 0.7), Color("a3845d"))
 	Props.box(node, Vector3(-w * 0.5 - 0.42, 1.55, z), Vector3(0.74, 0.12, yard * 0.7 + 0.04), SNOW)
+	stage.solids.solid(node, Vector3(-w * 0.5 - 0.42, 0.8, z), Vector3(0.74, 1.6, yard * 0.7 + 0.04), "wall")
 
 static func _windows(node: Node3D, w: float, d: float, floors: int, face_z: float, surround: Color, shutters: Color, seed: int) -> void:
 	var columns = 3 if w >= 6.8 else 2
@@ -117,14 +118,17 @@ static func _windows(node: Node3D, w: float, d: float, floors: int, face_z: floa
 # Covered porch (крыльцо) on the +X wall at z: a log-boxed landing at the
 # height of the living floor, a flight of steps down towards the street and
 # a lean-to roof on two posts.
-static func _porch(node: Node3D, w: float, z: float, roof: Color, logs: Color) -> void:
+static func _porch(stage, node: Node3D, w: float, z: float, roof: Color, logs: Color) -> void:
 	var x = w * 0.5 + 0.03
 	Props.box(node, Vector3(x + 0.8, PODKLET * 0.5, z), Vector3(1.6, PODKLET, 1.7), logs.darkened(0.1))
 	Props.box(node, Vector3(x + 0.8, PODKLET + 0.04, z), Vector3(1.7, 0.08, 1.8), Color("7a6650"))
+	stage.solids.solid(node, Vector3(x + 0.8, PODKLET * 0.5 + 0.04, z), Vector3(1.7, PODKLET + 0.08, 1.8), "building")
 	var steps = 5
 	for i in range(steps):
 		var top = PODKLET * float(steps - i) / (steps + 1)
 		Props.box(node, Vector3(x + 0.8, top * 0.5, z + 1.0 + i * 0.32), Vector3(1.3, top, 0.32), Color("7a6650"))
+		# Each step is its own box, so the flight keeps its stepped shape.
+		stage.solids.solid(node, Vector3(x + 0.8, top * 0.5, z + 1.0 + i * 0.32), Vector3(1.3, top, 0.32), "building")
 	for post_z in [z - 0.75, z + 0.75]:
 		Props.box(node, Vector3(x + 1.55, PODKLET + 1.15, post_z), Vector3(0.14, 2.3, 0.14), logs)
 	var lean = Props.box(node, Vector3(x + 0.85, PODKLET + 2.42, z), Vector3(1.95, 0.1, 2.0), roof)

@@ -131,14 +131,15 @@ func run() -> void:
 	check(game.stage.obstacle_hit(tree + Vector3(-3, 0, 0), tree + Vector3(3, 0, 0), 0.5) == index, "swept tree collision does not tunnel")
 	check(game.stage.fell(index, Vector3.RIGHT) and not game.stage.fell(index, Vector3.RIGHT), "tree falls exactly once")
 	game.stage.update_fallen(2)
-	check(absf(game.stage.fallen[index].basis.y.y) < 0.01, "fallen trunk transform stays horizontal")
+	var tip: Vector3 = tree + game.stage.fallen[index].basis * Vector3.UP * game.stage.forest_data[index].height * 0.64
+	check(absf(game.stage.fallen[index].basis.y.y) < 0.7 and absf(tip.y - game.stage.ground(tip)) < 0.3, "fallen trunk lies along the ground")
 	var midpoint = tree + Vector3.RIGHT * game.stage.forest_data[index].height * 0.32
 	check(game.stage.obstacle_hit(midpoint + Vector3(0, 0, -1), midpoint, 0.3) >= 0, "fallen log remains a collision obstacle")
 	var final_basis = game.stage.fallen[index].basis
 	game.stage.update_fallen(1)
 	check(game.stage.fallen[index].basis == final_basis, "settled trees retain final collision basis")
 	game.stage.apply_trees([{"id": 2, "dir": [0, 0, -1], "age": 1.3}])
-	check(absf(game.stage.fallen[2].basis.y.y) < 0.01 and game.stage.fallen[2].rendered_age == 1.3, "late completed tree snapshot renders horizontal trunk")
+	check(is_equal_approx(game.stage.fallen[2].basis.y.y, cos(game.stage.fallen[2].lie)) and game.stage.fallen[2].rendered_age == 1.3, "late completed tree snapshot renders the trunk lying down")
 	var snapshot_basis = game.stage.fallen[2].basis
 	game.stage.apply_trees([{"id": 2, "dir": [1, 0, 0], "age": 1.3}])
 	check(game.stage.fallen[2].basis != snapshot_basis, "completed tree snapshot direction change refreshes transform")

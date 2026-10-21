@@ -164,8 +164,12 @@ func step(c: Dictionary, stage, model: int) -> void:
 				if contact.get("person", false) and absf(motion.velocity.dot(forward)) > 5:
 					emit_event({"kind": "person", "position": other, "velocity": motion.velocity})
 		if blocked:
-			condition = maxf(0, condition - motion.velocity.length() * 1.4)
-			emit_event({"kind": "impact", "speed": motion.velocity.length()})
+			# Same rule as player_motion.gd: resting against a trunk is no crash.
+			var impact = motion.velocity.length()
+			if impact > 1 and impact_timer <= 0:
+				condition = maxf(0, condition - impact * 1.4)
+				impact_timer = 0.4
+				emit_event({"kind": "impact", "speed": impact})
 			motion.velocity = Vector3.ZERO if tree >= 0 else motion.velocity * -0.25
 		else:
 			node.position = next

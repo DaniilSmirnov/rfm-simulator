@@ -656,6 +656,7 @@ func _process(delta: float) -> void:
 	if soundscape != null: soundscape.update(delta)
 	camp_cooking.animate_flames(Time.get_ticks_msec() / 1000.0)
 	camp_grill.animate(Time.get_ticks_msec() / 1000.0)
+	if room.is_guest(): movable_props.apply_pending(); movable_props.render_guest() # also while paused: snapshots still arrive
 	if not playing or paused or dead or finished or (room.is_guest() and room.world_paused):
 		return
 	if room.is_authority():
@@ -687,7 +688,6 @@ func _process(delta: float) -> void:
 	Props.animate_wheels(car)
 	cargo.update(delta)
 	movable_props.refresh()
-	if room.is_guest(): movable_props.apply_pending()
 	camp_cooking.update(delta, room.is_guest())
 	injuries.update(delta)
 	spectators.update(elapsed, delta, room.is_guest())
@@ -818,7 +818,7 @@ func select_stage(variant: int, hosted_guest: bool = false) -> void:
 	jump_height = 0
 	jump_velocity = 0
 	selected_stage = variant
-	stage_caption.text = StageRegistry.caption(variant)
+	stage_caption.text = StageRegistry.caption(variant).to_upper()
 	stage_choice.select(variant)
 	stage.free()
 	stage = Stage.new(variant)
@@ -859,8 +859,8 @@ func _cancel_eat() -> void:
 	camp_actions.cancel_eat()
 
 func start_rally() -> bool:
-	# R is an information shortcut; it cannot bypass the safety convoy.
-	toast(course.caption())
+	# R is an information shortcut, quiet while the stage card shows; it cannot bypass the safety convoy.
+	if course_label == null or not course_label.is_visible_in_tree(): toast(course.caption())
 	return course.phase == "racing"
 
 func spawn_course_car(role: String, id: int, zero_index: int = 0) -> void:

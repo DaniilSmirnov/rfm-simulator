@@ -154,11 +154,8 @@ static func tree(stage, start: Vector3, end: Vector3, car: Dictionary) -> int:
 		if not stage.fallen.has(index):
 			if not circle(start, end, car, stage.trees[index], 0.2).is_empty(): return index
 		else:
-			var f: Dictionary = stage.fallen[index]
 			var length: float = stage.forest_data[index].height * 0.64
-			var direction: Vector3 = f.direction
-			var angle = smoothstep(0, 1.3, f.age) * PI * 0.5
-			var basis = Basis(Vector3.UP.cross(direction).normalized(), angle)
+			var basis: Basis = stage.fallen_basis(index)
 			# Match the rendered trunk's pivot and tilt, including during its fall.
 			# Raising the collider to car height traps a car above the log.
 			var lift = Vector3.ZERO if stage.detail_tree_visuals.has(index) else Vector3(0, 0.2, 0)

@@ -431,10 +431,6 @@ func build_details(cooperative: bool) -> void:
 	await _build_scenery(cooperative)
 	stage.life = make_life()
 
-# Village spectator spots are ordinary roadside places and the square: no signs.
-func clearing_signs() -> bool:
-	return false
-
 # Keep a whole picnic group clear of both sides of every junction.
 func spectator_camp(_index: int, clearing: Vector3, s: float, _outward: Vector3) -> Vector3:
 	# Layout depends on authored scenery, never on camps already instantiated.

@@ -29,10 +29,14 @@ const SLOT_Z0 = 17.0
 const SLOT_PITCH = 3.3
 # Departure order of a pass; a key's index also picks its bay.
 const KEYS = ["police_open", "zero1", "zero2", "zero3", "crew0", "crew1", "crew2", "crew3", "crew4", "crew5", "crew6", "crew7", "crew8", "crew9", "police_close"]
-# The players' row: across the front of the paddock, clear of the bays, the
-# tents and the cars' way in and out; a slot per room member.
-const VISITOR_X = [11.0, -11.0, 13.4, -13.4, 15.8, -15.8, 18.2, -18.2]
-const VISITOR_Z = 15.0
+# The players' cars start the day at the far end of the aisle, by the service
+# truck, nose towards the way out: held throttle drives straight down the
+# aisle and the lane, through the start arch, onto the road. The first slot
+# (the creator's) is on the aisle's centre line, two more beside it, four in
+# a row behind on the level apron past the paddock; the arch posts and the
+# bays' way out leave no room for more. An eighth member starts at the front
+# of the paddock. A slot per room member, (x, z) in park space.
+const VISITORS = [Vector2(0.0, 43.2), Vector2(2.4, 43.2), Vector2(-2.4, 43.2), Vector2(1.2, 48.6), Vector2(-1.2, 48.6), Vector2(3.6, 48.6), Vector2(-3.6, 48.6), Vector2(-11.0, 15.0)]
 const CRUISE = 5.0
 const REVERSE = 1.8
 
@@ -72,6 +76,16 @@ static func _outside(p: Vector2) -> float:
 	var lane = Vector2(maxf(absf(p.x) - LANE_HALF, 0.0), maxf(maxf(-p.y, p.y - LANE), 0.0)).length()
 	var paddock = Vector2(maxf(absf(p.x) - HALF_WIDTH, 0.0), maxf(maxf(LANE - p.y, p.y - LANE - DEPTH), 0.0)).length()
 	return minf(lane, paddock)
+
+# The ground in front of the players' row, from the front of the paddock to
+# the end of the road: their cars start the day nose towards it and drive out
+# across it, so trees keep off it (planting asks with its own padding).
+func forecourt(pos: Vector3, padding: float = 0.0) -> bool:
+	for end in ends:
+		var p = local(end, pos)
+		if absf(p.x) <= HALF_WIDTH + padding and p.y >= -padding and p.y <= LANE + padding:
+			return true
+	return false
 
 # The park a point is near (-1 for none), how far outside its surface, and how
 # fully it belongs to the levelled surface: 1 on it, 0 past the margin.
@@ -192,13 +206,13 @@ func slot_pose(index: int, key: String) -> Transform3D:
 	var nose: Vector3 = -end.right * slot_side(key)
 	return Transform3D(Basis(Vector3.UP, atan2(-nose.x, -nose.z)), world(index, p.x, p.y))
 
-# A player's car at the start of the day: in the players' row, nose towards
-# the lane, so the stage road past the start line stays clear for the convoy.
+# A player's car at the start of the day: at the far end of the aisle, nose
+# towards the lane and the end of the road.
 func visitor_pose(index: int, slot: int) -> Transform3D:
 	var end: Dictionary = ends[index]
 	var nose: Vector3 = -end.forward
-	var x: float = VISITOR_X[posmod(slot, VISITOR_X.size())]
-	return Transform3D(Basis(Vector3.UP, atan2(-nose.x, -nose.z)), world(index, x, VISITOR_Z))
+	var spot: Vector2 = VISITORS[posmod(slot, VISITORS.size())]
+	return Transform3D(Basis(Vector3.UP, atan2(-nose.x, -nose.z)), world(index, spot.x, spot.y))
 
 # The day begins with a player's car in the park at the start (pass 1): puts
 # it in its slot and returns its heading.

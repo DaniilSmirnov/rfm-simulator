@@ -7,6 +7,7 @@ extends RefCounted
 const Props = preload("res://scripts/core/props.gd")
 const Layout = preload("res://scripts/stages/village/village_layout.gd")
 const DetailLayer = preload("res://scripts/stages/detail_layer.gd")
+const Records = preload("res://scripts/stages/stage_records.gd")
 const LAVENDER_TEXTURE = preload("res://textures/nature/lavender.svg")
 
 const PARCEL = Vector2(30.0, 24.0)
@@ -287,6 +288,7 @@ func _vine_blocks() -> void:
 				if fposmod(x + half.x, 6.0) < 0.1:
 					posts.append(Transform3D(basis.scaled(Vector3(0.07, 1.5, 0.07)), p + Vector3.UP * 0.7))
 					post_colors.append(Color("7b6a52"))
+					stage.rocks.append(Records.rock(p, 0.05, 1.45, Records.POST))
 				if x < half.x:
 					var leaf = landscape.surface(local(parcel, x + 0.75, z))
 					leaves.append(Transform3D((basis * Basis(Vector3.UP, PI * 0.5)).scaled(Vector3(0.6, 0.62, 1.7)), leaf + Vector3.UP * 1.05))

@@ -11,11 +11,21 @@ const HEARTH_KINDS = ["firewood", "cauldron"]
 # How far off the campfire a resting cauldron still counts as mounted on it.
 const HEARTH_REACH = 0.55
 const Body = preload("res://scripts/core/prop_body.gd")
+const Motion = preload("res://scripts/net/snapshot_motion.gd")
 var game
 var stage_id = 0
 var records: Dictionary = {}
 var grips: Dictionary = {}
 var pending: Array = []
+var _sample_time = -INF
+# How far behind the host's snapshot times they arrive here: the least recent
+# delay, so uneven arrival never makes a prop speed up and slow down.
+var _lag = INF
+# How much later than that the latest snapshots came: props are drawn this
+# much further behind so a late one never leaves them standing.
+var _late = 0.0
+var _behind = 0.0
+var _drawn_at = -INF
 
 func refresh() -> void:
 	if game.stage == null:
@@ -217,12 +227,19 @@ func snapshot() -> Array:
 	for r in records.values():
 		if r.changed and not r.has("lamp"):
 			var rotation: Vector3 = r.node.global_rotation
-			result.append({"key": r.key, "pos": game.room.a(r.node.global_position), "rot": [rotation.x, rotation.y, rotation.z], "anchored": r.anchored})
+			var item = {"key": r.key, "pos": game.room.a(r.node.global_position), "rot": [rotation.x, rotation.y, rotation.z], "anchored": r.anchored}
+			# A flying prop's velocity lets guests draw it where it is now.
+			if r.has("body") and not r.has("tree") and not r.body.freeze and not r.body.sleeping and r.body.linear_velocity.length_squared() > 0.01:
+				item.velocity = game.room.a(r.body.linear_velocity)
+			result.append(item)
 	return result
 
-func apply_snapshot(data: Array) -> void:
+# `sample_time`: the host's time of the snapshot (server clock); -1 for world
+# collision ahead of a replay, -INF unknown (drawn on arrival).
+func apply_snapshot(data: Array, sample_time: float = -INF) -> void:
 	refresh()
 	pending = data
+	_sample_time = sample_time
 	apply_pending()
 
 # Camp providers may create nodes after collision snapshots arrive.
@@ -240,14 +257,79 @@ func apply_pending() -> void:
 		if r.has("body"):
 			r.body.freeze = true
 			r.body.global_transform = Transform3D(Basis.from_euler(game.room.v(item.rot)), game.room.v(item.pos))
-		r.node.global_position = game.room.v(item.pos)
-		r.node.global_rotation = game.room.v(item.rot)
+		_show(r, game.room.v(item.pos), game.room.v(item.rot), game.room.v(item.velocity) if item.has("velocity") else null)
 		r.node.set_meta("prop_dynamic", true)
 		r.anchored = bool(item.get("anchored", false))
 		r.node.set_meta("prop_anchored", r.anchored)
 		r.changed = true
 		if r.has("tree"): Specials.move_tree(game.stage, r)
 	pending = waiting
+
+# A guest's collision body takes the host's pose at once; the visible prop
+# follows the snapshots a short delay behind (SnapshotMotion) instead of jumping
+# to each one (up to 10 a second on the server path).
+func _show(r: Dictionary, pos: Vector3, rot: Vector3, velocity = null) -> void:
+	var clock: float = game.room.transport.view_clock if game.room.transport != null else -INF
+	if r.has("tree") or clock == -INF:
+		r.node.global_position = pos
+		r.node.global_rotation = rot
+		r.erase("motion")
+		return
+	if _sample_time < 0.0 and _sample_time > -INF:
+		# World collision ahead of a replay (-1): the visible pose follows with
+		# the same snapshot and its time.
+		return
+	if not r.has("motion"):
+		if r.node.global_position.is_equal_approx(pos) and r.node.global_rotation.is_equal_approx(rot):
+			return
+		r.motion = Motion.new()
+		r.motion.hold = true
+		# With the host's velocity the prop is drawn where it is now, falling
+		# while ahead; new snapshots fade their difference out (as for cars).
+		r.motion.predictive = velocity is Vector3
+		r.motion.gravity = 9.8 if r.motion.predictive else 0.0
+		var seed_time = (_sample_time if _sample_time >= 0.0 else clock) - r.motion.average_interval
+		r.motion.push(seed_time, r.node.global_position, r.node.global_rotation, false, Vector3.ZERO)
+		if r.motion.predictive: r.motion.render(seed_time)
+	var newest: Dictionary = r.motion.latest()
+	if newest.position.is_equal_approx(pos) and newest.rotation.is_equal_approx(rot):
+		return
+	r.shown_at = clock
+	if r.motion.predictive:
+		var stamp = _sample_time if _sample_time >= 0.0 else clock
+		r.motion.push(maxf(stamp, float(newest.time) + 0.001), pos, rot, false, velocity if velocity is Vector3 else Vector3.ZERO)
+		return
+	var at = clock
+	if _sample_time >= 0.0:
+		var lag = clock - _sample_time
+		# A step down shortens one interval; spread over several snapshots.
+		_lag = lag if _lag == INF else (maxf(lag, _lag - 0.005) if lag < _lag else lerpf(_lag, lag, 0.02))
+		at = minf(clock, _sample_time + _lag)
+		_late = maxf(clock - at + 0.02, _late * 0.99)
+	r.motion.push(maxf(at, float(newest.time) + 0.001), pos, rot)
+
+# Every frame on a guest: moves each prop still catching up with its snapshots.
+func render_guest() -> void:
+	var clock: float = game.room.transport.view_clock if game.room.transport != null else -INF
+	# The drawing delay changes at 10 % of the clock's pace: a sudden step held
+	# every prop still for a frame (SnapshotMotion never goes back).
+	if _drawn_at > -INF:
+		_behind = move_toward(_behind, minf(_late, 0.25), clampf(clock - _drawn_at, 0.0, 0.1) * 0.1)
+	_drawn_at = clock
+	for r in records.values():
+		if not r.has("motion") or not is_instance_valid(r.node):
+			continue
+		var pose: Dictionary = r.motion.render(clock if r.motion.predictive else clock - _behind)
+		if r.motion.predictive:
+			pose.position.y = maxf(pose.position.y, minf(game.stage.ground(pose.position), r.motion.latest().position.y))
+		r.node.global_position = pose.position
+		r.node.global_rotation = pose.rotation
+		# A second after the last snapshot the prop lies exactly where the host
+		# left it, whatever the clocks did meanwhile.
+		if clock - float(r.get("shown_at", clock)) > 1.0:
+			r.node.global_position = r.motion.latest().position
+			r.node.global_rotation = r.motion.latest().rotation
+			r.erase("motion")
 
 func solid_hit(contact: Dictionary, velocity: Vector3) -> void:
 	refresh()

@@ -108,8 +108,18 @@
     return button;
   };
 
+  // Bottom edge of the button in CSS px, so full-screen Godot pages can keep
+  // their text below it. Zero when the button is not shown.
+  const reservedTop = () => {
+    const button = document.getElementById(id);
+    if (!button?.getBoundingClientRect) return 0;
+    const rect = button.getBoundingClientRect();
+    return rect.height > 0 ? Math.ceil(rect.bottom) : 0;
+  };
+
   window.RallyFullscreen = {
     isActive: () => Boolean(fullscreenElement()),
+    reservedTop,
     enter: request,
     exit,
     toggle,

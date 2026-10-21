@@ -118,13 +118,21 @@ func tree_and_lamp(game) -> void:
 	props.refresh()
 	check(props.records.has("tree:0"), "fallen instanced tree exposes a drag target")
 	var tree: Dictionary = props.records["tree:0"]
-	check(not tree.body.sleeping, "a newly fallen tree checks native support before sleeping")
+	check(tree.body.sleeping, "a felled tree lies where it fell until someone drags it")
+	var length: float = stage.forest_data[0].height * 0.64
+	var tip: Vector3 = point + stage.fallen_basis(0) * Vector3.UP * length
+	check(absf(tip.y - stage.ground(tip)) < 0.3, "a felled trunk lies along the ground it fell onto")
 	var helper = {"pos": game.room.a(props.center(tree) + Vector3(2, 0, 0)), "in_car": false, "tow": true}
 	for i in range(30):
 		props.update({"local": helper}, {}, 1.0 / 60.0)
 		await physics_frame
 	await process_frame
 	check(tree.body.linear_velocity.x > 0.1 and stage.trees[0].distance_to(point) > 0.01 and stage.trees[0].is_equal_approx(tree.node.position), "dragging changes tree collision and rendering origin together")
+	var dragged: Vector3 = stage.trees[0]
+	for i in range(30):
+		props.update({}, {}, 1.0 / 60.0)
+		await physics_frame
+	check(stage.trees[0].distance_to(dragged) < 0.05 and tree.body.global_basis.y.angle_to(Vector3.UP) < 0.01, "a released trunk stays put instead of rolling")
 	var snapshot: Array = stage.tree_snapshot()
 	var moved: Vector3 = stage.trees[0]
 	stage.trees[0] = point
@@ -173,6 +181,56 @@ func guest_camp(host) -> void:
 	guest.room.apply_world(camp_only)
 	check(guest.grill.global_transform == fallen_pose, "a camp update without a prop snapshot never stands up moved equipment")
 	check(not host.grill.get_children().any(func(n): return n.has_meta("prop_key")), "tabletop and equipment detail has no independent movement")
+	var jumps = guest_flight(guest, key, -INF)
+	check(jumps > 0.2, "without a frame clock a guest jumps a flying prop to each snapshot (%.0f%% of frames jerk)" % (jumps * 100.0))
+	var smooth = guest_flight(guest, key, 100.0)
+	check(smooth < 0.05, "a guest draws a flying prop between snapshots that arrive unevenly (%.0f%% of frames jerk)" % (smooth * 100.0))
+	var behind = flight_error
+	var ahead = guest_flight(guest, key, 200.0, true)
+	check(ahead < 0.05 and flight_error < behind * 0.5, "with the host's velocity a guest draws a flying prop where it is now, smoothly (%.0f%% of frames jerk, %.2f m off instead of %.2f m)" % [ahead * 100.0, flight_error, behind])
+	check(guest.movable_props.records[key].body.global_position.distance_to(guest.grill.global_position) > 0.01 or not guest.movable_props.records[key].has("motion"), "the collision body keeps the newest host pose")
 	await guest._shutdown_audio()
 	guest.queue_free()
 	await process_frame
+
+# A prop thrown at 8 m/s arrives 10 times a second, 0-60 ms late, and is drawn
+# at 60 frames a second. Returns the share of frames whose visible speed changes
+# by more than 2 m/s (a jerk the eye sees).
+var flight_error = 0.0
+
+func guest_flight(guest, key: String, clock: float, with_velocity: bool = false) -> float:
+	var props = guest.movable_props
+	var start: Vector3 = guest.grill.global_position
+	var rng = RandomNumberGenerator.new()
+	rng.seed = 7
+	var arrivals: Array = []
+	for i in range(1, 16):
+		arrivals.append({"at": i * 0.1 + rng.randf() * 0.06, "t": i * 0.1})
+	var previous = null
+	var speed = -1.0
+	var jerks = 0
+	var frames = 0
+	flight_error = 0.0
+	for frame in range(1, 100):
+		var now = frame / 60.0
+		guest.room.transport.view_clock = clock + now if clock > -INF else -INF
+		while not arrivals.is_empty() and arrivals[0].at <= now:
+			var t: float = arrivals.pop_front().t
+			var pos: Vector3 = start + Vector3(8.0 * t, 8.0 * t - 4.9 * t * t, 0)
+			var item = {"key": key, "pos": guest.room.a(pos), "rot": [0, 0, 0], "anchored": false}
+			if with_velocity: item.velocity = [8.0, 8.0 - 9.8 * t, 0.0]
+			props.apply_snapshot([item], clock + t)
+		props.render_guest()
+		var shown: Vector3 = guest.grill.global_position
+		if previous != null:
+			var current = shown.distance_to(previous) * 60.0
+			if speed >= 0.0 and frame > 20 and frame < 85:
+				frames += 1
+				if absf(current - speed) > 2.0: jerks += 1
+				flight_error += shown.distance_to(start + Vector3(8.0 * now, 8.0 * now - 4.9 * now * now, 0))
+			speed = current
+		previous = shown
+	guest.room.transport.view_clock = -INF
+	props.apply_snapshot([{"key": key, "pos": guest.room.a(start), "rot": [0, 0, 0], "anchored": false}])
+	flight_error /= maxf(1.0, frames)
+	return float(jerks) / maxf(1.0, frames)

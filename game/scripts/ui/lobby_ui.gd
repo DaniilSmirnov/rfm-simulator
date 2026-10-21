@@ -1,12 +1,11 @@
 extends Node
 # Main menu presentation: car, stage and character cards with their own purchase buttons,
-# site and support links, volume, host-pause banner and the menu backdrop.
+# site and support links, settings and quit icons, host-pause banner and the menu backdrop.
 # Ownership remains in PlatformService and the backend.
 const NetProtocol = preload("res://scripts/net/net_protocol.gd")
 const UiKit = preload("res://scripts/ui/ui_kit.gd")
 const Loc = preload("res://scripts/ui/loc.gd")
 const SUPPORT_EMAIL = "rallyfansmap@yandex.com"
-const AUDIO_SETTINGS_PATH = "user://audio_settings.cfg"
 const CharacterProfiles = preload("res://scripts/people/character_profiles.gd")
 var game: Node3D
 var background: TextureRect
@@ -17,7 +16,10 @@ var car_purchase_button: Button
 var purchase_button: Button
 var check_purchase: Button
 var purchase_status: Label
+var return_button: Button
 var quit_dialog: Control
+var quit_text: Label
+var leave_dialog: Control
 var quit_button: Button
 var host_pause: PanelContainer
 var help_button: Button
@@ -25,10 +27,7 @@ var language_button: Button
 var help_dialog: Control
 var about_button: Button
 var about_dialog: Control
-var audio_controls: VBoxContainer
-var volume_label: Label
-var volume_slider: HSlider
-var master_base_db = 0.0
+var settings_button: Button
 var last_size = Vector2.ZERO
 var last_playing = false
 
@@ -48,11 +47,15 @@ func retranslate() -> void:
 	help_dialog.find_child("Message", true, false).text = _help_message()
 	about_dialog.find_child("Message", true, false).text = _about_message()
 	game.hud.footer.text = Loc.t("Версия %s") % ProjectSettings.get_setting("application/config/version")
-	game.stage_caption.text = game.StageRegistry.caption(game.selected_stage) if game.playing else game.StageRegistry.caption(game.selected_stage).to_upper()
+	game.stage_caption.text = game.StageRegistry.caption(game.selected_stage).to_upper()
+	game.hud.settings_screen.retranslate()
 	game.room.ui.refresh_language()
 	if game.mobile_controls != null:
 		game.mobile_controls.layout_state = []
 	refresh()
+	# The HUD under the pause menu is rebuilt only while playing.
+	if game.playing:
+		game.hud.update_hud()
 
 func _help_message() -> String:
 	return Loc.t("Если с игрой что-то не так, напиши нам:\n%s\n\nСкопируй адрес и отправь письмо из удобной почты.") % SUPPORT_EMAIL
@@ -118,6 +121,7 @@ func build_selection(parent: Control) -> void:
 	purchase_actions = UiKit.hbox(parent, 12)
 	purchase_actions.name = "PurchaseStatus"
 	purchase_actions.alignment = BoxContainer.ALIGNMENT_END
+	purchase_actions.custom_minimum_size.y = 40
 	purchase_status = UiKit.expand(UiKit.wrap(UiKit.label(purchase_actions, "", "muted")))
 	purchase_status.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	check_purchase = UiKit.button(purchase_actions, "ПРОВЕРИТЬ ПОКУПКУ", "ghost", 40)
@@ -157,6 +161,8 @@ func build_links(parent: Control) -> void:
 	about_button.tooltip_text = Loc.t("Сайт Rally Fans Map: %s") % UiKit.BRAND_URL
 	about_button.add_theme_font_size_override("font_size", 15)
 	about_button.pressed.connect(_open_about)
+	# Hidden everywhere for now: VK Play forbids links that lead players to other sites.
+	about_button.hide()
 	help_button = UiKit.button(parent, "ПОМОЩЬ", "ghost", 40)
 	help_button.name = "HelpButton"
 	help_button.tooltip_text = Loc.t("Написать в поддержку: %s") % SUPPORT_EMAIL
@@ -168,6 +174,14 @@ func build_links(parent: Control) -> void:
 	language_button.add_theme_font_size_override("font_size", 15)
 	language_button.pressed.connect(_switch_language)
 	language_button.visible = not _is_vk_family()
+	settings_button = UiKit.icon_button(parent, "res://textures/ui/menu/settings.svg", "Настройки")
+	settings_button.name = "SettingsButton"
+	settings_button.pressed.connect(func(): game.hud.settings_screen.open())
+	# Only a desktop window has nowhere else to close the game from.
+	quit_button = UiKit.icon_button(parent, "res://textures/ui/menu/quit.svg", "Выйти из игры")
+	quit_button.name = "QuitButton"
+	quit_button.pressed.connect(_confirm_quit)
+	quit_button.visible = OS.has_feature("pc") and not OS.has_feature("web")
 
 # A small window with an address and two actions; used where the WebView may
 # not open mailto: or external links (VK clients).
@@ -187,8 +201,9 @@ func _link_dialog(name: String, title: String, message: String, actions: Array) 
 	return modal.root
 
 func _open_help() -> void:
-	# mailto: is not reliably handled inside the VK client WebView.
-	if _is_vk_platform() or OS.shell_open("mailto:" + SUPPORT_EMAIL) != OK:
+	# In a browser shell_open("mailto:") reports OK even with no mail client,
+	# so the web build always shows the address (same as inside VK).
+	if OS.has_feature("web") or _is_vk_platform() or OS.shell_open("mailto:" + SUPPORT_EMAIL) != OK:
 		help_dialog.show()
 
 func _open_about() -> void:
@@ -210,53 +225,15 @@ func _copy(text: String, message: String) -> void:
 func _copy_support_email() -> void:
 	_copy(SUPPORT_EMAIL, Loc.t("Адрес поддержки: %s") % SUPPORT_EMAIL)
 
-# ---------------------------------------------------------------- settings
-
-func build_audio(parent: Control) -> void:
-	master_base_db = AudioServer.get_bus_volume_db(AudioServer.get_bus_index("Master"))
-	var settings = ConfigFile.new()
-	var percent = 100.0
-	if settings.load(AUDIO_SETTINGS_PATH) == OK:
-		var saved = settings.get_value("audio", "volume", 100.0)
-		if (saved is float or saved is int) and is_finite(float(saved)):
-			percent = clampf(float(saved), 0.0, 100.0)
-	audio_controls = UiKit.vbox(parent, 4)
-	audio_controls.name = "AudioSettings"
-	volume_label = UiKit.label(audio_controls, "", "caption")
-	volume_slider = HSlider.new()
-	volume_slider.name = "MasterVolume"
-	volume_slider.min_value = 0
-	volume_slider.max_value = 100
-	volume_slider.step = 1
-	volume_slider.custom_minimum_size = Vector2(0, 40)
-	volume_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	volume_slider.tooltip_text = "Громкость всех звуков. 0 — без звука."
-	audio_controls.add_child(volume_slider)
-	volume_slider.value = percent
-	_apply_volume(percent)
-	volume_slider.value_changed.connect(func(value: float):
-		_apply_volume(value)
-		var config = ConfigFile.new()
-		config.set_value("audio", "volume", value)
-		if config.save(AUDIO_SETTINGS_PATH) != OK:
-			game.toast("Не удалось сохранить громкость.")
-	)
-
-func _apply_volume(percent: float) -> void:
-	var master = AudioServer.get_bus_index("Master")
-	AudioServer.set_bus_mute(master, percent <= 0)
-	AudioServer.set_bus_volume_db(master, master_base_db + linear_to_db(maxf(percent / 100.0, 0.0001)))
-	volume_label.text = Loc.t("ЗВУК ВЫКЛЮЧЕН") if percent <= 0 else Loc.t("ГРОМКОСТЬ · %d%%") % roundi(percent)
-
 # ---------------------------------------------------------------- assembly
 
 func finish(parent: Control) -> void:
-	# Only a desktop window has nowhere else to close the game from.
-	quit_button = UiKit.button(parent, "ВЫЙТИ ИЗ ИГРЫ", "ghost", 44)
-	quit_button.name = "QuitButton"
-	quit_button.pressed.connect(_confirm_quit)
-	quit_button.visible = OS.has_feature("pc") and not OS.has_feature("web")
+	return_button = UiKit.button(parent, "В ГЛАВНОЕ МЕНЮ", "ghost", 44)
+	return_button.name = "ReturnButton"
+	return_button.pressed.connect(_confirm_leave)
+	return_button.hide()
 	_build_quit_dialog()
+	_build_leave_dialog()
 	help_dialog = _link_dialog("SupportDialog", "Помощь и поддержка", _help_message(), [["СКОПИРОВАТЬ АДРЕС", "primary", _copy_support_email]])
 	about_dialog = _link_dialog("AboutDialog", UiKit.BRAND_NAME, _about_message(), [["ОТКРЫТЬ САЙТ", "primary", func(): UiKit.open_url(UiKit.BRAND_URL)], ["СКОПИРОВАТЬ", "secondary", func(): _copy(UiKit.BRAND_URL, Loc.t("Ссылка скопирована: %s") % UiKit.BRAND_URL)]])
 	# Backdrop fills the viewport independently of the inset HUD root.
@@ -324,8 +301,12 @@ func refresh() -> void:
 	check_purchase.visible = service != null and service.profile.get("platform") == "vk" and (any_purchase or not service.purchase_message.is_empty()) and not game.playing
 	check_purchase.disabled = service.busy if service != null else true
 	purchase_status.text = service.purchase_message if service != null else ""
-	purchase_status.visible = not purchase_status.text.is_empty() and not game.playing
-	purchase_actions.visible = check_purchase.visible or purchase_status.visible
+	# Store messages only mean something in VK. Elsewhere the startup «Проверяем
+	# доступ…» line vanished a moment later and the menu jumped under the first click.
+	var vk_store = OS.has_feature("vk") or (service != null and service.profile.get("platform") == "vk")
+	purchase_status.visible = vk_store and not purchase_status.text.is_empty() and not game.playing
+	# The VK build keeps the row's height while the store loads for the same reason.
+	purchase_actions.visible = check_purchase.visible or purchase_status.visible or (OS.has_feature("vk") and not game.playing)
 	var car_ok = allowed("car", game.car_choice.selected)
 	var stage_ok = allowed("stage", game.stage_choice.selected)
 	var character_ok = allowed("character", game.avatar_variant)
@@ -354,6 +335,8 @@ func _process(_delta: float) -> void:
 		# Phones keep the entry block short: the status line shows only news.
 		game.room.ui.status.visible = not (game.mobile_mode and game.room.ui.status.text == game.room.ui.default_hint)
 		host_pause.visible = game.room.is_guest() and game.room.world_paused and not game.paused and not result
+	# Results already lead back to the menu through «НОВЫЙ ВЫЕЗД»; only the pause needs its own way out.
+	return_button.visible = game.playing and game.paused and not result
 	if not game.mobile_mode:
 		game.mobile_top.visible = game.playing
 	else:
@@ -365,7 +348,7 @@ func _build_quit_dialog() -> void:
 	var modal = UiKit.modal(game.hud.dialog_layer, "QuitDialog")
 	quit_dialog = modal.root
 	UiKit.label(modal.content, "Выйти из игры?", "heading")
-	UiKit.wrap(UiKit.label(modal.content, "Игра закроется, и ты покинешь выезд.", "body"))
+	quit_text = UiKit.wrap(UiKit.label(modal.content, "", "body"))
 	var row = UiKit.hbox(modal.content, 10)
 	var cancel = UiKit.expand(UiKit.button(row, "ОСТАТЬСЯ", "secondary", 44))
 	cancel.name = "CancelQuit"
@@ -378,9 +361,35 @@ func _build_quit_dialog() -> void:
 	confirm.pressed.connect(_quit_game)
 
 func _confirm_quit() -> void:
+	quit_text.text = "Игра закроется, и ты покинешь выезд. Прогресс выезда не сохраняется — в следующий раз он начнётся заново." if game.playing else "Игра закроется."
 	quit_dialog.show()
 	game.hud.fit_modal(quit_dialog)
 	quit_dialog.find_child("CancelQuit", true, false).grab_focus()
+
+# The outing lives only as long as the room: VK Play asks to say so before leaving.
+func _build_leave_dialog() -> void:
+	var modal = UiKit.modal(game.hud.dialog_layer, "LeaveDialog")
+	leave_dialog = modal.root
+	UiKit.label(modal.content, "Вернуться в главное меню?", "heading")
+	UiKit.wrap(UiKit.label(modal.content, "Ты покинешь выезд. Прогресс выезда не сохраняется — в следующий раз он начнётся заново.", "body"))
+	var row = UiKit.hbox(modal.content, 10)
+	var cancel = UiKit.expand(UiKit.button(row, "ОСТАТЬСЯ", "secondary", 44))
+	cancel.name = "CancelLeave"
+	cancel.pressed.connect(func():
+		leave_dialog.hide()
+		return_button.grab_focus()
+	)
+	var confirm = UiKit.expand(UiKit.button(row, "В ГЛАВНОЕ МЕНЮ", "primary", 44))
+	confirm.name = "ConfirmLeave"
+	confirm.pressed.connect(func():
+		leave_dialog.hide()
+		game.return_to_main_menu()
+	)
+
+func _confirm_leave() -> void:
+	leave_dialog.show()
+	game.hud.fit_modal(leave_dialog)
+	leave_dialog.find_child("CancelLeave", true, false).grab_focus()
 
 # Leaving tells the room right away instead of waiting for it to time out.
 func _quit_game() -> void:

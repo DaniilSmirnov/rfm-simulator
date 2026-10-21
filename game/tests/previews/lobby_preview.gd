@@ -19,6 +19,9 @@ func run() -> void:
 	game.set_process(false)
 	game.room.set_process(false)
 	await capture(game, "desktop-lobby")
+	game.hud.settings_screen.open()
+	await capture(game, "desktop-settings")
+	game.hud.settings_screen.close_screen()
 	game.platform_service.catalog = JSON.parse_string(FileAccess.get_file_as_string("res://data/store_catalog.json"))
 	game.platform_service.entitlements = {"mode": "restricted", "skus": []}
 	game.select_player_car(9)
@@ -46,6 +49,9 @@ func run() -> void:
 	game.menu_text.text = "Ралли, мангал и таймеры остановлены."
 	game.start_button.text = "ПРОДОЛЖИТЬ"
 	await capture(game, "mobile-pause")
+	game.hud.settings_screen.open()
+	await capture(game, "mobile-settings")
+	game.hud.settings_screen.close_screen()
 	game.paused = false
 	game.menu.hide()
 	game.room.connected = true

@@ -3,10 +3,12 @@ extends Node3D
 const Navigation = preload("res://scripts/people/crowd_navigation.gd")
 var people: Array[Dictionary] = []
 var targets: Dictionary = {}
+var arrivals: Dictionary = {}
 const MeshMerge = preload("res://scripts/core/mesh_merge.gd")
 const Props = preload("res://scripts/core/props.gd")
 const Records = preload("res://scripts/stages/stage_records.gd")
 const CharacterRig = preload("res://scripts/people/character_rig.gd")
+const SnapshotMotion = preload("res://scripts/net/snapshot_motion.gd")
 var stage: Node3D
 var arches: Array[Node3D] = []
 var cars: Array[Node3D] = []
@@ -181,7 +183,7 @@ func update(game, delta: float, guest: bool) -> void:
 		var facing = avatar.position - Vector3(0, 0, 1)
 		if guest and targets.has(person.id):
 			var pose: Dictionary = targets[person.id]
-			avatar.position = avatar.position.lerp(game.room.v(pose.pos), 1 - exp(-delta * 10))
+			avatar.position = SnapshotMotion.walk_toward(avatar.position, game.room.v(pose.pos), pose, arrivals, delta)
 			person.helper = int(pose.get("helper", -1))
 			person.action = str(pose.get("action", "watch"))
 			if pose.has("yaw"):
@@ -261,6 +263,7 @@ func snapshot() -> Array:
 
 func apply_snapshot(poses: Array) -> void:
 	var first = targets.is_empty()
+	SnapshotMotion.note_arrival(arrivals)
 	targets.clear()
 	for pose in poses:
 		targets[int(pose.id)] = pose

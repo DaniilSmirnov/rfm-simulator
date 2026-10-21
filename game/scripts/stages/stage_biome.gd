@@ -268,11 +268,7 @@ func woodland_blocked(_pos: Vector3, _padding: float) -> bool:
 func build_details(_cooperative: bool) -> void:
 	pass
 
-# Signposts at the spectator clearings ("ПОЛЯНА N").
-func clearing_signs() -> bool:
-	return true
-
-# Distant mountains or ridges; uses stage.rng after the clearing signs.
+# Distant mountains or ridges; uses stage.rng.
 func build_horizon() -> void:
 	pass
 

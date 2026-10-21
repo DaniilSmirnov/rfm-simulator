@@ -1,6 +1,6 @@
 extends RefCounted
 # The in-game interface: HUD cards, toasts, the menu window (main menu, pause,
-# result), mobile safe area, draw distance and invite buttons. Every control is
+# result), mobile safe area and invite buttons. Every control is
 # styled by ui_kit.gd. The nodes stay on game (menu, toast_label, ...) where
 # other scripts and tests use them.
 const MiniMap = preload("res://scripts/ui/minimap.gd")
@@ -20,7 +20,7 @@ var header: HBoxContainer
 var brand: HBoxContainer
 var links: HBoxContainer
 var entry_slot: VBoxContainer
-var settings: PanelContainer
+var settings_screen: Node
 var footer: Label
 var top_box: VBoxContainer
 var guide_button: Button
@@ -177,7 +177,7 @@ func build_notices(ui: Control) -> void:
 	game.consumption_warning.hide()
 
 # One window for the main menu, pause and result. Its parts are shown per
-# screen in update_menu(): header, text, selection, entry, actions, settings.
+# screen in update_menu(): header, text, selection, entry and actions; settings open in their own window.
 func build_menu(canvas: CanvasLayer) -> void:
 	dialog_layer = Control.new()
 	dialog_layer.name = "Dialogs"
@@ -205,6 +205,10 @@ func build_menu(canvas: CanvasLayer) -> void:
 	game.lobby_ui = preload("res://scripts/ui/lobby_ui.gd").new()
 	game.lobby_ui.game = game
 	game.add_child(game.lobby_ui)
+	settings_screen = preload("res://scripts/ui/settings_screen.gd").new()
+	settings_screen.game = game
+	game.add_child(settings_screen)
+	settings_screen.build(dialog_layer)
 	build_menu_header(game.menu_content)
 	game.menu_text = UiKit.wrap(UiKit.label(game.menu_content, "", "body"))
 	game.menu_text.hide()
@@ -261,24 +265,6 @@ func build_menu_actions(parent: Control) -> void:
 	game.invite_button.hide()
 	game.invite_status = UiKit.wrap(UiKit.label(parent, "", "muted"))
 	game.invite_status.hide()
-	settings = UiKit.card(parent, UiKit.SURFACE_SUNKEN, Vector2(16, 14))
-	settings.name = "Settings"
-	var column = UiKit.vbox(settings, 10)
-	game.draw_distance_controls = UiKit.vbox(column, 8)
-	game.draw_distance_controls.name = "DrawDistanceSettings"
-	UiKit.label(game.draw_distance_controls, "ГРАФИКА", "caption")
-	var distance_row = UiKit.hbox(game.draw_distance_controls, 8)
-	# Listed cheapest first; draw_distance_buttons stays indexed by mode.
-	game.draw_distance_buttons.resize(game.draw_distance.LABELS.size())
-	for index in game.draw_distance.ORDER:
-		var button = UiKit.expand(UiKit.button(distance_row, game.draw_distance.LABELS[index], "toggle", 42))
-		button.set_pressed_no_signal(index == game.draw_distance.mode)
-		button.pressed.connect(set_draw_distance.bind(index))
-		game.draw_distance_buttons[index] = button
-	game.lobby_ui.build_audio(column)
-	settings.hide()
-	game.draw_distance_controls.hide()
-
 # Which parts of the menu window this screen shows.
 func update_menu() -> void:
 	var main = not game.playing
@@ -288,16 +274,14 @@ func update_menu() -> void:
 	game.menu_title.visible = not brand.visible
 	game.menu_text.visible = game.menu_title.visible and not game.menu_text.text.is_empty()
 	links.visible = main or pause
-	settings.visible = pause
 	guide_button.visible = pause
 	secondary_row.visible = guide_button.visible or game.invite_button.visible
-	game.draw_distance_controls.visible = pause
 	footer.visible = main and not game.mobile_mode
 	if game.room != null:
 		game.room.ui.caption.visible = not game.mobile_mode
 	menu_dim.visible = game.menu.visible and game.playing
-	Demo.trim_menu(game, self, pause)
 	game.lobby_ui.help_button.visible = links.visible
+	Demo.trim_menu(game, self, pause)
 
 func layout_menu() -> void:
 	if dialog_area == null:
@@ -326,8 +310,9 @@ func fit_modal(modal: Control) -> void:
 	var center: Control = modal.get_node("Center")
 	var dialog: Control = center.get_node("Panel")
 	center.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	center.position = dialog_area.position
 	center.size = dialog_area.size
+	# A window taller than the area keeps its centre on the area's centre.
+	center.position = dialog_area.position + (dialog_area.size - center.size) / 2
 	var extent = dialog.get_combined_minimum_size()
 	dialog.pivot_offset = extent / 2
 	dialog.scale = Vector2.ONE * minf(1.0, minf(maxf(dialog_area.size.x - 24, 1) / extent.x, maxf(dialog_area.size.y - 24, 1) / extent.y))
@@ -338,7 +323,7 @@ func update_fps_counter(delta: float) -> void:
 		var message: String = game.draw_distance.watch(delta)
 		if message != "":
 			game.draw_distance.apply(game.stage)
-			update_draw_distance_buttons()
+			settings_screen.update_draw_distance_buttons()
 			toast(message)
 	game.fps_clock += delta
 	if game.fps_clock < 0.5 or game.fps_label == null:
@@ -431,8 +416,8 @@ func update_hud() -> void:
 		if game.condition <= 0:
 			info_text = Loc.t("МАШИНА СЛОМАНА    ·    САДИСЬ К ДРУГУ ИЛИ ЖДИ ТРОС")
 	else:
-		info_text = Loc.t("ЗРИТЕЛЬ    ·    %s · ШАМПУРЫ %d/10    ·    %s") % [game.camp_grill.status(false), game.camp_grill.servings, game.course.caption()]
-		hint_text = Loc.t("WASD — идти   ·   Shift — бег   ·   Space — прыжок   ·   мышь — смотреть   ·   F — действие   ·   Z — стол   ·   C — стулья   ·   G — мангал   ·   R — статус СУ")
+		info_text = Loc.t("ЗРИТЕЛЬ    ·    %s · ШАМПУРЫ %d/10") % [game.camp_grill.status(false), game.camp_grill.servings]
+		hint_text = Loc.t("WASD — идти   ·   Shift — бег   ·   Space — прыжок   ·   мышь — смотреть   ·   F — действие   ·   Z — стол   ·   C — стулья   ·   G — мангал")
 		if game.drink_time >= 0:
 			info_text = Loc.t("ОТКРЫВАЕМ БАНКУ") if game.drink_time < 1.25 else Loc.t("ЗА ХОРОШИЙ ВЫЕЗД!")
 		if game.eat_time >= 0:
@@ -536,7 +521,7 @@ func enable_mobile() -> void:
 	game.mobile_mode = true
 	game.draw_distance.apply_device_default(true)
 	game.draw_distance.apply(game.stage)
-	update_draw_distance_buttons()
+	settings_screen.update_draw_distance_buttons()
 	game.get_window().content_scale_size = Vector2i(960, 540)
 	game.get_window().content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
 	print("[RFM] Мобильный интерфейс: масштаб окна готов")
@@ -645,7 +630,8 @@ func mobile_safe_response(result: int, code: int, _headers: PackedStringArray, b
 	var ratio = extent / Vector2(maxf(float(data.width), 1.0), maxf(float(data.height), 1.0))
 	var origin = Vector2(float(data.left), float(data.top)) * ratio
 	var end = extent - Vector2(float(data.right), float(data.bottom)) * ratio
-	game.safety_safe_insets = Vector4(origin.x, origin.y, extent.x-end.x, extent.y-end.y)
+	# The memo also stays below the browser fullscreen button (overlay_top).
+	game.safety_safe_insets = Vector4(origin.x, maxf(origin.y, float(data.get("overlay_top", 0.0)) * ratio.y), extent.x-end.x, extent.y-end.y)
 	if game.safety_gate != null and is_instance_valid(game.safety_gate):
 		game.safety_gate.set_safe_insets(game.safety_safe_insets)
 	if not game.mobile_mode:
@@ -658,17 +644,6 @@ func update_invite_button() -> void:
 	game.invite_button.visible = game.playing and not game.dead and not game.finished and game.platform_service != null and game.platform_service.profile.get("platform", "") == "vk"
 	if game.invite_status != null:
 		game.invite_status.visible = game.invite_button.visible and not game.invite_status.text.is_empty()
-
-func set_draw_distance(index: int) -> void:
-	game.draw_distance.mode = clampi(index, game.draw_distance.NEAR, game.draw_distance.LOW)
-	game.draw_distance.apply(game.stage)
-	update_draw_distance_buttons()
-	if game.draw_distance.save_settings() != OK:
-		push_warning("Не удалось сохранить настройку графики")
-
-func update_draw_distance_buttons() -> void:
-	for index in range(game.draw_distance_buttons.size()):
-		game.draw_distance_buttons[index].set_pressed_no_signal(index == game.draw_distance.mode)
 
 # Stage entry: «Как играть» comes before the memo on the first VK and every demo entry.
 func show_stage_safety_gate() -> void:

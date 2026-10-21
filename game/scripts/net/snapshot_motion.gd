@@ -21,6 +21,11 @@ var average_interval = 0.1
 var jitter = 0.0
 var render_time = -INF
 var predictive = false
+# Props stop where the host left them: past the newest sample a held buffer
+# waits there instead of drifting on (a resting prop sends no more samples).
+var hold = false
+# A predictive buffer of something flying (a knocked prop) falls while ahead.
+var gravity = 0.0
 var correction_position = Vector3.ZERO
 var correction_yaw = 0.0
 var _clock = -INF
@@ -28,7 +33,7 @@ var _clock = -INF
 # `velocity`: the object's velocity at `time` when the sender knows it (a car
 # the host simulates); otherwise it is estimated from the previous sample.
 func push(time: float, position: Vector3, rotation: Vector3, reset: bool = false, velocity = null) -> bool:
-	var entry = {"time": time, "position": position, "rotation": rotation, "velocity": Vector3.ZERO, "turn": 0.0}
+	var entry = {"time": time, "position": position, "rotation": rotation, "velocity": Vector3.ZERO, "turn": 0.0, "gravity": gravity}
 	if not samples.is_empty():
 		var previous: Dictionary = samples[-1]
 		if time <= previous.time:
@@ -95,6 +100,8 @@ func sample(time: float) -> Dictionary:
 		return {"position": first.position.lerp(last.position, weight), "rotation": angles}
 	if predictive:
 		return _ahead(last, minf(time - last.time, MAX_LEAD))
+	if hold:
+		return last
 	var velocity: Vector3 = (last.position - first.position) / interval
 	velocity = velocity.limit_length(max_speed)
 	return {"position": last.position + velocity * clampf(time - last.time, 0, MAX_PREDICTION), "rotation": last.rotation}
@@ -113,6 +120,7 @@ static func _ahead(from: Dictionary, lead: float) -> Dictionary:
 			velocity = velocity.rotated(Vector3.UP, turn * step * 0.5)
 			position += velocity * step
 			velocity = velocity.rotated(Vector3.UP, turn * step * 0.5)
+	position.y -= 0.5 * float(from.get("gravity", 0.0)) * lead * lead
 	var rotation: Vector3 = from.rotation
 	rotation.y = wrapf(rotation.y + turn * lead, -PI, PI)
 	return {"position": position, "rotation": rotation}
@@ -137,3 +145,22 @@ func render(time: float, frozen: bool = false) -> Dictionary:
 	var rotation: Vector3 = pose.rotation
 	rotation.y = wrapf(rotation.y + correction_yaw, -PI, PI)
 	return {"position": pose.position + correction_position, "rotation": rotation}
+
+# People on foot arrive a few times a second (world_sync.gd PEOPLE_INTERVAL).
+# A guest walks each one to its newest position at the pace that gets there as
+# the next snapshot arrives, instead of rushing there and standing still.
+# `arrivals` keeps the receiver's {"time", "interval"} between snapshots.
+static func note_arrival(arrivals: Dictionary) -> void:
+	var now = Time.get_ticks_usec() / 1000000.0
+	if arrivals.has("time"):
+		arrivals.interval = lerpf(float(arrivals.get("interval", 0.35)), clampf(now - float(arrivals.time), 0.1, 1.0), 0.3)
+	arrivals.time = now
+
+# `target`: the snapshot entry, which remembers its pace.
+static func walk_toward(from: Vector3, goal: Vector3, target: Dictionary, arrivals: Dictionary, delta: float) -> Vector3:
+	var distance = from.distance_to(goal)
+	if distance > SNAP_DISTANCE:
+		return goal
+	if not target.has("pace"):
+		target.pace = distance / float(arrivals.get("interval", 0.35))
+	return from.move_toward(goal, maxf(float(target.pace), 0.3) * delta)

@@ -96,14 +96,15 @@ func run() -> void:
 	await process_frame
 	game.set_process(false)
 	game.room.set_process(false)
-	check(not game.draw_distance_controls.visible, "draw distance controls stay out of main menu")
+	check(not game.draw_distance_controls.is_visible_in_tree(), "draw distance controls stay closed in the main menu")
 	check(game.draw_distance.mode == (Distance.MEDIUM if "--mobile-controls" in OS.get_cmdline_user_args() else Distance.FAR), "startup applies the detected device default")
 	game.enable_mobile()
 	check(game.draw_distance.mode == Distance.MEDIUM and game.draw_distance_buttons[Distance.MEDIUM].button_pressed, "touch detection updates the default and selected UI button")
 	game.playing = true
 	game.paused = true
 	game.lobby_ui._process(0)
-	check(game.draw_distance_controls.visible, "three rendering presets appear in game pause")
+	game.lobby_ui.settings_button.pressed.emit()
+	check(game.draw_distance_controls.is_visible_in_tree(), "rendering presets appear in the settings opened from the pause")
 	var live_tile = MultiMeshInstance3D.new()
 	live_tile.visibility_range_end = 70
 	game.stage.add_child(live_tile)
@@ -129,12 +130,13 @@ func run() -> void:
 	game.draw_distance_buttons[Distance.NEAR].pressed.emit()
 	check(game.draw_distance_buttons[Distance.NEAR].button_pressed and not game.draw_distance_buttons[Distance.FAR].button_pressed, "only the selected preset is highlighted")
 	game.paused = false
-	game.lobby_ui._process(0)
-	check(not game.draw_distance_controls.visible, "settings hide when resuming")
+	game.hud.settings_screen._process(0)
+	check(not game.draw_distance_controls.is_visible_in_tree(), "settings hide when resuming")
 	game.paused = true
 	game.finished = true
-	game.lobby_ui._process(0)
-	check(not game.draw_distance_controls.visible, "settings stay out of result dialog")
+	game.lobby_ui.settings_button.pressed.emit()
+	game.hud.settings_screen._process(0)
+	check(not game.draw_distance_controls.is_visible_in_tree(), "settings stay out of result dialog")
 	DirAccess.remove_absolute(setting.settings_path)
 	await game._shutdown_audio()
 	game.queue_free()

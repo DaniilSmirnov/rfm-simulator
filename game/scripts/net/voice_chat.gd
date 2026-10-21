@@ -25,6 +25,7 @@ var mic := "idle"
 var connected_peers := 0
 var pending: Array = []
 var clock := 0.0
+var socket_was_open := false
 var label: Label
 
 func setup(owner: Node) -> void:
@@ -46,7 +47,12 @@ func available() -> bool:
 
 # The key is held and the microphone is live: others hear us and see the pose.
 func on_air() -> bool:
-	return transmitting and mic == "ready"
+	return transmitting and mic == "ready" and not cut_off()
+
+# Radio links are set up over the room socket only: on HTTP no link can open,
+# and links that are already up keep working.
+func cut_off() -> bool:
+	return not room.transport.socket_open and connected_peers == 0
 
 func join() -> void:
 	if not supported or room.player_id == "":
@@ -54,6 +60,7 @@ func join() -> void:
 	var session = ("%s-%s-%d" % [room.room_id, room.player_id, Time.get_ticks_msec()]).left(96)
 	var options = {"localId": room.player_id, "session": session, "iceServers": NetProtocol.direct("ice_servers", [])}
 	joined = backend.join(options)
+	socket_was_open = false
 	if joined:
 		sync_members(room.members.keys())
 
@@ -106,6 +113,13 @@ func _tick() -> void:
 		if label != null:
 			label.hide()
 		return
+	# The room relays signals only to open sockets, so a call made while we
+	# were still loading the stage was lost: ask everyone to ring again.
+	var socket_open: bool = room.transport.socket_open
+	if socket_open and not socket_was_open:
+		pending.clear()
+		backend.ring_again()
+	socket_was_open = socket_open
 	if not result.is_empty():
 		connected_peers = int(result.get("connected", 0))
 		for envelope in result.get("signals", []):
@@ -152,8 +166,11 @@ func _update_label() -> void:
 	for peer in room.peers.values():
 		if peer.state != null and bool(peer.state.get("radio", false)):
 			names.append(str(room.members.get(str(peer.id), {}).get("name", "")))
-	if on_air():
+	var no_link = transmitting and cut_off()
+	if no_link:
+		label.text = Loc.t("Плохая связь, голосовой чат не работает")
+	elif on_air():
 		label.text = Loc.t("РАЦИЯ · В ЭФИРЕ")
 	elif not names.is_empty():
 		label.text = Loc.t("РАЦИЯ · %s") % ", ".join(names)
-	label.visible = on_air() or not names.is_empty()
+	label.visible = no_link or on_air() or not names.is_empty()

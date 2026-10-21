@@ -70,8 +70,7 @@ func rebuild() -> void:
 	providers.append(provider("racers", "", ["racers", "recovery_links"], _racers_snapshot, _racers_apply))
 	providers.append(provider("park_movers", "", ["park_movers"], func(): return {"park_movers": game.park_traffic.movers_snapshot()}, func(f, t): game.park_traffic.apply_movers(f.get("park_movers", []), t)))
 	providers.append(_subsystem("injuries", func(): return game.injuries, "snapshot", "apply_snapshot"))
-	var props = _subsystem("movable_props", func(): return game.movable_props, "snapshot", "apply_snapshot", "props", 0.1)
-	props.collision = true
+	var props = provider("movable_props", "props", ["movable_props"], func(): return {"movable_props": game.movable_props.snapshot()}, _props_apply, true, 0.1)
 	providers.append(props)
 	providers.append(_subsystem("medics", func(): return game.injuries.medics, "snapshot", "apply_snapshot"))
 	providers.append(provider("outcome", "", ["dead", "finished", "title", "text"], _outcome_snapshot, _outcome_apply))
@@ -304,6 +303,11 @@ func _outcome_apply(w: Dictionary, _t: float) -> void:
 		game.finished = finished
 		game._show_result(str(w.get("title", "")), str(w.get("text", "")))
 
+# The host's time of the snapshot lets a guest draw flying props between them.
+func _props_apply(f: Dictionary, sample_time: float) -> void:
+	if f.has("movable_props"):
+		game.movable_props.apply_snapshot(f.movable_props, sample_time)
+
 func _stones_snapshot() -> Dictionary:
 	var result = {"stones": room.stone_state(), "stone_ids": game.stones.map(func(stone): return stone.id)}
 	if not game.impact_serials.is_empty():
@@ -391,6 +395,10 @@ func _racers_snapshot() -> Dictionary:
 		var entry = {"id": r.id, "variant": r.variant, "pos": room.a(r.node.position), "yaw": snappedf(r.node.rotation.y, 0.001), "state": r.state}
 		# Pitch and roll only; the middle angle is the yaw.
 		entry.tilt = [snappedf(r.node.rotation.x, 0.01), snappedf(r.node.rotation.z, 0.01)]
+		# A moving crew carries its velocity, so guests do not guess it from two snapshots.
+		var velocity: Vector3 = r.get("velocity", Vector3.ZERO)
+		if velocity.length_squared() > 0.0025:
+			entry.velocity = room.a(velocity)
 		if r.get("role", "racer") != "racer":
 			entry.role = r.role
 		if int(r.get("zero_index", 0)) != 0:
@@ -431,7 +439,7 @@ func _racers_apply(w: Dictionary, sample_time: float) -> void:
 			racer_motion[r.id].predictive = true
 		var lean: Array = r.get("tilt", [0.0, 0.0])
 		var tilt = Vector3(lean[0], r.yaw, lean[1])
-		racer_motion[r.id].push(sample_time, room.v(r.pos), tilt)
+		racer_motion[r.id].push(sample_time, room.v(r.pos), tilt, false, room.v(r.velocity) if r.has("velocity") else null)
 		racer_targets[r.id] = r
 	for local in game.racers.duplicate():
 		if not present.has(local.id):

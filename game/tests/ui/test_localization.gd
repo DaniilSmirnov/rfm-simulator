@@ -29,6 +29,9 @@ func run() -> void:
 	check(Loc.saved_language() == "en", "the choice is remembered")
 	check(game.lobby_ui.about_button.atr(lobby.about_button.text) == "ABOUT US" and lobby.help_button.atr(lobby.help_button.text) == "HELP", "buttons translate themselves")
 	check(game.start_button.atr("ИГРАТЬ") == "PLAY", "the start button translates")
+	var byline: Label = game.hud.brand.find_child("Byline", true, false)
+	check(byline.atr(byline.text) == "by Rally Fans Map", "the byline under the logo translates")
+	check(game.hud.settings_screen.volume_label.text.begins_with("VOLUME") or game.hud.settings_screen.volume_label.text == "SOUND OFF", "the volume label follows the language")
 	check(Loc.t("Шашлык удался. Осталось %d шампуров.") % 3 == "The shashlik turned out great. 3 skewers left.", "a formatted message translates and keeps its number")
 	game.toast("Подожди, пока водитель остановится.")
 	check(game.toast_label.text == "Wait for the driver to stop.", "toasts are stored translated")
@@ -63,8 +66,12 @@ func run() -> void:
 				shown = false
 				leaked += "[%s: %s]" % [state, label.text]
 	check(shown, "no Russian is left on the HUD in English " + leaked)
+	# Switching in the pause menu redraws the HUD under it straight away.
+	game.paused = true
 	lobby.language_button.pressed.emit()
 	check(Loc.current == "ru" and game.room.ui.name_input.text == "Фанат" and game.toast_label.text != "", "switching back restores Russian")
+	check(has_cyrillic(game.course_label.text) and has_cyrillic(game.quest_label.text), "the paused HUD is redrawn in the new language")
+	check(game.stage_caption.text == game.stage_caption.text.to_upper() and has_cyrillic(game.stage_caption.text), "the stage caption stays upper case")
 	game.platform_service.profile = {"platform": "vk"}
 	Loc.set_language("en", false)
 	lobby.refresh()

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readdir} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import {join,dirname} from 'node:path';
-import {groups,nodeSuites,verifyRegistry,slowTests,testPaths} from '../scripts/test-catalog.mjs';
+import {groups,nodeSuites,verifyRegistry,slowTests,testPaths,partition} from '../scripts/test-catalog.mjs';
 
 const here=dirname(fileURLToPath(import.meta.url));
 test('every functional Godot test is registered exactly once in a CI shard',async()=>{
@@ -40,4 +40,11 @@ test('every node unit test file is registered in a shard',async()=>{
  const combined=new Set(Object.values(nodeSuites).flat(1).flat());
  for(const file of (await readdir(here)).filter(f=>f.endsWith('.test.mjs')))
   assert.ok(combined.has('tests/'+file),'tests/'+file+' is not in nodeSuites');
+});
+test('--part slices cover each shard exactly once',()=>{
+ for(const [group,files] of Object.entries(groups))for(const n of [1,2,3,4,5,7]){
+  const parts=partition(files,n);
+  assert.equal(parts.length,n);
+  assert.deepEqual(parts.flat().sort(),[...files].sort(),group+' in '+n);
+ }
 });

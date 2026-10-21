@@ -3,8 +3,8 @@
   "types": {
     "vec": ["coordinate", "coordinate", "coordinate"],
     "pose": {"fields": {"pos": "vec", "yaw": "number"}, "required": ["pos", "yaw"]},
-    "rotation_pose": {"fields": {"key": "string", "pos": "vec", "rot": "vec", "anchored": "bool"}, "required": ["key", "pos", "rot"]},
-    "racer": {"fields": {"id": "int", "variant": "int", "pos": "vec", "yaw": "number", "state": "string", "tilt": ["number", "number"], "role": "string", "zero_index": "int", "towed": "bool", "recovery_helpers": "int"}, "required": ["id", "variant", "pos", "yaw", "state"]},
+    "rotation_pose": {"fields": {"key": "string", "pos": "vec", "rot": "vec", "anchored": "bool", "velocity": "vec"}, "required": ["key", "pos", "rot"]},
+    "racer": {"fields": {"id": "int", "variant": "int", "pos": "vec", "velocity": "vec", "yaw": "number", "state": "string", "tilt": ["number", "number"], "role": "string", "zero_index": "int", "towed": "bool", "recovery_helpers": "int"}, "required": ["id", "variant", "pos", "yaw", "state"]},
     "drive": {"fields": {"ack": "int", "pos": "vec", "yaw": "number", "velocity": "vec", "vertical": "number", "grounded": "bool", "pitch": "number", "roll": "number", "steering": "number", "yaw_rate": "number", "longitudinal": "number", "initialized": "bool", "condition": "number", "impact_timer": "number", "recovery_ack": "int", "prop_contacts": {"map": "number", "max": 2048}}, "required": ["ack", "pos", "yaw", "velocity", "vertical", "grounded", "pitch", "roll", "steering", "yaw_rate", "longitudinal"]},
     "stone": {"fields": {"id": "int", "pos": "vec", "velocity": "vec", "bounces": "int"}, "required": ["id", "pos", "velocity"]},
     "tree": {"fields": {"id": "int", "dir": "vec", "age": "number", "pos": "vec"}, "required": ["id", "dir", "age"]},

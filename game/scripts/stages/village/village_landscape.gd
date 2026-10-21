@@ -171,6 +171,10 @@ func _vineyards(cooperative: bool) -> void:
 	var terraces = Node3D.new()
 	terraces.name = "VineyardTerraces"
 	stage.add_child(terraces)
+	# The batched sections are freed; the terrace walls keep their bodies here.
+	var walls = Node3D.new()
+	walls.name = "VineyardTerraceWalls"
+	stage.add_child(walls)
 	for side_sign in [-1.0, 1.0]:
 		for row in range(17):
 			await village.pause(cooperative and row % 2 == 0)
@@ -192,6 +196,8 @@ func _vineyards(cooperative: bool) -> void:
 				section.transform = pose
 				Props.cylinder(section, Vector3(0, 0.75, 0), 0.06, 0.05, 1.5, Color("7b6a52"), 6)
 				Props.cylinder(section, Vector3(0, 0.45, 0.9), 0.07, 0.05, 0.9, Color("5e4a35"), 5)
+				stage.rocks.append(Records.rock(p, 0.06, 1.5, Records.POST))
+				stage.rocks.append(Records.rock(pose * Vector3(0, 0, 0.9), 0.07, 0.9, Records.POST))
 				for y in [0.7, 1.05, 1.4]:
 					Props.box(section, Vector3(0, y, 0), Vector3(0.016, 0.016, 6.0), Color("7b7d68"))
 				# Overlapping foliage forms a continuous trained hedge along the wires.
@@ -216,6 +222,10 @@ func _vineyards(cooperative: bool) -> void:
 					Props.box(section, Vector3(1.4, 0.12, 0), Vector3(0.5, 0.42, 6.1), Color("9d9584"))
 					for k in range(5):
 						Props.box(section, Vector3(1.4 + sin(k * 2.1) * 0.05, 0.36, -2.4 + k * 1.2), Vector3(0.48, 0.14, 1.1), Color("a9a191").darkened(k % 2 * 0.06))
+					var wall = Node3D.new()
+					walls.add_child(wall)
+					wall.transform = pose
+					solids.solid(wall, Vector3(1.4, -0.29, 0), Vector3(0.5, 1.44, 6.1), "wall")
 					wall_count += 1
 				if village.section(s).id == "valley" and row < 6:
 					harvest_rows.append({"pos": pose * Vector3(1.5, 0, 0), "yaw": village.yaw_at(s), "side": side_sign})
@@ -245,10 +255,11 @@ func _harvest_crates() -> void:
 			var crate = Vector3(0, 0.19 + k * 0.38, 0) if k < 2 else Vector3(0.62, 0.19, 0)
 			Props.box(stack, crate, Vector3(0.58, 0.36, 0.42), Color("b08a5a"))
 			Props.box(stack, crate + Vector3(0, 0.15, 0), Vector3(0.5, 0.08, 0.36), Color("4a2a4f"))
+		solids.solid(stack, Vector3(0.31, 0.38, 0), Vector3(1.2, 0.76, 0.42), "street_furniture")
 		placed += 1
 	village.counts["harvest_crates"] = placed
+	# The root keeps the stacks' collision bodies; only the meshes are batched.
 	village.batcher.collect(root, Transform3D.IDENTITY)
-	root.free()
 
 func _beehives() -> void:
 	var root = Node3D.new()
@@ -392,6 +403,7 @@ func _figs() -> void:
 		p = surface(p)
 		stems.append(Transform3D(Basis.from_scale(Vector3(0.14, 1.6, 0.14)), p + Vector3.UP * 0.8))
 		stem_colors.append(Color("8d8577"))
+		stage.rocks.append(Records.rock(p, 0.14, 1.6, Records.POST))
 		var indices: Array = []
 		for k in range(4):
 			var angle = k * TAU / 4.0 + p.x

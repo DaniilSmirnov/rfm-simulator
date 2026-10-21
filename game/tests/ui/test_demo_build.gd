@@ -24,10 +24,10 @@ func run() -> void:
 	await process_frame
 	check(shown(game.start_button) and game.start_button.text == "ИГРАТЬ", "main menu offers «Играть»")
 	check(game.title_label.text == "Rally Fans Simulator Demo", "the title says Demo")
-	check(game.lobby_ui.quit_button.visible and game.lobby_ui.quit_button.text == "ВЫЙТИ ИЗ ИГРЫ", "main menu offers «Выйти из игры» on desktop")
+	check(shown(game.lobby_ui.quit_button) and game.lobby_ui.quit_button.tooltip_text == "Выйти из игры", "main menu offers «Выйти из игры» on desktop")
 	check(not shown(game.selection_controls), "no stage, car or character selection")
 	check(not shown(game.room.ui.panel), "no room creation or joining")
-	check(not shown(game.hud.links), "no site, support or language links in the main menu")
+	check(not shown(game.lobby_ui.about_button) and not shown(game.lobby_ui.help_button) and not shown(game.lobby_ui.language_button) and not shown(game.lobby_ui.settings_button), "no site, support, language or settings links in the main menu")
 	var buttons = game.menu.find_children("*", "Button", true, false).filter(func(button): return button.is_visible_in_tree())
 	check(buttons.size() == 2, "the main menu has exactly two buttons")
 	game.platform_service.profile = {"platform": "standalone"}

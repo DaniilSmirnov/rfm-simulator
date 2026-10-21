@@ -148,7 +148,8 @@ static func _far_end(stage: Node3D, root: Node3D) -> void:
 	stage.solids.solid(root, at(truck.x + 0.85, truck.y, 1.5), Vector3(6.9, 3.0, 2.3), "service")
 	Movable.group(stage.solids, root, first, 3500)
 	first = root.get_child_count()
-	var generator = Vector2(4.5, 43.5)
+	# Beside the aisle's end, where the players' cars start the day.
+	var generator = Vector2(9.0, 43.5)
 	P.box(root, at(generator.x, generator.y, 0.35), Vector3(0.9, 0.55, 0.6), Color("e3b51e"))
 	P.box(root, at(generator.x, generator.y, 0.68), Vector3(0.7, 0.12, 0.45), Color("2a2d30"))
 	P.box(root, at(generator.x, generator.y, 0.04), Vector3(1.1, 0.08, 0.7), Color("2a2d30"))

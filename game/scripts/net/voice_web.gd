@@ -49,6 +49,9 @@ func sync_members(ids: Array) -> void:
 func on_signal(from: String, data: Dictionary) -> void:
 	_call(["onSignal", from, data])
 
+func ring_again() -> void:
+	_call(["ringAgain"])
+
 func set_ptt(value: bool) -> void:
 	_call(["setPtt", value])
 
