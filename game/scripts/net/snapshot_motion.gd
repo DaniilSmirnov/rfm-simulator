@@ -137,3 +137,22 @@ func render(time: float, frozen: bool = false) -> Dictionary:
 	var rotation: Vector3 = pose.rotation
 	rotation.y = wrapf(rotation.y + correction_yaw, -PI, PI)
 	return {"position": pose.position + correction_position, "rotation": rotation}
+
+# People on foot arrive a few times a second (world_sync.gd PEOPLE_INTERVAL).
+# A guest walks each one to its newest position at the pace that gets there as
+# the next snapshot arrives, instead of rushing there and standing still.
+# `arrivals` keeps the receiver's {"time", "interval"} between snapshots.
+static func note_arrival(arrivals: Dictionary) -> void:
+	var now = Time.get_ticks_usec() / 1000000.0
+	if arrivals.has("time"):
+		arrivals.interval = lerpf(float(arrivals.get("interval", 0.35)), clampf(now - float(arrivals.time), 0.1, 1.0), 0.3)
+	arrivals.time = now
+
+# `target`: the snapshot entry, which remembers its pace.
+static func walk_toward(from: Vector3, goal: Vector3, target: Dictionary, arrivals: Dictionary, delta: float) -> Vector3:
+	var distance = from.distance_to(goal)
+	if distance > SNAP_DISTANCE:
+		return goal
+	if not target.has("pace"):
+		target.pace = distance / float(arrivals.get("interval", 0.35))
+	return from.move_toward(goal, maxf(float(target.pace), 0.3) * delta)

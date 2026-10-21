@@ -152,6 +152,7 @@ func loop() -> void:
 		var t0 = Time.get_ticks_usec()
 		host._process(delta)
 		add("host_game_process", Time.get_ticks_usec() - t0)
+		host.room.transport.advance_view_clock(delta)
 		while not to_host.is_empty() and to_host[0].at <= t:
 			var bytes: PackedByteArray = to_host.pop_front().bytes
 			t0 = Time.get_ticks_usec()
@@ -178,6 +179,7 @@ func loop() -> void:
 		guest._process(delta)
 		add("guest_game_process", Time.get_ticks_usec() - t0)
 		t0 = Time.get_ticks_usec()
+		guest.room.transport.advance_view_clock(delta)
 		guest.room._render_guest_world(delta)
 		add("guest_render_world", Time.get_ticks_usec() - t0)
 		while not to_guest.is_empty() and to_guest[0].at <= t:

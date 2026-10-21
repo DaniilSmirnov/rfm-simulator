@@ -330,7 +330,7 @@ func _process(delta: float) -> void:
 	var frozen = world_paused or game.paused or game.dead or game.finished
 	for peer in peers.values():
 		if peer.state != null:
-			PeerView.animate(game, peer, delta, server_clock(), frozen, world_paused)
+			PeerView.animate(game, peer, delta, transport.view_clock, frozen, world_paused)
 	if is_guest():
 		_render_guest_world(delta)
 
@@ -344,11 +344,11 @@ func _render_guest_world(delta: float) -> void:
 		Props.update_course_lights(racer.node, game.elapsed)
 		if world_sync.racer_motion.has(racer.id):
 			var frozen = world_paused or game.dead or game.finished
-			var pose = world_sync.racer_motion[racer.id].render(server_clock(), frozen)
+			var pose = world_sync.racer_motion[racer.id].render(transport.view_clock, frozen)
 			racer.node.position = pose.position
 			racer.node.rotation = pose.rotation
 	game.crews.draw_recovery_ropes()
-	game.park_traffic.render_guest(server_clock(), world_paused or game.dead or game.finished)
+	game.park_traffic.render_guest(transport.view_clock, world_paused or game.dead or game.finished)
 
 static func a(pos: Vector3) -> Array:
 	return [snappedf(pos.x, 0.01), snappedf(pos.y, 0.01), snappedf(pos.z, 0.01)]

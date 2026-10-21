@@ -261,7 +261,8 @@ func _send(delta: float) -> void:
 # compacted by NetProtocol.compact_state().
 func world_packet() -> Dictionary:
 	var hot: Dictionary = room.world_sync.hot_state()
-	var now_ms = int(room.server_clock() * 1000.0)
+	# The frame's clock: the world in this packet is where this frame left it.
+	var now_ms = int((room.transport.view_clock if room.transport.view_clock > -INF else room.server_clock()) * 1000.0)
 	var players: Array = [_member_entry(room.player_id, room.local_state(), now_ms)]
 	for id in room.peers:
 		var peer: Dictionary = room.peers[id]
