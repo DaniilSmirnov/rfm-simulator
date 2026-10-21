@@ -643,7 +643,8 @@ func mobile_safe_response(result: int, code: int, _headers: PackedStringArray, b
 	var ratio = extent / Vector2(maxf(float(data.width), 1.0), maxf(float(data.height), 1.0))
 	var origin = Vector2(float(data.left), float(data.top)) * ratio
 	var end = extent - Vector2(float(data.right), float(data.bottom)) * ratio
-	game.safety_safe_insets = Vector4(origin.x, origin.y, extent.x-end.x, extent.y-end.y)
+	# The memo also stays below the browser fullscreen button (overlay_top).
+	game.safety_safe_insets = Vector4(origin.x, maxf(origin.y, float(data.get("overlay_top", 0.0)) * ratio.y), extent.x-end.x, extent.y-end.y)
 	if game.safety_gate != null and is_instance_valid(game.safety_gate):
 		game.safety_gate.set_safe_insets(game.safety_safe_insets)
 	if not game.mobile_mode:
