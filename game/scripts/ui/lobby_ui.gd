@@ -17,6 +17,7 @@ var car_purchase_button: Button
 var purchase_button: Button
 var check_purchase: Button
 var purchase_status: Label
+var return_button: Button
 var quit_dialog: Control
 var quit_button: Button
 var host_pause: PanelContainer
@@ -252,6 +253,10 @@ func _apply_volume(percent: float) -> void:
 # ---------------------------------------------------------------- assembly
 
 func finish(parent: Control) -> void:
+	return_button = UiKit.button(parent, "В ГЛАВНОЕ МЕНЮ", "ghost", 44)
+	return_button.name = "ReturnButton"
+	return_button.pressed.connect(game.return_to_main_menu)
+	return_button.hide()
 	# Only a desktop window has nowhere else to close the game from.
 	quit_button = UiKit.button(parent, "ВЫЙТИ ИЗ ИГРЫ", "ghost", 44)
 	quit_button.name = "QuitButton"
@@ -355,6 +360,8 @@ func _process(_delta: float) -> void:
 		# Phones keep the entry block short: the status line shows only news.
 		game.room.ui.status.visible = not (game.mobile_mode and game.room.ui.status.text == game.room.ui.default_hint)
 		host_pause.visible = game.room.is_guest() and game.room.world_paused and not game.paused and not result
+	# Results already lead back to the menu through «НОВЫЙ ВЫЕЗД»; only the pause needs its own way out.
+	return_button.visible = game.playing and game.paused and not result
 	if not game.mobile_mode:
 		game.mobile_top.visible = game.playing
 	else:
