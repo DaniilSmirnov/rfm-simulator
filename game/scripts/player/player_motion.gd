@@ -83,10 +83,14 @@ func drive(delta: float) -> void:
 		if contact_blocked(previous, next, true) or game.stage.biome.drive_blocked(previous, next):
 			hit = true
 		if hit:
-			game.condition = maxf(0, game.condition - game.vehicle_motion.velocity.length() * 1.4)
+			# Resting or creeping against a trunk is no crash: only a real impact hurts, once per cooldown.
+			var impact = game.vehicle_motion.velocity.length()
+			if impact > 1.0 and game.rock_impact_timer <= 0:
+				game.condition = maxf(0, game.condition - impact * 1.4)
+				game.rock_impact_timer = 0.4
+				game.toast("Удар! Сбавь скорость.")
 			game.vehicle_motion.velocity = Vector3.ZERO if tree_index >= 0 else game.vehicle_motion.velocity * -0.25
 			game.speed = game.vehicle_motion.velocity.dot(forward)
-			game.toast("Удар! Сбавь скорость.")
 		else:
 			game.car.position = next
 		game.vehicle_motion.suspension(game.car, game.stage, dt, game.heading, (game.heading - previous_heading) / dt * game.speed)
