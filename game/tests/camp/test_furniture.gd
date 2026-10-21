@@ -102,6 +102,13 @@ func run() -> void:
 		host.placement_kind = "flag"
 		host.placement_yaw = yaw
 		host.camp_actions.update_placement()
+		check(host.placement_preview.basis.is_equal_approx(Basis(Vector3.UP, yaw)), "flag preview stands plumb like the staked flag")
+		host.cancel_placement()
+		host.placement_preview = Node3D.new()
+		host.add_child(host.placement_preview)
+		host.placement_kind = "chairs"
+		host.placement_yaw = yaw
+		host.camp_actions.update_placement()
 		check(host.placement_preview.basis.is_equal_approx(expected), "preview uses the same terrain tilt as installed gear")
 		host.cancel_placement()
 		# Exercise all models through the common pose operation, including reset
@@ -109,7 +116,8 @@ func run() -> void:
 		for node in [host.camp, host.personal_chairs["host"], host.grill, placed_flag]:
 			host.camp_actions.ground_item(node, slope, yaw)
 			host.camp_actions.ground_item(node, origin, -0.4)
-			check(node.basis.is_equal_approx(host.stage.terrain_basis(origin, -0.4, host.stage.ground)), "returning to the clearing replaces the previous hillside tilt")
+			var level: Basis = Basis(Vector3.UP, -0.4) if node == placed_flag else host.stage.terrain_basis(origin, -0.4, host.stage.ground)
+			check(node.basis.is_equal_approx(level), "returning to the clearing replaces the previous hillside tilt")
 			host.camp_actions.ground_item(node, slope, yaw)
 		host.walker = slope
 		check(host.camp_cooking.deploy_fire(slope + Vector3(4, 0, 0), yaw), "fire can be deployed beside a hillside camp")

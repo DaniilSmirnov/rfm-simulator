@@ -7,6 +7,8 @@ const REACH = 2.5
 const TIP_SECONDS = 1.0
 # The campfire is fixed in place; the cauldron stand straddles it.
 const FIXED_KINDS = ["firewood"]
+# A flag is staked into the ground: it stands until a car runs it over.
+const STAKED_KINDS = ["flag"]
 const HEARTH_KINDS = ["firewood", "cauldron"]
 # How far off the campfire a resting cauldron still counts as mounted on it.
 const HEARTH_REACH = 0.55
@@ -43,7 +45,8 @@ func refresh() -> void:
 		_rekey(item.node, key)
 		var fixed: bool = item.kind in FIXED_KINDS
 		if fixed: item.node.set_meta("prop_fixed", true)
-		Registry.register(game.stage.solids, item.node, 25.0 if item.kind in ["grill", "cauldron"] else 8.0, fixed, key)
+		if item.kind in STAKED_KINDS: item.node.set_meta("prop_staked", true)
+		Registry.register(game.stage.solids, item.node, 25.0 if item.kind in ["grill", "cauldron"] else 8.0, fixed or item.kind in STAKED_KINDS, key)
 		if item.kind in HEARTH_KINDS: hearth.append(item.node)
 	game.stage.solids.movables.assign(game.stage.solids.movables.filter(func(r): return is_instance_valid(r.node)))
 	for record in game.stage.solids.movables:
@@ -90,7 +93,8 @@ func knock(key: String, velocity: Vector3) -> bool:
 	if not game.room.is_authority() or not records.has(key):
 		return false
 	var r: Dictionary = records[key]
-	if r.node.get_meta("prop_fixed", false) or velocity.length() < (5.0 if r.anchored else 0.8):
+	var rooted: bool = r.anchored and not r.node.get_meta("prop_staked", false)
+	if r.node.get_meta("prop_fixed", false) or velocity.length() < (5.0 if rooted else 0.8):
 		return false
 	r.anchored = false
 	r.node.set_meta("prop_anchored", false)

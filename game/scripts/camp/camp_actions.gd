@@ -11,7 +11,9 @@ var game
 # Use the same surface sampler for the ghost, deployed gear and room snapshots.
 func ground_item(node: Node3D, spot: Vector3, yaw: float) -> void:
 	if game.room.is_guest() and node.get_meta("prop_dynamic", false): return
-	node.basis = game.stage.terrain_basis(spot, yaw, game.stage.ground)
+	# A flagpole is driven in plumb: square to a hillside, it toppled downhill.
+	var plumb: bool = node.has_meta("rally_fans_map_flag") or (node == game.placement_preview and game.placement_kind == "flag")
+	node.basis = Basis(Vector3.UP, yaw) if plumb else game.stage.terrain_basis(spot, yaw, game.stage.ground)
 	node.position = Vector3(spot.x, Ground.height(node, spot, node.basis, game.stage.ground), spot.z)
 	node.set_meta("placement_yaw", yaw)
 	var body = node.get_node_or_null("PropBody")

@@ -24,7 +24,7 @@ static func resolve(stage, motion, start: Vector3, end: Vector3, delta: float, c
 					prop = candidate
 					break
 		var velocity: Vector3 = motion.velocity
-		var anchored = not prop.is_empty() and bool(prop.node.get_meta("prop_anchored", prop.anchored))
+		var anchored = not prop.is_empty() and bool(prop.node.get_meta("prop_anchored", prop.anchored)) and not prop.node.get_meta("prop_staked", false)
 		if prop.is_empty() or float(prop.mass) >= BLOCKING_MASS or (anchored and velocity.length() < 5.0):
 			result.position = hit.position
 			result.blocked = true
