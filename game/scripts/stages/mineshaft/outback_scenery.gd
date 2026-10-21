@@ -127,7 +127,7 @@ func _ground_cover() -> void:
 	stage.detail_batch("OutbackSaltbush", stage.NATURE_BUSH, shrub_p, shrub_c, DetailLayer.tiled(220.0))
 	counts["tussocks"] = tussock_p.size()
 
-# Rounded granite boulders piled into tors on the hills; large ones are solid.
+# Rounded granite boulders piled into tors on the hills; every one is solid.
 func _granite_tors() -> void:
 	var poses: Array = []
 	var colors: Array = []
@@ -142,8 +142,7 @@ func _granite_tors() -> void:
 			var yaw = rng.randf() * TAU
 			poses.append(Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3(radius * 1.2, radius * 0.85, radius)), p))
 			colors.append(Color("a39d92").lerp(Color("8c857a"), rng.randf()))
-			if radius > 1.2:
-				stage.rocks.append(Records.rock(p, radius * 0.9, radius * 1.4, Records.FOREST))
+			stage.rocks.append(Records.rock(p, radius * 0.9, radius * 1.4, Records.FOREST))
 	stage.detail_batch("GraniteTors", stage.NATURE_BOULDER, poses, colors, DetailLayer.tiled(320.0))
 	counts["boulders"] = poses.size()
 
@@ -207,7 +206,8 @@ func _mine_headframe() -> void:
 	var roof = Props.box(mine, Vector3(0, 3.45, -9.0), Vector3(5.6, 0.12, 4.6), IRON)
 	roof.rotation.x = 0.08
 	stage.rocks.append(Records.rock(biome.mine, 3.0, height, Records.BUILDING))
-	stage.rocks.append(Records.rock(mine.to_global(Vector3(0, 0, -9.0)), 3.0, 3.4, Records.BUILDING))
+	stage.solids.solid(mine, Vector3(0, 0.7, -9.0), Vector3(5.0, 5.4, 4.0), "building")
+	stage.rocks.append_array(Records.footprint(mine.to_global(Vector3(0, 0, -9.0)), mine.basis.x, 5.0, 4.0, 3.4))
 	var heap = mine.to_global(Vector3(7.5, 0, -6.0))
 	heap.y = stage.terrain_surface_height(heap) - 0.4
 	Props.cylinder(stage, heap + Vector3.UP * 2.2, 6.5, 1.2, 4.4, Color("9b4f30"), 9)
@@ -217,6 +217,7 @@ func _mine_headframe() -> void:
 # Simplified Australian flag on a pole: blue field, Southern Cross, Union corner.
 func _flag(parent: Node3D, at: Vector3) -> void:
 	Props.cylinder(parent, at + Vector3.UP * 3.5, 0.05, 0.04, 7.0, Color("d8d8d2"), 6)
+	stage.rocks.append(Records.rock(parent.to_global(at), 0.06, 7.0, Records.POST))
 	var cloth = at + Vector3(0.95, 6.3, 0)
 	Props.box(parent, cloth, Vector3(1.8, 0.9, 0.03), Color("1f3f8f"))
 	Props.box(parent, cloth + Vector3(-0.45, 0.22, 0.02), Vector3(0.9, 0.08, 0.02), Color("f4f4f0"))
@@ -237,9 +238,11 @@ func _homestead() -> void:
 	Props.box(home, Vector3(0, 2.1, 4.0), Vector3(10.0, 0.1, 1.8), RED_IRON.lightened(0.06))
 	for x in [-4.6, -1.5, 1.5, 4.6]:
 		Props.cylinder(home, Vector3(x, 1.05, 4.8), 0.07, 0.07, 2.1, Color("e8e3d6"), 5)
+		stage.rocks.append(Records.rock(home.to_global(Vector3(x, 0, 4.8)), 0.08, 2.1, Records.POST))
 	Props.box(home, Vector3(-2.5, 1.0, 3.52), Vector3(1.0, 2.0, 0.06), Color("355a43"))
 	Props.box(home, Vector3(2.0, 1.4, 3.52), Vector3(1.4, 1.0, 0.06), Color("3b4a52"))
-	stage.rocks.append(Records.rock(biome.homestead, 5.6, 3.6, Records.BUILDING))
+	stage.solids.solid(home, Vector3(0, 0.4, 0), Vector3(10.0, 4.8, 7.0), "building")
+	stage.rocks.append_array(Records.footprint(biome.homestead, home.basis.x, 10.0, 7.0, 3.6))
 	var tank = Vector3(7.5, 0, 1.0)
 	Props.cylinder(home, tank + Vector3.UP * 1.3, 1.7, 1.7, 2.6, Color("8f9599"), 14)
 	for ring in [0.5, 1.1, 1.7, 2.3]:
