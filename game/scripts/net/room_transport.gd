@@ -31,6 +31,8 @@ var suspended_at = -INF
 var socket_waiting_since = -INF
 # Server clock (NTP-style: offset estimated from the fastest round trips).
 var server_offset = 0.0
+# The server clock as this frame shows it (advance_view_clock).
+var view_clock = -INF
 var clock_initialized = false
 var best_round_trip = INF
 var round_trip_ms = 0.0
@@ -166,6 +168,20 @@ func update_server_clock(server_msec: float, sent_at: float = -1.0) -> void:
 func server_clock() -> float:
 	return now() + server_offset
 
+# Everything drawn from snapshots, and the host's world stamp, read one clock
+# per frame. It advances with the frame and only slews toward the server clock:
+# reading the wall clock mid-frame, or a 10 ms clock correction, would
+# otherwise jerk every remote car by its speed times that error.
+func advance_view_clock(delta: float) -> void:
+	view_clock = next_view_clock(view_clock, server_clock(), delta)
+
+static func next_view_clock(view: float, target: float, delta: float) -> float:
+	if view == -INF or absf(target - view) > 0.25:
+		return target
+	# Averaged over frames and at most 2 % faster or slower than real time:
+	# the wall clock read mid-frame wobbles by the frame's own work.
+	return view + delta + clampf((target - view) * 0.05, -delta * 0.02, delta * 0.02)
+
 # ---------------------------------------------------------------- socket
 
 # The socket carries the same sync bodies and replies as HTTP. The server also
@@ -217,6 +233,7 @@ func _socket_failed() -> void:
 	room.sync_now()
 
 func poll(delta: float) -> void:
+	advance_view_clock(delta)
 	if socket == null:
 		if socket_retry > 0 and room.connected:
 			socket_retry -= delta

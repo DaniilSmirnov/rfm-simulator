@@ -128,11 +128,19 @@ func animate_wheels() -> void:
 		Props.animate_wheels(entry.node)
 
 func update_racers(delta: float) -> void:
+	var start = {}
+	for racer in game.racers:
+		start[racer.id] = racer.node.position
 	var remaining = maxf(delta, 0)
 	while remaining > 0.000001:
 		var step = minf(remaining, 1.0 / 60.0)
 		update_racers_step(step)
 		remaining -= step
+	# Guests run crews ahead of their last snapshot with this velocity; it is
+	# taken over the whole frame, as a short last step would amplify noise.
+	if delta > 0.001:
+		for racer in game.racers:
+			racer.velocity = (racer.node.position - start[racer.id]) / delta if start.has(racer.id) else Vector3.ZERO
 
 func update_racers_step(delta: float) -> void:
 	var to_remove: Array[Dictionary] = []

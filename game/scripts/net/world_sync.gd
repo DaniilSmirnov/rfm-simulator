@@ -391,6 +391,10 @@ func _racers_snapshot() -> Dictionary:
 		var entry = {"id": r.id, "variant": r.variant, "pos": room.a(r.node.position), "yaw": snappedf(r.node.rotation.y, 0.001), "state": r.state}
 		# Pitch and roll only; the middle angle is the yaw.
 		entry.tilt = [snappedf(r.node.rotation.x, 0.01), snappedf(r.node.rotation.z, 0.01)]
+		# A moving crew carries its velocity, so guests do not guess it from two snapshots.
+		var velocity: Vector3 = r.get("velocity", Vector3.ZERO)
+		if velocity.length_squared() > 0.0025:
+			entry.velocity = room.a(velocity)
 		if r.get("role", "racer") != "racer":
 			entry.role = r.role
 		if int(r.get("zero_index", 0)) != 0:
@@ -431,7 +435,7 @@ func _racers_apply(w: Dictionary, sample_time: float) -> void:
 			racer_motion[r.id].predictive = true
 		var lean: Array = r.get("tilt", [0.0, 0.0])
 		var tilt = Vector3(lean[0], r.yaw, lean[1])
-		racer_motion[r.id].push(sample_time, room.v(r.pos), tilt)
+		racer_motion[r.id].push(sample_time, room.v(r.pos), tilt, false, room.v(r.velocity) if r.has("velocity") else null)
 		racer_targets[r.id] = r
 	for local in game.racers.duplicate():
 		if not present.has(local.id):

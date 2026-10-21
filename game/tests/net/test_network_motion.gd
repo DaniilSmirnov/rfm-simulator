@@ -188,6 +188,25 @@ func run() -> void:
 	check(worst_spacing <= Prediction.STAMP_DRIFT + 0.0001, "jittered input bursts keep simulation stamps evenly spaced")
 	check(behind, "simulation stamps stay just behind the arrival clock")
 	check(Prediction.stamp(stamp_time, 0, stamp_time + 5.0) == stamp_time + 5.0 - Prediction.STAMP_LAG, "a stall resets the stamp to the clock")
+	# The frame clock: a wall clock read at a different point of each frame and
+	# 10 ms server corrections move it by at most 2 % of a frame.
+	var Transport = load("res://scripts/net/room_transport.gd")
+	var wall = 50.0
+	var view = Transport.next_view_clock(-INF, wall, 1.0 / 60.0)
+	var worst_frame = 0.0
+	for i in range(240):
+		wall += 1.0 / 60.0 + (0.01 if i % 30 == 0 else 0.0)
+		var frame_start = view
+		view = Transport.next_view_clock(view, wall + rng.randf_range(0.0, 0.006), 1.0 / 60.0)
+		worst_frame = maxf(worst_frame, absf((view - frame_start) * 60.0 - 1.0))
+	check(worst_frame <= 0.0201, "frame clock follows frames, not the wall clock read mid-frame")
+	check(absf(view - wall) < 0.03, "frame clock stays with the server clock")
+	# People on foot walk to each snapshot at an even pace instead of rushing.
+	var arrivals = {"interval": 0.3}
+	var walk = {}
+	var at = Buffer.walk_toward(Vector3.ZERO, Vector3(1.2, 0, 0), walk, arrivals, 0.15)
+	check(absf(at.x - 0.6) < 0.001, "a walker covers half the way in half the snapshot interval")
+	check(Buffer.walk_toward(Vector3.ZERO, Vector3(20, 0, 0), {}, arrivals, 0.016).x == 20, "a walker far from the snapshot is placed there")
 	await game._shutdown_audio()
 	game.queue_free()
 	await process_frame

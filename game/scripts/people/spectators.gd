@@ -5,12 +5,14 @@ const Navigation = preload("res://scripts/people/crowd_navigation.gd")
 const Props = preload("res://scripts/core/props.gd")
 const GrillModel = preload("res://scripts/camp/grill_model.gd")
 const CharacterRig = preload("res://scripts/people/character_rig.gd")
+const SnapshotMotion = preload("res://scripts/net/snapshot_motion.gd")
 var game: Node3D
 var groups: Array[Dictionary] = []
 var people: Array[Dictionary] = []
 var clock = 0.0
 var navigation_budget = preload("res://scripts/people/navigation_budget.gd").new()
 var actor_targets: Dictionary = {}
+var actor_arrivals: Dictionary = {}
 
 func rebuild(cooperative: bool = false) -> void:
 	navigation_budget = preload("res://scripts/people/navigation_budget.gd").new()
@@ -137,7 +139,7 @@ func update(world_time: float, delta: float, guest: bool) -> void:
 		var action = pose.action
 		if guest and actor_targets.has(person.id):
 			var target: Dictionary = actor_targets[person.id]
-			person.avatar.position = person.avatar.position.lerp(game.room.v(target.pos), 1.0 - exp(-delta * 10))
+			person.avatar.position = SnapshotMotion.walk_toward(person.avatar.position, game.room.v(target.pos), target, actor_arrivals, delta)
 			person.avatar.rotation.y = lerp_angle(person.avatar.rotation.y, float(target.yaw), 1.0 - exp(-delta * 10))
 			person.helper = int(target.get("helper", -1))
 			action = str(target.get("action", "idle"))
@@ -312,6 +314,7 @@ func actor_snapshot() -> Array:
 
 func apply_actor_snapshot(poses: Array) -> void:
 	var first = actor_targets.is_empty()
+	SnapshotMotion.note_arrival(actor_arrivals)
 	actor_targets.clear()
 	for pose in poses:
 		actor_targets[int(pose.id)] = pose
