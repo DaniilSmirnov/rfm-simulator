@@ -37,29 +37,38 @@ func layout(variant: int) -> void:
 				if not parks.contains(point.p, 0.6) or not stage.solids.hit(point.p, point.p, 1.0, false).is_empty():
 					bad_path += 1
 		check(bad_path == 0, "%s park %d: every car's way in and out stays clear (%d bad points)" % [name, index, bad_path])
-		# The players' row (where everyone's car starts the day) is clear of
-		# the scenery and of every car's way in and out.
+		# The players' slots (where everyone's car starts the day, at the far
+		# end of the aisle) are on the level ground, clear of the scenery and
+		# of every car's way out of its bay. Crews back into their bays from
+		# the aisle's end only on the way in, long after the players drove off.
 		var crowded = 0
-		for slot in range(Parks.VISITOR_X.size()):
+		for slot in range(Parks.VISITORS.size()):
 			var spot: Vector3 = parks.visitor_pose(index, slot).origin
 			var nose: Vector3 = -end.forward
-			if not parks.contains(spot) or not stage.solids.hit(spot - nose * 2.2, spot + nose * 2.2, 1.0, false).is_empty():
+			if not parks.contains(spot, Parks.APRON - 1.0) or not stage.solids.hit(spot - nose * 2.2, spot + nose * 2.2, 1.0, false).is_empty():
 				crowded += 1
 			for key in Parks.KEYS:
-				for point in parks.leave_path(index, key) + parks.arrive_path(index, key, end.origin, end.forward):
+				for point in parks.leave_path(index, key):
 					if point.p.distance_to(spot) < 3.0:
 						crowded += 1
+			for other in range(slot):
+				if parks.visitor_pose(index, other).origin.distance_to(spot) < Hitbox.player(0).size.x + 0.2:
+					crowded += 1
 		check(crowded == 0, "%s park %d: the players' row is clear (%d clashes)" % [name, index, crowded])
-		# Held throttle from the players' row carries every car straight out of
-		# the paddock to the end of the road: no tree, rock or fixed prop on
-		# the way (the forest once stood a few metres past the paddock's edge).
-		# The day starts in the park at the start, so only there.
+		# Held throttle from every slot carries the car straight down the aisle
+		# and the lane to the end of the road and onto it: no tree, rock or
+		# fixed prop on the way. The day starts in the park at the start, so
+		# only there.
 		var stuck = []
-		for slot in range(Parks.VISITOR_X.size() if index == 0 else 0):
+		var off_road = []
+		for slot in range(Parks.VISITORS.size() if index == 0 else 0):
 			var pose: Transform3D = parks.visitor_pose(index, slot)
 			var car = Hitbox.shape(Hitbox.player(0), pose.basis.get_euler().y)
 			var nose: Vector3 = -pose.basis.z
-			for step in range(int(Parks.VISITOR_Z / 0.5)):
+			var run: float = parks.local(end, pose.origin).y
+			if slot < Parks.VISITORS.size() - 1 and stage.road_distance(pose.origin + nose * run) > 4.1 + Hitbox.player(0).size.x * 0.5:
+				off_road.append(str(slot))
+			for step in range(int(run / 0.5)):
 				var a: Vector3 = pose.origin + nose * (step * 0.5)
 				var b: Vector3 = a + nose * 0.5
 				a.y = stage.ground(a)
@@ -68,6 +77,7 @@ func layout(variant: int) -> void:
 					stuck.append("%d at %.1f m" % [slot, step * 0.5])
 					break
 		check(stuck.is_empty(), "%s park %d: every player's car drives out of the park (%s)" % [name, index, ", ".join(stuck)])
+		check(off_road.is_empty(), "%s park %d: every car from the aisle's end reaches the road (%s)" % [name, index, ", ".join(off_road)])
 		var limits: Vector2 = parks.z_limits
 		check(parks.world(index, 0, 45).z > limits.x and parks.world(index, 0, 45).z < limits.y, "%s park %d: people and cars may go there" % [name, index])
 	stage.queue_free()
