@@ -73,6 +73,16 @@ static func _outside(p: Vector2) -> float:
 	var paddock = Vector2(maxf(absf(p.x) - HALF_WIDTH, 0.0), maxf(maxf(LANE - p.y, p.y - LANE - DEPTH), 0.0)).length()
 	return minf(lane, paddock)
 
+# The ground in front of the players' row, from the front of the paddock to
+# the end of the road: their cars start the day nose towards it and drive out
+# across it, so trees keep off it (planting asks with its own padding).
+func forecourt(pos: Vector3, padding: float = 0.0) -> bool:
+	for end in ends:
+		var p = local(end, pos)
+		if absf(p.x) <= HALF_WIDTH + padding and p.y >= -padding and p.y <= LANE + padding:
+			return true
+	return false
+
 # The park a point is near (-1 for none), how far outside its surface, and how
 # fully it belongs to the levelled surface: 1 on it, 0 past the margin.
 func nearest(pos: Vector3, reach: float = MARGIN) -> Dictionary:

@@ -36,7 +36,7 @@ func plant_forest(cooperative: bool = false) -> void:
 		if cooperative and i % 400 == 0:
 			await stage.get_tree().process_frame
 		var p = Vector3(stage.rng.randf_range(-150, 150), 0, stage.rng.randf_range(-stage.length - 65, 50))
-		if stage.road_distance(p) < 9 or stage.parks.contains(p, 4.0):
+		if stage.road_distance(p) < 9 or stage.parks.contains(p, 4.0) or stage.parks.forecourt(p, 2.0):
 			continue
 		if stage.biome.tree_blocked(p):
 			continue
@@ -159,7 +159,7 @@ func _build_forest(forest: Array[Dictionary]) -> void:
 		stage.forest_layers.append(chunks)
 
 func woodland_spot(pos: Vector3, padding: float = 0.0) -> bool:
-	if stage.road_distance(pos) < 9.0 + padding or stage.trail_distance(pos) < 3.2 + padding or stage.parks.contains(pos, 3.0 + padding):
+	if stage.road_distance(pos) < 9.0 + padding or stage.trail_distance(pos) < 3.2 + padding or stage.parks.contains(pos, 3.0 + padding) or stage.parks.forecourt(pos, 1.0 + padding):
 		return false
 	if stage.biome.woodland_blocked(pos, padding):
 		return false

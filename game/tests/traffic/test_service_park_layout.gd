@@ -3,6 +3,7 @@ extends "res://tests/harness.gd"
 # rocks and mushrooms, with every car's way in and out of its bay unobstructed.
 const Stage = preload("res://scripts/stages/stage.gd")
 const Parks = preload("res://scripts/traffic/service_parks.gd")
+const Hitbox = preload("res://scripts/cars/car_hitbox.gd")
 
 func _initialize() -> void:
 	call_deferred("run")
@@ -49,10 +50,41 @@ func layout(variant: int) -> void:
 					if point.p.distance_to(spot) < 3.0:
 						crowded += 1
 		check(crowded == 0, "%s park %d: the players' row is clear (%d clashes)" % [name, index, crowded])
+		# Held throttle from the players' row carries every car straight out of
+		# the paddock to the end of the road: no tree, rock or fixed prop on
+		# the way (the forest once stood a few metres past the paddock's edge).
+		# The day starts in the park at the start, so only there.
+		var stuck = []
+		for slot in range(Parks.VISITOR_X.size() if index == 0 else 0):
+			var pose: Transform3D = parks.visitor_pose(index, slot)
+			var car = Hitbox.shape(Hitbox.player(0), pose.basis.get_euler().y)
+			var nose: Vector3 = -pose.basis.z
+			for step in range(int(Parks.VISITOR_Z / 0.5)):
+				var a: Vector3 = pose.origin + nose * (step * 0.5)
+				var b: Vector3 = a + nose * 0.5
+				a.y = stage.ground(a)
+				b.y = stage.ground(b)
+				if Hitbox.tree(stage, a, b, car) >= 0 or not Hitbox.rocks(stage, a, b, car).is_empty() or _fixed(stage, a, b, car):
+					stuck.append("%d at %.1f m" % [slot, step * 0.5])
+					break
+		check(stuck.is_empty(), "%s park %d: every player's car drives out of the park (%s)" % [name, index, ", ".join(stuck)])
 		var limits: Vector2 = parks.z_limits
 		check(parks.world(index, 0, 45).z > limits.x and parks.world(index, 0, 45).z < limits.y, "%s park %d: people and cars may go there" % [name, index])
 	stage.queue_free()
 	await process_frame
+
+# A solid a car cannot push aside: scenery, or a prop too heavy or anchored.
+func _fixed(stage, a: Vector3, b: Vector3, car: Dictionary) -> bool:
+	var ignored: Array = []
+	while true:
+		var hit: Dictionary = Hitbox.solids(stage.solids, a, b, car, ignored)
+		if hit.is_empty():
+			return false
+		var prop = stage.solids.movables.filter(func(m): return m.key == hit.get("prop", ""))
+		if prop.is_empty() or float(prop[0].mass) >= 500.0 or bool(prop[0].anchored):
+			return true
+		ignored.append(prop[0].node)
+	return false
 
 func run() -> void:
 	for variant in range(Stage.STAGES.size()):
