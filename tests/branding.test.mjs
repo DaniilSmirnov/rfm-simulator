@@ -53,7 +53,10 @@ test('main menu credits Rally Fans Map and links to its site', async () => {
   const lobby = await readFile(new URL('../game/scripts/ui/lobby_ui.gd', import.meta.url), 'utf8');
   const hud = await readFile(new URL('../game/scripts/ui/game_hud.gd', import.meta.url), 'utf8');
   assert.match(kit, /BRAND_URL = "https:\/\/rallyfansmap\.ru\/"/);
-  assert.match(kit, /Loc\.t\("от %s"\) % BRAND_NAME/);
+  const english = JSON.parse(await readFile(new URL('../game/data/translations_en.json', import.meta.url), 'utf8'));
+  // A plain key, so the byline follows a language switch on its own.
+  assert.match(kit, /label\(names, "от Rally Fans Map", "muted"\)/);
+  assert.equal(english['от Rally Fans Map'], 'by Rally Fans Map');
   assert.match(kit, /LOGO = "res:\/\/branding\/rfm-icon\.svg"/);
   assert.match(lobby, /"О НАС"/);
   assert.doesNotMatch(hud + lobby, /ПЕРЕВАЛ\. РАЛЛИ\. ШАШЛЫК/i);
