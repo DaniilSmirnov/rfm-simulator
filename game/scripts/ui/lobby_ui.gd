@@ -187,8 +187,9 @@ func _link_dialog(name: String, title: String, message: String, actions: Array) 
 	return modal.root
 
 func _open_help() -> void:
-	# mailto: is not reliably handled inside the VK client WebView.
-	if _is_vk_platform() or OS.shell_open("mailto:" + SUPPORT_EMAIL) != OK:
+	# In a browser shell_open("mailto:") reports OK even with no mail client,
+	# so the web build always shows the address (same as inside VK).
+	if OS.has_feature("web") or _is_vk_platform() or OS.shell_open("mailto:" + SUPPORT_EMAIL) != OK:
 		help_dialog.show()
 
 func _open_about() -> void:
