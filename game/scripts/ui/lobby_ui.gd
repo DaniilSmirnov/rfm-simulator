@@ -123,6 +123,7 @@ func build_selection(parent: Control) -> void:
 	purchase_actions = UiKit.hbox(parent, 12)
 	purchase_actions.name = "PurchaseStatus"
 	purchase_actions.alignment = BoxContainer.ALIGNMENT_END
+	purchase_actions.custom_minimum_size.y = 40
 	purchase_status = UiKit.expand(UiKit.wrap(UiKit.label(purchase_actions, "", "muted")))
 	purchase_status.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	check_purchase = UiKit.button(purchase_actions, "ПРОВЕРИТЬ ПОКУПКУ", "ghost", 40)
@@ -337,8 +338,12 @@ func refresh() -> void:
 	check_purchase.visible = service != null and service.profile.get("platform") == "vk" and (any_purchase or not service.purchase_message.is_empty()) and not game.playing
 	check_purchase.disabled = service.busy if service != null else true
 	purchase_status.text = service.purchase_message if service != null else ""
-	purchase_status.visible = not purchase_status.text.is_empty() and not game.playing
-	purchase_actions.visible = check_purchase.visible or purchase_status.visible
+	# Store messages only mean something in VK. Elsewhere the startup «Проверяем
+	# доступ…» line vanished a moment later and the menu jumped under the first click.
+	var vk_store = OS.has_feature("vk") or (service != null and service.profile.get("platform") == "vk")
+	purchase_status.visible = vk_store and not purchase_status.text.is_empty() and not game.playing
+	# The VK build keeps the row's height while the store loads for the same reason.
+	purchase_actions.visible = check_purchase.visible or purchase_status.visible or (OS.has_feature("vk") and not game.playing)
 	var car_ok = allowed("car", game.car_choice.selected)
 	var stage_ok = allowed("stage", game.stage_choice.selected)
 	var character_ok = allowed("character", game.avatar_variant)

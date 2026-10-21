@@ -59,6 +59,10 @@ func run() -> void:
 	game.room.connect_room("")
 	check(not game.room.busy, "locked stage cannot create room")
 	game.select_stage(1)
+	game.platform_service.purchase_message = "Проверяем доступ…"
+	game.lobby_ui.refresh()
+	check(not game.lobby_ui.purchase_actions.visible, "outside VK the startup access check adds no menu row that vanishes under the first click")
+	game.platform_service.purchase_message = ""
 	game.platform_service.profile = {"platform": "vk"}
 	check(game.lobby_ui.help_button != null and game.lobby_ui.help_dialog != null, "help action has a support dialog")
 	game.lobby_ui._open_help()
