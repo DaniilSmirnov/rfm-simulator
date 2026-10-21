@@ -37,6 +37,10 @@ func run() -> void:
 	var above = top + Vector3(0.5, 3.0, 0.5)
 	var seen = ViewClearance.clear_view(stage, under, above, body)
 	check(seen.y < top.y - 0.1 and seen.distance_to(under) < under.distance_to(above), "the camera stops under the tent roof")
+	# The chase camera does not settle inside its own car when the roof is that close: it rises around it.
+	var reach = 3.5
+	var chase = ViewClearance.chase_view(stage, under, above, body, reach)
+	check(chase.distance_to(under) >= reach - 0.01, "the chase camera keeps out of the car body under a roof")
 
 	# A standing conifer: a camera behind its crown is pulled in front of it.
 	var tree = -1
@@ -50,6 +54,8 @@ func run() -> void:
 	var from = base + Vector3(height * 0.6, height * 0.4, 0)
 	var to = base + Vector3(-height * 0.6, height * 0.4, 0)
 	var pulled = ViewClearance.clear_view(stage, from, to)
+	var lifted = ViewClearance.chase_view(stage, from, to, null, 3.5)
+	check(lifted.distance_to(from) >= 3.49, "behind a crown the chase camera stays a car's length away")
 	check(pulled.distance_to(from) < from.distance_to(to) * 0.5, "the camera is pulled in front of the crown")
 	check(not ViewClearance.in_crown(base, height, pulled, 0.0), "the pulled camera is outside the crown")
 	var sky = base + Vector3(0, height * 2.0, 0)

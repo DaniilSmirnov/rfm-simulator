@@ -25,6 +25,21 @@ static func clear_view(stage, from: Vector3, to: Vector3, ignored: Node3D = null
 		t = minf(t, from.distance_to(hit.position) / length)
 	return to if t >= 1.0 else from + travel * maxf(t, MIN_DISTANCE / length)
 
+# The chase camera never takes a clear spot closer to the car than `reach` (that
+# is inside the car body): it rises over the car instead, steeper until the view
+# from above is clear; with nothing clear it stays at `reach` on its own line.
+static func chase_view(stage, pivot: Vector3, to: Vector3, car: Node3D, reach: float) -> Vector3:
+	var seen = clear_view(stage, pivot, to, car)
+	var length = pivot.distance_to(to)
+	if length <= reach or pivot.distance_to(seen) >= reach:
+		return seen
+	var flat = Vector3(to.x - pivot.x, 0, to.z - pivot.z).normalized()
+	for lift in [0.75, 1.05, 1.35]:
+		var rise = clear_view(stage, pivot, pivot + (flat * cos(lift) + Vector3.UP * sin(lift)) * length, car)
+		if pivot.distance_to(rise) >= reach:
+			return rise
+	return pivot + (to - pivot) / length * reach
+
 # Fraction of from..to before it first enters a standing tree's crown (1 = never).
 static func crown_fraction(stage, from: Vector3, to: Vector3) -> float:
 	if stage.trees.is_empty():

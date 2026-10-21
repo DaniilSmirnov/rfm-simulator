@@ -278,7 +278,8 @@ func update_camera(delta: float) -> void:
 		desired.y = maxf(desired.y, game.stage.ground(desired) + 1.1)
 		var eased = game.camera.position.lerp(desired, 1 - exp(-delta * 7))
 		# Snap in front of a tent roof or a crown at once; ease back out.
-		game.camera.position = ViewClearance.clear_view(game.stage, body.position + Vector3(0, 1.1, 0), eased, body)
+		var reach = Hitbox.bounds(body).size.length() * 0.5 + 1.0
+		game.camera.position = ViewClearance.chase_view(game.stage, body.position + Vector3(0, 1.1, 0), eased, body, reach)
 		game.camera.look_at(body.position + Vector3(0, 1.1, 0) - behind * 1.5)
 	else:
 		game.camera.position = game.walker + Vector3(0, lerpf(1.45 if game.seated else 1.72, 0.36, collapse) + sin(game.elapsed * 12) * 0.015, 0)
