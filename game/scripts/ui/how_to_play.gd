@@ -182,6 +182,7 @@ func _goal(page_box: Control) -> void:
 	_row(page_box, "icon:flag", "Посмотри два прохода: в каждом по 10 экипажей.")
 	_row(page_box, "icon:tow", "Помогай застрявшим экипажам тросом.")
 	_row(page_box, "icon:bag", "В конце верни вещи в багажник и доедь до парка сервиса — на старте или на финише СУ.")
+	_text(page_box, "Прогресс выезда не сохраняется: если выйти с СУ или закрыть игру, выезд начнётся заново.")
 
 func _controls(page_box: Control) -> void:
 	if touch():
