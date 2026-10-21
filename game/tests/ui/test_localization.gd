@@ -31,7 +31,7 @@ func run() -> void:
 	check(game.start_button.atr("ПОЕХАЛИ") == "LET'S GO", "the start button translates")
 	var byline: Label = game.hud.brand.find_child("Byline", true, false)
 	check(byline.atr(byline.text) == "by Rally Fans Map", "the byline under the logo translates")
-	check(lobby.volume_label.text.begins_with("VOLUME") or lobby.volume_label.text == "SOUND OFF", "the volume label follows the language")
+	check(game.hud.settings_screen.volume_label.text.begins_with("VOLUME") or game.hud.settings_screen.volume_label.text == "SOUND OFF", "the volume label follows the language")
 	check(Loc.t("Шашлык удался. Осталось %d шампуров.") % 3 == "The shashlik turned out great. 3 skewers left.", "a formatted message translates and keeps its number")
 	game.toast("Подожди, пока водитель остановится.")
 	check(game.toast_label.text == "Wait for the driver to stop.", "toasts are stored translated")

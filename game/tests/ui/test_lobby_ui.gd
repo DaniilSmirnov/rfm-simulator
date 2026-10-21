@@ -129,12 +129,12 @@ func run() -> void:
 	check(game.lobby_ui.return_button.visible and not game.lobby_ui.host_pause.visible, "own pause offers return to main menu")
 	game.menu.show()
 	game.hud.update_menu()
-	check(game.hud.menu_dim.visible and game.hud.links.visible and game.hud.settings.visible and not game.hud.brand.visible, "pause dims the stage and keeps settings and links")
+	check(game.hud.menu_dim.visible and game.hud.links.visible and game.lobby_ui.settings_button.is_visible_in_tree() and not game.hud.brand.visible, "pause dims the stage and keeps the settings gear and links")
 	game.dead = true
 	game.hud.update_menu()
 	game.lobby_ui._process(0)
 	check(not game.lobby_ui.return_button.visible, "result window leads back through its own action")
-	check(not game.hud.links.visible and not game.hud.settings.visible and game.menu_title.visible, "result window shows only its title, text and actions")
+	check(not game.hud.links.visible and not game.lobby_ui.settings_button.is_visible_in_tree() and game.menu_title.visible, "result window shows only its title, text and actions")
 	game.dead = false
 	game.paused = false
 	game.room.world_paused = false

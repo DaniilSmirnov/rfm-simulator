@@ -131,6 +131,28 @@ static func button(parent: Node, text: String, kind: String = "secondary", heigh
 		parent.add_child(b)
 	return b
 
+# A square ghost button with a white pictogram; the tooltip names the action.
+static func icon_button(parent: Node, icon_path: String, tooltip: String, side: float = 40) -> Button:
+	var b = button(parent, "", "ghost", side)
+	b.icon = load(icon_path)
+	b.expand_icon = true
+	b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	b.custom_minimum_size = Vector2(side, side)
+	# The ghost padding is for text; an icon gets an even inset instead.
+	var inset = Vector2.ONE * roundf(side * 0.2)
+	for state in ["normal", "hover", "pressed", "disabled"]:
+		var style: StyleBoxFlat = theme().get_stylebox(state, "GhostButton").duplicate()
+		style.content_margin_left = inset.x
+		style.content_margin_right = inset.x
+		style.content_margin_top = inset.y
+		style.content_margin_bottom = inset.y
+		b.add_theme_stylebox_override(state, style)
+	b.add_theme_color_override("icon_normal_color", TEXT)
+	b.add_theme_color_override("icon_hover_color", HIGHLIGHT)
+	b.add_theme_color_override("icon_pressed_color", ACCENT)
+	b.tooltip_text = tooltip
+	return b
+
 static func vbox(parent: Node, separation: int = GAP) -> VBoxContainer:
 	var v = VBoxContainer.new()
 	v.add_theme_constant_override("separation", separation)

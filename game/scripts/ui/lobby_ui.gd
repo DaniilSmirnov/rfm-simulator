@@ -1,12 +1,11 @@
 extends Node
 # Main menu presentation: car, stage and character cards with their own purchase buttons,
-# site and support links, volume, host-pause banner and the menu backdrop.
+# site and support links, settings and quit icons, host-pause banner and the menu backdrop.
 # Ownership remains in PlatformService and the backend.
 const NetProtocol = preload("res://scripts/net/net_protocol.gd")
 const UiKit = preload("res://scripts/ui/ui_kit.gd")
 const Loc = preload("res://scripts/ui/loc.gd")
 const SUPPORT_EMAIL = "rallyfansmap@yandex.com"
-const AUDIO_SETTINGS_PATH = "user://audio_settings.cfg"
 const CharacterProfiles = preload("res://scripts/people/character_profiles.gd")
 var game: Node3D
 var background: TextureRect
@@ -26,10 +25,7 @@ var language_button: Button
 var help_dialog: Control
 var about_button: Button
 var about_dialog: Control
-var audio_controls: VBoxContainer
-var volume_label: Label
-var volume_slider: HSlider
-var master_base_db = 0.0
+var settings_button: Button
 var last_size = Vector2.ZERO
 var last_playing = false
 
@@ -50,7 +46,7 @@ func retranslate() -> void:
 	about_dialog.find_child("Message", true, false).text = _about_message()
 	game.hud.footer.text = Loc.t("Версия %s") % ProjectSettings.get_setting("application/config/version")
 	game.stage_caption.text = game.StageRegistry.caption(game.selected_stage).to_upper()
-	_show_volume(volume_slider.value)
+	game.hud.settings_screen.retranslate()
 	game.room.ui.refresh_language()
 	if game.mobile_controls != null:
 		game.mobile_controls.layout_state = []
@@ -174,6 +170,14 @@ func build_links(parent: Control) -> void:
 	language_button.add_theme_font_size_override("font_size", 15)
 	language_button.pressed.connect(_switch_language)
 	language_button.visible = not _is_vk_family()
+	settings_button = UiKit.icon_button(parent, "res://textures/ui/menu/settings.svg", "Настройки")
+	settings_button.name = "SettingsButton"
+	settings_button.pressed.connect(func(): game.hud.settings_screen.open())
+	# Only a desktop window has nowhere else to close the game from.
+	quit_button = UiKit.icon_button(parent, "res://textures/ui/menu/quit.svg", "Выйти из игры")
+	quit_button.name = "QuitButton"
+	quit_button.pressed.connect(_confirm_quit)
+	quit_button.visible = OS.has_feature("pc") and not OS.has_feature("web")
 
 # A small window with an address and two actions; used where the WebView may
 # not open mailto: or external links (VK clients).
@@ -217,47 +221,6 @@ func _copy(text: String, message: String) -> void:
 func _copy_support_email() -> void:
 	_copy(SUPPORT_EMAIL, Loc.t("Адрес поддержки: %s") % SUPPORT_EMAIL)
 
-# ---------------------------------------------------------------- settings
-
-func build_audio(parent: Control) -> void:
-	master_base_db = AudioServer.get_bus_volume_db(AudioServer.get_bus_index("Master"))
-	var settings = ConfigFile.new()
-	var percent = 100.0
-	if settings.load(AUDIO_SETTINGS_PATH) == OK:
-		var saved = settings.get_value("audio", "volume", 100.0)
-		if (saved is float or saved is int) and is_finite(float(saved)):
-			percent = clampf(float(saved), 0.0, 100.0)
-	audio_controls = UiKit.vbox(parent, 4)
-	audio_controls.name = "AudioSettings"
-	volume_label = UiKit.label(audio_controls, "", "caption")
-	volume_slider = HSlider.new()
-	volume_slider.name = "MasterVolume"
-	volume_slider.min_value = 0
-	volume_slider.max_value = 100
-	volume_slider.step = 1
-	volume_slider.custom_minimum_size = Vector2(0, 40)
-	volume_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	volume_slider.tooltip_text = "Громкость всех звуков. 0 — без звука."
-	audio_controls.add_child(volume_slider)
-	volume_slider.value = percent
-	_apply_volume(percent)
-	volume_slider.value_changed.connect(func(value: float):
-		_apply_volume(value)
-		var config = ConfigFile.new()
-		config.set_value("audio", "volume", value)
-		if config.save(AUDIO_SETTINGS_PATH) != OK:
-			game.toast("Не удалось сохранить громкость.")
-	)
-
-func _apply_volume(percent: float) -> void:
-	var master = AudioServer.get_bus_index("Master")
-	AudioServer.set_bus_mute(master, percent <= 0)
-	AudioServer.set_bus_volume_db(master, master_base_db + linear_to_db(maxf(percent / 100.0, 0.0001)))
-	_show_volume(percent)
-
-func _show_volume(percent: float) -> void:
-	volume_label.text = Loc.t("ЗВУК ВЫКЛЮЧЕН") if percent <= 0 else Loc.t("ГРОМКОСТЬ · %d%%") % roundi(percent)
-
 # ---------------------------------------------------------------- assembly
 
 func finish(parent: Control) -> void:
@@ -265,11 +228,6 @@ func finish(parent: Control) -> void:
 	return_button.name = "ReturnButton"
 	return_button.pressed.connect(game.return_to_main_menu)
 	return_button.hide()
-	# Only a desktop window has nowhere else to close the game from.
-	quit_button = UiKit.button(parent, "ВЫЙТИ ИЗ ИГРЫ", "ghost", 44)
-	quit_button.name = "QuitButton"
-	quit_button.pressed.connect(_confirm_quit)
-	quit_button.visible = OS.has_feature("pc") and not OS.has_feature("web")
 	_build_quit_dialog()
 	help_dialog = _link_dialog("SupportDialog", "Помощь и поддержка", _help_message(), [["СКОПИРОВАТЬ АДРЕС", "primary", _copy_support_email]])
 	about_dialog = _link_dialog("AboutDialog", UiKit.BRAND_NAME, _about_message(), [["ОТКРЫТЬ САЙТ", "primary", func(): UiKit.open_url(UiKit.BRAND_URL)], ["СКОПИРОВАТЬ", "secondary", func(): _copy(UiKit.BRAND_URL, Loc.t("Ссылка скопирована: %s") % UiKit.BRAND_URL)]])
