@@ -19,6 +19,8 @@ const PULL_LEAD = 25.0
 const STEP = 1.0 / 30.0
 const ACCEL = 2.5
 const BRAKE = 3.5
+# Seconds a car backing into its bay waits for a player's car in its way.
+const CAR_WAIT = 6.0
 
 var game
 # Per park (0 at the start of the route, 1 at its end): key -> parked car node.
@@ -256,8 +258,16 @@ func step(entry: Dictionary, delta: float) -> void:
 	var i = _index_at(lengths, d)
 	var stop = _stop_after(path, lengths, i)
 	var desired = minf(Parks.REVERSE if path[i + 1].reverse else Parks.CRUISE, sqrt(2.0 * BRAKE * maxf(0.0, stop - d)) + 0.3)
-	if _blocked(node, node.position, path[mini(i + 12, path.size() - 1)].p):
+	var blocker = _blocked(node, node.position, path[mini(i + 12, path.size() - 1)].p)
+	if blocker != "":
 		desired = 0.0
+	# A car left standing in the aisle (a player's, at the far end where the
+	# day starts) would hold a crew backing into its bay for good: after a
+	# while it is taken to its bay, as between the passes.
+	entry.car_wait = float(entry.get("car_wait", 0.0)) + delta if blocker == "car" else 0.0
+	if entry.state == "to_park" and entry.car_wait > CAR_WAIT:
+		_arrived(entry)
+		return
 	var speed = float(entry.speed)
 	speed = move_toward(speed, desired, delta * (BRAKE * 2.0 if desired < speed else ACCEL))
 	entry.speed = speed
@@ -311,13 +321,16 @@ static func _stop_after(path: Array, lengths: Array, index: int) -> float:
 	return lengths[-1]
 
 # Somebody (or something) in the way ahead: wait for them to step aside.
-func _blocked(node: Node3D, from: Vector3, ahead: Vector3) -> bool:
-	var others: Array = [game.car.position]
+# "car" for a player's car, "other" for anybody on foot or a moving car, and
+# "" when the way is clear.
+func _blocked(node: Node3D, from: Vector3, ahead: Vector3) -> String:
+	var others: Array = []
+	var cars: Array = [game.car.position]
 	if not game.in_car:
 		others.append(game.walker)
 	for peer in game.room.peers.values():
 		if peer.state != null:
-			others.append(game.room.v(peer.state.car))
+			cars.append(game.room.v(peer.state.car))
 			if not peer.state.in_car:
 				others.append(game.room.v(peer.state.pos))
 	for racer in game.racers:
@@ -328,8 +341,11 @@ func _blocked(node: Node3D, from: Vector3, ahead: Vector3) -> bool:
 	var start = from + (ahead - from).normalized() * 1.2
 	for point in others:
 		if Motion.swept_hit(start, ahead, point, 1.9):
-			return true
-	return false
+			return "other"
+	for point in cars:
+		if Motion.swept_hit(start, ahead, point, 1.9):
+			return "car"
+	return ""
 
 # ---------------------------------------------------------------- the way home
 

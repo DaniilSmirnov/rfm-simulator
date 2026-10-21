@@ -35,6 +35,8 @@ const PROBE_REFRESH = 8.0
 const PROBE_MAX_AGE = 0.5
 # Seconds a chosen passing line is kept before candidates are re-scored.
 const LANE_INTERVAL = 0.12
+# Metres added each side of a service vehicle's exact footprint when probing.
+const EXACT_MARGIN = 0.3
 
 static func profile(id: int) -> Dictionary:
 	return {"bias": sin(id * 1.91) * 0.55, "phase": fmod(id * 2.37, TAU), "pace": 0.96 + fmod(id * 0.618, 1.0) * 0.08}
@@ -223,6 +225,15 @@ static func plan(game: Node3D, racer: Dictionary) -> Dictionary:
 	# can be too close to the planned line yet clear of the one driven now, and
 	# with no other line open in a narrow street the crew would stop beside it.
 	var candidates = [base, clampf(current, -reach, reach), -minf(2.95, reach), minf(2.95, reach), -minf(1.5, reach), minf(1.5, reach)]
+	# Police and ambulance also try the lines that just clear each blocker:
+	# beside a car parked before a narrow bridge, a fixed passing line can be
+	# too far out for the bridge and the racing line too close to the car.
+	if ServiceTraffic.applies(racer):
+		for blocker in blockers:
+			for side in [-1.0, 1.0]:
+				var edge = float(blocker.line) + side * (clearance + 0.05)
+				if absf(edge) <= reach:
+					candidates.append(edge)
 	if racer.get("role", "") == "ambulance":
 		reach += 2.0 # Search the verge too; terrain/solid probes must approve it.
 		for edge in [reach, maxf(0.0, reach - 0.75), maxf(0.0, reach - 1.5)]:
@@ -304,15 +315,19 @@ static func _clear_path(game, racer: Dictionary, target: float, distance: float)
 			if absf(point.y - previous.y) > maxf(0.5, point.distance_to(previous) * 0.45): return false
 			if ServiceTraffic.flooded(game, point, s): return false
 		var route_blocked = not stage.rock_hit(previous, point, route_radius).is_empty() or stage.obstacle_hit(previous, point, route_radius, true) >= 0
-		# Ambulance shoulder passes use the exact footprint: the wider scalar
-		# envelope would reject a valid verge gap beside a stopped car.
-		if racer.get("role", "") == "ambulance":
+		# Police and ambulance passes use the exact footprint: the wider scalar
+		# envelope would reject a valid verge gap beside a stopped car, or a
+		# line round a car parked just before the narrow Поречье bridge.
+		# The probe is a little wider than the car: a car still turning onto
+		# the line sweeps wider than one already holding it.
+		var exact = ServiceTraffic.applies(racer)
+		if exact:
 			var direction: Vector3 = point - previous
-			var shape = Hitbox.shape(box, atan2(-direction.x, -direction.z))
+			var shape = Hitbox.shape(AABB(box.position - Vector3(EXACT_MARGIN, 0, 0), box.size + Vector3(EXACT_MARGIN * 2.0, 0, 0)), atan2(-direction.x, -direction.z))
 			route_blocked = not Hitbox.rocks(stage, previous, point, shape).is_empty() or Hitbox.tree(stage, previous, point, shape) >= 0 or not Hitbox.solids(stage.solids, previous, point, shape, []).is_empty()
 		if route_blocked:
 			return false
-		if racer.get("role", "") != "ambulance" and not stage.solids.hit(previous, point, route_radius).is_empty():
+		if not exact and not stage.solids.hit(previous, point, route_radius).is_empty():
 			return false
 		previous = point
 	return true
