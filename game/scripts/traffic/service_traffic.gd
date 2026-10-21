@@ -59,6 +59,14 @@ static func blocked(game, racer: Dictionary, start: Vector3, end: Vector3) -> bo
 			return true
 	return not game.stage.rock_hit(start, end, 1.1).is_empty() or game.stage.obstacle_hit(start, end, 1.1, true) >= 0 or not game.stage.solids.hit(start, end, 1.1).is_empty()
 
+# Water off the carriageway. A ford floods the road itself, so only water
+# deeper than on the road centre at that station counts: a van may cross the
+# ford on any line but never leaves the road into a lake.
+static func flooded(game, point: Vector3, progress: float) -> bool:
+	if game.stage.water == null:
+		return false
+	return game.stage.water.depth(point) > maxf(0.2, game.stage.water.depth(game.race_at(progress)) + 0.2)
+
 static func save(racer: Dictionary) -> Dictionary:
 	if not applies(racer): return {}
 	return {"s": racer.s, "line": racer.line, "position": racer.node.position, "rotation": racer.node.rotation}
@@ -187,7 +195,7 @@ static func _detour_clear(game, racer: Dictionary, target_line: float, distance:
 			return false
 		if not game.stage.rock_hit(previous, point, 1.1).is_empty() or game.stage.obstacle_hit(previous, point, 1.1, true) >= 0 or not game.stage.solids.hit(previous, point, 1.1).is_empty():
 			return false
-		if game.stage.water != null and game.stage.water.depth(point) > 0.2:
+		if flooded(game, point, station):
 			return false
 		for person in people(game):
 			if str(person.get("key", "")) == target_key:
@@ -281,7 +289,7 @@ static func _priority_clear(game, racer: Dictionary, target_line: float, distanc
 		var line = lerpf(current, target_line, smoothstep(0.0, distance * 0.6, ahead))
 		var point: Vector3 = game.race_at(progress) + game.race_side(progress) * line
 		point.y = game.stage.ground(point)
-		if game.stage.water != null and game.stage.water.depth(point) > 0.2:
+		if flooded(game, point, progress):
 			return false
 		for person in standing:
 			if approaching_hit(previous + lift, point + lift, person.pos + lift, PERSON_CLEARANCE + 0.5):

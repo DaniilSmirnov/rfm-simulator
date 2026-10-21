@@ -22,7 +22,7 @@ export const groups = Object.freeze({
   "test_rally_rejoin.gd", "test_rally_smoothness.gd", "test_rally_tracks.gd", "test_rally_traffic.gd", "test_room.gd", "test_room_recovery.gd", "test_direct_link.gd", "test_world_validation.gd", "test_voice_radio.gd", "test_voice_native.gd",
   "test_physics.gd", "test_prop_contact.gd", "test_car_hitbox.gd", "test_food_fleet.gd", "test_foraging.gd", "test_grill_fire.gd", "test_camp_models.gd",
   "test_poison_mushrooms.gd", "test_network_motion.gd", "test_tow_recovery.gd", "test_car_rides.gd",
-  "test_crew_limit.gd", "test_drive_prediction.gd", "test_route_index.gd", "test_knockdown.gd", "test_ambulance_medics.gd", "test_ambulance_right_of_way.gd",
+  "test_crew_limit.gd", "test_drive_prediction.gd", "test_route_index.gd", "test_knockdown.gd", "test_ambulance_medics.gd", "test_ambulance_right_of_way.gd", "test_ambulance_ford.gd",
  ],
  world: [
   "test_baked_village.gd", "test_village_landmarks.gd", "test_navigation_budget.gd",
@@ -67,7 +67,7 @@ export const seconds = Object.freeze({
  "test_camp_cooking.gd": 30, "test_tow_recovery.gd": 30, "test_service_parks.gd": 28, "test_room.gd": 28,
  "test_food_fleet.gd": 28, "test_foraging.gd": 28, "test_grill_fire.gd": 28, "test_ambulance_medics.gd": 28,
  "test_rally_traffic.gd": 25, "test_direct_link.gd": 25, "test_poison_mushrooms.gd": 25, "test_world_loading.gd": 24,
- "test_ambulance_right_of_way.gd": 22, "test_movable_props.gd": 22, "test_party.gd": 20, "test_cargo_selection_order.gd": 19,
+ "test_ambulance_right_of_way.gd": 22, "test_ambulance_ford.gd": 26, "test_movable_props.gd": 22, "test_party.gd": 20, "test_cargo_selection_order.gd": 19,
  "test_rally_tracks.gd": 18, "test_trunk.gd": 18, "test_vk_access.gd": 18, "test_furniture.gd": 18, "test_packing.gd": 17,
 });
 // Splits a shard into n parts of similar length: longest test first, each to
