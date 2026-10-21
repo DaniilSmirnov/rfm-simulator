@@ -621,5 +621,6 @@
   "Нет доступа к микрофону: рация работает только на приём.": "No microphone access: the radio can only receive.",
   "Микрофон не найден: рация работает только на приём.": "No microphone found: the radio can only receive.",
   "РАЦИЯ · В ЭФИРЕ": "RADIO · ON AIR",
-  "РАЦИЯ · %s": "RADIO · %s"
+  "РАЦИЯ · %s": "RADIO · %s",
+  "Плохая связь, голосовой чат не работает": "Poor connection, voice chat is not working"
 }

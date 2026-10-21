@@ -47,7 +47,12 @@ func available() -> bool:
 
 # The key is held and the microphone is live: others hear us and see the pose.
 func on_air() -> bool:
-	return transmitting and mic == "ready"
+	return transmitting and mic == "ready" and not cut_off()
+
+# Radio links are set up over the room socket only: on HTTP no link can open,
+# and links that are already up keep working.
+func cut_off() -> bool:
+	return not room.transport.socket_open and connected_peers == 0
 
 func join() -> void:
 	if not supported or room.player_id == "":
@@ -161,8 +166,11 @@ func _update_label() -> void:
 	for peer in room.peers.values():
 		if peer.state != null and bool(peer.state.get("radio", false)):
 			names.append(str(room.members.get(str(peer.id), {}).get("name", "")))
-	if on_air():
+	var no_link = transmitting and cut_off()
+	if no_link:
+		label.text = Loc.t("Плохая связь, голосовой чат не работает")
+	elif on_air():
 		label.text = Loc.t("РАЦИЯ · В ЭФИРЕ")
 	elif not names.is_empty():
 		label.text = Loc.t("РАЦИЯ · %s") % ", ".join(names)
-	label.visible = on_air() or not names.is_empty()
+	label.visible = no_link or on_air() or not names.is_empty()
