@@ -168,6 +168,43 @@ func run() -> void:
 	plates.free()
 	check(stage.get_node_or_null("Homestead/WindmillRotor") != null, "the windmill rotor can turn")
 	check(stage.road_distance(mine.mine) > 15.0, "mine headframe stands clear of the jump")
+	# The headframe is an open frame: its legs, strut and shaft collar stop a
+	# car, the gaps between the legs do not (no invisible wall around it).
+	var frame: Node3D = stage.get_node("MineHeadframe")
+	var blocked = func(local: Vector3) -> bool:
+		var p = frame.to_global(local)
+		p.y = stage.ground(p)
+		var e = Vector3(0.01, 0, 0)
+		return not stage.solids.hit(p - e, p + e, 0.3, false).is_empty() or not stage.rock_hit(p - e, p + e, 0.3, false).is_empty()
+	var legs_stop = true
+	for corner in [Vector3(-1.9, 0, -1.9), Vector3(1.9, 0, -1.9), Vector3(-1.9, 0, 1.9), Vector3(1.9, 0, 1.9)]:
+		legs_stop = legs_stop and blocked.call(corner)
+	check(legs_stop and blocked.call(Vector3.ZERO) and blocked.call(Vector3(0, 0, -2.3)), "headframe legs, shaft collar and raking strut are solid")
+	# The spoil heap on the hillside stops a car only where it is drawn: on its
+	# far side from the headframe nothing blocks a probe whose reach holds no
+	# cone more than 0.1 m out of the ground, and its drawn core stops cars.
+	var heap: Vector3 = mine.scenery.spoil_heap
+	var away = Vector2(heap.x - mine.mine.x, heap.z - mine.mine.z).normalized()
+	var cone_out = func(direction: Vector3, r: float) -> float:
+		if r >= 6.5:
+			return -1.0
+		return heap.y + 4.4 * minf((6.5 - r) / 5.3, 1.0) - stage.ground(heap + direction * r)
+	var heap_fits = true
+	var heap_solid = true
+	for i in range(32):
+		var direction = Vector3.FORWARD.rotated(Vector3.UP, i * TAU / 32.0)
+		if Vector2(direction.x, direction.z).dot(away) < 0.2:
+			continue
+		for step in range(12, 32):
+			var r = step * 0.25
+			var p = heap + direction * r
+			var hit = not stage.rock_hit(p - Vector3(0.01, 0, 0), p + Vector3(0.01, 0, 0), 0.3, false).is_empty()
+			if hit and cone_out.call(direction, r - 0.35) < 0.1:
+				heap_fits = false
+			if not hit and cone_out.call(direction, r) > 1.0:
+				heap_solid = false
+	check(heap_fits and heap_solid, "the spoil heap collides where it is drawn on the hillside")
+	check(not blocked.call(Vector3(2.4, 0, 0)) and not blocked.call(Vector3(-2.4, 0, 0)) and not blocked.call(Vector3(0, 0, 2.4)), "no invisible wall beside the headframe between its legs")
 	check(stage.clearings.size() == mine.CLEARINGS.size(), "spectator areas at the bends and both banks of the jump")
 	for clearing in stage.clearings:
 		check(stage.road_distance(clearing) > 10.0, "spectator area is off the road")
