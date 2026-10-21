@@ -25,6 +25,8 @@
     "build:macos": "node scripts/build-desktop.mjs --platform=macos",
     "build:linux": "node scripts/build-desktop.mjs --platform=linux",
     "build:windows": "node scripts/build-desktop.mjs --platform=windows",
+    "build:windows-demo": "node scripts/build-desktop.mjs --platform=windows-demo",
+    "build:macos-demo": "node scripts/build-desktop.mjs --platform=macos-demo",
     "build:android": "node scripts/build-desktop.mjs --platform=android"
   },
   "devDependencies": {

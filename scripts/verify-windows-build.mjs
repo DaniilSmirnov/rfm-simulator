@@ -3,13 +3,15 @@ import { open, readdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const executables = [
-  { name: 'Rally_Fans_Simulator_x86.exe', machine: 0x014c, magic: 0x010b },
-  { name: 'Rally_Fans_Simulator_x64.exe', machine: 0x8664, magic: 0x020b },
+// The full game is Rally_Fans_Simulator_*.exe, the demo Rally_Fans_Simulator_Demo_*.exe.
+const executablesFor = stem => [
+  { name: `${stem}_x86.exe`, machine: 0x014c, magic: 0x010b },
+  { name: `${stem}_x64.exe`, machine: 0x8664, magic: 0x020b },
 ];
 
 // Inspect the actual exported bytes, rather than trusting the preset or file extension.
-export async function verifyWindowsBuild(directory) {
+export async function verifyWindowsBuild(directory, stem = 'Rally_Fans_Simulator') {
+  const executables = executablesFor(stem);
   const files = (await readdir(directory)).sort();
   assert.deepEqual(files, executables.map(exe => exe.name).sort(), 'Windows output must contain exactly the two standalone exe files');
   for (const exe of executables) {
@@ -51,5 +53,5 @@ export async function verifyWindowsBuild(directory) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  await verifyWindowsBuild(resolve(process.argv[2] ?? 'dist-windows'));
+  await verifyWindowsBuild(resolve(process.argv[2] ?? 'dist-windows'), process.argv[3]);
 }

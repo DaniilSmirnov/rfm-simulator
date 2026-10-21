@@ -9,6 +9,7 @@ const Stage = preload("res://scripts/stages/stage.gd")
 const StageRegistry = preload("res://scripts/stages/stage_registry.gd")
 const UiKit = preload("res://scripts/ui/ui_kit.gd")
 const Loc = preload("res://scripts/ui/loc.gd")
+const Demo = preload("res://scripts/core/demo.gd")
 
 var game
 # Menu window parts that change with the screen (main menu / pause / result).
@@ -246,10 +247,10 @@ func build_menu_header(parent: Control) -> void:
 	game.lobby_ui.build_links(links)
 
 func build_menu_actions(parent: Control) -> void:
-	game.start_button = UiKit.button(parent, "ПОЕХАЛИ", "primary", 54)
+	game.start_button = UiKit.button(parent, "ИГРАТЬ", "primary", 54)
 	game.start_button.name = "StartButton"
 	game.start_button.add_theme_font_size_override("font_size", 19)
-	game.start_button.pressed.connect(game._menu_action)
+	game.start_button.pressed.connect(Demo.start_pressed.bind(game))
 	game.start_button.hide()
 	# Pause: «Как играть» and the VK invitation share one row.
 	secondary_row = UiKit.hbox(parent, 10)
@@ -280,6 +281,7 @@ func update_menu() -> void:
 		game.room.ui.caption.visible = not game.mobile_mode
 	menu_dim.visible = game.menu.visible and game.playing
 	game.lobby_ui.help_button.visible = links.visible
+	Demo.trim_menu(game, self, pause)
 
 func layout_menu() -> void:
 	if dialog_area == null:
@@ -287,7 +289,7 @@ func layout_menu() -> void:
 	update_menu()
 	var area = dialog_area.size
 	var main = not game.playing
-	var width = (1100.0 if main else 560.0) if not game.mobile_mode else (1100.0 if main else 600.0)
+	var width = (1100.0 if main and not Demo.active() else 560.0) if not game.mobile_mode else (1100.0 if main else 600.0)
 	game.menu.custom_minimum_size.x = width
 	var extent = game.menu.get_combined_minimum_size()
 	var factor = minf(1.0, minf(maxf(area.x - 24, 1) / extent.x, maxf(area.y - 24, 1) / extent.y))
@@ -643,8 +645,7 @@ func update_invite_button() -> void:
 	if game.invite_status != null:
 		game.invite_status.visible = game.invite_button.visible and not game.invite_status.text.is_empty()
 
-# Stage entry. In VK the first entry opens «Как играть» first; the memo
-# follows when it is closed.
+# Stage entry: «Как играть» comes before the memo on the first VK and every demo entry.
 func show_stage_safety_gate() -> void:
 	if game.safety_gate != null and is_instance_valid(game.safety_gate):
 		return
@@ -652,7 +653,7 @@ func show_stage_safety_gate() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	if game.how_to_play.is_open():
 		return
-	if game.platform_service != null and game.platform_service.profile.get("platform", "") == "vk" and game.how_to_play.open_first_time():
+	if (Demo.active() or game.platform_service != null and game.platform_service.profile.get("platform", "") == "vk") and game.how_to_play.open_first_time(Demo.active()):
 		layout_menu()
 		return
 	open_stage_safety_gate()

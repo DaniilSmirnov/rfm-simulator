@@ -4,9 +4,10 @@ extends RefCounted
 # for a colour or a font size, so menus, HUD and VK dialogs stay consistent.
 #   var theme = UiKit.theme()             # set once on each UI root
 #   UiKit.label(box, "Спецучасток", "caption")
-#   UiKit.button(row, "ПОЕХАЛИ", "primary")
+#   UiKit.button(row, "ИГРАТЬ", "primary")
 #   var modal = UiKit.modal(layer, "SupportDialog")   # modal.panel / modal.content
 const Loc = preload("res://scripts/ui/loc.gd")
+const Demo = preload("res://scripts/core/demo.gd")
 
 const BRAND_URL = "https://rallyfansmap.ru/"
 const BRAND_NAME = "Rally Fans Map"
@@ -190,7 +191,7 @@ static func brand(parent: Node, logo_size: float = 56) -> HBoxContainer:
 	var names = vbox(row, 0)
 	names.name = "Names"
 	names.alignment = BoxContainer.ALIGNMENT_CENTER
-	var title = label(names, GAME_NAME, "title")
+	var title = label(names, GAME_NAME + (" Demo" if Demo.active() else ""), "title")
 	title.name = "Title"
 	title.add_theme_font_override("font", BRAND_FONT)
 	# A plain key, so the label follows a language switch on its own.

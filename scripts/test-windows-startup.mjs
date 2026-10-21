@@ -7,12 +7,13 @@ import { verifyWindowsBuild } from './verify-windows-build.mjs';
 
 assert.equal(process.platform, 'win32', 'Run this smoke test on Windows');
 const directory = resolve(process.argv[2] ?? 'dist-windows');
-await verifyWindowsBuild(directory);
+const stem = process.argv[3] ?? 'Rally_Fans_Simulator';
+await verifyWindowsBuild(directory, stem);
 for (const arch of ['x86', 'x64']) {
   // No checkout, .pck, DLLs, or other architecture's exe in the working directory.
   const isolated = await mkdtemp(join(tmpdir(), `rfm-${arch}-`));
   try {
-    const name = `Rally_Fans_Simulator_${arch}.exe`;
+    const name = `${stem}_${arch}.exe`;
     const exe = join(isolated, name);
     const logPath = join(isolated, 'startup.log');
     await copyFile(join(directory, name), exe);
