@@ -294,6 +294,7 @@ func _show(r: Dictionary, pos: Vector3, rot: Vector3, velocity = null) -> void:
 	var newest: Dictionary = r.motion.latest()
 	if newest.position.is_equal_approx(pos) and newest.rotation.is_equal_approx(rot):
 		return
+	r.shown_at = clock
 	if r.motion.predictive:
 		var stamp = _sample_time if _sample_time >= 0.0 else clock
 		r.motion.push(maxf(stamp, float(newest.time) + 0.001), pos, rot, false, velocity if velocity is Vector3 else Vector3.ZERO)
@@ -323,7 +324,11 @@ func render_guest() -> void:
 			pose.position.y = maxf(pose.position.y, minf(game.stage.ground(pose.position), r.motion.latest().position.y))
 		r.node.global_position = pose.position
 		r.node.global_rotation = pose.rotation
-		if clock - float(r.motion.latest().time) > 1.0:
+		# A second after the last snapshot the prop lies exactly where the host
+		# left it, whatever the clocks did meanwhile.
+		if clock - float(r.get("shown_at", clock)) > 1.0:
+			r.node.global_position = r.motion.latest().position
+			r.node.global_rotation = r.motion.latest().rotation
 			r.erase("motion")
 
 func solid_hit(contact: Dictionary, velocity: Vector3) -> void:
