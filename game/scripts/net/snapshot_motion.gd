@@ -21,6 +21,9 @@ var average_interval = 0.1
 var jitter = 0.0
 var render_time = -INF
 var predictive = false
+# Props stop where the host left them: past the newest sample a held buffer
+# waits there instead of drifting on (a resting prop sends no more samples).
+var hold = false
 var correction_position = Vector3.ZERO
 var correction_yaw = 0.0
 var _clock = -INF
@@ -95,6 +98,8 @@ func sample(time: float) -> Dictionary:
 		return {"position": first.position.lerp(last.position, weight), "rotation": angles}
 	if predictive:
 		return _ahead(last, minf(time - last.time, MAX_LEAD))
+	if hold:
+		return last
 	var velocity: Vector3 = (last.position - first.position) / interval
 	velocity = velocity.limit_length(max_speed)
 	return {"position": last.position + velocity * clampf(time - last.time, 0, MAX_PREDICTION), "rotation": last.rotation}

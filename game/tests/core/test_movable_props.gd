@@ -181,6 +181,46 @@ func guest_camp(host) -> void:
 	guest.room.apply_world(camp_only)
 	check(guest.grill.global_transform == fallen_pose, "a camp update without a prop snapshot never stands up moved equipment")
 	check(not host.grill.get_children().any(func(n): return n.has_meta("prop_key")), "tabletop and equipment detail has no independent movement")
+	var jumps = guest_flight(guest, key, -INF)
+	check(jumps > 0.2, "without a frame clock a guest jumps a flying prop to each snapshot (%.0f%% of frames jerk)" % (jumps * 100.0))
+	var smooth = guest_flight(guest, key, 100.0)
+	check(smooth < 0.05, "a guest draws a flying prop between snapshots that arrive unevenly (%.0f%% of frames jerk)" % (smooth * 100.0))
+	check(guest.movable_props.records[key].body.global_position.distance_to(guest.grill.global_position) > 0.01 or not guest.movable_props.records[key].has("motion"), "the collision body keeps the newest host pose")
 	await guest._shutdown_audio()
 	guest.queue_free()
 	await process_frame
+
+# A prop thrown at 8 m/s arrives 10 times a second, 0-60 ms late, and is drawn
+# at 60 frames a second. Returns the share of frames whose visible speed changes
+# by more than 2 m/s (a jerk the eye sees).
+func guest_flight(guest, key: String, clock: float) -> float:
+	var props = guest.movable_props
+	var start: Vector3 = guest.grill.global_position
+	var rng = RandomNumberGenerator.new()
+	rng.seed = 7
+	var arrivals: Array = []
+	for i in range(1, 16):
+		arrivals.append({"at": i * 0.1 + rng.randf() * 0.06, "t": i * 0.1})
+	var previous = null
+	var speed = -1.0
+	var jerks = 0
+	var frames = 0
+	for frame in range(1, 100):
+		var now = frame / 60.0
+		guest.room.transport.view_clock = clock + now if clock > -INF else -INF
+		while not arrivals.is_empty() and arrivals[0].at <= now:
+			var t: float = arrivals.pop_front().t
+			var pos: Vector3 = start + Vector3(8.0 * t, 4.0 * t - 4.9 * t * t, 0)
+			props.apply_snapshot([{"key": key, "pos": guest.room.a(pos), "rot": [0, 0, 0], "anchored": false}], 50.0 + t)
+		props.render_guest()
+		var shown: Vector3 = guest.grill.global_position
+		if previous != null:
+			var current = shown.distance_to(previous) * 60.0
+			if speed >= 0.0 and frame > 20 and frame < 85:
+				frames += 1
+				if absf(current - speed) > 2.0: jerks += 1
+			speed = current
+		previous = shown
+	guest.room.transport.view_clock = -INF
+	props.apply_snapshot([{"key": key, "pos": guest.room.a(start), "rot": [0, 0, 0], "anchored": false}])
+	return float(jerks) / maxf(1.0, frames)

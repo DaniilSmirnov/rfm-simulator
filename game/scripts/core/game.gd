@@ -687,7 +687,7 @@ func _process(delta: float) -> void:
 	Props.animate_wheels(car)
 	cargo.update(delta)
 	movable_props.refresh()
-	if room.is_guest(): movable_props.apply_pending()
+	if room.is_guest(): movable_props.apply_pending(); movable_props.render_guest()
 	camp_cooking.update(delta, room.is_guest())
 	injuries.update(delta)
 	spectators.update(elapsed, delta, room.is_guest())

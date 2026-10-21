@@ -70,8 +70,7 @@ func rebuild() -> void:
 	providers.append(provider("racers", "", ["racers", "recovery_links"], _racers_snapshot, _racers_apply))
 	providers.append(provider("park_movers", "", ["park_movers"], func(): return {"park_movers": game.park_traffic.movers_snapshot()}, func(f, t): game.park_traffic.apply_movers(f.get("park_movers", []), t)))
 	providers.append(_subsystem("injuries", func(): return game.injuries, "snapshot", "apply_snapshot"))
-	var props = _subsystem("movable_props", func(): return game.movable_props, "snapshot", "apply_snapshot", "props", 0.1)
-	props.collision = true
+	var props = provider("movable_props", "props", ["movable_props"], func(): return {"movable_props": game.movable_props.snapshot()}, _props_apply, true, 0.1)
 	providers.append(props)
 	providers.append(_subsystem("medics", func(): return game.injuries.medics, "snapshot", "apply_snapshot"))
 	providers.append(provider("outcome", "", ["dead", "finished", "title", "text"], _outcome_snapshot, _outcome_apply))
@@ -303,6 +302,11 @@ func _outcome_apply(w: Dictionary, _t: float) -> void:
 		game.dead = dead
 		game.finished = finished
 		game._show_result(str(w.get("title", "")), str(w.get("text", "")))
+
+# The host's time of the snapshot lets a guest draw flying props between them.
+func _props_apply(f: Dictionary, sample_time: float) -> void:
+	if f.has("movable_props"):
+		game.movable_props.apply_snapshot(f.movable_props, sample_time)
 
 func _stones_snapshot() -> Dictionary:
 	var result = {"stones": room.stone_state(), "stone_ids": game.stones.map(func(stone): return stone.id)}
