@@ -194,8 +194,13 @@ static func plan(game: Node3D, racer: Dictionary) -> Dictionary:
 		var center = game.race_at(station)
 		if absf(object.pos.y - center.y) > 4:
 			continue
-		var lateral: float = (object.pos - center).dot(game.race_side(station))
+		var offset: Vector3 = object.pos - center
+		var lateral: float = offset.dot(game.race_side(station))
 		if absf(lateral) > line_limit(game, station) + CLEARANCE:
+			continue
+		# Behind the start or past the finish the projection clamps to the
+		# route's end: a car further along the park's aisle is not on the road.
+		if Vector2(offset.x, offset.z).length_squared() > lateral * lateral + 9.0:
 			continue
 		# Clear of both the line the crew holds and the one it means to drive
 		# (a spectator's car on the verge, a car in the park beside the start):
