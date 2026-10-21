@@ -859,8 +859,8 @@ func _cancel_eat() -> void:
 	camp_actions.cancel_eat()
 
 func start_rally() -> bool:
-	# R is an information shortcut; it cannot bypass the safety convoy.
-	toast(course.caption())
+	# R is an information shortcut, quiet while the stage card shows; it cannot bypass the safety convoy.
+	if course_label == null or not course_label.is_visible_in_tree(): toast(course.caption())
 	return course.phase == "racing"
 
 func spawn_course_car(role: String, id: int, zero_index: int = 0) -> void:

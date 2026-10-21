@@ -429,8 +429,8 @@ func update_hud() -> void:
 		if game.condition <= 0:
 			info_text = Loc.t("МАШИНА СЛОМАНА    ·    САДИСЬ К ДРУГУ ИЛИ ЖДИ ТРОС")
 	else:
-		info_text = Loc.t("ЗРИТЕЛЬ    ·    %s · ШАМПУРЫ %d/10    ·    %s") % [game.camp_grill.status(false), game.camp_grill.servings, game.course.caption()]
-		hint_text = Loc.t("WASD — идти   ·   Shift — бег   ·   Space — прыжок   ·   мышь — смотреть   ·   F — действие   ·   Z — стол   ·   C — стулья   ·   G — мангал   ·   R — статус СУ")
+		info_text = Loc.t("ЗРИТЕЛЬ    ·    %s · ШАМПУРЫ %d/10") % [game.camp_grill.status(false), game.camp_grill.servings]
+		hint_text = Loc.t("WASD — идти   ·   Shift — бег   ·   Space — прыжок   ·   мышь — смотреть   ·   F — действие   ·   Z — стол   ·   C — стулья   ·   G — мангал")
 		if game.drink_time >= 0:
 			info_text = Loc.t("ОТКРЫВАЕМ БАНКУ") if game.drink_time < 1.25 else Loc.t("ЗА ХОРОШИЙ ВЫЕЗД!")
 		if game.eat_time >= 0:
