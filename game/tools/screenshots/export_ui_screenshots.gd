@@ -4,7 +4,8 @@ extends SceneTree
 #   xvfb-run godot --path game --rendering-driver opengl3 --resolution 844x390 \
 #     --script res://tools/screenshots/export_ui_screenshots.gd -- --state=pause --vk --mobile-controls --out=/tmp/pause.png
 # States: menu, hud, drawer, car, pause, guest_pause, result, safety, help,
-# about, guide (first VK entry, --page=N), guide_pause, loading.
+# about, guide (first VK entry, --page=N), guide_pause, loading,
+# warning (beer/mushroom notice, --kind=beer|mushroom).
 
 func _initialize() -> void:
 	call_deferred("run")
@@ -31,7 +32,7 @@ func run() -> void:
 	if state == "menu":
 		game.select_stage(stage)
 		game.stage_choice.select(stage)
-	if state in ["hud", "drawer", "car", "pause", "guest_pause", "result", "safety", "guide", "guide_pause"]:
+	if state in ["hud", "drawer", "car", "pause", "guest_pause", "result", "safety", "guide", "guide_pause", "warning"]:
 		await game.start_game()
 		game._prepare_capture()
 		game.camera.position = game.camp.position + Vector3(10, 5, 12)
@@ -43,6 +44,9 @@ func run() -> void:
 			game._toggle_car()
 		elif state == "pause":
 			game._set_paused(true)
+		elif state == "warning":
+			game.crosshair.show()
+			game.show_consumption_warning(arg("kind", "mushroom"))
 		elif state == "guest_pause":
 			# Show the guest overlay without a server: a connected non-host room.
 			game.room.set_process(false)
