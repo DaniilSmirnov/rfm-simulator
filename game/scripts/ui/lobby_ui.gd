@@ -18,6 +18,8 @@ var check_purchase: Button
 var purchase_status: Label
 var return_button: Button
 var quit_dialog: Control
+var quit_text: Label
+var leave_dialog: Control
 var quit_button: Button
 var host_pause: PanelContainer
 var help_button: Button
@@ -159,6 +161,8 @@ func build_links(parent: Control) -> void:
 	about_button.tooltip_text = Loc.t("Сайт Rally Fans Map: %s") % UiKit.BRAND_URL
 	about_button.add_theme_font_size_override("font_size", 15)
 	about_button.pressed.connect(_open_about)
+	# Hidden everywhere for now: VK Play forbids links that lead players to other sites.
+	about_button.hide()
 	help_button = UiKit.button(parent, "ПОМОЩЬ", "ghost", 40)
 	help_button.name = "HelpButton"
 	help_button.tooltip_text = Loc.t("Написать в поддержку: %s") % SUPPORT_EMAIL
@@ -226,9 +230,10 @@ func _copy_support_email() -> void:
 func finish(parent: Control) -> void:
 	return_button = UiKit.button(parent, "В ГЛАВНОЕ МЕНЮ", "ghost", 44)
 	return_button.name = "ReturnButton"
-	return_button.pressed.connect(game.return_to_main_menu)
+	return_button.pressed.connect(_confirm_leave)
 	return_button.hide()
 	_build_quit_dialog()
+	_build_leave_dialog()
 	help_dialog = _link_dialog("SupportDialog", "Помощь и поддержка", _help_message(), [["СКОПИРОВАТЬ АДРЕС", "primary", _copy_support_email]])
 	about_dialog = _link_dialog("AboutDialog", UiKit.BRAND_NAME, _about_message(), [["ОТКРЫТЬ САЙТ", "primary", func(): UiKit.open_url(UiKit.BRAND_URL)], ["СКОПИРОВАТЬ", "secondary", func(): _copy(UiKit.BRAND_URL, Loc.t("Ссылка скопирована: %s") % UiKit.BRAND_URL)]])
 	# Backdrop fills the viewport independently of the inset HUD root.
@@ -343,7 +348,7 @@ func _build_quit_dialog() -> void:
 	var modal = UiKit.modal(game.hud.dialog_layer, "QuitDialog")
 	quit_dialog = modal.root
 	UiKit.label(modal.content, "Выйти из игры?", "heading")
-	UiKit.wrap(UiKit.label(modal.content, "Игра закроется, и ты покинешь выезд.", "body"))
+	quit_text = UiKit.wrap(UiKit.label(modal.content, "", "body"))
 	var row = UiKit.hbox(modal.content, 10)
 	var cancel = UiKit.expand(UiKit.button(row, "ОСТАТЬСЯ", "secondary", 44))
 	cancel.name = "CancelQuit"
@@ -356,9 +361,35 @@ func _build_quit_dialog() -> void:
 	confirm.pressed.connect(_quit_game)
 
 func _confirm_quit() -> void:
+	quit_text.text = "Игра закроется, и ты покинешь выезд. Прогресс выезда не сохраняется — в следующий раз он начнётся заново." if game.playing else "Игра закроется."
 	quit_dialog.show()
 	game.hud.fit_modal(quit_dialog)
 	quit_dialog.find_child("CancelQuit", true, false).grab_focus()
+
+# The outing lives only as long as the room: VK Play asks to say so before leaving.
+func _build_leave_dialog() -> void:
+	var modal = UiKit.modal(game.hud.dialog_layer, "LeaveDialog")
+	leave_dialog = modal.root
+	UiKit.label(modal.content, "Вернуться в главное меню?", "heading")
+	UiKit.wrap(UiKit.label(modal.content, "Ты покинешь выезд. Прогресс выезда не сохраняется — в следующий раз он начнётся заново.", "body"))
+	var row = UiKit.hbox(modal.content, 10)
+	var cancel = UiKit.expand(UiKit.button(row, "ОСТАТЬСЯ", "secondary", 44))
+	cancel.name = "CancelLeave"
+	cancel.pressed.connect(func():
+		leave_dialog.hide()
+		return_button.grab_focus()
+	)
+	var confirm = UiKit.expand(UiKit.button(row, "В ГЛАВНОЕ МЕНЮ", "primary", 44))
+	confirm.name = "ConfirmLeave"
+	confirm.pressed.connect(func():
+		leave_dialog.hide()
+		game.return_to_main_menu()
+	)
+
+func _confirm_leave() -> void:
+	leave_dialog.show()
+	game.hud.fit_modal(leave_dialog)
+	leave_dialog.find_child("CancelLeave", true, false).grab_focus()
 
 # Leaving tells the room right away instead of waiting for it to time out.
 func _quit_game() -> void:

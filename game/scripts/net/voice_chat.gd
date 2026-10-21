@@ -25,6 +25,7 @@ var mic := "idle"
 var connected_peers := 0
 var pending: Array = []
 var clock := 0.0
+var socket_was_open := false
 var label: Label
 
 func setup(owner: Node) -> void:
@@ -54,6 +55,7 @@ func join() -> void:
 	var session = ("%s-%s-%d" % [room.room_id, room.player_id, Time.get_ticks_msec()]).left(96)
 	var options = {"localId": room.player_id, "session": session, "iceServers": NetProtocol.direct("ice_servers", [])}
 	joined = backend.join(options)
+	socket_was_open = false
 	if joined:
 		sync_members(room.members.keys())
 
@@ -106,6 +108,13 @@ func _tick() -> void:
 		if label != null:
 			label.hide()
 		return
+	# The room relays signals only to open sockets, so a call made while we
+	# were still loading the stage was lost: ask everyone to ring again.
+	var socket_open: bool = room.transport.socket_open
+	if socket_open and not socket_was_open:
+		pending.clear()
+		backend.ring_again()
+	socket_was_open = socket_open
 	if not result.is_empty():
 		connected_peers = int(result.get("connected", 0))
 		for envelope in result.get("signals", []):
