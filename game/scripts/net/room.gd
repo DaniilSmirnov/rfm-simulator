@@ -423,7 +423,13 @@ func _update_peer(p: Dictionary) -> void:
 		var switched = peer.state != null and peer.state.in_car != p.state.in_car
 		var tilt = v(p.state.get("tilt", [0, p.state.heading, 0]))
 		tilt.y = p.state.heading
-		peer.car_motion.push(sample_time, v(p.state.car), tilt)
+		# Cars the host simulates come with their exact velocity.
+		var velocity = null
+		if is_host and host_drives.has(p.id):
+			velocity = host_drives[p.id].motion.velocity
+		elif not is_host and authoritative_drives.has(p.id):
+			velocity = v(authoritative_drives[p.id].velocity)
+		peer.car_motion.push(sample_time, v(p.state.car), tilt, false, velocity)
 		peer.avatar_motion.max_speed = 12.0
 		peer.avatar_motion.push(sample_time, v(p.state.pos), Vector3(0, p.state.yaw, 0), switched)
 		peer.last_sample_time = sample_time
@@ -633,9 +639,15 @@ func drive_context(owner: String) -> Dictionary:
 		if is_instance_valid(entry.node): contacts.append(Hitbox.contact(entry.node))
 	if owner != player_id:
 		contacts.append(Hitbox.contact(game.car))
+	# A guest predicting its own car meets other cars where it shows them, ahead
+	# of their last snapshot, which is closer to where the host has them.
+	var shown = is_guest() and owner == player_id
 	for id in peers:
 		if id != owner and peers[id].state != null:
-			contacts.append({"position": v(peers[id].state.car), "yaw": peers[id].state.get("heading", 0), "box": Hitbox.bounds(peers[id].car)})
+			var car: Node3D = peers[id].car
+			var position = car.position if shown and not peers[id].car_motion.samples.is_empty() else v(peers[id].state.car)
+			var yaw = car.rotation.y if shown and not peers[id].car_motion.samples.is_empty() else peers[id].state.get("heading", 0)
+			contacts.append({"position": position, "yaw": yaw, "box": Hitbox.bounds(car)})
 	# Everybody on foot except the driver; people lying after a hit are passed.
 	for person in game.injuries.people():
 		if person.key != "player:" + owner and not game.injuries.is_down(person.key) and not person.get("riding", false):

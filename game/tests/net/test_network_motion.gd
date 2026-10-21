@@ -75,6 +75,61 @@ func run() -> void:
 			finite_motion = finite_motion and is_finite(rendered)
 			previous_render = rendered
 		check(monotonic and finite_motion, "remote motion stays continuous with %d ms latency" % int(latency * 1000))
+	# Cars are shown where they are now: dead reckoning ahead of the newest
+	# sample, with new samples blended in instead of jumping.
+	var circle = func(t: float) -> Vector3: return Vector3(sin(t * 0.5) * 40.0, 0, cos(t * 0.5) * 40.0)
+	var heading = func(t: float) -> float: return wrapf(t * 0.5 - PI / 2, -PI, PI)
+	for latency in [0.04, 0.12]:
+		var ahead = Buffer.new()
+		ahead.predictive = true
+		var behind_buffer = Buffer.new()
+		var next_sample = 0
+		var worst_ahead = 0.0
+		var worst_behind = 0.0
+		var worst_step = 0.0
+		var last_shown = Vector3.ZERO
+		var jitter_rng = RandomNumberGenerator.new()
+		jitter_rng.seed = 7
+		var arrivals = []
+		for i in range(200):
+			arrivals.append(i * 0.05 + latency + jitter_rng.randf() * latency * 0.5)
+		for frame in range(400):
+			var now = frame / 60.0
+			while next_sample < arrivals.size() and arrivals[next_sample] <= now:
+				var sent = next_sample * 0.05
+				ahead.push(sent, circle.call(sent), Vector3(0, heading.call(sent), 0))
+				behind_buffer.push(sent, circle.call(sent), Vector3(0, heading.call(sent), 0))
+				next_sample += 1
+			var shown = ahead.render(now).position
+			if frame > 60:
+				worst_ahead = maxf(worst_ahead, shown.distance_to(circle.call(now)))
+				worst_behind = maxf(worst_behind, behind_buffer.render(now).position.distance_to(circle.call(now)))
+				worst_step = maxf(worst_step, shown.distance_to(last_shown))
+			last_shown = shown
+		check(worst_ahead < 0.15 and worst_ahead < worst_behind * 0.2, "a car turning at 20 m/s is shown where it is now with %d ms latency (%.2f m off, %.2f m behind before)" % [int(latency * 1000), worst_ahead, worst_behind])
+		check(worst_step < 0.5, "predicted car moves continuously with %d ms latency" % int(latency * 1000))
+	var braking = Buffer.new()
+	braking.predictive = true
+	var largest_jump = 0.0
+	var shown_before = Vector3.ZERO
+	for frame in range(120):
+		var now = frame / 60.0
+		if frame % 3 == 0:
+			var sent = now - 0.1
+			if sent >= 0:
+				braking.push(sent, Vector3(minf(sent, 1.0) * 20.0, 0, 0), Vector3.ZERO)
+		var shown = braking.render(now).position
+		if frame > 12:
+			largest_jump = maxf(largest_jump, shown.distance_to(shown_before))
+		shown_before = shown
+	check(largest_jump < 0.6, "a sudden stop is blended in, not snapped (largest frame step %.2f m)" % largest_jump)
+	check(absf(braking.render(5.0).position.x - 20.0) < 0.05, "a stopped car settles where it stopped")
+	var known = Buffer.new()
+	known.predictive = true
+	known.push(0.0, Vector3.ZERO, Vector3.ZERO, false, Vector3(0, 0, -10))
+	check(known.render(0.1).position.distance_to(Vector3(0, 0, -1)) < 0.001, "a velocity sent by the host is used from the first sample")
+	check(known.render(5.0).position.z >= -10.0 * Buffer.MAX_LEAD - 0.001, "a lost connection stops prediction after the lead limit")
+	check(known.render(6.0, true).position == Vector3.ZERO and known.correction_position == Vector3.ZERO, "paused cars show the last sample")
 	var game = load("res://main.tscn").instantiate()
 	root.add_child(game)
 	await process_frame
