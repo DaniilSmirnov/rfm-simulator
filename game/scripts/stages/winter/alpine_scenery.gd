@@ -228,6 +228,8 @@ static func _build_barriers(stage, root: Node3D) -> void:
 			if i + 1 >= points.size() or points[i + 1] == null:
 				continue
 			var q: Vector3 = points[i + 1]
+			# The rail or wall between two posts is as solid as the posts.
+			stage.rocks.append_array(Records.row(p, q, 0.25 if stone else 0.12, 0.85, Records.BARRIER, 0.4))
 			if stone:
 				walls.append(beam(p, q, 0.27, 0.62, 0.5))
 				wall_colors.append(STONE.lightened(sin(p.x * 3.1 + p.z) * 0.06))
@@ -463,12 +465,10 @@ static func _build_house(stage, root: Node3D, item: Dictionary) -> void:
 		height = _build_chapel(node, w, d)
 	else:
 		height = _build_chalet(stage, node, w, d, int(size.y), item.kind == "hotel")
-	# Rectangular footprints are covered by a row of overlapping circles.
-	var across = node.basis.x
-	var circles = maxi(1, ceili(w / d))
-	for i in range(circles):
-		var offset = (float(i) - (circles - 1) * 0.5) * (w / circles)
-		stage.rocks.append(Records.rock(node.position + across * offset, minf(w / circles, d) * 0.5 + 0.35, height, Records.BUILDING))
+	# The walls and plinth are one solid box; circles inside it keep crowds,
+	# camps and gravel off the footprint without reaching past the walls.
+	stage.solids.solid(node, Vector3(0, (height - 2.0) * 0.5, 0), Vector3(w + 0.3, height + 2.0, d + 0.3), "building")
+	stage.rocks.append_array(Records.footprint(node.position, node.basis.x, w + 0.3, d + 0.3, height))
 
 static func _build_chalet(stage, node: Node3D, w: float, d: float, floors: int, hotel: bool) -> float:
 	var ground_floor = 3.0
@@ -511,6 +511,7 @@ static func _build_chalet(stage, node: Node3D, w: float, d: float, floors: int, 
 	# Firewood under the eaves, a classic of mountain houses.
 	for row in range(3):
 		Props.box(node, Vector3(-w * 0.5 - 0.5, 0.3 + row * 0.38, 0.0), Vector3(0.7, 0.36, d * 0.7), Color("7a5636").lightened(row * 0.04))
+	stage.solids.solid(node, Vector3(-w * 0.5 - 0.5, 0.6, 0.0), Vector3(0.7, 1.2, d * 0.7), "wall")
 	return ridge
 
 static func _build_chapel(node: Node3D, w: float, d: float) -> float:
