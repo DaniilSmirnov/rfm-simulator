@@ -49,11 +49,15 @@ func retranslate() -> void:
 	help_dialog.find_child("Message", true, false).text = _help_message()
 	about_dialog.find_child("Message", true, false).text = _about_message()
 	game.hud.footer.text = Loc.t("Версия %s") % ProjectSettings.get_setting("application/config/version")
-	game.stage_caption.text = game.StageRegistry.caption(game.selected_stage) if game.playing else game.StageRegistry.caption(game.selected_stage).to_upper()
+	game.stage_caption.text = game.StageRegistry.caption(game.selected_stage).to_upper()
+	_show_volume(volume_slider.value)
 	game.room.ui.refresh_language()
 	if game.mobile_controls != null:
 		game.mobile_controls.layout_state = []
 	refresh()
+	# The HUD under the pause menu is rebuilt only while playing.
+	if game.playing:
+		game.hud.update_hud()
 
 func _help_message() -> String:
 	return Loc.t("Если с игрой что-то не так, напиши нам:\n%s\n\nСкопируй адрес и отправь письмо из удобной почты.") % SUPPORT_EMAIL
@@ -248,6 +252,9 @@ func _apply_volume(percent: float) -> void:
 	var master = AudioServer.get_bus_index("Master")
 	AudioServer.set_bus_mute(master, percent <= 0)
 	AudioServer.set_bus_volume_db(master, master_base_db + linear_to_db(maxf(percent / 100.0, 0.0001)))
+	_show_volume(percent)
+
+func _show_volume(percent: float) -> void:
 	volume_label.text = Loc.t("ЗВУК ВЫКЛЮЧЕН") if percent <= 0 else Loc.t("ГРОМКОСТЬ · %d%%") % roundi(percent)
 
 # ---------------------------------------------------------------- assembly

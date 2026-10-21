@@ -818,7 +818,7 @@ func select_stage(variant: int, hosted_guest: bool = false) -> void:
 	jump_height = 0
 	jump_velocity = 0
 	selected_stage = variant
-	stage_caption.text = StageRegistry.caption(variant)
+	stage_caption.text = StageRegistry.caption(variant).to_upper()
 	stage_choice.select(variant)
 	stage.free()
 	stage = Stage.new(variant)

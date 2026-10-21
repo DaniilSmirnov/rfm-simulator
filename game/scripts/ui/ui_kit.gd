@@ -171,7 +171,8 @@ static func brand(parent: Node, logo_size: float = 56) -> HBoxContainer:
 	var title = label(names, GAME_NAME, "title")
 	title.name = "Title"
 	title.add_theme_font_override("font", BRAND_FONT)
-	var by = label(names, Loc.t("от %s") % BRAND_NAME, "muted")
+	# A plain key, so the label follows a language switch on its own.
+	var by = label(names, "от Rally Fans Map", "muted")
 	by.name = "Byline"
 	by.add_theme_font_override("font", BRAND_FONT)
 	return row
