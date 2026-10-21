@@ -102,6 +102,8 @@
 "ДО ОТКРЫТИЯ СУ %02d:%02d": "STAGE OPENS IN %02d:%02d",
 "ДО ОБРАТНОГО ПРОХОДА %02d:%02d": "REVERSE RUN IN %02d:%02d",
 "ОТКРЫТИЕ СУ · ПОЛИЦИЯ": "STAGE OPENING · POLICE",
+"ПРОЕЗД ПОЛИЦИИ ЗАБЛОКИРОВАН · ОСВОБОДИТЕ ДОРОГУ": "POLICE BLOCKED · CLEAR THE ROAD",
+"Проезд полиции заблокирован! Освободите дорогу: уберите машины и людей с её пути.": "The police car is blocked! Clear the road: move cars and people out of its way.",
 "НУЛЕВОЙ ЭКИПАЖ %d/3 · № 0": "ZERO CAR %d/3 · № 0",
 "СУ ОТКРЫТ · ГОНЩИКИ": "STAGE OPEN · RACERS",
 "ЗАКРЫТИЕ СУ · ПОЛИЦИЯ": "STAGE CLOSING · POLICE",

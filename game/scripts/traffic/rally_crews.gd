@@ -28,6 +28,10 @@ const FLOOR_REUSE_HEIGHT = 0.8
 const CAR_RAM_MIN_SPEED = 3.0
 const CAR_RAM_FULL_SPEED = 20.0
 const CAR_RAM_MAX_DAMAGE = 30.0
+# A police car that gains less than POLICE_STALL_DISTANCE (m) of road in
+# POLICE_STALL_SECONDS waits behind something: everybody is asked to clear it.
+const POLICE_STALL_DISTANCE = 1.5
+const POLICE_STALL_SECONDS = 2.0
 # Seconds after a tow until a crew drives at its full launch again, and the
 # share of that launch it starts with.
 const RECOVERY_RAMP = 6.0
@@ -141,6 +145,22 @@ func update_racers(delta: float) -> void:
 	if delta > 0.001:
 		for racer in game.racers:
 			racer.velocity = (racer.node.position - start[racer.id]) / delta if start.has(racer.id) else Vector3.ZERO
+	watch_police(delta)
+
+# Flags the course while a police car stands still on the stage; a red flag
+# stop is not a blockage. Guests read the flag from the course snapshot.
+func watch_police(delta: float) -> void:
+	var blocked = false
+	for racer in game.racers:
+		if not racer.get("role", "") in ["opening_police", "closing_police"] or racer.state != "racing":
+			continue
+		if game.course.red_flag or absf(racer.s - float(racer.get("stall_s", -100.0))) > POLICE_STALL_DISTANCE:
+			racer.stall_s = racer.s
+			racer.stall_time = 0.0
+		else:
+			racer.stall_time = float(racer.get("stall_time", 0.0)) + delta
+		blocked = blocked or racer.stall_time >= POLICE_STALL_SECONDS
+	game.course.police_blocked = blocked
 
 func update_racers_step(delta: float) -> void:
 	var to_remove: Array[Dictionary] = []

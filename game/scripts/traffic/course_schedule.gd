@@ -10,6 +10,8 @@ var zero_index = 0
 var active_id = -1
 # An ambulance is on the stage: starts pause and crews brake until it leaves.
 var red_flag = false
+# The police car on the stage stands behind something on the road.
+var police_blocked = false
 
 func update(game, delta: float) -> void:
 	if not game.playing or game.paused or game.dead or game.finished or (game.room.is_guest()):
@@ -94,6 +96,8 @@ func short_caption() -> String:
 func phase_caption() -> String:
 	if red_flag:
 		return Loc.t("КРАСНЫЙ ФЛАГ · СКОРАЯ НА СУ")
+	if police_blocked:
+		return Loc.t("ПРОЕЗД ПОЛИЦИИ ЗАБЛОКИРОВАН · ОСВОБОДИТЕ ДОРОГУ")
 	match phase:
 		"countdown":
 			var seconds = ceili(remaining)
@@ -108,7 +112,7 @@ func phase_caption() -> String:
 		_: return Loc.t("СУ ЗАКРЫТ")
 
 func snapshot() -> Dictionary:
-	return {"pass_index": pass_index, "phase": phase, "remaining": ceilf(remaining), "zero_index": zero_index, "active_id": active_id, "red_flag": red_flag}
+	return {"pass_index": pass_index, "phase": phase, "remaining": ceilf(remaining), "zero_index": zero_index, "active_id": active_id, "red_flag": red_flag, "police_blocked": police_blocked}
 
 func apply_snapshot(data: Dictionary) -> void:
 	pass_index = clampi(int(data.get("pass_index", 1)), 1, 2)
@@ -117,3 +121,4 @@ func apply_snapshot(data: Dictionary) -> void:
 	zero_index = clampi(int(data.get("zero_index", 0)), 0, 3)
 	active_id = int(data.get("active_id", -1))
 	red_flag = data.get("red_flag", false) == true
+	police_blocked = data.get("police_blocked", false) == true
