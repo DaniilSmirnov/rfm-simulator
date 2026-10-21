@@ -185,6 +185,9 @@ func guest_camp(host) -> void:
 	check(jumps > 0.2, "without a frame clock a guest jumps a flying prop to each snapshot (%.0f%% of frames jerk)" % (jumps * 100.0))
 	var smooth = guest_flight(guest, key, 100.0)
 	check(smooth < 0.05, "a guest draws a flying prop between snapshots that arrive unevenly (%.0f%% of frames jerk)" % (smooth * 100.0))
+	var behind = flight_error
+	var ahead = guest_flight(guest, key, 200.0, true)
+	check(ahead < 0.05 and flight_error < behind * 0.5, "with the host's velocity a guest draws a flying prop where it is now, smoothly (%.0f%% of frames jerk, %.2f m off instead of %.2f m)" % [ahead * 100.0, flight_error, behind])
 	check(guest.movable_props.records[key].body.global_position.distance_to(guest.grill.global_position) > 0.01 or not guest.movable_props.records[key].has("motion"), "the collision body keeps the newest host pose")
 	await guest._shutdown_audio()
 	guest.queue_free()
@@ -193,7 +196,9 @@ func guest_camp(host) -> void:
 # A prop thrown at 8 m/s arrives 10 times a second, 0-60 ms late, and is drawn
 # at 60 frames a second. Returns the share of frames whose visible speed changes
 # by more than 2 m/s (a jerk the eye sees).
-func guest_flight(guest, key: String, clock: float) -> float:
+var flight_error = 0.0
+
+func guest_flight(guest, key: String, clock: float, with_velocity: bool = false) -> float:
 	var props = guest.movable_props
 	var start: Vector3 = guest.grill.global_position
 	var rng = RandomNumberGenerator.new()
@@ -205,13 +210,16 @@ func guest_flight(guest, key: String, clock: float) -> float:
 	var speed = -1.0
 	var jerks = 0
 	var frames = 0
+	flight_error = 0.0
 	for frame in range(1, 100):
 		var now = frame / 60.0
 		guest.room.transport.view_clock = clock + now if clock > -INF else -INF
 		while not arrivals.is_empty() and arrivals[0].at <= now:
 			var t: float = arrivals.pop_front().t
-			var pos: Vector3 = start + Vector3(8.0 * t, 4.0 * t - 4.9 * t * t, 0)
-			props.apply_snapshot([{"key": key, "pos": guest.room.a(pos), "rot": [0, 0, 0], "anchored": false}], 50.0 + t)
+			var pos: Vector3 = start + Vector3(8.0 * t, 8.0 * t - 4.9 * t * t, 0)
+			var item = {"key": key, "pos": guest.room.a(pos), "rot": [0, 0, 0], "anchored": false}
+			if with_velocity: item.velocity = [8.0, 8.0 - 9.8 * t, 0.0]
+			props.apply_snapshot([item], clock + t)
 		props.render_guest()
 		var shown: Vector3 = guest.grill.global_position
 		if previous != null:
@@ -219,8 +227,10 @@ func guest_flight(guest, key: String, clock: float) -> float:
 			if speed >= 0.0 and frame > 20 and frame < 85:
 				frames += 1
 				if absf(current - speed) > 2.0: jerks += 1
+				flight_error += shown.distance_to(start + Vector3(8.0 * now, 8.0 * now - 4.9 * now * now, 0))
 			speed = current
 		previous = shown
 	guest.room.transport.view_clock = -INF
 	props.apply_snapshot([{"key": key, "pos": guest.room.a(start), "rot": [0, 0, 0], "anchored": false}])
+	flight_error /= maxf(1.0, frames)
 	return float(jerks) / maxf(1.0, frames)

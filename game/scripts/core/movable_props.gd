@@ -227,7 +227,11 @@ func snapshot() -> Array:
 	for r in records.values():
 		if r.changed and not r.has("lamp"):
 			var rotation: Vector3 = r.node.global_rotation
-			result.append({"key": r.key, "pos": game.room.a(r.node.global_position), "rot": [rotation.x, rotation.y, rotation.z], "anchored": r.anchored})
+			var item = {"key": r.key, "pos": game.room.a(r.node.global_position), "rot": [rotation.x, rotation.y, rotation.z], "anchored": r.anchored}
+			# A flying prop's velocity lets guests draw it where it is now.
+			if r.has("body") and not r.has("tree") and not r.body.freeze and not r.body.sleeping and r.body.linear_velocity.length_squared() > 0.01:
+				item.velocity = game.room.a(r.body.linear_velocity)
+			result.append(item)
 	return result
 
 # `sample_time`: the host's time of the snapshot (server clock); -1 for world
@@ -253,7 +257,7 @@ func apply_pending() -> void:
 		if r.has("body"):
 			r.body.freeze = true
 			r.body.global_transform = Transform3D(Basis.from_euler(game.room.v(item.rot)), game.room.v(item.pos))
-		_show(r, game.room.v(item.pos), game.room.v(item.rot))
+		_show(r, game.room.v(item.pos), game.room.v(item.rot), game.room.v(item.velocity) if item.has("velocity") else null)
 		r.node.set_meta("prop_dynamic", true)
 		r.anchored = bool(item.get("anchored", false))
 		r.node.set_meta("prop_anchored", r.anchored)
@@ -264,21 +268,35 @@ func apply_pending() -> void:
 # A guest's collision body takes the host's pose at once; the visible prop
 # follows the snapshots a short delay behind (SnapshotMotion) instead of jumping
 # to each one (up to 10 a second on the server path).
-func _show(r: Dictionary, pos: Vector3, rot: Vector3) -> void:
+func _show(r: Dictionary, pos: Vector3, rot: Vector3, velocity = null) -> void:
 	var clock: float = game.room.transport.view_clock if game.room.transport != null else -INF
 	if r.has("tree") or clock == -INF:
 		r.node.global_position = pos
 		r.node.global_rotation = rot
 		r.erase("motion")
 		return
+	if _sample_time < 0.0 and _sample_time > -INF:
+		# World collision ahead of a replay (-1): the visible pose follows with
+		# the same snapshot and its time.
+		return
 	if not r.has("motion"):
 		if r.node.global_position.is_equal_approx(pos) and r.node.global_rotation.is_equal_approx(rot):
 			return
 		r.motion = Motion.new()
 		r.motion.hold = true
-		r.motion.push(clock - r.motion.average_interval, r.node.global_position, r.node.global_rotation)
+		# With the host's velocity the prop is drawn where it is now, falling
+		# while ahead; new snapshots fade their difference out (as for cars).
+		r.motion.predictive = velocity is Vector3
+		r.motion.gravity = 9.8 if r.motion.predictive else 0.0
+		var seed_time = (_sample_time if _sample_time >= 0.0 else clock) - r.motion.average_interval
+		r.motion.push(seed_time, r.node.global_position, r.node.global_rotation, false, Vector3.ZERO)
+		if r.motion.predictive: r.motion.render(seed_time)
 	var newest: Dictionary = r.motion.latest()
 	if newest.position.is_equal_approx(pos) and newest.rotation.is_equal_approx(rot):
+		return
+	if r.motion.predictive:
+		var stamp = _sample_time if _sample_time >= 0.0 else clock
+		r.motion.push(maxf(stamp, float(newest.time) + 0.001), pos, rot, false, velocity if velocity is Vector3 else Vector3.ZERO)
 		return
 	var at = clock
 	if _sample_time >= 0.0:
@@ -287,10 +305,6 @@ func _show(r: Dictionary, pos: Vector3, rot: Vector3) -> void:
 		_lag = lag if _lag == INF else (maxf(lag, _lag - 0.005) if lag < _lag else lerpf(_lag, lag, 0.02))
 		at = minf(clock, _sample_time + _lag)
 		_late = maxf(clock - at + 0.02, _late * 0.99)
-	elif _sample_time > -INF:
-		# World collision ahead of a replay (-1): the visible pose follows with
-		# the same snapshot and its time.
-		return
 	r.motion.push(maxf(at, float(newest.time) + 0.001), pos, rot)
 
 # Every frame on a guest: moves each prop still catching up with its snapshots.
@@ -304,7 +318,9 @@ func render_guest() -> void:
 	for r in records.values():
 		if not r.has("motion") or not is_instance_valid(r.node):
 			continue
-		var pose: Dictionary = r.motion.render(clock - _behind)
+		var pose: Dictionary = r.motion.render(clock if r.motion.predictive else clock - _behind)
+		if r.motion.predictive:
+			pose.position.y = maxf(pose.position.y, minf(game.stage.ground(pose.position), r.motion.latest().position.y))
 		r.node.global_position = pose.position
 		r.node.global_rotation = pose.rotation
 		if clock - float(r.motion.latest().time) > 1.0:

@@ -24,6 +24,8 @@ var predictive = false
 # Props stop where the host left them: past the newest sample a held buffer
 # waits there instead of drifting on (a resting prop sends no more samples).
 var hold = false
+# A predictive buffer of something flying (a knocked prop) falls while ahead.
+var gravity = 0.0
 var correction_position = Vector3.ZERO
 var correction_yaw = 0.0
 var _clock = -INF
@@ -31,7 +33,7 @@ var _clock = -INF
 # `velocity`: the object's velocity at `time` when the sender knows it (a car
 # the host simulates); otherwise it is estimated from the previous sample.
 func push(time: float, position: Vector3, rotation: Vector3, reset: bool = false, velocity = null) -> bool:
-	var entry = {"time": time, "position": position, "rotation": rotation, "velocity": Vector3.ZERO, "turn": 0.0}
+	var entry = {"time": time, "position": position, "rotation": rotation, "velocity": Vector3.ZERO, "turn": 0.0, "gravity": gravity}
 	if not samples.is_empty():
 		var previous: Dictionary = samples[-1]
 		if time <= previous.time:
@@ -118,6 +120,7 @@ static func _ahead(from: Dictionary, lead: float) -> Dictionary:
 			velocity = velocity.rotated(Vector3.UP, turn * step * 0.5)
 			position += velocity * step
 			velocity = velocity.rotated(Vector3.UP, turn * step * 0.5)
+	position.y -= 0.5 * float(from.get("gravity", 0.0)) * lead * lead
 	var rotation: Vector3 = from.rotation
 	rotation.y = wrapf(rotation.y + turn * lead, -PI, PI)
 	return {"position": position, "rotation": rotation}
