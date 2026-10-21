@@ -173,11 +173,7 @@ func run() -> void:
 	var blocked_recovery = client.node.position
 	client.context = {"racing": true}
 	client.predict(1, 0, 0, true, village, 0, true)
-	check(client.recovery_ack == 0 and client.node.position.distance_to(blocked_recovery) < 1, "recovery without a park bay stays put during a rally")
-	var bay = village.parks.visitor_pose(0, 1)
-	client.context = {"racing": true, "park": [bay.origin.x, bay.origin.y, bay.origin.z, bay.basis.get_euler().y]}
-	client.predict(1, 0, 0, true, village, 0, true)
-	check(client.recovery_ack != 0 and client.node.position.distance_to(bay.origin) < 0.5 and village.road_distance(client.node.position) > 4.1, "recovery during a rally returns the car to its park bay, off the road")
+	check(client.recovery_ack == 0 and client.node.position.distance_to(blocked_recovery) < 1, "recovery is rejected during a rally")
 	village.free()
 	stage.free()
 	print("DRIVE PREDICTION RESULT: %d failures" % failures)

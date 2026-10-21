@@ -113,18 +113,11 @@ func emit_event(event: Dictionary) -> void:
 		events.append(event)
 
 func step(c: Dictionary, stage, model: int) -> void:
-	# While the rally runs the road belongs to the crews, so Home takes the car
-	# back to its bay in the start park instead of onto the stage.
-	var park: Array = context.get("park", [])
-	if c.get("recover", false) and (not context.get("racing", false) or park.size() == 4):
+	if c.get("recover", false) and not context.get("racing", false):
 		recovery_ack = int(c.seq)
-		if context.get("racing", false):
-			node.position = Vector3(park[0], park[1], park[2])
-			yaw = park[3]
-		else:
-			node.position = stage.at(stage.road_s(node.position))
-			var direction = stage.direction(stage.road_s(node.position))
-			yaw = atan2(-direction.x, -direction.z)
+		node.position = stage.at(stage.road_s(node.position))
+		var direction = stage.direction(stage.road_s(node.position))
+		yaw = atan2(-direction.x, -direction.z)
 		motion = Motion.new()
 		visual_offset = Vector3.ZERO
 		visual_yaw = 0.0

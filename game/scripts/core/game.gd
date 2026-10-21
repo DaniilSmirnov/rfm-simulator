@@ -622,18 +622,16 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("rally"):
 		start_rally()
 	elif event.is_action_pressed("recover"):
-		if room.connected and room.recover_drive():
-			return
-		# During the rally the road belongs to the crews: back to the start park.
-		if racing:
-			heading = stage.parks.park_visitor(car, room.members.get(room.player_id, {}).get("slot", 0) if room.connected else 0)
-			toast("Машина возвращена в сервис-парк.")
-		else:
+		if not racing:
+			if room.connected and room.recover_drive():
+				return
 			car.position = stage.at(stage.road_s(car.position))
 			heading = atan2(-stage.direction(stage.road_s(car.position)).x, -stage.direction(stage.road_s(car.position)).z)
+			speed = 0
+			vehicle_motion = Motion.new()
 			toast("Машина возвращена на СУ.")
-		speed = 0
-		vehicle_motion = Motion.new()
+		else:
+			toast("Возврат на СУ недоступен во время заездов.")
 	elif event is InputEventKey and event.pressed and not event.echo:
 		if room.is_guest():
 			return
