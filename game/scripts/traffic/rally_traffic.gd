@@ -302,7 +302,7 @@ static func _clear_path(game, racer: Dictionary, target: float, distance: float)
 		if racer.get("role", "") == "ambulance":
 			if absf(line) > line_limit(game, s) + 1.2: return false
 			if absf(point.y - previous.y) > maxf(0.5, point.distance_to(previous) * 0.45): return false
-			if stage.water != null and stage.water.depth(point) > 0.2: return false
+			if ServiceTraffic.flooded(game, point, s): return false
 		var route_blocked = not stage.rock_hit(previous, point, route_radius).is_empty() or stage.obstacle_hit(previous, point, route_radius, true) >= 0
 		# Ambulance shoulder passes use the exact footprint: the wider scalar
 		# envelope would reject a valid verge gap beside a stopped car.
