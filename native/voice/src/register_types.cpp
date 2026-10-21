@@ -1,3 +1,4 @@
+#include "data_link.hpp"
 #include "voice_encoder.hpp"
 #include "voice_link.hpp"
 
@@ -14,6 +15,7 @@ static void initialize_rally_voice(ModuleInitializationLevel level) {
 	if (level != MODULE_INITIALIZATION_LEVEL_SCENE) return;
 	GDREGISTER_CLASS(RallyVoiceEncoder);
 	GDREGISTER_CLASS(RallyVoiceLink);
+	GDREGISTER_CLASS(RallyDataLink);
 }
 
 static void uninitialize_rally_voice(ModuleInitializationLevel level) {

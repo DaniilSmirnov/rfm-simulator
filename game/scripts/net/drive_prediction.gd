@@ -10,6 +10,8 @@ const MAX_PENDING = 240
 const MAX_PENDING_TICKS = 480
 const MAX_TICKS = 12
 const INPUT_STEP = 1.0 / 32.0
+# The fixed driving tick, seconds.
+const STEP = preload("res://scripts/cars/player_handling.gd").STEP
 var motion = Motion.new()
 var node = Node3D.new()
 var yaw = 0.0
@@ -29,6 +31,14 @@ var recovery_ack = 0
 # into one command instead of producing a command per rendered frame.
 var coalesce = false
 var sealed_seq = 0
+# The predicted state after each unacknowledged command (seq -> snapshot()).
+# When the host's state at an acknowledgement matches it, nothing needs replaying.
+var predicted: Dictionary = {}
+# Largest difference from the host that is kept instead of replayed: a few
+# millimetres, below what the wire rounding and the screen can show.
+const MATCH_POSITION = 0.005
+const MATCH_SPEED = 0.01
+const MATCH_ANGLE = 0.001
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_PREDELETE:
@@ -51,6 +61,7 @@ func reset(position: Vector3, heading: float) -> void:
 	sealed_seq = 0
 	context.clear()
 	replaying = false
+	predicted = {0: snapshot()}
 
 func snapshot() -> Dictionary:
 	return {"prop_contacts": motion.prop_contacts.duplicate(), "recovery_ack": recovery_ack, "condition": condition, "impact_timer": impact_timer, "ack": ack, "pos": [node.position.x, node.position.y, node.position.z], "yaw": yaw, "velocity": [motion.velocity.x, motion.velocity.y, motion.velocity.z], "vertical": motion.vertical_speed, "initialized": motion.initialized, "grounded": motion.grounded, "pitch": motion.pitch, "roll": motion.roll, "steering": motion.handling.steering, "yaw_rate": motion.handling.yaw_rate, "longitudinal": motion.handling.longitudinal_accel}
@@ -194,11 +205,13 @@ func predict(ticks: int, throttle: float, steer: float, brake: bool, stage, mode
 			if int(last.seq) > sealed_seq and not last.get("recover", false) and float(last.throttle) == throttle and float(last.steer) == steer and bool(last.brake) == brake and int(last.ticks) + ticks <= MAX_TICKS:
 				last.ticks = int(last.ticks) + ticks
 				step({"seq": last.seq, "ticks": ticks, "throttle": throttle, "steer": steer, "brake": brake}, stage, model)
+				predicted[int(last.seq)] = snapshot()
 				return
 	seq += 1
 	var c = {"seq": seq, "ticks": ticks, "throttle": throttle, "steer": steer, "brake": brake, "recover": recover}
 	pending.append(c)
 	step(c, stage, model)
+	predicted[seq] = snapshot()
 
 func accept(commands: Array, stage, model: int, budget: int = 1152) -> int:
 	var consumed = 0
@@ -216,16 +229,84 @@ func reconcile(s: Dictionary, stage, model: int) -> void:
 	if int(s.ack) < ack:
 		return
 	var recovered = int(s.get("recovery_ack", 0)) > recovery_ack
+	# The usual case: the host ran the same input to the same result. Replaying
+	# every unacknowledged tick for each world packet (20 a second) cost more
+	# than the driving itself, so a matching state only drops acknowledged input.
+	var expected = snapshot() if pending.filter(func(c): return int(c.seq) > int(s.ack)).is_empty() else predicted.get(int(s.ack))
+	if not recovered and expected != null and matches(expected, s):
+		ack = int(s.ack)
+		seq = maxi(seq, ack)
+		pending = pending.filter(func(c): return int(c.seq) > ack)
+		_forget_acknowledged()
+		return
 	var before = node.position + visual_offset
 	var before_yaw = yaw + visual_yaw
 	restore(s)
 	pending = pending.filter(func(c): return int(c.seq) > ack)
+	_forget_acknowledged()
+	predicted[ack] = snapshot()
 	replaying = true
 	for c in pending:
 		step(c, stage, model)
+		predicted[int(c.seq)] = snapshot()
 	replaying = false
 	visual_offset = before - node.position
 	visual_yaw = wrapf(before_yaw - yaw, -PI, PI)
 	if recovered or visual_offset.length() > 5.0 or (not pending.is_empty() and pending.back().get("recover", false)):
 		visual_offset = Vector3.ZERO
 		visual_yaw = 0.0
+
+func _forget_acknowledged() -> void:
+	for key in predicted.keys():
+		if int(key) < ack:
+			predicted.erase(key)
+
+# Whether a host snapshot (full or wire_snapshot) is the predicted state `p`,
+# within the wire's rounding. Missing wire fields carry restore()'s defaults.
+static func matches(p: Dictionary, s: Dictionary) -> bool:
+	for key in ["pos", "velocity"]:
+		var a: Array = p[key]
+		var b: Array = s[key]
+		var limit = MATCH_POSITION if key == "pos" else MATCH_SPEED
+		for i in range(3):
+			if absf(float(a[i]) - float(b[i])) > limit:
+				return false
+	for key in ["yaw", "pitch", "roll", "yaw_rate"]:
+		if absf(angle_difference(float(p[key]), float(s[key]))) > MATCH_ANGLE:
+			return false
+	for key in ["vertical", "steering", "longitudinal"]:
+		if absf(float(p[key]) - float(s[key])) > MATCH_SPEED:
+			return false
+	if bool(p.grounded) != bool(s.grounded) or bool(p.initialized) != bool(s.get("initialized", true)):
+		return false
+	if absf(float(p.condition) - float(s.get("condition", 100.0))) > 0.02 or absf(float(p.impact_timer) - float(s.get("impact_timer", 0.0))) > 0.02:
+		return false
+	if int(p.recovery_ack) != int(s.get("recovery_ack", 0)):
+		return false
+	var contacts: Dictionary = s.get("prop_contacts", {})
+	if p.prop_contacts.size() != contacts.size():
+		return false
+	for key in contacts:
+		if not p.prop_contacts.has(key) or absf(float(p.prop_contacts[key]) - float(contacts[key])) > 0.02:
+			return false
+	return true
+
+# When a car simulated on the host from a guest's input was where it is. The
+# input arrives in bursts (a packet carries a few ticks, the network adds
+# jitter), so the arrival time would make the car speed up and slow down between
+# snapshots. The stamp moves by the simulated ticks instead and only drifts
+# slowly (2 ms a packet) towards the arrival clock, a little behind it.
+const STAMP_LAG = 0.03
+const STAMP_DRIFT = 0.002
+
+static func stamp(time: float, ticks: int, clock: float) -> float:
+	var target = clock - STAMP_LAG
+	if ticks > 0:
+		time += ticks * STEP
+		time += clampf(target - time, -STAMP_DRIFT, STAMP_DRIFT)
+	else:
+		# Standing still: time passes, the position does not change.
+		time = maxf(time + 0.001, target)
+	if time > clock or time < clock - 0.25:
+		time = target
+	return time

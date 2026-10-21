@@ -116,6 +116,16 @@ func world_state() -> Dictionary:
 		world.merge(p.snapshot.call(), true)
 	return world
 
+# Only the hot providers, for the host's direct packets (20 a second). The slow
+# sections, their snapshots and their revision hashes are the server path's job.
+func hot_state() -> Dictionary:
+	_ensure()
+	var world = {}
+	for p in providers:
+		if p.section == "":
+			world.merge(p.snapshot.call(), true)
+	return world
+
 static func split_world_by(full: Dictionary, sections: Dictionary) -> Dictionary:
 	var hot = full.duplicate()
 	var cold = {}

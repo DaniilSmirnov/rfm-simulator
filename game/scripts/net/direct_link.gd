@@ -10,9 +10,13 @@ extends Node
 #   host -> guest  the hot world, authoritative cars and everyone's state
 # A link that does not open, or goes quiet, falls back to the server path.
 #
-# Only browser builds have a WebRTC implementation; native builds keep using
-# the server. Tests replace `connection_factory` with an in-process pair.
+# Browser builds use the engine's WebRTC; desktop and Android use RallyDataLink
+# from the native/voice extension through direct_native.gd. Both open the same
+# channel with the same signaling, so any two players can link. Without either,
+# the room stays on the server. Tests replace `connection_factory` with an
+# in-process pair.
 const WorldValidation = preload("res://scripts/net/world_validation.gd")
+const DirectNative = preload("res://scripts/net/direct_native.gd")
 const NetProtocol = preload("res://scripts/net/net_protocol.gd")
 # Numeric engine enums, so the script parses without the WebRTC module.
 const PEER_CONNECTED = 2
@@ -38,11 +42,12 @@ var world_clock = 0.0
 
 func setup(owner_room) -> void:
 	room = owner_room
+	var web = OS.has_feature("web")
 	if not connection_factory.is_valid():
-		connection_factory = _engine_connection
+		connection_factory = _engine_connection if web else DirectNative.create
 	if not signal_sender.is_valid():
 		signal_sender = func(to: String, data: Dictionary) -> bool: return room.transport.send_signal(to, data)
-	enabled = OS.has_feature("web") and ClassDB.class_exists("WebRTCPeerConnection") and not "--room-direct=off" in OS.get_cmdline_user_args()
+	enabled = (ClassDB.class_exists("WebRTCPeerConnection") if web else DirectNative.available()) and not "--room-direct=off" in OS.get_cmdline_user_args()
 
 static func _engine_connection():
 	return ClassDB.instantiate("WebRTCPeerConnection")
@@ -255,15 +260,16 @@ func _send(delta: float) -> void:
 # roster (name, slot, car) is not repeated: the server delivers it. States are
 # compacted by NetProtocol.compact_state().
 func world_packet() -> Dictionary:
-	var hot: Dictionary = room.world_sync.current_parts().hot.duplicate()
-	hot.erase("cold_revs")
+	var hot: Dictionary = room.world_sync.hot_state()
 	var now_ms = int(room.server_clock() * 1000.0)
 	var players: Array = [_member_entry(room.player_id, room.local_state(), now_ms)]
 	for id in room.peers:
 		var peer: Dictionary = room.peers[id]
 		if peer.state == null:
 			continue
-		players.append(_member_entry(str(id), peer.state, int(float(peer.get("last_state_time", room.server_clock())) * 1000.0)))
+		# A car the host drives is stamped with its simulation time (drive_prediction.gd stamp()).
+		var time = float(room.drive_budgets[id].stamp) if room.drive_budgets.has(id) else float(peer.get("last_state_time", room.server_clock()))
+		players.append(_member_entry(str(id), peer.state, int(time * 1000.0)))
 	return {"t": "w", "time": now_ms, "world": hot, "players": players}
 
 func _member_entry(id: String, state: Dictionary, state_time: int) -> Dictionary:
@@ -272,7 +278,8 @@ func _member_entry(id: String, state: Dictionary, state_time: int) -> Dictionary
 # A member entry as the server would list it, with the roster filled in.
 func _full_entry(entry: Dictionary) -> Dictionary:
 	var member: Dictionary = room.members.get(str(entry.get("id", "")), {})
-	return {"id": entry.id, "name": member.get("name", ""), "slot": member.get("slot", 0), "car_model": member.get("car_model", 0), "character": member.get("character", member.get("slot", 0)), "state_time": entry.get("state_time", 0), "state": NetProtocol.clean_state(NetProtocol.expand_state(entry.state))}
+	# "host_stamped": the host's time of this state, also for the car it drives.
+	return {"id": entry.id, "name": member.get("name", ""), "slot": member.get("slot", 0), "car_model": member.get("car_model", 0), "character": member.get("character", member.get("slot", 0)), "state_time": entry.get("state_time", 0), "host_stamped": true, "state": NetProtocol.clean_state(NetProtocol.expand_state(entry.state))}
 
 func _receive(from: String, message: Dictionary) -> void:
 	match str(message.get("t", "")):
@@ -281,12 +288,15 @@ func _receive(from: String, message: Dictionary) -> void:
 				_receive_state(from, message.get("state"))
 		"w":
 			if not room.is_host and from == room.host_id and message.get("world") is Dictionary and message.get("players") is Array:
-				if not WorldValidation.valid(message.world) or not _timestamp(message.get("time", -1)): return
+				if not _timestamp(message.get("time", -1)) or not WorldValidation.valid(message.world): return
 				var players: Array = []
 				for entry in message.players:
 					if not entry is Dictionary or not entry.get("id") is String or not NetProtocol.valid_compact_state(entry.get("state")) or not _timestamp(entry.get("state_time", 0)): return
 					players.append(_full_entry(entry))
+				# Checked above: the room applies it without walking it again.
+				WorldValidation.trust(message.world)
 				room._guest_world(message.world, float(message.get("time", -1)), players, false)
+				WorldValidation.trust(null)
 
 # The host takes a guest's state straight from its link, with the checks the
 # server applies to the same state on the server path.

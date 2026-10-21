@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
 import { connect as tcpConnect } from 'node:net';
 import { readFile, writeFile, cp, mkdir } from 'node:fs/promises';
+import { existsSync, readdirSync } from 'node:fs';
 import { join, extname } from 'node:path';
 import { setTimeout as wait } from 'node:timers/promises';
 import assert from 'node:assert/strict';
@@ -17,7 +18,11 @@ const SOCKET_DELAY = 150;
 // With a WebRTC engine, browser clients also open a direct host-guest link; the
 // room socket (still delayed) only relays its setup.
 const engineManifest = JSON.parse(await readFile(new URL('../engine/manifest.json', import.meta.url), 'utf8'));
-const directMode = web && socketMode && engineManifest.webrtc === true && !directOff;
+// Native clients open it through the native/voice extension when its library
+// for this platform is installed (node scripts/build-voice.mjs).
+const nativeLibrary = {darwin: 'macos', linux: 'linux', win32: 'windows'}[process.platform];
+const nativeDirect = !web && socketMode && !directOff && existsSync(join(root, 'game/addons/rally_voice/bin')) && readdirSync(join(root, 'game/addons/rally_voice/bin')).some(name => name.startsWith(`librally_voice.${nativeLibrary}.`));
+const directMode = socketMode && !directOff && (web ? engineManifest.webrtc === true : nativeDirect);
 const workerPort = 8793;
 const processes = [];
 let browserFactory;

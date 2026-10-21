@@ -102,7 +102,8 @@ func run() -> void:
 		g.set_process(false)
 		g.room.set_process(false)
 		g.start_game()
-	check(not host.room.direct.enabled, "native builds keep the server path")
+	var DirectNative = load("res://scripts/net/direct_native.gd")
+	check(host.room.direct.enabled == DirectNative.available(), "native builds link directly exactly when the native library is installed")
 	host.room.player_id = "host"
 	guest.room.player_id = "guest"
 	host.room.is_host = true
@@ -146,6 +147,11 @@ func run() -> void:
 	check(guest.room.peers.has("host") and guest.room.peers.host.state != null, "guest sees the host's own state from the direct packet")
 	var packet: Dictionary = host.room.direct.world_packet()
 	check(not packet.world.has("cold_revs") and not packet.world.has("npc_people") and not packet.world.has("camp"), "slow sections stay on the server path")
+	var full_hot: Dictionary = host.room.world_sync.current_parts().hot
+	full_hot.erase("cold_revs")
+	check(JSON.stringify(packet.world, "", true) == JSON.stringify(full_hot, "", true), "the direct packet is the hot world without building the slow sections")
+	var guest_entry = packet.players.filter(func(e): return e.id == "guest")
+	check(guest_entry.size() == 1 and int(guest_entry[0].state_time) == int(float(host.room.drive_budgets.guest.stamp) * 1000.0), "a guest car the host drives is stamped with its simulation time")
 	for entry in packet.players:
 		check(not entry.state.has("drive_inputs") and not entry.state.has("trees") and not entry.has("name"), "raw driving input, object requests and the roster are never forwarded to guests")
 	check(guest.room.sync_body().get("direct", false) == true and not host.room.sync_body().has("direct"), "a guest with a healthy link tells the server to leave the hot world to it")

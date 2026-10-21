@@ -215,6 +215,11 @@ func _adopt_local_host_state() -> void:
 
 func _apply_sync(data: Dictionary) -> void:
 	if data.get("world") != null and not WorldValidation.valid(data.world): return
+	WorldValidation.trust(data.get("world"))
+	_apply_checked_sync(data)
+	WorldValidation.trust(null)
+
+func _apply_checked_sync(data: Dictionary) -> void:
 	if is_host and data.get("cold_revs") is Dictionary:
 		world_sync.server_cold_revs = data.cold_revs
 	host_id = str(data.get("host", host_id))
@@ -246,6 +251,11 @@ func _apply_sync(data: Dictionary) -> void:
 # A guest applies the host's world: from the server, or straight from the host.
 func _guest_world(world, stamp: float, players: Array, membership: bool) -> void:
 	if world != null and not WorldValidation.valid(world): return
+	WorldValidation.trust(world)
+	_apply_guest_world(world, stamp, players, membership)
+	WorldValidation.trust(null)
+
+func _apply_guest_world(world, stamp: float, players: Array, membership: bool) -> void:
 	if world is Dictionary and stamp > authority_stamp:
 		authoritative_drives = world.get("driving", {})
 		authority_stamp = stamp
@@ -405,8 +415,8 @@ func _update_peer(p: Dictionary) -> void:
 	if p.state != null:
 		var sample_time = float(p.state_time) / 1000.0 if p.has("state_time") else server_clock()
 		if is_host and host_drives.has(p.id):
-			sample_time = server_clock()
-		elif not is_host and authoritative_drives.has(p.id):
+			sample_time = float(drive_budgets[p.id].stamp)
+		elif not is_host and authoritative_drives.has(p.id) and not p.get("host_stamped", false):
 			sample_time = authority_stamp / 1000.0
 		if peer.has("last_sample_time") and sample_time <= peer.last_sample_time:
 			return
@@ -427,7 +437,7 @@ func _simulate_guest_drive(p: Dictionary) -> void:
 		var solver = Prediction.new()
 		var pose: Transform3D = game.stage.parks.visitor_pose(0, int(p.get("slot", 1)))
 		solver.reset(pose.origin, pose.basis.get_euler().y)
-		drive_budgets[p.id] = {"time": Time.get_ticks_usec(), "ticks": 30.0}
+		drive_budgets[p.id] = {"time": Time.get_ticks_usec(), "ticks": 30.0, "stamp": server_clock() - Prediction.STAMP_LAG}
 		host_drives[p.id] = solver
 	var solver = host_drives[p.id]
 	var budget = drive_budgets[p.id]
@@ -435,14 +445,17 @@ func _simulate_guest_drive(p: Dictionary) -> void:
 	budget.ticks = minf(120.0, budget.ticks + maxf(0, (now - budget.time) / 1000000.0) * 120.0)
 	budget.time = now
 	solver.context = drive_context(str(p.id))
+	var consumed = 0
 	if not game.paused and not game.dead and not game.finished:
-		budget.ticks -= solver.accept(p.state.get("drive_inputs", []), game.stage, int(p.get("car_model", 0)), int(budget.ticks))
+		consumed = solver.accept(p.state.get("drive_inputs", []), game.stage, int(p.get("car_model", 0)), int(budget.ticks))
+		budget.ticks -= consumed
 		apply_drive_events(solver, true)
 	else:
 		# Acknowledgement prevents pre-pause inputs from playing after resume.
 		for c in p.state.get("drive_inputs", []):
 			if int(c.seq) == solver.ack + 1:
 				solver.ack = int(c.seq)
+	budget.stamp = Prediction.stamp(float(budget.stamp), consumed, server_clock())
 	if not p.state.in_car:
 		solver.motion.velocity = Vector3.ZERO
 	p.state.car = a(solver.node.position)

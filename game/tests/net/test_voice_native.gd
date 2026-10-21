@@ -77,6 +77,7 @@ func run() -> void:
 	await mesh_rules()
 	await microphone_release()
 	await real_links()
+	await real_data_links()
 	finish()
 
 # The microphone bus comes with the project, so the radio never adds a bus
@@ -250,6 +251,45 @@ func real_links() -> void:
 	check(nodes.a.connected_count() == 1 and nodes.b.connected_count() == 1, "the native mesh connects through relayed signals")
 	for id in nodes:
 		nodes[id].leave()
+
+# The room's direct link on native builds: the same extension, through the
+# adapter that direct_link.gd uses in place of Godot's WebRTC.
+func real_data_links() -> void:
+	var DirectNative = load("res://scripts/net/direct_native.gd")
+	var guest = DirectNative.create()
+	var host = DirectNative.create()
+	if guest == null or host == null:
+		if OS.get_environment("RFM_REQUIRE_NATIVE_VOICE") == "1":
+			check(false, "the native direct link is available")
+		print("SKIP: native direct link not available")
+		return
+	var channels = []
+	for pc in [guest, host]:
+		pc.initialize({"iceServers": []})
+		channels.append(pc.create_data_channel("fast", {"negotiated": true, "id": 1, "ordered": false, "maxRetransmits": 0}))
+	guest.session_description_created.connect(func(type, sdp): host.set_remote_description(type, sdp))
+	host.session_description_created.connect(func(type, sdp): guest.set_remote_description(type, sdp))
+	guest.ice_candidate_created.connect(func(media, index, name): host.add_ice_candidate(media, index, name))
+	host.ice_candidate_created.connect(func(media, index, name): guest.add_ice_candidate(media, index, name))
+	check(guest.create_offer() == OK, "the guest offers a native direct link")
+	var deadline = Time.get_ticks_msec() + 10000
+	while Time.get_ticks_msec() < deadline and not channels.all(func(c): return c.get_ready_state() == 1):
+		guest.poll()
+		host.poll()
+		await create_timer(0.02).timeout
+	check(channels.all(func(c): return c.get_ready_state() == 1) and guest.get_connection_state() == 2, "two native direct links open over loopback")
+	var world = JSON.stringify({"t": "w", "time": 1, "world": {}, "players": []}).to_utf8_buffer()
+	check(channels[1].put_packet(world) == OK and channels[0].put_packet("{\"t\":\"s\"}".to_utf8_buffer()) == OK, "both sides send")
+	deadline = Time.get_ticks_msec() + 3000
+	while Time.get_ticks_msec() < deadline and not (channels[0].get_available_packet_count() > 0 and channels[1].get_available_packet_count() > 0):
+		guest.poll()
+		host.poll()
+		await create_timer(0.02).timeout
+	check(channels[0].get_available_packet_count() == 1 and channels[0].get_packet() == world, "the world packet arrives unchanged")
+	check(channels[1].get_available_packet_count() == 1 and channels[1].get_packet().get_string_from_utf8() == "{\"t\":\"s\"}", "the guest state arrives")
+	channels[0].close()
+	host.close()
+	check(guest.get_connection_state() == 5 and channels[0].get_ready_state() == 3, "a closed native link reports closed")
 
 func rms(frames: PackedVector2Array) -> float:
 	if frames.is_empty():
