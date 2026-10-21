@@ -22,6 +22,8 @@ static func create(game: Node, p: Dictionary) -> Dictionary:
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	var peer = {"id": p.id, "car": car, "avatar": avatar, "arm": arm, "held_box": carried_box, "held_kind": "table", "can": arm.get_node("BeerCan"), "skewer": arm.get_node("Skewer"), "eat_time": -1.0, "eat_sample": -1.0, "drink_time": -1.0, "drink_sample": -1.0, "label": label, "last_car": null, "state": null, "car_motion": SnapshotMotion.new(), "avatar_motion": SnapshotMotion.new(),
 		"radio": RadioModel.attach_to_hand(arm, CharacterRig.grip()), "radio_lift": 0.0}
+	# Cars are shown where they are now, ahead of the last snapshot.
+	peer.car_motion.predictive = true
 	if p.state != null:
 		car.position = room_v(p.state.car)
 		avatar.position = room_v(p.state.pos)

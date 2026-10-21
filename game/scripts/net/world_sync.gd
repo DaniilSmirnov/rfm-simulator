@@ -428,6 +428,7 @@ func _racers_apply(w: Dictionary, sample_time: float) -> void:
 			game.racers.append({"id": r.id, "role": role, "zero_index": int(r.get("zero_index", 0)), "node": node, "state": r.state, "variant": r.variant})
 		if not racer_motion.has(r.id):
 			racer_motion[r.id] = SnapshotMotion.new()
+			racer_motion[r.id].predictive = true
 		var lean: Array = r.get("tilt", [0.0, 0.0])
 		var tilt = Vector3(lean[0], r.yaw, lean[1])
 		racer_motion[r.id].push(sample_time, room.v(r.pos), tilt)
