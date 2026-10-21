@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { verifyWindowsBuild } from './verify-windows-build.mjs';
 import { getGodot, root, run } from './godot.mjs';
 
-// Native exports (Steam desktop, Android). Usage: node scripts/build-desktop.mjs --platform=macos|linux|windows|android
+// Native exports (Steam desktop, Android). Usage: node scripts/build-desktop.mjs --platform=macos|linux|windows|android|windows-demo|macos-demo
 // The official 4.4.1 export templates are downloaded once into .cache/templates and
 // checked against a pinned SHA-256; only the selected platform templates are unpacked.
 // Linux exports a separate .pck; Windows embeds all game data into each executable.
@@ -17,7 +17,13 @@ const platforms = {
   windows: { targets: [
     { preset: 'Windows x86', template: 'windows_release_x86_32.exe', output: 'Rally_Fans_Simulator_x86.exe' },
     { preset: 'Windows x64', template: 'windows_release_x86_64.exe', output: 'Rally_Fans_Simulator_x64.exe' },
-  ], patch: windowsPatch, prepare: prepareWindows },
+  ], patch: windowsPatch, prepare: prepareWindows, verify: 'Rally_Fans_Simulator' },
+  // Demo builds (export feature "demo", see game/scripts/core/demo.gd): solo play only, so no radio library.
+  'windows-demo': { targets: [
+    { preset: 'Windows x86 Demo', template: 'windows_release_x86_32.exe', output: 'Rally_Fans_Simulator_Demo_x86.exe' },
+    { preset: 'Windows x64 Demo', template: 'windows_release_x86_64.exe', output: 'Rally_Fans_Simulator_Demo_x64.exe' },
+  ], patch: windowsPatch, prepare: prepareWindows, verify: 'Rally_Fans_Simulator_Demo' },
+  'macos-demo': { preset: 'macOS Demo', template: 'macos.zip', output: 'Rally Fans Simulator Demo.zip', patch: macosPatch, mobileTextures: true },
   android: { preset: 'Android', template: 'android_release.apk', output: 'Rally Fans Simulator.apk', patch: androidPatch, prepare: prepareAndroid, mobileTextures: true },
 };
 const name = process.argv.find(arg => arg.startsWith('--platform='))?.split('=')[1] ?? 'macos';
@@ -179,4 +185,4 @@ for (const target of targets) {
   if (target.pck && (await stat(join(output, target.pck))).size < 1024 * 1024) throw new Error('Exported game data (.pck) is suspiciously small.');
   console.log(`${target.preset} ready: ${join(output, target.output)} (${(size / 1048576).toFixed(1)} MiB). ${note}`);
 }
-if (name === 'windows') await verifyWindowsBuild(output);
+if (platform.verify) await verifyWindowsBuild(output, platform.verify);
