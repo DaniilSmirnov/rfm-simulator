@@ -463,6 +463,7 @@ func _gates() -> void:
 		# French entry sign: white panel with a red border on two grey posts.
 		for x in [-1.2, 1.2]:
 			Props.cylinder(root, Vector3(x, 1.1, 0), 0.05, 0.05, 2.2, Color("8d918c"), 6)
+			solids.solid(root, Vector3(x, 0.55, 0), Vector3(0.1, 1.1, 0.1), "sign")
 		Props.box(root, Vector3(0, 2.0, 0), Vector3(2.9, 0.92, 0.06), Color("c8352f"))
 		Props.box(root, Vector3(0, 2.0, -0.01), Vector3(2.7, 0.74, 0.06), Color("f4f1ea"))
 		for face in [-1.0, 1.0]:
@@ -904,7 +905,7 @@ func _domaine() -> void:
 	sign.double_sided = false
 	Props.box(root, Vector3(0, 2.4, -5.55), Vector3(4.6, 0.6, 0.06), Color("efe4cc"))
 	for x in [-2.0, 2.0]:
-		Props.box(root, Vector3(x, 1.2, -5.55), Vector3(0.12, 2.4, 0.12), Color("6b5236"))
+		Interiors.block(self, root, Vector3(x, 1.2, -5.55), Vector3(0.12, 2.4, 0.12), Color("6b5236"))
 	# Barrels and grape crates in the yard.
 	for i in range(6):
 		var barrel = Props.cylinder(root, Vector3(-5.0 + i * 1.0, 0.45, -8.0), 0.42, 0.42, 0.9, Color("7a4c30"), 12)
