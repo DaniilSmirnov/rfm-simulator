@@ -154,6 +154,8 @@ jobs:
           path: .cache/godot
           key: godot-4.4.1-linux-x86_64
       - run: npm ci
+      # The local Worker serves its room API next to the built site.
+      - run: npm run build
       - name: Verify two native multiplayer clients
         run: node scripts/test-multiplayer.mjs
       - name: Verify two native multiplayer clients over WebSocket
