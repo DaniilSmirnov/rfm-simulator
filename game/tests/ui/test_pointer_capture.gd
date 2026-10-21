@@ -10,12 +10,35 @@ func motion(game, dx: float) -> void:
 	event.relative = Vector2(dx, 0)
 	game._unhandled_input(event)
 
+# Join pressed in the menu captures at once; a room the host has just
+# re-created answers 404 for its old ID. The menu gets its cursor back and
+# the join can be retried without a restart.
+func failed_join(game) -> void:
+	var pointer = game.pointer
+	var room = game.room
+	room.ui.id_input.text = "0".repeat(room.NetProtocol.room_id_length())
+	room.busy = true
+	check(not pointer.stray(true), "the capture from the join button holds while the server answers")
+	room.transport.request_kind = "join"
+	room._response(HTTPRequest.RESULT_SUCCESS, 404, PackedStringArray(), JSON.stringify({"error": "Комната не найдена или закрыта."}).to_utf8_buffer())
+	check(not room.connected and not game.playing and not room.busy, "a missing room leaves the player in the menu")
+	check(room.ui.status.text.contains("новый ID"), "the error explains a re-created room has a new ID")
+	check(not room.ui.join_button.disabled and not room.ui.create_button.disabled, "join and create can be pressed again")
+	check(pointer.stray(true), "a capture left after the failed join is stray")
+	pointer.update(true)
+	check(not pointer.was_captured and not game.paused, "the menu frees the cursor without opening pause")
+	game.loading_world = true
+	check(not pointer.stray(true), "the capture holds while the stage loads")
+	game.loading_world = false
+	await process_frame
+
 func run() -> void:
 	var game = load("res://main.tscn").instantiate()
 	root.add_child(game)
 	await process_frame
 	game.set_process(false)
 	game.room.set_process(false)
+	await failed_join(game)
 	await game.start_game()
 	var pointer = game.pointer
 	check(game.playing and not game.paused and pointer.wanted(), "desktop play wants the pointer")
