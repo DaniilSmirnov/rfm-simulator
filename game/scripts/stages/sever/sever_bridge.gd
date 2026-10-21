@@ -59,7 +59,9 @@ static func build(stage, biome, root: Node3D, batch: Callable) -> Node3D:
 	# Log cribs at both banks and a pier in the middle of the stream.
 	for z in [-length * 0.5 + 0.9, length * 0.5 - 0.9]:
 		Carpentry.log_frame(frame, Vector3(0, bed, z), half * 2.0 + 1.4, 1.8, -bed - 0.62, LOGS.darkened(0.05))
+		stage.solids.solid(frame, Vector3(0, (bed - 0.62) * 0.5, z), Vector3(half * 2.0 + 1.4, -bed - 0.62, 1.8), "wall")
 	Carpentry.log_frame(frame, Vector3(0, bed, 0), half * 2.0 + 0.8, 1.4, -bed - 0.62, LOGS.darkened(0.05))
+	stage.solids.solid(frame, Vector3(0, (bed - 0.62) * 0.5, 0), Vector3(half * 2.0 + 0.8, -bed - 0.62, 1.4), "wall")
 	_frozen_stream(stage, biome, root)
 	return frame
 

@@ -27,7 +27,7 @@ static func build(stage, biome, root: Node3D) -> Node3D:
 	_quadrangle(node)
 	_apse(node)
 	_refectory(node)
-	_bell_tower(node)
+	_bell_tower(stage, node)
 	stage.solids.solid(node, Vector3(0, 3.2, 0), Vector3(8.3, 6.4, 8.3), "building")
 	stage.solids.solid(node, Vector3(0, 2.5, -5.9), Vector3(5.3, 5.0, 3.9), "building")
 	stage.solids.solid(node, Vector3(0, 2.2, 7.25), Vector3(7.3, 4.4, 6.8), "building")
@@ -110,7 +110,7 @@ static func _refectory(node: Node3D) -> void:
 		for z in [5.6, 8.9]:
 			Carpentry.side_window(node, Vector3(side * 3.62, 2.5, z), Vector2(0.6, 0.85), LOGS.lightened(0.25), LOGS, false, side)
 
-static func _bell_tower(node: Node3D) -> void:
+static func _bell_tower(stage, node: Node3D) -> void:
 	var base = Vector3(0, 0, 12.6)
 	Carpentry.log_frame(node, base, 4.2, 4.2, 7.0, LOGS)
 	# Open octagonal belfry: floor, posts, bells and the crowning ring.
@@ -140,6 +140,7 @@ static func _bell_tower(node: Node3D) -> void:
 	porch.position = base + Vector3(0, 0, 2.15)
 	for x in [-0.95, 0.95]:
 		Props.box(porch, Vector3(x, 1.3, 1.35), Vector3(0.16, 2.6, 0.16), LOGS)
+		stage.solids.solid(porch, Vector3(x, 1.3, 1.35), Vector3(0.16, 2.6, 0.16), "building")
 	var ridge = Carpentry.gable_roof(porch, 2.6, 2.1, 0.0, 1.75, 0.75, PLANK, 0.25)
 	Carpentry.gable(porch, 1.6, 2.1, 2.6, ridge - 0.08, 0.12, LOGS.lightened(0.1))
 	Props.box(porch, Vector3(0, 0.1, 0.9), Vector3(2.0, 0.2, 1.8), Color("7a6650"))

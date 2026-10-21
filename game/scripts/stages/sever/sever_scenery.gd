@@ -94,6 +94,10 @@ func _fence_run(a: Vector3, b: Vector3) -> void:
 		post_colors.append(FENCE.lightened(0.04 * sin(i * 1.7)) if not post else FENCE.darkened(0.15))
 		if post:
 			stage.rocks.append(Records.rock(p, 0.1, 1.2, Records.BARRIER))
+	# The pickets between the posts are solid too.
+	for record in Records.row(a, b, 0.1, 1.2, Records.BARRIER, 0.4):
+		record.pos.y = stage.RoadCut.ground(stage, record.pos)
+		stage.rocks.append(record)
 	for y in [0.3, 0.8]:
 		var pa = a + Vector3.UP * (stage.ground(a) - a.y + y)
 		var pb = b + Vector3.UP * (stage.ground(b) - b.y + y)
@@ -191,6 +195,7 @@ func _roadside_posts(root: Node3D) -> void:
 			p.y = stage.base_ground(p)
 			poses.append(Transform3D(Basis.from_scale(Vector3(0.06, 1.8, 0.06)), p + Vector3.UP * 0.75))
 			colors.append(Color("5c4c38"))
+			stage.rocks.append(Records.rock(p, 0.04, 1.65, Records.POST))
 	_batch(root, "SnowStakes", unit_box(), poses, colors)
 
 # ---------------------------------------------------------------- batching
