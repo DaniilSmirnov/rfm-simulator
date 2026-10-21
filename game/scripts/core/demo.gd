@@ -25,7 +25,6 @@ static func trim_menu(game, hud, pause: bool) -> void:
 	game.selection_controls.hide()
 	var lobby = game.lobby_ui
 	hud.links.visible = pause or not game.playing
-	lobby.about_button.visible = pause
 	lobby.help_button.visible = pause
 	lobby.settings_button.visible = pause
 	lobby.language_button.visible = pause and not lobby._is_vk_family()
