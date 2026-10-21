@@ -656,7 +656,11 @@ func drive_context(owner: String) -> Dictionary:
 	for person in game.injuries.people():
 		if person.key != "player:" + owner and not game.injuries.is_down(person.key) and not person.get("riding", false):
 			contacts.append({"position": person.pos, "person": true})
-	return {"contacts": contacts, "racing": game.racing}
+	var context = {"contacts": contacts, "racing": game.racing}
+	if game.racing:
+		var pose: Transform3D = game.stage.parks.visitor_pose(0, int(members.get(owner, {}).get("slot", 0 if owner == player_id and is_host else 1)))
+		context.park = [pose.origin.x, pose.origin.y, pose.origin.z, pose.basis.get_euler().y]
+	return context
 
 func apply_drive_events(solver, authoritative: bool) -> void:
 	for event in solver.events:
@@ -683,7 +687,7 @@ func recover_drive() -> bool:
 		return true
 	prediction.context = drive_context(player_id)
 	prediction.predict(1, 0, 0, false, game.stage, game.selected_car, true)
-	game.toast("Машина возвращена на СУ.")
+	game.toast("Машина возвращена в сервис-парк." if game.racing else "Машина возвращена на СУ.")
 	return true
 
 func smooth_car_visuals() -> void:
