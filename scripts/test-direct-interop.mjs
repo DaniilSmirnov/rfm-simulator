@@ -34,7 +34,13 @@ const tcp = createTcpServer(s => {
  });
 });
 await new Promise(resolve => tcp.listen(0, '127.0.0.1', resolve));
-const toNative = message => socket?.write(JSON.stringify(message) + '\n');
+// The page offers right away; nothing may be written before the native client
+// has connected, or the offer is lost (a slow runner starts Godot later).
+const pending = [];
+const toNative = message => {
+ pending.push(JSON.stringify(message) + '\n');
+ if (socket) socket.write(pending.splice(0).join(''));
+};
 
 const godot = await getGodot();
 const logs = [];
@@ -74,6 +80,9 @@ try {
   // The page's side of the native "host" link is a guest: it offers.
   return links.host.pc.createOffer().then(offer => links.host.pc.setLocalDescription(offer)).then(() => outbox.push({link: 'host', kind: 'offer', sdp: links.host.pc.localDescription.sdp}));
  });
+ const connectBy = Date.now() + 30000;
+ while (!socket && exited === null && Date.now() < connectBy) await wait(50);
+ assert.ok(socket, 'the native client connects to the test: ' + logs.join(''));
  const deadline = Date.now() + 30000;
  const done = () => lastReport && lastReport.open.length === 2 && ['host', 'guest'].every(name => lastReport.received[name].includes('browser-' + name) && lastReport.received[name].includes('echo:native-' + name));
  let pageState = null;
