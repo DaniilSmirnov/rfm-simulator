@@ -358,7 +358,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [macos, linux, windows]
+        platform: [macos, linux, windows, windows-demo, macos-demo]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -368,7 +368,7 @@ jobs:
           node-version: 22
           cache: npm
       - name: Install Wine for the exe icon and file properties (rcedit)
-        if: matrix.platform == 'windows'
+        if: startsWith(matrix.platform, 'windows')
         run: sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends wine wine64
       - run: npm ci
       - name: Add the native radio extension
@@ -378,15 +378,19 @@ jobs:
           merge-multiple: true
           path: game/addons/rally_voice/bin
       - run: node scripts/build-voice.mjs --install
-      - name: Export the release build (Windows x86 + x64, others x86_64/universal)
+      - name: Export the release build (Windows x86 + x64, others x86_64/universal; *-demo is the solo demo)
         run: npm run build:${{ matrix.platform }}
       - name: Check the executable format
         run: |
-          if [ "${{ matrix.platform }}" = macos ]; then
-            unzip -q dist-macos/*.zip -d macos-check
+          if [ "${{ matrix.platform }}" = macos ] || [ "${{ matrix.platform }}" = macos-demo ]; then
+            unzip -q dist-${{ matrix.platform }}/*.zip -d macos-check
             file macos-check/*.app/Contents/MacOS/* | tee file.txt
             grep -q "Mach-O universal binary with 2 architectures" file.txt
-            grep -qa "addons/rally_voice/bin/librally_voice.macos.universal.dylib" macos-check/*.app/Contents/Resources/*.pck
+            if [ "${{ matrix.platform }}" = macos ]; then
+              grep -qa "addons/rally_voice/bin/librally_voice.macos.universal.dylib" macos-check/*.app/Contents/Resources/*.pck
+            fi
+          elif [ "${{ matrix.platform }}" = windows-demo ]; then
+            node scripts/verify-windows-build.mjs dist-windows-demo Rally_Fans_Simulator_Demo
           elif [ "${{ matrix.platform }}" = windows ]; then
             node scripts/verify-windows-build.mjs dist-windows
             # The radio library rides inside each exe's embedded pack.
@@ -405,10 +409,16 @@ jobs:
           if-no-files-found: error
 
   windows-startup:
-    name: Windows standalone startup (x86 + x64)
+    name: Windows standalone startup (${{ matrix.build.artifact }}, x86 + x64)
     needs: desktop
     runs-on: windows-2022
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        build:
+          - {artifact: desktop-windows, stem: Rally_Fans_Simulator}
+          - {artifact: desktop-windows-demo, stem: Rally_Fans_Simulator_Demo}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -418,7 +428,7 @@ jobs:
           node-version: 22
       - uses: actions/download-artifact@v4
         with:
-          name: desktop-windows
+          name: ${{ matrix.build.artifact }}
           path: dist-windows
       - name: Launch each exe alone from an isolated directory
-        run: node scripts/test-windows-startup.mjs dist-windows
+        run: node scripts/test-windows-startup.mjs dist-windows ${{ matrix.build.stem }}
