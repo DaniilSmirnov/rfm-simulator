@@ -25,20 +25,25 @@ static func clear_view(stage, from: Vector3, to: Vector3, ignored: Node3D = null
 		t = minf(t, from.distance_to(hit.position) / length)
 	return to if t >= 1.0 else from + travel * maxf(t, MIN_DISTANCE / length)
 
-# The chase camera never takes a clear spot closer to the car than `reach` (that
-# is inside the car body): it rises over the car instead, steeper until the view
-# from above is clear; with nothing clear it stays at `reach` on its own line.
+# The chase camera does not huddle against the car when scenery (a tent roof
+# behind the park bay, a crown) cuts its line short: it rises over the car,
+# steeper until most of the distance is clear, and never comes closer than
+# `reach` (that is inside the car body); with nothing clear it stays at
+# `reach` on its own line.
 static func chase_view(stage, pivot: Vector3, to: Vector3, car: Node3D, reach: float) -> Vector3:
 	var seen = clear_view(stage, pivot, to, car)
 	var length = pivot.distance_to(to)
-	if length <= reach or pivot.distance_to(seen) >= reach:
+	if length <= reach or pivot.distance_to(seen) >= maxf(reach, length * 0.75):
 		return seen
+	var best = seen if pivot.distance_to(seen) >= reach else pivot + (to - pivot) / length * reach
 	var flat = Vector3(to.x - pivot.x, 0, to.z - pivot.z).normalized()
 	for lift in [0.75, 1.05, 1.35]:
 		var rise = clear_view(stage, pivot, pivot + (flat * cos(lift) + Vector3.UP * sin(lift)) * length, car)
-		if pivot.distance_to(rise) >= reach:
-			return rise
-	return pivot + (to - pivot) / length * reach
+		if pivot.distance_to(rise) > pivot.distance_to(best) + 0.5:
+			best = rise
+		if pivot.distance_to(best) >= length * 0.75:
+			break
+	return best
 
 # Fraction of from..to before it first enters a standing tree's crown (1 = never).
 static func crown_fraction(stage, from: Vector3, to: Vector3) -> float:
