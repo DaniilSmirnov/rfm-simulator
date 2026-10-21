@@ -44,6 +44,7 @@ find_package(Opus CONFIG REQUIRED)
 
 add_library(rally_voice SHARED
   src/register_types.cpp
+  src/data_link.cpp
   src/voice_link.cpp
   src/voice_encoder.cpp
   src/radio_dsp.cpp)

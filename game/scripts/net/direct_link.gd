@@ -10,9 +10,13 @@ extends Node
 #   host -> guest  the hot world, authoritative cars and everyone's state
 # A link that does not open, or goes quiet, falls back to the server path.
 #
-# Only browser builds have a WebRTC implementation; native builds keep using
-# the server. Tests replace `connection_factory` with an in-process pair.
+# Browser builds use the engine's WebRTC; desktop and Android use RallyDataLink
+# from the native/voice extension through direct_native.gd. Both open the same
+# channel with the same signaling, so any two players can link. Without either,
+# the room stays on the server. Tests replace `connection_factory` with an
+# in-process pair.
 const WorldValidation = preload("res://scripts/net/world_validation.gd")
+const DirectNative = preload("res://scripts/net/direct_native.gd")
 const NetProtocol = preload("res://scripts/net/net_protocol.gd")
 # Numeric engine enums, so the script parses without the WebRTC module.
 const PEER_CONNECTED = 2
@@ -38,11 +42,12 @@ var world_clock = 0.0
 
 func setup(owner_room) -> void:
 	room = owner_room
+	var web = OS.has_feature("web")
 	if not connection_factory.is_valid():
-		connection_factory = _engine_connection
+		connection_factory = _engine_connection if web else DirectNative.create
 	if not signal_sender.is_valid():
 		signal_sender = func(to: String, data: Dictionary) -> bool: return room.transport.send_signal(to, data)
-	enabled = OS.has_feature("web") and ClassDB.class_exists("WebRTCPeerConnection") and not "--room-direct=off" in OS.get_cmdline_user_args()
+	enabled = (ClassDB.class_exists("WebRTCPeerConnection") if web else DirectNative.available()) and not "--room-direct=off" in OS.get_cmdline_user_args()
 
 static func _engine_connection():
 	return ClassDB.instantiate("WebRTCPeerConnection")

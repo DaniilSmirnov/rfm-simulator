@@ -11,6 +11,12 @@ browser and native players hear each other.
   It handles SDP and ICE, the Opus audio line, an RTP jitter buffer with FEC/PLC,
   and the radio colouring (band-pass, volume, hiss) for an `AudioStreamGenerator`.
   libdatachannel calls back on its own threads, and Godot drains events with `poll()`.
+- `RallyDataLink`: the room's direct link (`game/scripts/net/direct_link.gd`)
+  on native builds. It opens the same negotiated unordered data channel
+  without retransmits that browser builds open with Godot's WebRTC, so native
+  and browser players link directly. `direct_native.gd` adapts it to the
+  WebRTCPeerConnection API that the link code uses. The library loads when a
+  room starts linking, not only on the first radio join.
 - `RallyVoiceEncoder`: turns the microphone (`AudioEffectCapture` frames at the
   mix rate) into 20 ms mono Opus packets at 24 kbit/s with in-band FEC.
 
@@ -47,7 +53,7 @@ writes a `.gdextension` next to it and loads it with
 
 - Windows builds stay one standalone exe.
 - Builds without the library (the web, tests) start without extension errors.
-- The library loads only when someone uses the radio.
+- The library loads only when it is needed: the radio or a room's direct link.
 
 The microphone plays into the `RadioMic` bus from `game/default_bus_layout.tres`
 (an `AudioEffectCapture` before a -80 dB fader). The bus is never added at

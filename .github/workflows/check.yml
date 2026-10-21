@@ -296,6 +296,8 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Native Godot client talks with a Chromium client
         run: node scripts/test-voice-interop.mjs
+      - name: Native direct link opens with a Chromium client
+        run: node scripts/test-direct-interop.mjs
 
   android:
     name: Android build

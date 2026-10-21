@@ -102,7 +102,8 @@ func run() -> void:
 		g.set_process(false)
 		g.room.set_process(false)
 		g.start_game()
-	check(not host.room.direct.enabled, "native builds keep the server path")
+	var DirectNative = load("res://scripts/net/direct_native.gd")
+	check(host.room.direct.enabled == DirectNative.available(), "native builds link directly exactly when the native library is installed")
 	host.room.player_id = "host"
 	guest.room.player_id = "guest"
 	host.room.is_host = true
