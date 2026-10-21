@@ -208,9 +208,6 @@ func rally_speed(s: float) -> float:
 		return 17.0
 	return 20.0 if s < GROVE_BEGIN else 23.0
 
-func clearing_signs() -> bool:
-	return false
-
 # The bench and the slot between the castles have no verge to stand on: the
 # spectators keep to their areas on the rim and the floor.
 func roadside_spectators() -> bool:

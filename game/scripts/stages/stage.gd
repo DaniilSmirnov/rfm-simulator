@@ -394,8 +394,6 @@ func _build_details(cooperative: bool = false) -> void:
 	await biome.build_details(cooperative)
 
 func _build_finish() -> void:
-	if biome.clearing_signs():
-		woodland.clearing_signs()
 	biome.build_horizon()
 	parks.build(self)
 

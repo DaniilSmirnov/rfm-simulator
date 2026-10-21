@@ -470,21 +470,3 @@ func tree_layers(name: String, trees: Array, layers: Array) -> void:
 			colors.append(Color(layer.color).lightened(float(tree.shade)))
 		var detail = DetailLayer.tiled(260.0).tree(name, bases, heights) if index == 0 else DetailLayer.tiled(260.0).tree(name)
 		detail_batch("%s%d" % [name, index], layer.mesh, poses, colors, detail)
-
-# Signposts at the spectator clearings ("ПОЛЯНА N").
-func clearing_signs() -> void:
-	for i in range(stage.clearings.size()):
-		var first = stage.get_child_count()
-		var c: Vector3 = stage.clearings[i] + stage.direction(stage.road_s(stage.clearings[i])) * 8.0
-		c.y = stage.RoadCut.ground(stage, c)
-		RallyProps.cylinder(stage, c + Vector3(0, 1.2, 0), 0.07, 0.07, 2.4, Color("d5bc8e"), 5)
-		var sign = RallyProps.box(stage, c + Vector3(0, 2.15, 0), Vector3(2, 0.65, 0.12), Color("e5d9b9"))
-		var label = Label3D.new()
-		sign.add_child(label)
-		label.position = Vector3(0, 0, 0.075)
-		label.text = Loc.t("ПОЛЯНА %d") % (i + 1)
-		label.font_size = 42
-		label.pixel_size = 0.005
-		label.modulate = Color("344537")
-		label.outline_size = 0
-		Movable.group(stage.solids, stage, first, 15, true)
