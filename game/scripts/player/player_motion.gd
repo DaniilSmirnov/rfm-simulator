@@ -9,6 +9,7 @@ const PropContact = preload("res://scripts/cars/prop_contact.gd")
 const Motion = preload("res://scripts/cars/vehicle_motion.gd")
 const CarRegistry = preload("res://scripts/cars/car_registry.gd")
 const Stage = preload("res://scripts/stages/stage.gd")
+const ViewClearance = preload("res://scripts/player/view_clearance.gd")
 
 var game:
 	set(value):
@@ -275,7 +276,9 @@ func update_camera(delta: float) -> void:
 		var distance = Vector2(8.2, 4.4).length()
 		var desired = body.position + behind * cos(elevation) * distance + Vector3.UP * sin(elevation) * distance
 		desired.y = maxf(desired.y, game.stage.ground(desired) + 1.1)
-		game.camera.position = game.camera.position.lerp(desired, 1 - exp(-delta * 7))
+		var eased = game.camera.position.lerp(desired, 1 - exp(-delta * 7))
+		# Snap in front of a tent roof or a crown at once; ease back out.
+		game.camera.position = ViewClearance.clear_view(game.stage, body.position + Vector3(0, 1.1, 0), eased, body)
 		game.camera.look_at(body.position + Vector3(0, 1.1, 0) - behind * 1.5)
 	else:
 		game.camera.position = game.walker + Vector3(0, lerpf(1.45 if game.seated else 1.72, 0.36, collapse) + sin(game.elapsed * 12) * 0.015, 0)
@@ -316,8 +319,8 @@ func toggle_car() -> void:
 		game.in_car = false
 		game.vehicle_motion.velocity = Vector3.ZERO
 		game.speed = 0
-		game.walker = game.car.position + Vector3(-2.1, 0, 0).rotated(Vector3.UP, game.heading)
-		game.walker.y = game.stage.walking_ground(game.walker)
+		var side = Vector3(-2.1, 0, 0).rotated(Vector3.UP, game.heading)
+		game.walker = ViewClearance.exit_spot(game.stage, [game.car.position + side, game.car.position - side])
 		game.view_yaw = game.heading
 		game.toast("Z — стол, C — стулья, G — мангал. Устанавливай вне СУ.")
 	elif game.walker.distance_to(game.car.position) < 4:

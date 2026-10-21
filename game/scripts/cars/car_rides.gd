@@ -13,6 +13,7 @@ extends RefCounted
 # host moves towed cars in Recovery.update, as it does for ropes held by hand.
 const Recovery = preload("res://scripts/cars/recovery.gd")
 const Loc = preload("res://scripts/ui/loc.gd")
+const ViewClearance = preload("res://scripts/player/view_clearance.gd")
 const SEATS = 5
 # Metres between two cars for hooking the rope, its length, and the distance
 # at which a stretched rope comes off (a car returned to the road, a host lag).
@@ -176,8 +177,9 @@ func leave(force: bool = false) -> void:
 	var seat = maxi(0, riders(ride).find(me()))
 	var origin: Vector3 = node.position if node != null else game.walker
 	var yaw: float = node.rotation.y if node != null else game.view_yaw
-	game.walker = origin + Vector3(-2.1 if seat % 2 == 0 else 2.1, 0, 0.6 * floorf(seat / 2.0)).rotated(Vector3.UP, yaw)
-	game.walker.y = game.stage.walking_ground(game.walker)
+	var side = Vector3(-2.1 if seat % 2 == 0 else 2.1, 0, 0).rotated(Vector3.UP, yaw)
+	var back = Vector3(0, 0, 0.6 * floorf(seat / 2.0)).rotated(Vector3.UP, yaw)
+	game.walker = ViewClearance.exit_spot(game.stage, [origin + side + back, origin - side + back])
 	game.view_yaw = yaw
 	ride = ""
 	game.in_car = false
