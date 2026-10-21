@@ -382,6 +382,13 @@ func _level(node: Node3D, half: Vector2, color: Color) -> void:
 	var depth = node.position.y - low + 0.5
 	Props.box(node, Vector3(0, 0.3 - depth * 0.5, 0), Vector3(half.x * 2.0 + 0.2, depth + 0.6, half.y * 2.0 + 0.2), color)
 
+# The levelled plinth and walls are one solid box. The circles stay inside it
+# and keep trees, camps and gravel off the footprint.
+func _footprint(node: Node3D, half: Vector2, height: float) -> void:
+	var size = Vector2(half.x * 2.0 + 0.2, half.y * 2.0 + 0.2)
+	stage.solids.solid(node, Vector3(0, (height - 2.0) * 0.5, 0), Vector3(size.x, height + 2.0, size.y), "building")
+	stage.rocks.append_array(Records.footprint(node.position, node.basis.x, size.x, size.y, height))
+
 func _build_yellow_house() -> void:
 	var house = Node3D.new()
 	house.name = "YellowHouse"
@@ -404,7 +411,7 @@ func _build_yellow_house() -> void:
 		Props.box(house, Vector3(x, 2.5, 3.56), Vector3(0.86, 1.0, 0.04), Color("3b4a52"))
 	Props.box(house, Vector3(-1.4, 1.65, -3.52), Vector3(1.0, 2.1, 0.06), Color("f2eee2"))
 	Props.box(house, Vector3(-1.4, 1.6, -3.56), Vector3(0.8, 1.9, 0.04), Color("5a3b2b"))
-	stage.rocks.append(Records.rock(yellow_house, 5.6, 6.0, Records.BUILDING))
+	_footprint(house, Vector2(4.6, 3.6), 6.0)
 	# A wooden shed and a fence line typical of a farmyard by the stage.
 	var shed = yellow_house + Vector3(YELLOW_HOUSE_SIDE * 9.0, 0, -6.0)
 	var barn = Node3D.new()
@@ -414,7 +421,7 @@ func _build_yellow_house() -> void:
 	_level(barn, Vector2(2.0, 1.6), Color("5f5a52"))
 	Props.box(barn, Vector3(0, 2.0, 0), Vector3(4.0, 2.8, 3.2), Color("8b3a2a"))
 	Props.box(barn, Vector3(0, 3.55, 0), Vector3(4.4, 0.25, 3.6), Color("4a4540"))
-	stage.rocks.append(Records.rock(shed, 2.6, 3.0, Records.BUILDING))
+	_footprint(barn, Vector2(2.0, 1.6), 3.7)
 
 # Spectators traditionally mark how far crews fly over the crest.
 func _build_jump_boards() -> void:
@@ -429,6 +436,9 @@ func _build_jump_boards() -> void:
 		var board = Props.box(boards, p + Vector3(0, 1.25, 0), Vector3(0.9, 0.5, 0.06), Color("f4f2ea"))
 		var direction = stage.direction(s)
 		board.rotation.y = atan2(-direction.x, -direction.z)
+		stage.rocks.append(Records.rock(p, 0.06, 1.5, Records.POST))
+		var plate = stage.solids.solid(boards, board.position, Vector3(0.9, 0.5, 0.06), "sign")
+		plate.rotation.y = board.rotation.y
 		# Captions stay real text: the boards are seen up close at the jump.
 		for face in [[0.04, 0.0], [-0.04, PI]]:
 			var caption = Props.label_3d(board, Vector3(0, 0, face[0]), Loc.t("%d м") % metres, 64, 0.005, Color("b0322a"), face[1])
@@ -451,7 +461,7 @@ func _build_sauna() -> void:
 	# faces never share a plane and flicker.
 	Props.box(hut, Vector3(0, 1.2, 1.80), Vector3(0.8, 1.7, 0.06), Color("4a3524"))
 	Props.cylinder(hut, Vector3(1.0, 3.5, -0.8), 0.14, 0.14, 1.3, Color("2f2f2f"), 6)
-	stage.rocks.append(Records.rock(sauna, 2.5, 3.2, Records.BUILDING))
+	_footprint(hut, Vector2(2.1, 1.8), 3.2)
 	# Jetty: deck planks on posts standing in the lake.
 	var start: Vector3 = jetty.start
 	var end: Vector3 = jetty.end
@@ -473,6 +483,8 @@ func _build_sauna() -> void:
 			var post = p + across * sign * 0.8
 			var bottom = stage.ground(post) - 0.3
 			Props.cylinder(pier, Vector3(post.x, (bottom + deck) * 0.5, post.z), 0.09, 0.09, deck - bottom, Color("5b4733"), 5)
+			# Up to the deck, so people walking on the jetty step over them.
+			stage.rocks.append(Records.rock(Vector3(post.x, bottom, post.z), 0.09, deck - bottom - 0.08, Records.POST))
 	# Rowing boat tied at the end of the jetty; it floats on the waves.
 	boat = Node3D.new()
 	boat.name = "RowingBoat"
