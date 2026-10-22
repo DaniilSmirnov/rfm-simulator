@@ -10,6 +10,7 @@ extends RefCounted
 # road (0) into the park. The land is levelled to the height of the road end:
 # ground(), the drawn terrain and the tyres all meet the same flat surface.
 const ServiceParkModel = preload("res://scripts/traffic/service_park_model.gd")
+const Hitbox = preload("res://scripts/cars/car_hitbox.gd")
 const LANE = 12.0
 const DEPTH = 34.0
 const HALF_WIDTH = 19.0
@@ -221,6 +222,18 @@ func park_visitor(car: Node3D, slot: int) -> float:
 	car.position = pose.origin
 	car.rotation = Vector3(0, pose.basis.get_euler().y, 0)
 	return car.rotation.y
+
+# A member joining late can find their slot taken by a car someone parked
+# there: the first start slot from their own where a car of `box` touches none
+# of `contacts` (Hitbox contacts; people on foot step aside). All taken, their own.
+func free_visitor_pose(slot: int, box: AABB, contacts: Array) -> Transform3D:
+	var cars = contacts.filter(func(other): return not other.get("person", false))
+	for k in range(VISITORS.size()):
+		var pose = visitor_pose(0, slot + k)
+		var shape = Hitbox.shape(box, pose.basis.get_euler().y)
+		if cars.all(func(other): return not Hitbox.blocked(pose.origin, pose.origin, shape, other)):
+			return pose
+	return visitor_pose(0, slot)
 
 # The start line of a pass leaving this park: the end of the road, facing it.
 func line_pose(index: int) -> Transform3D:

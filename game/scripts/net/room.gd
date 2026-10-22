@@ -10,7 +10,6 @@ extends Node
 #   drive_prediction.gd  guest car prediction / host-side simulation
 const Hitbox = preload("res://scripts/cars/car_hitbox.gd")
 const Prediction = preload("res://scripts/net/drive_prediction.gd")
-const SnapshotMotion = preload("res://scripts/net/snapshot_motion.gd")
 const Props = preload("res://scripts/core/props.gd")
 const NetProtocol = preload("res://scripts/net/net_protocol.gd")
 const Transport = preload("res://scripts/net/room_transport.gd")
@@ -441,7 +440,7 @@ func _update_peer(p: Dictionary) -> void:
 func _simulate_guest_drive(p: Dictionary) -> void:
 	if not host_drives.has(p.id):
 		var solver = Prediction.new()
-		var pose: Transform3D = game.stage.parks.visitor_pose(0, int(p.get("slot", 1)))
+		var pose: Transform3D = game.stage.parks.free_visitor_pose(int(p.get("slot", 1)), Hitbox.player(int(p.get("car_model", 0))), drive_context(str(p.id)).contacts)
 		solver.reset(pose.origin, pose.basis.get_euler().y)
 		drive_budgets[p.id] = {"time": Time.get_ticks_usec(), "ticks": 30.0, "stamp": server_clock() - Prediction.STAMP_LAG}
 		host_drives[p.id] = solver
@@ -594,9 +593,10 @@ func disconnect_room(message: String) -> void:
 	transport.close_socket()
 	game.paused = true
 	game.menu.show()
-	game.menu_title.text = "Комната закрыта"
-	game.menu_text.text = message
-	game.start_button.text = "В ГЛАВНОЕ МЕНЮ"
+	if not (game.finished or game.dead): # a trip's results stay; their button leads to the menu
+		game.menu_title.text = "Комната закрыта"
+		game.menu_text.text = message
+		game.start_button.text = "В ГЛАВНОЕ МЕНЮ"
 	game.dead = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	if game.mobile_controls != null:
@@ -606,9 +606,9 @@ func disconnect_room(message: String) -> void:
 # ---------------------------------------------------------------- driving
 
 func predict_drive(delta: float) -> bool:
-	if is_host or not prediction_enabled:
-		return false
-	if not prediction.active:
+	if is_host: return false
+	# Until the host's first world the car waits where the host starts it.
+	if not prediction_enabled or not prediction.active:
 		return true
 	input_clock += minf(delta, 0.1)
 	var ticks = int(input_clock / prediction.motion.handling.STEP)
@@ -669,9 +669,9 @@ func apply_drive_events(solver, authoritative: bool) -> void:
 	solver.events.clear()
 
 func recover_drive() -> bool:
-	if is_host or not prediction_enabled:
+	if is_host:
 		return false
-	if not prediction.active:
+	if not prediction_enabled or not prediction.active:
 		game.toast("Дождись синхронизации машины с хозяином.")
 		return true
 	if prediction.full():
