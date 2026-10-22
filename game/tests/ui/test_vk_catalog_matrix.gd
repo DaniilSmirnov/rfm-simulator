@@ -31,7 +31,7 @@ func run() -> void:
 			check(bool(entry.get("purchase_enabled", not is_free)) == not is_free,
 				"%s %d exposes payment only when locked" % [kind,idx])
 			if not is_free:
-				check(int(entry.get("price", -1)) == (20 if kind == "stage" else 3),
+				check(int(entry.get("price", -1)) == (20 if kind == "stage" or idx == 11 else 3),
 					"%s %d has the production VK price" % [kind,idx])
 				service.entitlements.skus = [str(entry.get("sku", ""))]
 				check(service.can_use(kind, idx), "%s %d unlocks after its SKU purchase" % [kind,idx])

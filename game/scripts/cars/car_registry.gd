@@ -59,6 +59,9 @@ static func car(variant: int) -> Dictionary:
 	return cars[posmod(variant, cars.size())]
 
 # Share of drive torque sent to the rear axle.
+static func flies(variant: int) -> bool:
+	return bool(car(variant).get("flight", false))
+
 static func rear_bias(variant: int) -> float:
 	match str(car(variant).handling.drive):
 		"rear":

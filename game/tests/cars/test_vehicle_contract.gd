@@ -6,7 +6,7 @@ func _initialize() -> void:
 	call_deferred("run")
 
 func run() -> void:
-	check(Props.PLAYER_MODELS.size() == 11, "eleven player vehicles are registered")
+	check(Props.PLAYER_MODELS.size() == 12, "twelve player vehicles are registered")
 	for index in range(Props.PLAYER_MODELS.size()):
 		var car: Node3D = Props.player_car(index)
 		if car == null:
@@ -28,7 +28,7 @@ func run() -> void:
 					if child.get_meta("rolling_wheel_radius") is float or child.get_meta("rolling_wheel_radius") is int:
 						wheels.append(child)
 		check(shell_count > 0, "vehicle %d has visible geometry" % index)
-		check(wheels.size() >= 4, "vehicle %d has four rolling wheel surfaces" % index)
+		check(wheels.is_empty() if Props.CarRegistry.flies(index) else wheels.size() >= 4, "vehicle %d uses skids or four rolling wheel surfaces" % index)
 		var axle_positions: Dictionary = {}
 		for wheel in wheels:
 			var radius = float(wheel.get_meta("rolling_wheel_radius"))
@@ -40,7 +40,7 @@ func run() -> void:
 					"vehicle %d rim and tyre rotate at the same angular speed" % index)
 			else:
 				axle_positions[key] = radius
-		check(axle_positions.size() >= 4, "vehicle %d has two separate axles and both sides" % index)
+		check(axle_positions.is_empty() if Props.CarRegistry.flies(index) else axle_positions.size() >= 4, "vehicle %d has the expected landing gear" % index)
 		var hinge = car.get_node_or_null("TrunkHinge")
 		var boxes = car.get_node_or_null("TrunkBoxes")
 		check(hinge != null, "vehicle %d exposes an operable trunk hinge" % index)

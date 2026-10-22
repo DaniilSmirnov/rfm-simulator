@@ -26,13 +26,10 @@ var top_box: VBoxContainer
 var guide_button: Button
 var secondary_row: HBoxContainer
 var plan_title: Label
-
 func request_game_mouse_capture() -> void:
 	game.pointer.request()
-
 func panel(color: Color) -> StyleBoxFlat:
 	return UiKit.panel_style(color)
-
 func label(parent: Node, text: String, font_size: int, color: Color = UiKit.TEXT) -> Label:
 	var l = UiKit.label(parent, text)
 	l.add_theme_font_size_override("font_size", font_size)
@@ -371,7 +368,7 @@ func update_hud() -> void:
 	var remaining_items = game.packing.remaining() if game.packing.active() else -1
 	var bag = game.foraging.stock() if not game.in_car else {}
 	var pot = game.camp_cooking.pot != null
-	var state: Array = [game.mobile_mode, game.in_car, game.playing, game.paused, game.dead, game.finished,
+	var state: Array = [game.mobile_mode, game.selected_car, game.in_car, game.playing, game.paused, game.dead, game.finished,
 		int(absf(game.speed) * 3.6), int(game.condition),
 		game.stage.road_distance(game.car.position) > 4 if game.in_car and not game.mobile_mode else false,
 		game.course.phase, game.course.pass_index, game.course.zero_index,
@@ -412,6 +409,9 @@ func update_hud() -> void:
 	elif game.in_car:
 		info_text = Loc.t("%02d КМ/Ч    ·    ЛЕГКОВУШКА %d%%    ·    %s") % [int(absf(game.speed) * 3.6), int(game.condition), Loc.t("ОБОЧИНА") if game.stage.road_distance(game.car.position) > 4 else Loc.t("ГРАВИЙ / КОЛЕЯ")]
 		hint_text = Loc.t("WASD / стрелки — газ и руль   ·   Space — тормоз   ·   F — выйти   ·   Home — вернуть на СУ")
+		if game.Props.CarRegistry.flies(game.selected_car):
+			info_text = Loc.t("ВЕРТОЛЁТ · %02d КМ/Ч · %d%%") % [int(absf(game.speed) * 3.6), int(game.condition)]
+			hint_text = Loc.t("WASD — полёт и поворот · Space — вверх · Shift — вниз · F — выйти после посадки")
 		if game.rides.hitch_candidate() != "" and game.rides.hitch == "":
 			hint_text += Loc.t("   ·   T — взять друга на трос")
 		if game.condition <= 0:

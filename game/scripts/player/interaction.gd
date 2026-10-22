@@ -58,9 +58,10 @@ func normal_target() -> Dictionary:
 		return {"action": "relief_stop", "label": Loc.t("Закончить")}
 	var items: Array = []
 	game.cargo.offers(items, self)
-	if not game.cargo.at_open_trunk(game.chair_owner()):
-		offer(items, game.car.position + Vector3(0, 0.9, 0), 1.4, 4, "car", "Сесть в машину")
-	game.rides.offers(items, self)
+	if not game.cargo.held.has(game.chair_owner()):
+		if not game.cargo.at_open_trunk(game.chair_owner()):
+			offer(items, game.car.position + Vector3(0, 0.9, 0), 1.4, 4, "car", "Сесть в машину")
+		game.rides.offers(items, self)
 	game.camp_cooking.offers(items, self)
 	if game.stage.solids.bell != null:
 		offer(items, game.stage.solids.bell.handle_position(), 0.35, 2.0, "church_bell", "Позвонить в колокол")

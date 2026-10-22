@@ -106,7 +106,7 @@ func _layout() -> void:
 	var state: Array = [size, active(), landscape(), world_blocked(), game.in_car, game.placement_kind,
 		gear_open, game.seated, game.injuries.down, game.beers < 30, game.packing.active(), game.flag_count(),
 		game.foraging.can_eat("berries"), game.tow_target != null, game.nearby_tow_target(), target.get("label", ""),
-		game.rides.ride, game.rides.hitch, game.rides.hitch_candidate() != "", tow_caption()]
+		game.selected_car, game.rides.ride, game.rides.hitch, game.rides.hitch_candidate() != "", tow_caption()]
 	if state == layout_state:
 		return
 	layout_state = state
@@ -143,10 +143,17 @@ func _layout_driving() -> Array:
 		add_button("Выйти", "interact", false, Rect2(Vector2(side, bottom - 56), Vector2(TILE.x, 56)))
 		return []
 	add_button("Газ", "forward", true, Rect2(Vector2(size.x - EDGE - pedal.x, bottom - pedal.y), pedal))
-	add_button("Тормоз", "brake", true, Rect2(Vector2(size.x - EDGE - 2 * pedal.x - GAP, bottom - pedal.y), pedal))
+	var flying = game.Props.CarRegistry.flies(game.selected_car)
+	var left_pedal = Rect2(Vector2(size.x - EDGE - 2 * pedal.x - GAP, bottom - pedal.y), pedal)
+	if flying:
+		add_button("Вверх", "jump", true, left_pedal)
+	else:
+		add_button("Тормоз", "brake", true, left_pedal)
 	add_button("Назад", "back", true, Rect2(Vector2(side, bottom - pedal.y), Vector2(TILE.x, 56)))
 	add_button("Выйти", "interact", false, Rect2(Vector2(side, bottom - 56), Vector2(TILE.x, 56)))
-	if game.rides.hitch != "" or game.rides.hitch_candidate() != "":
+	if flying:
+		add_button("Вниз", "sprint", true, Rect2(Vector2(side, bottom - pedal.y - 56 - GAP), Vector2(TILE.x, 56)))
+	elif game.rides.hitch != "" or game.rides.hitch_candidate() != "":
 		add_button("Трос", "tow", true, Rect2(Vector2(side, bottom - pedal.y - 56 - GAP), Vector2(TILE.x, 56)))
 	return [["Вернуть", "recover"]]
 
@@ -286,6 +293,8 @@ func _move_look(pos: Vector2) -> void:
 
 func button_icon(button: Dictionary) -> Texture2D:
 	var name: String = ICON_NAMES.get(button.action, "hand")
+	if game.in_car and game.Props.CarRegistry.flies(game.selected_car) and button.action == "sprint":
+		name = "reverse"
 	if button.action == "interact" and (game.in_car or button.label == Loc.t("В машину") or button.label.begins_with(Loc.t("К другу"))):
 		name = "door"
 	return icons.get(name)

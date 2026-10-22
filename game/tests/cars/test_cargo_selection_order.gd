@@ -27,13 +27,15 @@ func run() -> void:
 			game.car.rotation = Vector3(tilt.x, game.heading, tilt.z)
 			var pose: Dictionary = game.cargo.poses().local
 			game.walker = game.cargo.point(pose)
-			game.camera.position = game.car.transform * Vector3(0, 1.6, Props.trunk_profile(variant).rear + 2.2)
+			var side_bay = bool(Props.trunk_profile(variant).get("side", false))
+			game.camera.position = game.car.transform * (Vector3(3.2, 1.6, 0) if side_bay else Vector3(0, 1.6, Props.trunk_profile(variant).rear + 2.2))
 			for index in range(Props.CARGO_KINDS.size()):
 				var target: Vector3 = game.car.transform * Props.cargo_point(Props.trunk_profile(variant), index)
 				game.camera.look_at(target)
 				check(game.interaction.current().get("value", "") == Props.CARGO_KINDS[index], "each cargo box is selectable on car %d, box %d" % [variant, index])
 				if index >= 3:
-					game.camera.look_at(target + game.car.basis * Vector3(-0.25 if index == 3 else 0.25, 0.1, 0))
+					var offset = -0.25 if index == 3 else 0.25
+					game.camera.look_at(target + game.car.basis * (Vector3(0, 0.1, offset) if side_bay else Vector3(offset, 0.1, 0)))
 					check(game.interaction.current().get("value", "") == Props.CARGO_KINDS[index], "wood and pot accept forgiving off-centre aim")
 				game.interaction.activate()
 				check(game.cargo.held.get("local", {}).get("kind", "") == Props.CARGO_KINDS[index] and not game.in_car, "F takes selected gear without entering car")

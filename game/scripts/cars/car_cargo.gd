@@ -70,7 +70,7 @@ func cargo_position(pose: Dictionary, index: int) -> Vector3:
 
 func point(pose: Dictionary) -> Vector3:
 	var p = Props.trunk_profile(int(pose.variant))
-	return pose.pos + pose_basis(pose) * Vector3(0, p.floor + 0.42, p.rear + 0.25)
+	return pose.pos + pose_basis(pose) * (Vector3(1.4, 1.1, 0) if p.get("side", false) else Vector3(0, p.floor + 0.42, p.rear + 0.25))
 
 func near(owner: String) -> bool:
 	var cars = poses()
@@ -85,6 +85,8 @@ func at_open_trunk(owner: String) -> bool:
 	var pose: Dictionary = cars[owner]
 	var profile = Props.trunk_profile(int(pose.variant))
 	var offset: Vector3 = pose_basis(pose).inverse() * (game.actor_pos() - pose.pos)
+	if profile.get("side", false):
+		return offset.x >= 0.6 and absf(offset.z) < 1.2
 	return offset.z >= profile.rear - 0.75 and absf(offset.x) <= profile.half + 0.85
 
 func owner_of(item: Dictionary) -> String:
@@ -172,7 +174,7 @@ func take(kind: String) -> bool:
 			held[owner] = {"kind": kind, "owner": owner, "returning": false}
 			return true
 	if not opened.get(owner, false) or not near(owner) or not stored(kind, owner):
-		game.toast("Подойди к задней части своей машины — багажник откроется сам.")
+		game.toast("Подойди к багажному отсеку своего транспорта — он откроется сам.")
 		return false
 	if (kind == "table" and game.camp != null) or (kind == "grill" and game.grill != null) or (kind == "firewood" and game.camp_cooking.fire != null) or (kind == "cauldron" and game.camp_cooking.pot != null):
 		game.toast("Общий предмет уже установлен. Возьми свой стул.")

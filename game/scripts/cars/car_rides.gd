@@ -171,6 +171,9 @@ func board_npc(owner: String) -> void:
 
 func leave(force: bool = false) -> void:
 	var node = car_node(ride)
+	if not force and node != null and node.has_meta("helicopter") and node.position.y > preload("res://scripts/cars/helicopter_motion.gd").floor_at(game.stage, node.position, node.rotation.y) + 0.15:
+		game.toast("Дождись посадки вертолёта.")
+		return
 	if not force and node != null and absf(speed_of(ride)) > 1:
 		game.toast("Подожди, пока водитель остановится.")
 		return
@@ -221,10 +224,12 @@ func update() -> void:
 # A friend's car can go on the rope when it is broken or nobody drives it.
 func towable(owner: String) -> bool:
 	var state = state_of(owner)
+	var node = car_node(owner)
+	if node != null and node.has_meta("helicopter"): return false
 	return owner != me() and state != null and (broken(owner) or not driving(state)) and str(state.get("hitch", "")) == ""
 
 func hitch_candidate() -> String:
-	if not game.room.connected or not game.in_car or riding():
+	if game.car.has_meta("helicopter") or not game.room.connected or not game.in_car or riding():
 		return ""
 	var best = ""
 	var best_distance = TOW_RANGE
