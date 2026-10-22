@@ -26,8 +26,8 @@ const platforms = {
   'macos-demo': { preset: 'macOS Demo', template: 'macos.zip', output: 'Rally Fans Simulator Demo.zip', patch: macosPatch, mobileTextures: true },
   android: { preset: 'Android', template: 'android_release.apk', output: 'Rally Fans Simulator.apk', patch: androidPatch, prepare: prepareAndroid, mobileTextures: true },
   // Godot writes an Xcode project; Xcode builds it without code signing into an unsigned IPA
-  // (install it with your own certificate: Sideloadly, AltStore or codesign). No radio library yet.
-  ios: { preset: 'iOS', template: 'ios.zip', output: 'xcode/RallyFansSimulator.ipa', patch: iosPatch, prepare: prepareIos, finish: buildIos, mobileTextures: true },
+  // (install it with your own certificate: Sideloadly, AltStore or codesign).
+  ios: { preset: 'iOS', template: 'ios.zip', output: 'xcode/RallyFansSimulator.ipa', patch: iosPatch, setup: setupIos, prepare: prepareIos, finish: buildIos, mobileTextures: true },
 };
 const name = process.argv.find(arg => arg.startsWith('--platform='))?.split('=')[1] ?? 'macos';
 const platform = platforms[name];
@@ -89,6 +89,16 @@ function androidPatch(preset) {
 // The placeholder never signs anything: Xcode builds with signing turned off.
 function iosPatch(preset) {
   return macosPatch(preset).replace('application/app_store_team_id=""', 'application/app_store_team_id="UNSIGNED00"');
+}
+
+// iOS cannot load a library copied to user:// at run time, so the radio is a regular
+// GDExtension there: Godot embeds the dylib in the app as a framework and loads it at startup.
+async function setupIos(project) {
+  const library = 'addons/rally_voice/bin/librally_voice.ios.arm64.dylib';
+  if (!await exists(join(project, library))) return 'WARNING: no iOS radio library (node scripts/build-voice.mjs --target=ios-arm64), the build has no radio.';
+  await writeFile(join(project, 'addons/rally_voice/rally_voice.gdextension'),
+    `[configuration]\nentry_symbol = "rally_voice_init"\ncompatibility_minimum = "4.4"\n\n[libraries]\nios.arm64 = "res://${library}"\n`);
+  return 'Radio library embedded.';
 }
 
 async function prepareIos() {
@@ -199,6 +209,7 @@ for (const [index, target] of targets.entries()) {
   if (!found) throw new Error(`Export preset ${target.preset} is missing.`);
 }
 await writeFile(presetPath, preset);
+const setupNote = platform.setup ? await platform.setup(project) : '';
 // Apple Silicon and Android need ETC2/ASTC textures; the Web and PC builds do not, so only those copies enable them.
 if (platform.mobileTextures) {
   const settingsPath = join(project, 'project.godot');
@@ -208,7 +219,7 @@ if (platform.mobileTextures) {
 }
 // Same generated scenes as the Web build: village and rally tracks are baked before export.
 run(godot, ['--headless', '--editor', '--path', project, '--import']);
-const note = platform.prepare ? await platform.prepare() : '';
+const note = [setupNote, platform.prepare ? await platform.prepare() : ''].filter(Boolean).join(' ');
 run(godot, ['--headless', '--path', project, '--script', 'res://tools/bake/bake_rally_tracks.gd']);
 run(godot, ['--headless', '--path', project, '--script', 'res://tools/bake/bake_village.gd']);
 for (const target of targets) {
