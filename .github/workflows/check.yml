@@ -16,6 +16,50 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Release exports (desktop, Android, the radio library for every platform,
+  # the VK prototype) run on main and on manual runs. A pull request runs them
+  # only when it changes files those builds depend on; game code is covered by
+  # the tests, and main still checks every merged commit.
+  changes:
+    name: Detect export changes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      export: ${{ steps.filter.outputs.export }}
+      vk: ${{ steps.filter.outputs.vk }}
+      voice: ${{ steps.filter.outputs.voice }}
+    steps:
+      - id: filter
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          if [ "$EVENT" != pull_request ]; then
+            files=ALL
+          else
+            files=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --jq '.[].filename')
+          fi
+          printf '%s\n' "$files"
+          changed() { [ "$files" = ALL ] || printf '%s\n' "$files" | grep -qE "$1"; }
+          common='^(\.github/workflows/check\.yml|package(-lock)?\.json|scripts/godot\.mjs)$'
+          export='^(native/|game/export_presets\.cfg$|game/project\.godot$|game/branding/|scripts/(build-desktop|build-voice|verify-windows-build|test-windows-startup)\.mjs$)'
+          vk='^(web/|engine/|game/scripts/platform/|scripts/(build-web|test-platform-build|test-platform-web)\.mjs$)'
+          if changed "$common" || changed "$export"; then e=true; else e=false; fi
+          if changed "$common" || changed "$vk"; then v=true; else v=false; fi
+          linux='{"target":"linux-x86_64","os":"ubuntu-24.04","container":"quay.io/pypa/manylinux_2_28_x86_64"}'
+          if [ $e = true ]; then
+            voice='[LINUX,{"target":"windows-x86_64","os":"ubuntu-24.04"},{"target":"windows-x86_32","os":"ubuntu-24.04"},{"target":"macos-universal","os":"macos-14"},{"target":"android-arm64","os":"ubuntu-24.04"},{"target":"android-arm32","os":"ubuntu-24.04"}]'
+          else
+            voice='[LINUX]'
+          fi
+          voice=${voice/LINUX/$linux}
+          echo "export=$e vk=$v"
+          { echo "export=$e"; echo "vk=$v"; echo "voice={\"include\":$voice}"; } >> "$GITHUB_OUTPUT"
+
   lint:
     name: Lint GDScript
     runs-on: ubuntu-24.04
@@ -276,6 +320,8 @@ jobs:
 
   vk-prototype:
     name: VK prototype
+    needs: changes
+    if: needs.changes.outputs.vk == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
@@ -309,19 +355,15 @@ jobs:
   native-voice:
     name: Native radio (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
+    needs: changes
     container: ${{ matrix.container }}
     timeout-minutes: 45
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          # glibc 2.28: the library loads on every distribution Godot supports.
-          - {target: linux-x86_64, os: ubuntu-24.04, container: "quay.io/pypa/manylinux_2_28_x86_64"}
-          - {target: windows-x86_64, os: ubuntu-24.04}
-          - {target: windows-x86_32, os: ubuntu-24.04}
-          - {target: macos-universal, os: macos-14}
-          - {target: android-arm64, os: ubuntu-24.04}
-          - {target: android-arm32, os: ubuntu-24.04}
+      # Linux always (the radio tests load it); the other targets only with
+      # the exports. The linux build uses manylinux glibc 2.28, so the library
+      # loads on every distribution Godot supports.
+      matrix: ${{ fromJSON(needs.changes.outputs.voice) }}
     env:
       # Bump to rebuild every library without a source change, for example
       # after a toolchain change in the install step below.
@@ -417,7 +459,8 @@ jobs:
 
   android:
     name: Android build
-    needs: native-voice
+    needs: [changes, native-voice]
+    if: needs.changes.outputs.export == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
@@ -468,7 +511,8 @@ jobs:
 
   desktop:
     name: Desktop build (${{ matrix.platform }})
-    needs: native-voice
+    needs: [changes, native-voice]
+    if: needs.changes.outputs.export == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     strategy:
