@@ -78,6 +78,17 @@
         "ambient": "d6dadb", "ambient_energy": 0.4, "fog": "ccd4d4", "fog_density": 0.0022
       },
       "sun": {"rotation": [-18, -40, 0], "color": "eef1f0", "energy": 0.62}
+    },
+    {
+      "id": "quarry", "title": "Асбестовский карьер", "subtitle": "белая пыль, отвалы и БелАЗы",
+      "biome": "res://scripts/stages/quarry/quarry.gd",
+      "loading": "Отвалы и карьер",
+      "minimap": "b9bcb2e8",
+      "environment": {
+        "sky_top": "6f8fae", "sky_curve": 0.07, "sky_horizon": "e2e3dc", "ground_bottom": "a3a59b", "ground_horizon": "e2e3dc",
+        "ambient": "c9ccc4", "ambient_energy": 0.32, "fog": "c9cbc3", "fog_density": 0.0016, "fog_sky_affect": 0.4
+      },
+      "sun": {"rotation": [-38, -36, 0], "color": "fff3e0", "energy": 0.74}
     }
   ]
 }

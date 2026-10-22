@@ -174,7 +174,7 @@ WebAssembly медленнее, поэтому в браузере те же з�
 Запускались локально по одному:
 `test_drive_prediction`, `test_direct_link`, `test_network_motion`,
 `test_room`, `test_room_recovery`, `test_world_validation`,
-`test_offroad_contact`, `test_offroad_contact_late`, `test_stage_solids`,
+`test_offroad_contact`, `test_offroad_contact_late`, `test_offroad_contact_last`, `test_stage_solids`,
 `test_rocks`, `test_vehicle_contract`, `test_car_rides`, `test_tow_recovery`,
 `test_canyon`, `test_terrain_seams`, `test_woodland`, `test_mineshaft`,
 `test_alpine_winter`. Все зелёные. `node scripts/lint-gdscript.mjs` чистый.
