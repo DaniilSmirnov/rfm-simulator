@@ -14,6 +14,7 @@ const Props = preload("res://scripts/core/props.gd")
 const Motion = preload("res://scripts/cars/vehicle_motion.gd")
 const SnapshotMotion = preload("res://scripts/net/snapshot_motion.gd")
 const Parks = preload("res://scripts/traffic/service_parks.gd")
+const PeerView = preload("res://scripts/net/peer_view.gd")
 # Seconds before the stage opens (either pass) that the first car pulls up.
 const PULL_LEAD = 25.0
 const STEP = 1.0 / 30.0
@@ -352,11 +353,15 @@ func _blocked(node: Node3D, from: Vector3, ahead: Vector3) -> String:
 # The day ends when everybody sits in a car, their own or a friend's, standing
 # in a service park, either one (its level apron included: the back row of the
 # players' slots stands there). A car left on the stage (a broken one whose
-# owner came with a friend) does not hold the day up.
+# owner came with a friend) does not hold the day up, nor does a member who is
+# away from the keyboard or has lost the connection (PeerView.away()).
 func everyone_home() -> bool:
 	if parks() == null or not game.in_car or parks().park_at(game.player_position(), Parks.APRON) < 0:
 		return false
+	var now = game.room.server_clock()
 	for peer in game.room.peers.values():
+		if PeerView.away(peer, now):
+			continue
 		if peer.state == null or not peer.state.in_car or parks().park_at(game.rides.seat_of(peer.state), Parks.APRON) < 0:
 			return false
 	return true

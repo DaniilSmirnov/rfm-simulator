@@ -7,8 +7,15 @@ const SnapshotMotion = preload("res://scripts/net/snapshot_motion.gd")
 const NetProtocol = preload("res://scripts/net/net_protocol.gd")
 const CharacterRig = preload("res://scripts/people/character_rig.gd")
 const RadioModel = preload("res://scripts/people/radio_model.gd")
+const RoomTransport = preload("res://scripts/net/room_transport.gd")
 # Seconds to raise the radio to the mouth (and to lower it again).
 const RADIO_RAISE = 0.2
+# A member who has not moved, looked round or got in or out of a car for this
+# long (s) is away from the keyboard; one not heard from for RoomTransport's
+# RECOVERY_SECONDS has given up reconnecting, though the server lists them
+# for its 90 s TTL. Neither holds up the end of the day (everyone_home()).
+const AWAY_SECONDS = 120.0
+const LOST_SECONDS = RoomTransport.RECOVERY_SECONDS
 
 static func create(game: Node, p: Dictionary) -> Dictionary:
 	var car = Props.player_car(int(p.get("car_model", p.get("slot", 0))))
@@ -28,6 +35,18 @@ static func create(game: Node, p: Dictionary) -> Dictionary:
 		car.position = room_v(p.state.car)
 		avatar.position = room_v(p.state.pos)
 	return peer
+
+# `time`: the server time (s) of the state just taken into peer.state.
+static func note_activity(peer: Dictionary, time: float) -> void:
+	peer.last_state_time = time
+	var s: Dictionary = peer.state
+	var seen = {"time": time, "in_car": bool(s.get("in_car", false)), "pos": room_v(s.get("pos", [0, 0, 0])), "car": room_v(s.get("car", [0, 0, 0])), "yaw": float(s.get("yaw", 0.0))}
+	var last: Dictionary = peer.get("activity", {})
+	if last.is_empty() or seen.in_car != last.in_car or seen.pos.distance_to(last.pos) > 0.5 or seen.car.distance_to(last.car) > 0.5 or absf(angle_difference(seen.yaw, last.yaw)) > 0.15:
+		peer.activity = seen
+
+static func away(peer: Dictionary, now: float) -> bool:
+	return now - float(peer.get("last_state_time", now)) > LOST_SECONDS or now - float(peer.get("activity", {}).get("time", now)) > AWAY_SECONDS
 
 static func remove(peer: Dictionary) -> void:
 	for node in [peer.car, peer.avatar, peer.label]:

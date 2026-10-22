@@ -118,6 +118,18 @@ func request(kind: String, room_id: String, body: Dictionary) -> void:
 	if err != OK:
 		handle_http(HTTPRequest.RESULT_CANT_CONNECT, 0, PackedStringArray(), PackedByteArray())
 
+# Giving up on a room (recovery_delay() < 0): a last leave, in case the server can be reached again,
+# so the others do not see this member for the rest of its membership TTL.
+# It goes on its own request and its answer is ignored: the room screen
+# already says the room is closed.
+func abandon(room_id: String, token: String) -> void:
+	var leave = HTTPRequest.new()
+	leave.timeout = 8
+	add_child(leave)
+	leave.request_completed.connect(func(_result, _code, _headers, _body): leave.queue_free())
+	if leave.request(endpoint("leave", room_id), ["Content-Type: application/json"], HTTPClient.METHOD_POST, JSON.stringify({"token": token})) != OK:
+		leave.queue_free()
+
 func cancel() -> void:
 	if busy:
 		http.cancel_request()
@@ -156,6 +168,7 @@ func recovery_delay() -> float:
 		recovery_started_at = active_now
 	errors += 1
 	if active_now - recovery_started_at >= RECOVERY_SECONDS:
+		abandon(room.room_id, room.token)
 		return -1.0
 	return minf(5.0, pow(2.0, mini(errors - 1, 3)))
 

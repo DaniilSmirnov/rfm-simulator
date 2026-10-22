@@ -11,15 +11,27 @@ const CAR_CLEARANCE = 3.1
 const PRIORITY_AFTER = 2.5
 const PRIORITY_DISTANCE = 30.0
 const PRIORITY_SPEED = 5.0
+# A police car first asks everybody to clear the road (the blocked notice),
+# then takes the same right of way.
+const POLICE_PRIORITY_AFTER = 20.0
+# Held this long (s), a service vehicle passes players standing in its way
+# for PRIORITY_DISTANCE metres: a player who walked away from the keyboard on
+# the road cannot hold the course. Other people still hold it.
+const PLAYER_PATIENCE = 45.0
+const HOLD_DISTANCE = 1.5
 
 static func applies(racer: Dictionary) -> bool:
 	return racer.get("role", "racer") in ["ambulance", "opening_police", "closing_police"]
 
-static func people(game) -> Array:
+# `racer` passing players (see PLAYER_PATIENCE) leaves standing players out.
+static func people(game, racer: Dictionary = {}) -> Array:
 	var result: Array = []
+	var skip_players = passing_players(racer)
 	# Keep injury avatars discoverable for animation, but block service traffic
 	# only with standing people and the actual displaced body positions.
 	for person in game.injuries.people():
+		if skip_players and str(person.key).begins_with("player:"):
+			continue
 		# Somebody riding on a car is not in the road.
 		if not game.injuries.is_down(str(person.key)) and not person.get("riding", false):
 			result.append(person)
@@ -57,7 +69,7 @@ static func approaching_hit(start: Vector3, end: Vector3, target: Vector3, radiu
 	return Motion.swept_hit(start, end, target, radius)
 
 static func blocked(game, racer: Dictionary, start: Vector3, end: Vector3) -> bool:
-	for person in people(game):
+	for person in people(game, racer):
 		if approaching_hit(start, end, person.pos, PERSON_CLEARANCE):
 			return true
 	if priority(racer):
@@ -92,26 +104,40 @@ static func guard(game, racer: Dictionary, before: Dictionary) -> bool:
 	return true
 
 static func priority(racer: Dictionary) -> bool:
-	return float(racer.get("priority_until", -1.0)) > float(racer.s)
+	return float(racer.get("priority_until", -1.0)) > float(racer.get("s", 0.0))
 
-# Seconds since the ambulance last moved; once held long enough it takes
-# priority until it is PRIORITY_DISTANCE further on.
-static func _update_hold(racer: Dictionary) -> void:
-	if racer.get("role", "") != "ambulance":
-		return
-	if float(racer.get("drive_speed", 0.0)) >= 0.3 or not racer.has("moving_age"):
+static func passing_players(racer: Dictionary) -> bool:
+	return float(racer.get("players_until", -1.0)) > float(racer.get("s", 0.0))
+
+# Seconds since the vehicle last made HOLD_DISTANCE metres of road (police
+# edging sideways is still held; an ambulance rolling at all is not); once
+# held long enough it takes
+# priority until it is PRIORITY_DISTANCE further on. Police waiting out a red
+# flag is not held, and neither is an ambulance parked at a casualty (no plan
+# is made then, so the gap in planning restarts the count).
+static func _update_hold(game, racer: Dictionary) -> void:
+	var police = racer.get("role", "") != "ambulance"
+	var gap = racer.age - float(racer.get("plan_age", racer.age))
+	racer.plan_age = racer.age
+	var rolling = not police and float(racer.get("drive_speed", 0.0)) >= 0.3
+	if rolling or absf(float(racer.s) - float(racer.get("hold_s", -100.0))) > HOLD_DISTANCE or gap > 0.5 or gap < 0.0 or (police and game.course.red_flag):
+		racer.hold_s = racer.s
 		racer.moving_age = racer.age
-	if not priority(racer) and racer.age - float(racer.moving_age) >= PRIORITY_AFTER:
+	var held = racer.age - float(racer.moving_age)
+	if not priority(racer) and held >= (POLICE_PRIORITY_AFTER if police else PRIORITY_AFTER):
 		racer.priority_until = float(racer.s) + PRIORITY_DISTANCE
 		racer.erase("path_probes")
 		racer.erase("lane_choice")
+	if not passing_players(racer) and held >= PLAYER_PATIENCE:
+		racer.players_until = float(racer.s) + PRIORITY_DISTANCE
+		racer.priority_until = maxf(float(racer.get("priority_until", -1.0)), float(racer.players_until))
 
 static func pedestrian_plan(game, racer: Dictionary, plan: Dictionary) -> Dictionary:
-	_update_hold(racer)
+	_update_hold(game, racer)
 	if priority(racer):
 		return priority_plan(game, racer, plan)
 	var current: float = racer.line + racer.slide
-	for person in people(game):
+	for person in people(game, racer):
 		if racer.node.position.distance_squared_to(person.pos) > 10000.0: continue
 		var station: float = game.race_station(person.pos)
 		var gap: float = station - racer.s
@@ -205,7 +231,7 @@ static func _detour_clear(game, racer: Dictionary, target_line: float, distance:
 			return false
 		if flooded(game, point, station):
 			return false
-		for person in people(game):
+		for person in people(game, racer):
 			if str(person.get("key", "")) == target_key:
 				continue
 			if approaching_hit(previous + Vector3(0, 0.7, 0), point + Vector3(0, 0.7, 0), person.pos + Vector3(0, 0.7, 0), PERSON_CLEARANCE):
@@ -236,7 +262,7 @@ static func _pedestrian_detour(game, racer: Dictionary, plan: Dictionary, gap: f
 
 # ---------------------------------------------------------------- priority
 
-# Line for an ambulance with right of way: the nearest line to the planned one
+# Line for a service vehicle with right of way: the nearest line to the planned one
 # that keeps clear of people and water, preferring lines that also clear the
 # cars. Only people can hold it; without a person-safe line it waits.
 static func priority_plan(game, racer: Dictionary, plan: Dictionary) -> Dictionary:
@@ -268,7 +294,7 @@ static func priority_plan(game, racer: Dictionary, plan: Dictionary) -> Dictiona
 static func _widest_gap(game, racer: Dictionary, candidates: Array[float]) -> float:
 	var current = float(racer.get("line", 0.0)) + float(racer.get("slide", 0.0))
 	var lines: Array[float] = []
-	for person in people(game):
+	for person in people(game, racer):
 		var station: float = game.race_station(person.pos)
 		if str(person.get("key", "")) == str(racer.get("target_key", "")) or station - float(racer.s) < -3.0 or station - float(racer.s) > 14.0:
 			continue
@@ -290,7 +316,7 @@ static func _priority_clear(game, racer: Dictionary, target_line: float, distanc
 	var target_key = str(racer.get("target_key", ""))
 	var lift = Vector3(0, 0.7, 0)
 	var blocking_cars = cars(game, racer) if avoid_cars else []
-	var standing = people(game).filter(func(person): return str(person.get("key", "")) != target_key and person.pos.distance_squared_to(previous) < 3600.0)
+	var standing = people(game, racer).filter(func(person): return str(person.get("key", "")) != target_key and person.pos.distance_squared_to(previous) < 3600.0)
 	for i in range(1, 7):
 		var ahead = distance * i / 6.0
 		var progress: float = minf(game.stage.length - 0.01, racer.s + ahead)

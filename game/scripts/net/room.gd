@@ -429,7 +429,7 @@ func _update_peer(p: Dictionary) -> void:
 		peer.last_sample_time = sample_time
 	peer.state = p.state
 	if p.state != null:
-		peer.last_state_time = float(p.state_time) / 1000.0 if p.has("state_time") else server_clock()
+		PeerView.note_activity(peer, float(p.state_time) / 1000.0 if p.has("state_time") else server_clock())
 
 # The host runs each guest's car from the guest's input, within a time budget.
 func _simulate_guest_drive(p: Dictionary) -> void:
