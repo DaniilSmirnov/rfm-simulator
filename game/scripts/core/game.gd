@@ -790,11 +790,8 @@ func _cancel_drink() -> void:
 	camp_actions.cancel_drink()
 
 func select_player_car(variant: int) -> void:
-	if loading_world:
-		return
-	if playing and platform_service != null and not platform_service.can_use("car", posmod(variant, Props.PLAYER_MODELS.size())):
-		return
-	if not car_allowed(variant):
+	if loading_world: return
+	if (playing and platform_service != null and not platform_service.can_use("car", posmod(variant, Props.PLAYER_MODELS.size()))) or (not playing and not Props.CarRegistry.offered(variant, selected_stage)):
 		return
 	selected_car = posmod(variant, Props.PLAYER_MODELS.size())
 	if car_choice != null:
@@ -839,15 +836,9 @@ func select_stage(variant: int, hosted_guest: bool = false) -> void:
 	speed = 0
 	camera.position = stage.at(45) + Vector3(22, 15, 12)
 	camera.look_at(stage.at(70))
-	# A stage-only car (the helicopter in the canyon) gives way to the first car.
-	if not car_allowed(selected_car):
-		select_player_car(0)
+	if not Props.CarRegistry.offered(selected_car, selected_stage): select_player_car(0)
 	if lobby_ui != null:
 		lobby_ui.refresh()
-
-# Whether the car may be picked on the selected stage (cars.json `stages`).
-func car_allowed(variant: int) -> bool:
-	return Props.CarRegistry.allowed_on(posmod(variant, Props.PLAYER_MODELS.size()), str(StageRegistry.entry(selected_stage).get("id", "")))
 
 func eat_meat(source_group: int = -2) -> bool:
 	return camp_actions.eat_meat(source_group)

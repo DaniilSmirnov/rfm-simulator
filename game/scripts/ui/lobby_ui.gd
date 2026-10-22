@@ -282,7 +282,7 @@ func refresh() -> void:
 	var service = game.platform_service
 	var any_purchase = false
 	for variant in range(game.car_choice.item_count):
-		game.car_choice.set_skipped(variant, not game.car_allowed(variant))
+		game.car_choice.set_skipped(variant, not game.Props.CarRegistry.offered(variant, game.selected_stage))
 	for i in range(CARDS.size()):
 		var kind: String = CARDS[i].kind
 		var index = selected(kind)

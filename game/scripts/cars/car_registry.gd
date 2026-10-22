@@ -65,11 +65,12 @@ static func flies(variant: int) -> bool:
 static func ground_cars() -> Array:
 	return range(cars.size()).filter(func(variant): return not flies(variant))
 
-# Optional `stages` (stage ids from data/stages.json) limits where a car is
-# offered; without it the car goes everywhere.
-static func allowed_on(variant: int, stage_id: String) -> bool:
+# Optional `stages` (stage ids from data/stages.json) limits where the menu
+# offers a car (the helicopter only in Charyn canyon); without it the car goes
+# everywhere. Leaving its stage swaps such a car for the first one.
+static func offered(variant: int, stage_index: int) -> bool:
 	var stages = car(variant).get("stages", [])
-	return stages.is_empty() or stage_id in stages
+	return stages.is_empty() or str(preload("res://scripts/stages/stage_registry.gd").entry(stage_index).get("id", "")) in stages
 
 # Share of drive torque sent to the rear axle.
 
