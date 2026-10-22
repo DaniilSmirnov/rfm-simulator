@@ -173,6 +173,8 @@ static func blocked(start: Vector3, end: Vector3, car: Dictionary, other: Dictio
 		if minf(start.y, end.y) > position.y + 1.5: return false
 		return not circle(start, end, car, position, 0.3).is_empty()
 	var box: AABB = other.get("box", player(0))
+	# Most contacts are far away: reject them before building their pose.
+	if apart(start + car.offset, end + car.offset, position, car.half.length() + box.size.length() + box.position.length()): return false
 	var basis = Basis(Vector3.UP, float(other.get("yaw", 0)))
 	var center = position + basis * box.get_center()
 	if apart(start + car.offset, end + car.offset, center, car.half.length() + box.size.length() * 0.5): return false

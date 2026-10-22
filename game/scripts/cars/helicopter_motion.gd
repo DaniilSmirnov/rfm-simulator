@@ -5,14 +5,23 @@ const Hitbox = preload("res://scripts/cars/car_hitbox.gd")
 const TOP_SPEED = 24.0
 const CLIMB_SPEED = 5.0
 const CEILING = 90.0
+const GROUND_MARGIN = 1.0
+
+# The last answer: one tick ends where the next starts, at the same yaw.
+# Kept for one frame only, so a dug or settled floor is seen next frame.
+static var _last_floor: Array = [null, Vector3.INF, 0.0, 0.0, -1]
 
 static func floor_at(stage, point: Vector3, yaw: float) -> float:
+	var frame = Engine.get_process_frames()
+	if _last_floor[4] == frame and _last_floor[0] == stage and _last_floor[1] == point and _last_floor[2] == yaw:
+		return _last_floor[3]
 	var surface: Callable = stage.vehicle_ground if stage.has_method("vehicle_ground") else stage.ground
 	var height: float = surface.call(point)
 	for x in [-1.2, 1.2]:
 		for z in [-2.1, 2.1]:
 			var foot = point + Vector3(x, 0, z).rotated(Vector3.UP, yaw)
 			height = maxf(height, surface.call(foot))
+	_last_floor = [stage, point, yaw, height + 0.06, frame]
 	return height + 0.06
 
 static func step(solver, command: Dictionary, stage, model: int, dt: float) -> void:
@@ -38,19 +47,25 @@ static func step(solver, command: Dictionary, stage, model: int, dt: float) -> v
 	next.x = clampf(next.x, -185, 185)
 	next.z = clampf(next.z, stage.parks.z_limits.x, stage.parks.z_limits.y)
 	next.y = minf(next.y, CEILING + floor_height)
+	var next_floor = floor_at(stage, next, solver.yaw)
 	# Terrain sweeps include skid corners; narrow crests cannot be crossed below ground.
-	var samples = maxi(1, int(ceil(start.distance_to(next) / 0.1)))
-	for i in range(1, samples + 1):
-		var probe = start.lerp(next, float(i) / samples)
-		var support = floor_at(stage, probe, solver.yaw)
-		if probe.y < support:
-			if support > start.y + 0.25:
-				next = start
-				motion.velocity = Vector3.ZERO
-			else:
-				next.y = maxf(next.y, support)
-			motion.vertical_speed = 0
-			break
+	# Well above both footprints a short step cannot meet the land, so the
+	# per-decimetre sweep (five height queries each) only runs near the ground.
+	var travel = start.distance_to(next)
+	if travel > 1.0 or minf(start.y, next.y) < maxf(floor_height, next_floor) + GROUND_MARGIN:
+		var samples = maxi(1, int(ceil(travel / 0.1)))
+		for i in range(1, samples + 1):
+			var probe = start.lerp(next, float(i) / samples)
+			var support = next_floor if i == samples else floor_at(stage, probe, solver.yaw)
+			if probe.y < support:
+				if support > start.y + 0.25:
+					next = start
+					next_floor = floor_height
+					motion.velocity = Vector3.ZERO
+				else:
+					next.y = maxf(next.y, support)
+				motion.vertical_speed = 0
+				break
 	var shape = Hitbox.shape(Hitbox.player(model), solver.yaw)
 	var blocked = false
 	# Yaw in place also sweeps the duct tips conservatively. Test the full
@@ -72,7 +87,8 @@ static func step(solver, command: Dictionary, stage, model: int, dt: float) -> v
 		motion.vertical_speed = 0
 	else:
 		node.position = next
-	motion.grounded = node.position.y <= floor_at(stage, node.position, solver.yaw) + 0.09
+		floor_height = next_floor
+	motion.grounded = node.position.y <= floor_height + 0.09
 	motion.pitch = 0
 	motion.roll = 0
 	node.rotation = Vector3(0, solver.yaw, 0)
