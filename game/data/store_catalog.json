@@ -69,6 +69,16 @@
     "price": 20
   },
   {
+    "sku": "stage_08",
+    "type": "stage",
+    "content_id": 7,
+    "title": "Асбестовский карьер",
+    "free": false,
+    "enabled": true,
+    "purchase_enabled": true,
+    "price": 20
+  },
+  {
     "sku": "car_01",
     "type": "car",
     "content_id": 0,

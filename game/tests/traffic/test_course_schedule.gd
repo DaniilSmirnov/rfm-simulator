@@ -1,4 +1,7 @@
 extends "res://tests/harness.gd"
+# The opening police, zero crews, competitors and closing police on every map,
+# then a late guest. Each map builds a whole world, so the maps are split over
+# this test and test_course_schedule_late.gd to stay within the time limit.
 func _initialize() -> void:
 	call_deferred("run")
 func finish_vehicle(game) -> void:
@@ -15,13 +18,18 @@ func finish_vehicle(game) -> void:
 		game._update_racers(0.15)
 		if not game.racers.any(func(item): return item.id == id):
 			break
+func stages() -> Array:
+	return range(0, 4)
+# Only this file checks the late guest; it needs one map, not all of them.
+func checks_guest() -> bool:
+	return true
 func run() -> void:
 	var game = load("res://main.tscn").instantiate()
 	root.add_child(game)
 	await process_frame
 	game.set_process(false)
 	game.room.set_process(false)
-	for variant in range(RallyStage.STAGES.size()):
+	for variant in stages():
 		game.playing = false
 		game.select_stage(variant)
 		game.start_game()
@@ -114,6 +122,13 @@ func run() -> void:
 		check(game.racers.is_empty() and game.rally_spawn_count == 10 and game.passed == 10, "closed stage never restarts or creates an eleventh racer")
 		game.rally_spawn_count = 0
 		game.passed = 0
+	if not checks_guest():
+		await game._shutdown_audio()
+		game.queue_free()
+		await process_frame
+		print("COURSE SCHEDULE RESULT: %d failures" % failures)
+		finish()
+		return
 	# A late guest must see the current host timer, roles and same service model.
 	game.playing = false
 	game.start_game()

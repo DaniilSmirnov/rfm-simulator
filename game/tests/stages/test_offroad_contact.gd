@@ -1,8 +1,8 @@
 extends "res://tests/harness.gd"
 # A car off the road rests on the land that is drawn, on every stage; on the
 # road it keeps the road surface. Each stage builds a whole world, so the
-# stages are split over this test and test_offroad_contact_late.gd to stay
-# within the runner's time limit.
+# stages are split over this test, test_offroad_contact_late.gd and
+# test_offroad_contact_last.gd to stay within the runner's time limit.
 const Stage = preload("res://scripts/stages/stage.gd")
 
 func _initialize() -> void:

@@ -114,7 +114,8 @@ static func _floor(points: PackedVector3Array) -> void:
 		z -= FLOOR_STEP
 
 # Catmull-Rom through the control points, sampled fine enough to measure.
-static func _spline(points: PackedVector3Array) -> PackedVector3Array:
+# Shared with the quarry stage.
+static func spline(points: PackedVector3Array) -> PackedVector3Array:
 	var dense = PackedVector3Array()
 	for i in range(points.size() - 1):
 		var a: Vector3 = points[maxi(i - 1, 0)]
@@ -127,9 +128,12 @@ static func _spline(points: PackedVector3Array) -> PackedVector3Array:
 	dense.append(points[points.size() - 1])
 	return dense
 
-# One entry per metre of road, so a station is a metre along it.
 static func _plan(length: float) -> PackedVector3Array:
-	var dense = _spline(control_points())
+	return resample(spline(control_points()), length)
+
+# One entry per metre of road, so a station is a metre along it; a road
+# shorter than `length` runs on straight. Shared with the quarry stage.
+static func resample(dense: PackedVector3Array, length: float) -> PackedVector3Array:
 	var wanted = int(length / TABLE_STEP) + 4
 	var result = PackedVector3Array([dense[0]])
 	var walked = 0.0
