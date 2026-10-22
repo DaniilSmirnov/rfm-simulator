@@ -6,6 +6,7 @@ extends Node
 # over what arrived since the previous tick.
 const PATH = "/__rally_voice"
 const MAX_BODY = 262144
+const RADIO_BUS = "Radio"
 
 var origin := ""
 var http: HTTPRequest
@@ -17,6 +18,8 @@ var lost := false
 var signals: Array = []
 var events: Array = []
 var connected := 0
+# The page plays outside Godot's mixer, so it gets the faders as one gain.
+var sent_volume := -1.0
 
 # Whether the page really has voice is only known from the first reply.
 static func supported() -> bool:
@@ -36,6 +39,7 @@ func _ready() -> void:
 func join(options: Dictionary) -> bool:
 	want_joined = true
 	lost = false
+	sent_volume = -1.0
 	_call(["join", options])
 	return true
 
@@ -58,6 +62,10 @@ func set_ptt(value: bool) -> void:
 # {signals, events, connected} like the native backend; joined is false once
 # the page turned out to have no voice.
 func tick(levels: Array) -> Dictionary:
+	var gain = volume()
+	if absf(gain - sent_volume) > 0.001:
+		sent_volume = gain
+		_call(["setVolume", gain])
 	_call(["tick", levels])
 	var result = {"signals": signals, "events": events, "connected": connected}
 	if lost:
@@ -65,6 +73,18 @@ func tick(levels: Array) -> Dictionary:
 	signals = []
 	events = []
 	return result
+
+# The Radio and Master faders together, as the page's linear gain.
+static func volume() -> float:
+	var db = 0.0
+	for name in ["Master", RADIO_BUS]:
+		var bus = AudioServer.get_bus_index(name)
+		if bus < 0:
+			continue
+		if AudioServer.is_bus_mute(bus):
+			return 0.0
+		db += AudioServer.get_bus_volume_db(bus)
+	return snappedf(db_to_linear(db), 0.001)
 
 func _call(call: Array) -> void:
 	calls.append(call)

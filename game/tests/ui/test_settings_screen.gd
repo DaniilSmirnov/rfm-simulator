@@ -1,6 +1,7 @@
 extends "res://tests/harness.gd"
+const VoiceWeb = preload("res://scripts/net/voice_web.gd")
 # The settings window: the gear in the menu header (main menu and pause), draw
-# distance, volume and the desktop screen options, all kept between launches.
+# distance, master and radio volume and the desktop screen options, all kept between launches.
 func _initialize() -> void:
 	call_deferred("run")
 func run() -> void:
@@ -26,6 +27,16 @@ func run() -> void:
 	screen.volume_slider.value = 40
 	var saved = ConfigFile.new()
 	check(saved.load(screen.audio_path) == OK and is_equal_approx(float(saved.get_value("audio", "volume")), 40.0) and screen.volume_label.text.contains("40"), "volume is saved and shown")
+	var radio = AudioServer.get_bus_index("Radio")
+	check(radio >= 0 and AudioServer.get_bus_send(radio) == &"Master" and AudioServer.get_bus_effect(radio, 1) is AudioEffectAmplify and AudioServer.get_bus_effect(radio, 1).volume_db > 0 and AudioServer.get_bus_effect(radio, AudioServer.get_bus_effect_count(radio) - 1) is AudioEffectHardLimiter, "the radio has its own bus with a boost and a limiter last")
+	screen.radio_slider.value = 30
+	saved = ConfigFile.new()
+	check(saved.load(screen.audio_path) == OK and is_equal_approx(float(saved.get_value("audio", "radio_volume")), 30.0) and is_equal_approx(float(saved.get_value("audio", "volume")), 40.0) and screen.radio_label.text.contains("30"), "radio volume is saved next to the master volume")
+	check(is_equal_approx(AudioServer.get_bus_volume_db(radio), linear_to_db(0.3)) and is_equal_approx(VoiceWeb.volume(), snappedf(db_to_linear(linear_to_db(0.3) + AudioServer.get_bus_volume_db(AudioServer.get_bus_index("Master"))), 0.001)), "the radio fader moves and the browser voice gets the same gain")
+	screen.radio_slider.value = 0
+	check(AudioServer.is_bus_mute(radio) and VoiceWeb.volume() == 0.0, "zero silences the radio")
+	screen.radio_slider.value = 100
+	check(not AudioServer.is_bus_mute(radio), "the radio comes back")
 	screen.volume_slider.value = 100
 	screen.set_window_mode(screen.WINDOWED)
 	screen.resolution_choice.cycle(-1)

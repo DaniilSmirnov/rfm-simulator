@@ -1,6 +1,6 @@
 extends Node
 # The settings window, opened by the gear in the menu header (main menu and
-# pause): draw distance, master volume and, in a desktop window, the window
+# pause): draw distance, master and radio volume and, in a desktop window, the window
 # mode and resolution. Every choice applies at once and is kept between
 # launches. The browser page has its own fullscreen button and no window to
 # resize, so the screen section is shown only by native desktop builds.
@@ -20,6 +20,8 @@ var audio_path = AUDIO_SETTINGS_PATH
 var display_path = DISPLAY_SETTINGS_PATH
 var volume_label: Label
 var volume_slider: HSlider
+var radio_label: Label
+var radio_slider: HSlider
 var master_base_db = 0.0
 var display_controls: VBoxContainer
 var window_mode_buttons: Array[Button] = []
@@ -71,6 +73,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func retranslate() -> void:
 	_show_volume(volume_slider.value)
+	_show_radio_volume(radio_slider.value)
 	_show_display()
 
 func _section(parent: Control, title: String, node_name: String) -> VBoxContainer:
@@ -111,31 +114,46 @@ func update_draw_distance_buttons() -> void:
 func _build_audio(parent: Control) -> void:
 	master_base_db = AudioServer.get_bus_volume_db(AudioServer.get_bus_index("Master"))
 	var settings = ConfigFile.new()
-	var percent = 100.0
-	if settings.load(audio_path) == OK:
-		var saved = settings.get_value("audio", "volume", 100.0)
-		if (saved is float or saved is int) and is_finite(float(saved)):
-			percent = clampf(float(saved), 0.0, 100.0)
+	var loaded = settings.load(audio_path) == OK
 	var column = _section(parent, "ЗВУК", "AudioSettings")
 	volume_label = UiKit.label(column, "", "body")
-	volume_slider = HSlider.new()
-	volume_slider.name = "MasterVolume"
-	volume_slider.min_value = 0
-	volume_slider.max_value = 100
-	volume_slider.step = 1
-	volume_slider.custom_minimum_size = Vector2(0, 40)
-	volume_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	volume_slider.tooltip_text = "Громкость всех звуков. 0 — без звука."
-	column.add_child(volume_slider)
-	volume_slider.value = percent
-	_apply_volume(percent)
+	volume_slider = _volume_slider(column, "MasterVolume", "Громкость всех звуков. 0 — без звука.", _saved_percent(settings, "volume") if loaded else 100.0)
+	radio_label = UiKit.label(column, "", "body")
+	radio_slider = _volume_slider(column, "RadioVolume", "Громкость голосов в рации. 0 — рация молчит.", _saved_percent(settings, "radio_volume") if loaded else 100.0)
+	_apply_volume(volume_slider.value)
+	_apply_radio_volume(radio_slider.value)
 	volume_slider.value_changed.connect(func(value: float):
 		_apply_volume(value)
-		var config = ConfigFile.new()
-		config.set_value("audio", "volume", value)
-		if config.save(audio_path) != OK:
-			game.toast("Не удалось сохранить громкость.")
+		_save_audio()
 	)
+	radio_slider.value_changed.connect(func(value: float):
+		_apply_radio_volume(value)
+		_save_audio()
+	)
+
+func _saved_percent(settings: ConfigFile, key: String) -> float:
+	var saved = settings.get_value("audio", key, 100.0)
+	return clampf(float(saved), 0.0, 100.0) if (saved is float or saved is int) and is_finite(float(saved)) else 100.0
+
+func _volume_slider(column: Control, node_name: String, tooltip: String, percent: float) -> HSlider:
+	var slider = HSlider.new()
+	slider.name = node_name
+	slider.min_value = 0
+	slider.max_value = 100
+	slider.step = 1
+	slider.custom_minimum_size = Vector2(0, 40)
+	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	slider.tooltip_text = tooltip
+	column.add_child(slider)
+	slider.value = percent
+	return slider
+
+func _save_audio() -> void:
+	var config = ConfigFile.new()
+	config.set_value("audio", "volume", volume_slider.value)
+	config.set_value("audio", "radio_volume", radio_slider.value)
+	if config.save(audio_path) != OK:
+		game.toast("Не удалось сохранить громкость.")
 
 func _apply_volume(percent: float) -> void:
 	var master = AudioServer.get_bus_index("Master")
@@ -143,8 +161,20 @@ func _apply_volume(percent: float) -> void:
 	AudioServer.set_bus_volume_db(master, master_base_db + linear_to_db(maxf(percent / 100.0, 0.0001)))
 	_show_volume(percent)
 
+# The Radio bus (default_bus_layout.tres) carries every voice, native and, as
+# a gain sent to the page, browser ones; its boost and limiter stay as they are.
+func _apply_radio_volume(percent: float) -> void:
+	var radio = AudioServer.get_bus_index("Radio")
+	if radio >= 0:
+		AudioServer.set_bus_mute(radio, percent <= 0)
+		AudioServer.set_bus_volume_db(radio, linear_to_db(maxf(percent / 100.0, 0.0001)))
+	_show_radio_volume(percent)
+
 func _show_volume(percent: float) -> void:
 	volume_label.text = Loc.t("ЗВУК ВЫКЛЮЧЕН") if percent <= 0 else Loc.t("ГРОМКОСТЬ · %d%%") % roundi(percent)
+
+func _show_radio_volume(percent: float) -> void:
+	radio_label.text = Loc.t("РАЦИЯ ВЫКЛЮЧЕНА") if percent <= 0 else Loc.t("ГРОМКОСТЬ РАЦИИ · %d%%") % roundi(percent)
 
 # ---------------------------------------------------------------- screen
 
