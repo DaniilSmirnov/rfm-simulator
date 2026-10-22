@@ -44,8 +44,8 @@ const LIMIT = 256
 # item when it is stood back up: nobody sees it happen or gets caught in it.
 const RAISE_CLEARANCE = 80.0
 
-# One wire entry per felled tree: [id, heading, lie, age], plus the base
-# [x, y, z] once a drag moved it off the stump (about 25 bytes a tree).
+# One wire entry per felled tree: [id, heading, lie, age], plus the exact base
+# [x, y, z] once a drag moved it off the stump (about 22 bytes a lying tree).
 static func snapshot(stage) -> Array:
 	var result: Array = []
 	for index in stage.fallen:
@@ -53,7 +53,7 @@ static func snapshot(stage) -> Array:
 		var entry = [index, snappedf(atan2(f.direction.x, f.direction.z), 0.001), snappedf(float(f.get("lie", PI * 0.5)), 0.001), snappedf(f.age, 0.01)]
 		var base: Vector3 = stage.trees[index]
 		if not base.is_equal_approx(f.get("origin", base)):
-			entry.append_array([snappedf(base.x, 0.01), snappedf(base.y, 0.01), snappedf(base.z, 0.01)])
+			entry.append_array([base.x, base.y, base.z])
 		result.append(entry)
 	return result
 
