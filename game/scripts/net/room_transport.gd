@@ -9,6 +9,7 @@ extends Node
 #   room._on_left()
 const WorldValidation = preload("res://scripts/net/world_validation.gd")
 const NetProtocol = preload("res://scripts/net/net_protocol.gd")
+const Dedicated = preload("res://scripts/net/dedicated.gd")
 # WebSocket ready states, kept numeric so the script parses without the module.
 const SOCKET_OPEN = 1
 const SOCKET_CLOSED = 3
@@ -114,7 +115,11 @@ func request(kind: String, room_id: String, body: Dictionary) -> void:
 	request_kind = kind
 	request_sent_at = now()
 	busy = true
-	var err = http.request(endpoint(kind, room_id), ["Content-Type: application/json"], HTTPClient.METHOD_POST, JSON.stringify(body))
+	var headers = ["Content-Type: application/json"]
+	if kind == "create" and Dedicated.active():
+		headers.append("X-Rally-Dedicated: " + Dedicated.token())
+		body = body.merged(Dedicated.create_fields())
+	var err = http.request(endpoint(kind, room_id), headers, HTTPClient.METHOD_POST, JSON.stringify(body))
 	if err != OK:
 		handle_http(HTTPRequest.RESULT_CANT_CONNECT, 0, PackedStringArray(), PackedByteArray())
 

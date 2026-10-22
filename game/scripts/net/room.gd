@@ -23,6 +23,7 @@ const CarRides = preload("res://scripts/cars/car_rides.gd")
 const Loc = preload("res://scripts/ui/loc.gd")
 const WorldValidation = preload("res://scripts/net/world_validation.gd")
 const VoiceChat = preload("res://scripts/net/voice_chat.gd")
+const Dedicated = preload("res://scripts/net/dedicated.gd")
 
 var game: Node3D
 var voice: Node
@@ -82,6 +83,7 @@ func _ready() -> void:
 	direct.setup(self)
 	ui.build(self)
 	world_sync.setup(self)
+	if Dedicated.active(): add_child(Dedicated.new())
 
 # ---------------------------------------------------------------- roles
 
@@ -280,7 +282,7 @@ func _apply_guest_world(world, stamp: float, players: Array, membership: bool) -
 func _update_members(players: Array) -> void:
 	members.clear()
 	for p in players:
-		members[str(p.id)] = {"name": p.get("name", ""), "slot": int(p.get("slot", 0)), "car_model": int(p.get("car_model", 0)), "character": int(p.get("character", p.get("slot", 0)))}
+		members[str(p.id)] = {"name": p.get("name", ""), "slot": int(p.get("slot", 0)), "car_model": int(p.get("car_model", 0)), "character": int(p.get("character", p.get("slot", 0))), "dedicated": p.get("dedicated", false) == true}
 	direct.sync_members(host_id, members.keys())
 	voice.sync_members(members.keys())
 
@@ -375,7 +377,8 @@ func local_state() -> Dictionary:
 func _update_peers(players: Array, use_states: bool = true, membership: bool = true) -> void:
 	var present = {}
 	for p in players:
-		if p.id == player_id:
+		# A dedicated server hosts the room but is nobody on the stage.
+		if p.id == player_id or members.get(str(p.id), {}).get("dedicated", false):
 			continue
 		present[p.id] = true
 		if not peers.has(p.id):

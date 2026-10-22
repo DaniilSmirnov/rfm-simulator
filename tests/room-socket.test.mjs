@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { setTimeout as wait } from 'node:timers/promises';
-import { RallyRoom } from '../server/worker.mjs';
+import { RallyRoom, dedicatedCreate } from '../server/worker.mjs';
 
 // Minimal stand-in for the Durable Object hibernation API.
 class FakeSocket {
@@ -282,4 +282,18 @@ test('expired hello is rejected before the alarm runs', async () => {
   await room.webSocketMessage(ws, JSON.stringify({ type: 'hello', token: host.token }));
   assert.equal(ws.closed, 4401);
   assert.equal(room.sockets(host.player).length, 0);
+});
+
+test('only the dedicated key marks a room as served and picks its ID', () => {
+  const raw = JSON.stringify({ name: 'Сервер', dedicated: true, room: 'D0D0D0', stage: 1 });
+  const anonymous = dedicatedCreate(raw, null, 'key');
+  assert.deepEqual(JSON.parse(anonymous.raw), { name: 'Сервер', stage: 1 });
+  assert.equal(anonymous.room, '');
+  const served = dedicatedCreate(raw, 'key', 'key');
+  assert.deepEqual(JSON.parse(served.raw), { name: 'Сервер', stage: 1, dedicated: true });
+  assert.equal(served.room, 'D0D0D0');
+  assert.equal(dedicatedCreate(JSON.stringify({ room: '../x' }), 'key', 'key').room, '');
+  for (const [key, secret] of [['wrong', 'key'], ['ke', 'key'], ['', ''], ['key', undefined]]) {
+    assert.throws(() => dedicatedCreate(raw, key, secret), e => e.status === 403);
+  }
 });

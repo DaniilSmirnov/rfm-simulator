@@ -34,6 +34,26 @@ const ROOM_ID = protocol.room_id_pattern.replace(/^\^|\$$/g, '');
 const SOCKET_ROUTE = new RegExp(`^/api/rooms/(${ROOM_ID})/socket$`);
 const ENTRY_ROUTE = new RegExp(`^/api/rooms/${ROOM_ID}/join$`);
 const ROOM_ROUTE = new RegExp(`^/api/rooms/(${ROOM_ID})/(join|sync|leave|heartbeat)$`);
+const FIXED_ROOM = new RegExp(`^${ROOM_ID}$`);
+// Strings compared in time that does not depend on where they differ.
+function sameSecret(a, b) {
+  const x = new TextEncoder().encode(a), y = new TextEncoder().encode(b);
+  let diff = x.length ^ y.length;
+  for (let i = 0; i < x.length; i++) diff |= x[i] ^ (y[i] ?? 0);
+  return diff === 0 && x.length > 0;
+}
+// A create from a dedicated server (game/scripts/net/dedicated.gd) carries
+// X-Rally-Dedicated with DEDICATED_TOKEN. Only then do the "dedicated" mark and
+// a fixed "room" ID reach the room; from anyone else both are dropped.
+export function dedicatedCreate(raw, key, secret) {
+  let body;
+  try { body = JSON.parse(raw); } catch { return { raw, room: '' }; }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return { raw, room: '' };
+  const { dedicated, room, ...rest } = body;
+  if (key === null) return { raw: JSON.stringify(rest), room: '' };
+  if (!secret || !sameSecret(key, secret)) throw new RoomError(403, 'Неверный ключ сервера.');
+  return { raw: JSON.stringify({ ...rest, dedicated: true }), room: typeof room === 'string' && FIXED_ROOM.test(room) ? room : '' };
+}
 const socketUrl = (url, room) => `${url.protocol === 'https:' ? 'wss:' : 'ws:'}//${url.host}/api/rooms/${room}/socket`;
 export class RallyRoom {
   constructor(ctx) {
@@ -320,13 +340,17 @@ export default {
     }
     if (url.pathname === '/api/rooms') {
       let raw;
-      try { raw = await readBody(request, 1024, 'Слишком длинное имя.'); }
+      let fixed = '';
+      try {
+        raw = await readBody(request, 1024, 'Слишком длинное имя.');
+        ({ raw, room: fixed } = dedicatedCreate(raw, request.headers.get('X-Rally-Dedicated'), env.DEDICATED_TOKEN));
+      }
       catch (error) { if (error instanceof RoomError) return json({error:error.message},error.status); throw error; }
-      for (let attempt = 0; attempt < 4; attempt++) {
-        const id = [...crypto.getRandomValues(new Uint8Array(3))].map(n => n.toString(16).padStart(2, '0')).join('').toUpperCase();
+      for (let attempt = 0; attempt < (fixed ? 1 : 4); attempt++) {
+        const id = fixed || [...crypto.getRandomValues(new Uint8Array(3))].map(n => n.toString(16).padStart(2, '0')).join('').toUpperCase();
         const room = env.ROOMS.get(env.ROOMS.idFromName(id));
         const response = await room.fetch(new Request(`${url.origin}/create`, { method: 'POST', body: raw }));
-        if (response.status === 409) continue;
+        if (response.status === 409 && !fixed) continue;
         const data = await response.json();
         return json(response.ok ? { ...data, room: id, socket: socketUrl(url, id) } : { ...data, room: id }, response.status);
       }

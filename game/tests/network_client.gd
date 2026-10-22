@@ -44,6 +44,9 @@ func _process(delta: float) -> void:
 		sample.processed = game.room.processed.keys()
 		sample.safe_area_ready = game.mobile_safe_rect.has_area()
 		sample.direct = game.room.direct.open_links().size()
+		sample.peers = game.room.peers.size()
+		sample.racers = game.racers.size()
+		sample.phase = game.course.phase
 		sample.direct_healthy = not game.room.is_host and game.room.direct.healthy(game.room.host_id)
 		if game.movable_props.records.has(prop_key):
 			var prop: Dictionary = game.movable_props.records[prop_key]

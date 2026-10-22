@@ -10,6 +10,7 @@ const Motion = preload("res://scripts/cars/vehicle_motion.gd")
 const CarRegistry = preload("res://scripts/cars/car_registry.gd")
 const Stage = preload("res://scripts/stages/stage.gd")
 const ViewClearance = preload("res://scripts/player/view_clearance.gd")
+const Dedicated = preload("res://scripts/net/dedicated.gd")
 
 var game:
 	set(value):
@@ -20,6 +21,7 @@ var relief = preload("res://scripts/player/tree_relief.gd").new()
 var perches = preload("res://scripts/player/perches.gd").new()
 
 func drive(delta: float) -> void:
+	if Dedicated.active(): return # a dedicated server has no player of its own
 	game.rides.update()
 	if game.rides.riding():
 		game.rides.follow()
@@ -160,6 +162,7 @@ func contact_blocked(start: Vector3, end: Vector3, driving: bool, limit: float =
 	return false
 
 func walk(delta: float) -> void:
+	if Dedicated.active(): return
 	game.rides.update()
 	perches.carry()
 	if relief.update(delta):
