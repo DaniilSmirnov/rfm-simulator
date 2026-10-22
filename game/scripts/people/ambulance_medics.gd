@@ -9,6 +9,9 @@ const WALK_RADIUS = 20.0
 const STATION_TOLERANCE = 6.0
 const DOOR_SECONDS = 0.65
 const REACH = 1.3
+# A doctor who cannot find the way back boards anyway: the van never leaves
+# with its doctor outside.
+const RETURN_GIVE_UP = 20.0
 var _owner: WeakRef
 var injuries:
 	get:
@@ -138,6 +141,9 @@ func _step(medic: Dictionary, van: Dictionary, delta: float) -> void:
 				injuries._stand(medic.key, record)
 				_next(medic, van, record.pos)
 		"returning":
+			medic.time += delta
+			if medic.time >= RETURN_GIVE_UP:
+				medic.avatar.position = medic.door
 			Navigation.move(injuries.game, medic, medic.door, delta, false)
 			_face(medic, medic.door)
 			if Navigation.flat(medic.avatar.position).distance_to(Navigation.flat(medic.door)) < 0.2:
@@ -180,6 +186,7 @@ func _next(medic: Dictionary, van: Dictionary, origin: Vector3) -> void:
 func _return(medic: Dictionary, van: Dictionary) -> void:
 	medic.key = ""
 	medic.state = "returning"
+	medic.time = 0.0
 	medic.erase("navigation")
 	van.treating = ""
 

@@ -25,6 +25,10 @@ const CREW_SPEED = 2.0
 const MAX_FLIGHT = 5.0
 const MAX_LAUNCH = 13.0
 const TREAT_SECONDS = 3.0
+# Seconds an ambulance may stand by a casualty its doctor cannot reach on foot
+# (fenced in, on a ledge) before the casualty gets up unaided: otherwise the
+# doctor retries forever and the red flag never clears.
+const RESCUE_GIVE_UP = 30.0
 const Medics = preload("res://scripts/people/ambulance_medics.gd")
 const CharacterRig = preload("res://scripts/people/character_rig.gd")
 const Perches = preload("res://scripts/player/perches.gd")
@@ -367,6 +371,9 @@ func _update_host(delta: float) -> void:
 						play.stand(key)
 					continue
 				var ambulance = _ambulance(int(r.ambulance))
+				if _unreachable(r, key, ambulance, delta):
+					_stand(key, r)
+					continue
 				if ambulance.is_empty():
 					_assign(r, key)
 				elif not medics.active.has(int(ambulance.id)):
@@ -388,6 +395,20 @@ func _update_host(delta: float) -> void:
 				continue
 		_pose(key, r.pos, r.rot, 1.0)
 	game.course.red_flag = red_flag()
+
+# Time counts while the van waits beside this casualty, or its doctor is out
+# for them but stands still short of them. A doctor still walking (a long way
+# across a field) or busy with someone else does not count.
+func _unreachable(r: Dictionary, key: String, ambulance: Dictionary, delta: float) -> bool:
+	if ambulance.is_empty():
+		return false
+	var medic: Dictionary = medics.active.get(int(ambulance.id), {})
+	var waiting = str(ambulance.get("target_key", "")) == key and _ambulance_at_casualty(ambulance, r)
+	if not medic.is_empty():
+		waiting = medic.key == key and medic.state != "treating" and not medic.moving
+	if waiting:
+		r.rescue_wait = float(r.get("rescue_wait", 0.0)) + delta
+	return float(r.get("rescue_wait", 0.0)) >= RESCUE_GIVE_UP
 
 # A casualty is reachable on foot from a van that is close or level with them
 # along the road, however far off the road they lie.
