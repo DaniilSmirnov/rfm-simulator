@@ -87,7 +87,9 @@ function toolchain(target, prefix) {
     const sdk = spawnSync('xcrun', ['--sdk', t.sdk, '--show-sdk-path'], {encoding: 'utf8'}).stdout.trim();
     if (!sdk) throw new Error(`xcrun found no ${t.sdk} SDK. Install Xcode.`);
     process.env.SDKROOT = sdk;
-    args.push(`-DCMAKE_OSX_SYSROOT=${sdk}`, `-DCOCOA_LIBRARY=${sdk}/System/Library/Frameworks/Foundation.framework`);
+    args.push(`-DCMAKE_OSX_SYSROOT=${sdk}`, `-DCOCOA_LIBRARY=${sdk}/System/Library/Frameworks/Foundation.framework`,
+      // Cross builds for iOS confine find_*() to the SDK; our prefix lives outside it.
+      `-DCMAKE_FIND_ROOT_PATH=${prefix}`, '-DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=BOTH', '-DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=BOTH', '-DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=BOTH');
   }
   if (t.abi) {
     const ndk = process.env.ANDROID_NDK_ROOT || process.env.ANDROID_NDK_LATEST_HOME || process.env.ANDROID_NDK_HOME || process.env.ANDROID_NDK;
