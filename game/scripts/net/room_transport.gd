@@ -17,15 +17,19 @@ const SOCKET_RETRY = 5.0
 const SOCKET_MAX_FAILURES = 3
 # Leave time for an 8s HTTP request and capped backoff before membership's 90s TTL.
 const RECOVERY_SECONDS = 45.0
+# Host syncs in a row the server may refuse before the room is given up.
+const MAX_REFUSED_SYNCS = 3
 const SOCKET_REPLY_TIMEOUT = 8.0
 
 var room
 var http: HTTPRequest
+var beacon: HTTPRequest
 var server = "http://127.0.0.1:8787"
 var busy = false
 var request_kind = ""
 var request_sent_at = 0.0
 var errors = 0
+var refused_syncs = 0
 var recovery_started_at = -INF
 var suspended_at = -INF
 var socket_waiting_since = -INF
@@ -86,6 +90,22 @@ func _notification(what: int) -> void:
 		if socket_waiting_since != -INF:
 			socket_waiting_since += now() - maxf(suspended_at, socket_waiting_since)
 		suspended_at = -INF
+	# A phone stops the engine in the background, so a native host reports it
+	# before sleeping and the server keeps the room (web: room-session.js).
+	if what == NOTIFICATION_APPLICATION_PAUSED or what == NOTIFICATION_APPLICATION_RESUMED:
+		report_background(what == NOTIFICATION_APPLICATION_PAUSED)
+
+# Sent on its own threaded request: the engine may stop polling right after.
+func report_background(background: bool) -> void:
+	if OS.has_feature("web") or room == null or not room.connected or not room.is_host:
+		return
+	if beacon == null:
+		beacon = HTTPRequest.new()
+		beacon.use_threads = true
+		beacon.timeout = 8
+		add_child(beacon)
+	beacon.cancel_request()
+	beacon.request(endpoint("heartbeat", room.room_id), ["Content-Type: application/json"], HTTPClient.METHOD_POST, JSON.stringify({"token": room.token, "background": background}))
 
 func endpoint(kind: String, room_id: String) -> String:
 	return server + ("/api/rooms" if kind == "create" else "/api/rooms/%s/%s" % [room_id, kind])
@@ -97,6 +117,18 @@ func request(kind: String, room_id: String, body: Dictionary) -> void:
 	var err = http.request(endpoint(kind, room_id), ["Content-Type: application/json"], HTTPClient.METHOD_POST, JSON.stringify(body))
 	if err != OK:
 		handle_http(HTTPRequest.RESULT_CANT_CONNECT, 0, PackedStringArray(), PackedByteArray())
+
+# Giving up on a room (recovery_delay() < 0): a last leave, in case the server can be reached again,
+# so the others do not see this member for the rest of its membership TTL.
+# It goes on its own request and its answer is ignored: the room screen
+# already says the room is closed.
+func abandon(room_id: String, token: String) -> void:
+	var leave = HTTPRequest.new()
+	leave.timeout = 8
+	add_child(leave)
+	leave.request_completed.connect(func(_result, _code, _headers, _body): leave.queue_free())
+	if leave.request(endpoint("leave", room_id), ["Content-Type: application/json"], HTTPClient.METHOD_POST, JSON.stringify({"token": token})) != OK:
+		leave.queue_free()
 
 func cancel() -> void:
 	if busy:
@@ -136,12 +168,24 @@ func recovery_delay() -> float:
 		recovery_started_at = active_now
 	errors += 1
 	if active_now - recovery_started_at >= RECOVERY_SECONDS:
+		abandon(room.room_id, room.token)
 		return -1.0
 	return minf(5.0, pow(2.0, mini(errors - 1, 3)))
 
 func reset_recovery() -> void:
 	errors = 0
 	recovery_started_at = -INF
+	refused_syncs = 0
+
+# The host's sync refused as too large or malformed (413, 400) is one bad
+# snapshot, not a closed room: the cold sections are offered again from
+# scratch. Only a run of refusals with no good reply in between is terminal.
+func tolerate_refused_sync(code: int) -> bool:
+	if not room.is_host or code not in [400, 413] or refused_syncs >= MAX_REFUSED_SYNCS:
+		return false
+	refused_syncs += 1
+	room.world_sync.reset()
+	return true
 
 # ---------------------------------------------------------------- clock
 

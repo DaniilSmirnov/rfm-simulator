@@ -60,9 +60,10 @@ function dataStrings() {
 }
 
 // Messages the room server sends and the client shows as they are.
+// Payment and authorization replies reach only VK, which is Russian-only.
 function serverStrings() {
   const used = new Map();
-  const skip = /Платеж|Авториз|имя|VK/;
+  const skip = /Платеж|Авториз|VK/;
   for (const name of ['room-core.mjs', 'rate-limits.mjs', 'worker.mjs']) {
     for (const line of readFileSync(join(root, 'server', name), 'utf8').split('\n')) {
       for (const m of line.matchAll(/'((?:[^'\\]|\\.)*)'|`((?:[^`\\]|\\.)*)`/g)) {

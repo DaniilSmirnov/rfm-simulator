@@ -103,10 +103,23 @@ func _tile(key: Vector2i) -> void:
 	for index in stage.tree_cells.get(key, []):
 		var p: Vector3 = stage.trees[index]
 		if trunks.has(index) or stage.fallen.get(index, {}).get("dynamic", false) or Vector2i(floori(p.x / TILE), floori(p.z / TILE)) != key: continue
-		var shape_tree = CapsuleShape3D.new()
-		shape_tree.radius = 0.2
-		shape_tree.height = float(stage.forest_data[index].height) * 0.64 if index < stage.forest_data.size() else 8.0
-		trunks[index] = _collider(shape_tree, p + Vector3.UP * shape_tree.height * 0.5)
+		_trunk(index)
+
+func _trunk(index: int) -> void:
+	var shape_tree = CapsuleShape3D.new()
+	shape_tree.radius = 0.2
+	shape_tree.height = float(stage.forest_data[index].height) * 0.64 if index < stage.forest_data.size() else 8.0
+	trunks[index] = _collider(shape_tree, stage.trees[index] + Vector3.UP * shape_tree.height * 0.5)
+
+# A felled tree stood back up (fallen_trees.gd raise) gets its upright trunk
+# again where its tile is already built; an unbuilt tile adds it when built.
+func stand(index: int) -> void:
+	if trunks.has(index):
+		trunks[index].queue_free()
+		trunks.erase(index)
+	var p: Vector3 = stage.trees[index]
+	if tiles.has(Vector2i(floori(p.x / TILE), floori(p.z / TILE))):
+		_trunk(index)
 
 func _collider(shape: Shape3D, at: Vector3) -> StaticBody3D:
 	var body = StaticBody3D.new()

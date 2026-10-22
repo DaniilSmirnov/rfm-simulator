@@ -7,7 +7,7 @@
     "racer": {"fields": {"id": "int", "variant": "int", "pos": "vec", "velocity": "vec", "yaw": "number", "state": "string", "tilt": ["number", "number"], "role": "string", "zero_index": "int", "towed": "bool", "recovery_helpers": "int"}, "required": ["id", "variant", "pos", "yaw", "state"]},
     "drive": {"fields": {"ack": "int", "pos": "vec", "yaw": "number", "velocity": "vec", "vertical": "number", "grounded": "bool", "pitch": "number", "roll": "number", "steering": "number", "yaw_rate": "number", "longitudinal": "number", "initialized": "bool", "condition": "number", "impact_timer": "number", "recovery_ack": "int", "prop_contacts": {"map": "number", "max": 2048}}, "required": ["ack", "pos", "yaw", "velocity", "vertical", "grounded", "pitch", "roll", "steering", "yaw_rate", "longitudinal"]},
     "stone": {"fields": {"id": "int", "pos": "vec", "velocity": "vec", "bounces": "int"}, "required": ["id", "pos", "velocity"]},
-    "tree": {"fields": {"id": "int", "dir": "vec", "age": "number", "pos": "vec"}, "required": ["id", "dir", "age"]},
+    "tree": {"one": [["int", "number", "number", "number"], ["int", "number", "number", "number", "coordinate", "coordinate", "coordinate"]]},
     "lamp": {"fields": {"id": "int", "pos": "vec", "rot": "vec"}, "required": ["id", "pos", "rot"]},
     "actor": {"fields": {"id": "int", "pos": "vec", "yaw": "number", "action": "string", "helper": "int"}, "required": ["id", "pos"]},
     "injury": {"fields": {"key": "string", "phase": "string", "pos": "vec", "rot": "vec", "play": "bool", "limp": "number", "eta": "number", "treat": "bool", "moving": "bool", "clock": "number", "goal": "vec", "home_yaw": "number"}, "required": ["key", "phase", "pos", "rot"]},

@@ -10,7 +10,6 @@ extends Node
 #   drive_prediction.gd  guest car prediction / host-side simulation
 const Hitbox = preload("res://scripts/cars/car_hitbox.gd")
 const Prediction = preload("res://scripts/net/drive_prediction.gd")
-const SnapshotMotion = preload("res://scripts/net/snapshot_motion.gd")
 const Props = preload("res://scripts/core/props.gd")
 const NetProtocol = preload("res://scripts/net/net_protocol.gd")
 const Transport = preload("res://scripts/net/room_transport.gd")
@@ -128,6 +127,7 @@ func _on_rate_limited(retry: float) -> void:
 	ui.room_label.text = Loc.t("Слишком много запросов. Повторим через %d сек.") % ceili(retry)
 
 func _on_failure(kind: String, code: int, message: String, _data) -> void:
+	if connected and kind == "sync" and transport.tolerate_refused_sync(code): return
 	if connected and code in [400, 401, 404, 410, 413]:
 		disconnect_room(message)
 	elif connected:
@@ -361,16 +361,10 @@ func _requests(source: Dictionary) -> Array:
 		result.append({"id": index, "dir": a(source[index])})
 	return result.slice(0, NetProtocol.limit("object_requests_per_sync"))
 
-func tree_requests() -> Array:
-	return _requests(game.tree_requests)
-
-func lamp_requests() -> Array:
-	return _requests(game.lamp_requests)
-
 func local_state() -> Dictionary:
 	return {"drive_enabled": prediction_enabled, "drive_inputs": prediction.outgoing() if prediction_enabled else [], "pos": a(game.player_position()), "car": a(game.car.position), "heading": snappedf(game.heading, 0.001), "tilt": a(game.car.rotation), "yaw": snappedf(game.view_yaw, 0.001), "pitch": snappedf(game.view_pitch, 0.001), "in_car": game.in_car,
 		"tow": Input.is_action_pressed("tow") and not game.in_car and not game.injuries.down and not game.paused and not game.dead and not game.finished and game.beers < 30 and game.drink_time < 0 and game.eat_time < 0,
-		"push": a(game.walking_intent()), "speed": snappedf(game.speed, 0.01), "beers": game.beers, "trees": tree_requests(), "lamps": lamp_requests(), "beer": snappedf(game.drink_time, 0.01), "eat": snappedf(game.eat_time, 0.01), "food_kind": game.eat_kind, "food_species": game.food_species, "seated": game.seated, "running": game.running(), "airborne": game.jump_height > 0.01, "relief": game.player.relief.active,
+		"push": a(game.walking_intent()), "speed": snappedf(game.speed, 0.01), "beers": game.beers, "trees": _requests(game.tree_requests), "lamps": _requests(game.lamp_requests), "beer": snappedf(game.drink_time, 0.01), "eat": snappedf(game.eat_time, 0.01), "food_kind": game.eat_kind, "food_species": game.food_species, "seated": game.seated, "running": game.running(), "airborne": game.jump_height > 0.01, "relief": game.player.relief.active,
 		"ride": game.rides.ride, "hitch": game.rides.hitch, "broken": game.condition <= 0,
 		"radio": voice.on_air()}.merged(game.player.perches.state_fields())
 
@@ -435,13 +429,13 @@ func _update_peer(p: Dictionary) -> void:
 		peer.last_sample_time = sample_time
 	peer.state = p.state
 	if p.state != null:
-		peer.last_state_time = float(p.state_time) / 1000.0 if p.has("state_time") else server_clock()
+		PeerView.note_activity(peer, float(p.state_time) / 1000.0 if p.has("state_time") else server_clock())
 
 # The host runs each guest's car from the guest's input, within a time budget.
 func _simulate_guest_drive(p: Dictionary) -> void:
 	if not host_drives.has(p.id):
 		var solver = Prediction.new()
-		var pose: Transform3D = game.stage.parks.visitor_pose(0, int(p.get("slot", 1)))
+		var pose: Transform3D = game.stage.parks.free_visitor_pose(int(p.get("slot", 1)), Hitbox.player(int(p.get("car_model", 0))), drive_context(str(p.id)).contacts)
 		solver.reset(pose.origin, pose.basis.get_euler().y)
 		drive_budgets[p.id] = {"time": Time.get_ticks_usec(), "ticks": 30.0, "stamp": server_clock() - Prediction.STAMP_LAG}
 		host_drives[p.id] = solver
@@ -594,9 +588,10 @@ func disconnect_room(message: String) -> void:
 	transport.close_socket()
 	game.paused = true
 	game.menu.show()
-	game.menu_title.text = "Комната закрыта"
-	game.menu_text.text = message
-	game.start_button.text = "В ГЛАВНОЕ МЕНЮ"
+	if not (game.finished or game.dead): # a trip's results stay; their button leads to the menu
+		game.menu_title.text = "Комната закрыта"
+		game.menu_text.text = message
+		game.start_button.text = "В ГЛАВНОЕ МЕНЮ"
 	game.dead = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	if game.mobile_controls != null:
@@ -606,9 +601,9 @@ func disconnect_room(message: String) -> void:
 # ---------------------------------------------------------------- driving
 
 func predict_drive(delta: float) -> bool:
-	if is_host or not prediction_enabled:
-		return false
-	if not prediction.active:
+	if is_host: return false
+	# Until the host's first world the car waits where the host starts it.
+	if not prediction_enabled or not prediction.active:
 		return true
 	input_clock += minf(delta, 0.1)
 	var ticks = int(input_clock / prediction.motion.handling.STEP)
@@ -669,9 +664,9 @@ func apply_drive_events(solver, authoritative: bool) -> void:
 	solver.events.clear()
 
 func recover_drive() -> bool:
-	if is_host or not prediction_enabled:
+	if is_host:
 		return false
-	if not prediction.active:
+	if not prediction_enabled or not prediction.active:
 		game.toast("Дождись синхронизации машины с хозяином.")
 		return true
 	if prediction.full():

@@ -24,6 +24,13 @@ function standing(s) {
   return { stand: key, stand_at: [clamp(s.stand_at[0], -8, 8), clamp(s.stand_at[1], -1, 4), clamp(s.stand_at[2], -8, 8)] };
 }
 
+// A member who stops answering for this long leaves the room; for the host
+// that closes it. A host whose page reported going to the background (phone
+// locked, another app opened) keeps the room longer: its guests stay paused
+// and the game resumes when the host comes back.
+export const MEMBER_TTL = 90000;
+export const BACKGROUND_HOST_TTL = 600000;
+
 export class RoomError extends Error {
   constructor(status, message) { super(message); this.status = status; }
 }
@@ -33,8 +40,9 @@ export class RoomState {
   }
   expire(now) {
     const d = this.data;
-    if (d.host && (!d.players[d.host] || now - d.players[d.host].seen > 90000)) d.closed = true;
-    for (const [id, p] of Object.entries(d.players)) if (id !== d.host && now - p.seen > 90000) delete d.players[id];
+    const host = d.players[d.host];
+    if (d.host && (!host || now - host.seen > (host.background === true ? BACKGROUND_HOST_TTL : MEMBER_TTL))) d.closed = true;
+    for (const [id, p] of Object.entries(d.players)) if (id !== d.host && now - p.seen > MEMBER_TTL) delete d.players[id];
     d.commands = d.commands.filter(c => d.players[c.player]);
   }
   member(token) {

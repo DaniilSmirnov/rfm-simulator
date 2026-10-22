@@ -7,6 +7,10 @@ static func refresh(game, records: Dictionary) -> void:
 		var key = "lamp:%d" % i
 		if lamp.fallen and not records.has(key):
 			records[key] = {"key": key, "node": lamp.body, "box": AABB(Vector3(-0.17, -2, -0.17), Vector3(0.34, 4, 0.34)), "mass": 28.0, "anchored": false, "changed": false, "velocity": Vector3.ZERO, "spin": Vector3.ZERO, "lamp": i}
+	# A trunk stood back up (fallen_trees.gd raise) is no prop any more.
+	for key in records:
+		if records[key].has("tree") and not stage.fallen.has(records[key].tree):
+			records[key].node.queue_free()
 	for index in stage.fallen:
 		var key = "tree:%d" % index
 		if records.has(key):
@@ -33,6 +37,7 @@ static func move_lamp(game, r: Dictionary) -> void:
 
 static func move_tree(stage, r: Dictionary) -> void:
 	var index: int = r.tree
+	if not stage.fallen.has(index): return
 	var old: Vector3 = stage.trees[index]
 	var next: Vector3 = r.node.position
 	var old_cell: Vector2i = stage._tree_cell(old)

@@ -164,7 +164,7 @@ static func plan(game: Node3D, racer: Dictionary) -> Dictionary:
 	# Once treatment is complete, an ambulance must safely pass people
 	# still standing near the scene instead of remaining red-flagged forever.
 	if racer.get("role", "") == "ambulance" and float(racer.get("target_s", -1.0)) < 0.0:
-		for person in ServiceTraffic.people(game):
+		for person in ServiceTraffic.people(game, racer):
 			positions.append({"pos": person.pos, "speed": 0.0})
 	for peer in game.room.peers.values():
 		if peer.state != null:

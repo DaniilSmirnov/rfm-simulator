@@ -32,6 +32,9 @@ const CAR_RAM_MAX_DAMAGE = 30.0
 # POLICE_STALL_SECONDS waits behind something: everybody is asked to clear it.
 const POLICE_STALL_DISTANCE = 1.5
 const POLICE_STALL_SECONDS = 2.0
+# A crew or zero car standing this long (s) behind something it cannot pass,
+# such as a car left across a narrow road, retires: the stage goes on.
+const CREW_PATIENCE = 30.0
 # Seconds after a tow until a crew drives at its full launch again, and the
 # share of that launch it starts with.
 const RECOVERY_RAMP = 6.0
@@ -193,6 +196,14 @@ func update_racers_step(delta: float) -> void:
 			var actual_speed = move_toward(current_speed, float(traffic.speed), delta * gain)
 			actual_speed = minf(actual_speed, float(traffic.get("advance", INF)) / maxf(delta, 0.001))
 			racer.drive_speed = actual_speed
+			if not ServiceTraffic.applies(racer) and not red_hold:
+				racer.held = float(racer.get("held", 0.0)) + delta if actual_speed < 0.3 else 0.0
+				if racer.held >= CREW_PATIENCE:
+					stop_at_obstacle(racer)
+					racer.state = "stopped"
+					racer.retired = true
+					game.toast("Экипаж не может проехать и сошёл с дистанции.")
+					continue
 			# Keep the racing state: no towing/despawn or timetable transition while
 			# waiting. Freeze lateral corrections too, so stopped cars cannot creep.
 			if red_hold and actual_speed <= 0.0:
@@ -297,7 +308,7 @@ func update_racers_step(delta: float) -> void:
 					game.toast("Экипаж застрял. Нужен трос — T рядом с машиной.")
 		elif racer.state in ["stopped", "stranded", "parked"]:
 			racer.motion.suspension(node, game.stage, delta, node.rotation.y)
-			if racer.state == "stopped" and not red_hold and not service and racer.age > 18 and racer.node != game.tow_target and not racer.get("towed", false) and int(racer.get("recovery_helpers", 0)) == 0:
+			if racer.state == "stopped" and not red_hold and (not service or racer.get("retired", false)) and racer.age > 18 and racer.node != game.tow_target and not racer.get("towed", false) and int(racer.get("recovery_helpers", 0)) == 0:
 				to_remove.append(racer)
 		if was_racing and not ServiceTraffic.priority(racer):
 			var contact = Hitbox.rocks(game.stage, racer.previous, node.position, Hitbox.shape(Hitbox.bounds(node), node.rotation.y))

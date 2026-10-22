@@ -156,6 +156,18 @@ func run() -> void:
 			room.transport.errors = 0
 			failure(room, socket, status)
 			check(not room.connected and game.menu_text.text == "Recovery test error", "%s %d is a visible terminal failure" % ["socket" if socket else "HTTP", status])
+		# One host sync the server refuses (too large, malformed) is not fatal.
+		room.is_host = true
+		for status in [413, 400]:
+			room.connected = true
+			room.transport.reset_recovery()
+			room.world_sync.server_cold_revs = {"trees": 1}
+			failure(room, socket, status)
+			check(room.connected and room.world_sync.server_cold_revs.is_empty(), "%s host sync refused with %d keeps the room and resends cold sections" % ["socket" if socket else "HTTP", status])
+		for i in range(room.transport.MAX_REFUSED_SYNCS):
+			failure(room, socket, 413)
+		check(not room.connected, "%s host gives up after repeated refused syncs" % ("socket" if socket else "HTTP"))
+		room.is_host = false
 		room.connected = true
 		room.transport.reset_recovery()
 		failure(room, socket, 429)

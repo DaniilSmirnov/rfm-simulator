@@ -13,6 +13,7 @@ extends RefCounted
 const Props = preload("res://scripts/core/props.gd")
 const SnapshotMotion = preload("res://scripts/net/snapshot_motion.gd")
 const Validation = preload("res://scripts/net/world_validation.gd")
+const NetProtocol = preload("res://scripts/net/net_protocol.gd")
 
 var room
 var game
@@ -172,6 +173,27 @@ func host_upload(body: Dictionary) -> void:
 		cold_uploaded_at[section] = now
 	if not cold.is_empty():
 		body.cold = cold
+		_fit(body)
+
+# The server refuses a message over max_message_bytes (413). Sections that do
+# not fit, largest first, wait for a later upload instead of the whole sync
+# failing; the room and the hot world keep going meanwhile.
+func _fit(body: Dictionary) -> void:
+	var limit = NetProtocol.max_message_bytes() - 2048
+	while body.has("cold") and JSON.stringify(body).to_utf8_buffer().size() > limit:
+		var largest = ""
+		var largest_size = -1
+		for section in body.cold:
+			var size = JSON.stringify(body.cold[section]).length()
+			if size > largest_size:
+				largest = section
+				largest_size = size
+		body.cold.erase(largest)
+		cold_sent.erase(largest)
+		cold_uploaded_at.erase(largest)
+		push_warning("[RFM network] cold section %s (%d bytes) left out of an oversized sync" % [largest, largest_size])
+		if body.cold.is_empty():
+			body.erase("cold")
 
 func reset() -> void:
 	cold_revs.clear()

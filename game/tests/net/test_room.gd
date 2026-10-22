@@ -24,6 +24,7 @@ func run() -> void:
 	guest.room.is_host = false
 	host.room.connected = true
 	guest.room.connected = true
+	check(guest.room.predict_drive(0.1) and guest.room.recover_drive(), "a guest's car waits for the host's first world instead of driving on its own")
 	check(guest.room.submit("table") and guest.camp == null, "guest camp action queues without changing local world")
 	check(not guest.room.submit("beer"), "beer animation remains local")
 	var cmd = {"id": "guest:1", "action": "table", "state": {"in_car": false, "pos": host.room.a(host.stage.clearings[0]), "car": host.room.a(guest.car.position), "yaw": 0.0}}
@@ -142,6 +143,15 @@ func run() -> void:
 	host.room._update_peers([])
 	check(host.room.peers.is_empty(), "departed player nodes removed")
 	var drive_state = {"drive_enabled": true, "drive_inputs": [{"seq": 1, "ticks": 12, "throttle": 1.0, "steer": 0.0, "brake": false}], "pos": [999, 0, 0], "car": [999, 0, 0], "in_car": true, "heading": 0.0, "yaw": 0.0, "pitch": 0.0, "beer": -1.0}
+	var parked = host.car.transform
+	host.car.transform = host.stage.parks.visitor_pose(0, 2)
+	var late_state = drive_state.duplicate(true)
+	late_state.drive_inputs = []
+	host.room._update_peers([{"id": "late", "name": "Late", "slot": 2, "car_model": 0, "state_time": 10000, "state": late_state}])
+	var late: Vector3 = host.room.host_drives.late.node.position
+	check(late.distance_to(host.car.position) > 2 and late.distance_to(host.stage.parks.visitor_pose(0, 3).origin) < 0.01, "a late member whose slot holds a parked car starts in the next free one")
+	host.room._update_peers([])
+	host.car.transform = parked
 	var driver = {"id": "driver", "name": "Driver", "slot": 1, "car_model": 0, "state_time": 10000, "state": drive_state.duplicate(true)}
 	host.room._update_peers([driver])
 	check(host.room.host_drives.driver.node.position.distance_to(host.stage.parks.visitor_pose(0, 1).origin) < 2, "host initializes driving from trusted slot rather than claimed position")
@@ -181,6 +191,7 @@ func run() -> void:
 	check(guest.dead and guest.menu.visible, "shared result reaches guest")
 	guest.room.disconnect_room("Хозяин вышел")
 	check(not guest.room.connected and guest.paused and guest.dead, "disconnect blocks further local play")
+	check(guest.menu_title.text == "Общий выезд окончен" and guest.menu.visible, "room closing after the trip keeps the guest's results on screen")
 	print("ROOM RESULT: %d checks, %d failures" % [checks, failures])
 	for g in [host, guest]:
 		await g._shutdown_audio()

@@ -596,33 +596,18 @@ func sync_providers(game) -> Array:
 	var trees_snapshot = func() -> Dictionary:
 		return {"fallen": tree_snapshot()}
 	var trees_apply = func(f: Dictionary, _t: float) -> void:
-		apply_trees(f.get("fallen", []))
+		apply_trees(f.get("fallen", []), game.tree_requests)
 		for fallen_tree in f.get("fallen", []):
-			game.tree_requests.erase(int(fallen_tree.id))
+			game.tree_requests.erase(int(fallen_tree[0]))
 	list.append(WorldSync.provider("trees", "trees", ["fallen"], trees_snapshot, trees_apply, true))
 	return list
 
+# Felled trees on the wire (fallen_trees.gd); applying stands up unlisted ones.
 func tree_snapshot() -> Array:
-	var result = []
-	for index in fallen:
-		var f: Dictionary = fallen[index]
-		result.append({"id": index, "dir": [f.direction.x, 0, f.direction.z], "age": f.age, "lie": f.get("lie", PI * 0.5), "pos": [trees[index].x, trees[index].y, trees[index].z]})
-	return result
+	return FallenTrees.snapshot(self)
 
-func apply_trees(snapshot: Array) -> void:
-	for f in snapshot:
-		var index = int(f.id)
-		if index < 0 or index >= trees.size():
-			continue
-		fell(index, Vector3(f.dir[0], 0, f.dir[2]))
-		fallen[index].direction = Vector3(f.dir[0], 0, f.dir[2]).normalized()
-		fallen[index].age = maxf(fallen[index].age, float(f.age))
-		fallen[index].lie = float(f.lie) if f.has("lie") else FallenTrees.lie_angle(self, fallen[index].origin, fallen[index].direction, forest_data[index].height * 0.64)
-		if f.has("pos"):
-			trees[index] = Vector3(f.pos[0], f.pos[1], f.pos[2])
-			fallen[index].erase("rendered_age")
-	_rebuild_tree_index()
-	update_fallen(0)
+func apply_trees(snapshot: Array, keep: Dictionary = {}) -> void:
+	FallenTrees.apply(self, snapshot, keep)
 
 static func flat(pos: Vector3) -> Vector2:
 	return Vector2(pos.x, pos.z)

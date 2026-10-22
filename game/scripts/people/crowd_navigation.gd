@@ -101,7 +101,8 @@ static func plan(game, start: Vector3, goal: Vector3, ctx: Dictionary) -> Array:
 	var search = begin(game, start, goal, ctx)
 	if not search.has("route"):
 		step(game, search, MAX_VISITS)
-	return search.route
+	# A search that spends its whole budget stops before it can note failure.
+	return search.get("route", [])
 
 # An A* search over CELL squares around start. It holds "route" once finished
 # (empty when there is none). A long detour visits a few hundred cells at

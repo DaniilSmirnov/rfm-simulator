@@ -4,6 +4,7 @@ extends "res://tests/harness.gd"
 # a broken car stays in the game, and the outing ends only when every car is
 # broken.
 const NetProtocol = preload("res://scripts/net/net_protocol.gd")
+const PeerView = preload("res://scripts/net/peer_view.gd")
 
 func _initialize() -> void:
 	call_deferred("run")
@@ -96,6 +97,20 @@ func run() -> void:
 	check(game.park_traffic.everyone_home(), "a guest riding in the host's car arrives with it")
 	game.room.peers.friend.state.in_car = false
 	check(not game.park_traffic.everyone_home(), "nobody arrives while the driver is still outside")
+	# A friend away from the keyboard, or one whose connection is gone, does not hold the day.
+	var friend: Dictionary = game.room.peers.friend
+	var now = game.room.server_clock()
+	PeerView.note_activity(friend, now)
+	friend.activity.time = now - PeerView.AWAY_SECONDS - 1.0
+	check(game.park_traffic.everyone_home(), "a friend who has not moved for two minutes does not hold the day")
+	PeerView.note_activity(friend, now)
+	check(game.park_traffic.everyone_home(), "standing still with the same view is no sign of life")
+	friend.state.yaw = 1.0
+	PeerView.note_activity(friend, now)
+	check(not game.park_traffic.everyone_home(), "looking round counts as being back")
+	friend.last_state_time = now - PeerView.LOST_SECONDS - 1.0
+	check(game.park_traffic.everyone_home(), "a friend not heard from since the reconnect timeout does not hold the day")
+	friend.last_state_time = now
 
 	# A broken car no longer ends the outing while a friend's car still drives.
 	game.room._update_peers([{"id": "friend", "name": "Друг", "state": friend_state(game, on_stage(game, 300, 3), true)}])
