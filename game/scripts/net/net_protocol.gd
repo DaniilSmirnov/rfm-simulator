@@ -91,6 +91,9 @@ static func clean_state(s):
 			if not _number(c.get("throttle")) or absf(float(c.throttle)) > 1.0 or not _number(c.get("steer")) or absf(float(c.steer)) > 1.0 or not c.get("brake") is bool:
 				continue
 			var command = {"seq": int(c.seq), "ticks": int(c.ticks), "throttle": float(c.throttle), "steer": float(c.steer), "brake": c.brake}
+			if c.has("lift"):
+				if not _number(c.lift) or absf(float(c.lift)) > 1.0: continue
+				command.lift = float(c.lift)
 			if c.get("recover") == true:
 				command.recover = true
 			inputs.append(command)

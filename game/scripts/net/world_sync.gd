@@ -421,6 +421,9 @@ func _racers_snapshot() -> Dictionary:
 		var velocity: Vector3 = r.get("velocity", Vector3.ZERO)
 		if velocity.length_squared() > 0.0025:
 			entry.velocity = room.a(velocity)
+		# The front wheels' angle of a crew on the tyre model (opposite lock).
+		if r.node.has_meta("steer_angle") and absf(float(r.node.get_meta("steer_angle"))) > 0.01:
+			entry.steer = snappedf(float(r.node.get_meta("steer_angle")), 0.01)
 		if r.get("role", "racer") != "racer":
 			entry.role = r.role
 		if int(r.get("zero_index", 0)) != 0:
@@ -435,6 +438,14 @@ func _racers_snapshot() -> Dictionary:
 		result.recovery_links = game.recovery_links
 	return result
 
+# The host's wheel angle for a crew on the tyre model; without it the wheels
+# follow the curve the guest sees the car drive.
+static func _apply_steer(node: Node3D, entry: Dictionary) -> void:
+	if entry.has("steer"):
+		node.set_meta("steer_angle", float(entry.steer))
+	elif node.has_meta("steer_angle"):
+		node.set_meta("steer_angle", 0.0)
+
 func _racers_apply(w: Dictionary, sample_time: float) -> void:
 	if not w.has("racers"):
 		return
@@ -447,6 +458,7 @@ func _racers_apply(w: Dictionary, sample_time: float) -> void:
 				local.state = r.state
 				local.towed = r.get("towed", false)
 				local.recovery_helpers = int(r.get("recovery_helpers", 0))
+				_apply_steer(local.node, r)
 				exists = true
 				break
 		if not exists:
@@ -456,6 +468,7 @@ func _racers_apply(w: Dictionary, sample_time: float) -> void:
 			node.position = room.v(r.pos)
 			node.set_meta("room_id", r.id)
 			game.racers.append({"id": r.id, "role": role, "zero_index": int(r.get("zero_index", 0)), "node": node, "state": r.state, "variant": r.variant})
+			_apply_steer(node, r)
 		if not racer_motion.has(r.id):
 			racer_motion[r.id] = SnapshotMotion.new()
 			racer_motion[r.id].predictive = true

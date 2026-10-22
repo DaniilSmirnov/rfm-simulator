@@ -17,6 +17,7 @@ var game:
 		game = value
 		relief.game = value
 		perches.game = value
+var flight_solver = preload("res://scripts/net/drive_prediction.gd").new()
 var relief = preload("res://scripts/player/tree_relief.gd").new()
 var perches = preload("res://scripts/player/perches.gd").new()
 
@@ -27,6 +28,9 @@ func drive(delta: float) -> void:
 		game.rides.follow()
 		return
 	if game.room.connected and game.room.predict_drive(delta):
+		return
+	if CarRegistry.flies(game.selected_car):
+		drive_helicopter(delta)
 		return
 	# Carry fractional ticks across render frames; cap long stalls at one second.
 	game.vehicle_motion.drive_clock += clampf(delta, 0, 1.0)
@@ -111,6 +115,23 @@ func drive(delta: float) -> void:
 			game.die("Легковушка утонула в финском озере.\nДальше только пешком.")
 			return
 		game.die("Легковушка сдалась раньше тебя.\nРазбитый СУ победил подвеску.")
+
+func drive_helicopter(delta: float) -> void:
+	game.vehicle_motion.drive_clock += clampf(delta, 0, 1.0)
+	var dt: float = game.vehicle_motion.handling.STEP
+	var ticks = int(game.vehicle_motion.drive_clock / dt)
+	game.vehicle_motion.drive_clock -= ticks * dt
+	flight_solver.motion = game.vehicle_motion
+	flight_solver.node.position = game.car.position
+	flight_solver.yaw = game.heading
+	flight_solver.condition = game.condition
+	flight_solver.context = game.room.drive_context(game.room.player_id)
+	flight_solver.step({"ticks": ticks, "throttle": Input.get_axis("back", "forward"), "steer": Input.get_axis("left", "right"), "lift": float(Input.is_action_pressed("jump")) - float(Input.is_action_pressed("sprint"))}, game.stage, game.selected_car)
+	game.room.apply_drive_events(flight_solver, false)
+	game.car.transform = flight_solver.node.transform
+	game.heading = flight_solver.yaw
+	game.condition = flight_solver.condition
+	game.speed = game.vehicle_motion.velocity.dot(Vector3(-sin(game.heading), 0, -cos(game.heading)))
 
 func knock_tree(index: int, direction_hint: Vector3) -> void:
 	if game.stage.fell(index, direction_hint):
@@ -317,6 +338,9 @@ func toggle_car() -> void:
 	if not can_change_seat():
 		return
 	if game.in_car:
+		if CarRegistry.flies(game.selected_car) and not game.vehicle_motion.grounded:
+			game.toast("Сначала приземлись: Shift — снижение.")
+			return
 		if absf(game.speed) > 1:
 			game.toast("Сначала остановись: Space — тормоз.")
 			return

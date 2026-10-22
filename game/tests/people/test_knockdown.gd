@@ -89,7 +89,11 @@ func run() -> void:
 		parked = parked or van.state == "parked"
 		if parked:
 			break
-	check(parked and absf(van.s - lying.station) <= 6.0 and van.node.position.distance_to(lying.pos) <= 8.0, "the ambulance parks within safe treatment range")
+	# The casualty lies 9 m from the centre line and the van keeps 1.2 m inside
+	# the road edge, stopping up to four metres short: just under 9 m.
+	# (It used to pass at 8 m only because the crew that stopped just ahead
+	# pushed the van out wide.)
+	check(parked and absf(van.s - lying.station) <= 6.0 and van.node.position.distance_to(lying.pos) <= 9.0, "the ambulance parks within safe treatment range (%.1f m)" % van.node.position.distance_to(lying.pos))
 	# Route projection may lag behind the casualty; the doctor's approach must
 	# use the physical position, and treatment starts only after reaching them.
 	van.s = lying.station - 7.0

@@ -289,7 +289,7 @@ test('Sport sedan model 9 survives joins and restored rooms while out-of-range m
   const restored = new RoomState(structuredClone(r.data));
   const reply = restored.sync({ token: g.token, state: state() }, 1100);
   assert.deepEqual(reply.players.map(p => p.car_model), [9, 9]);
-  const late = restored.add('Late', 1200, false, { car_model: 11 });
+  const late = restored.add('Late', 1200, false, { car_model: 12 });
   assert.equal(late.car_model, late.slot);
 });
 
@@ -533,6 +533,10 @@ test('a dedicated host is nobody on the stage and can take its fixed ID again', 
   const server = r.add('Сервер', 1000, true, { dedicated: true, stage: 2 });
   const g = r.add('Друг', 1000);
   assert.equal(g.slot, 0, 'the first guest takes the first park slot');
+  const full = new RoomState();
+  full.add('Сервер', 1000, true, { dedicated: true });
+  for (let i = 0; i < MAX_PLAYERS; i++) full.add('g', 1000);
+  assert.throws(() => full.add('overflow', 1000), e => e.status === 409, 'the server takes no place');
   const view = r.sync({ token: g.token, state: state() }, 1100);
   assert.equal(view.players.find(p => p.id === server.player).dedicated, true);
   assert.equal(view.players.find(p => p.id === g.player).dedicated, undefined);
@@ -551,4 +555,15 @@ test('a dedicated host is nobody on the stage and can take its fixed ID again', 
   const player = new RoomState();
   player.add('Сервер', 1000, true, { dedicated: true });
   assert.throws(() => player.add('Хозяин', 1000, true), e => e.status === 409);
+});
+
+test('helicopter selection and bounded lift survive the Worker relay', () => {
+ const r = new RoomState();
+ const h = r.add('Pilot', 1000, true, {car_model: 11});
+ const g = r.add('Guest pilot', 1000, false, {car_model: 11});
+ assert.equal(g.car_model, 11);
+ const input = {seq: 1, ticks: 12, throttle: 0, steer: 0, brake: false, lift: -1};
+ r.sync({token: g.token, state: {...state(), drive_enabled: true, drive_inputs: [input, {...input, seq:2, lift:2}]}}, 1100);
+ const reply = r.sync({token: h.token, state: state()}, 1200);
+ assert.deepEqual(reply.players.find(p => p.id === g.player).state.drive_inputs, [input]);
 });

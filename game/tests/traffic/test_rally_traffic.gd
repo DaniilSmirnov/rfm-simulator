@@ -170,8 +170,13 @@ func run() -> void:
 	game._update_racers(1.0 / 60.0)
 	var lateral: float = (drifting.node.position - game.race_at(drifting.s)).dot(game.race_side(drifting.s))
 	check(absf(lateral - drifting.line - drifting.slide) < 0.01, "slide displaces the actual vehicle rather than only changing its steering target")
-	drifting.slide = 3.6
-	game._update_racers(1.0 / 60.0)
+	# A hard sideways shove carries the car past the road edge: the driver
+	# cannot catch it, and it leaves the road with its momentum.
+	drifting.motion.velocity += game.race_side(drifting.s) * 20.0
+	for i in range(60):
+		game._update_racers(1.0 / 60.0)
+		if drifting.state != "racing":
+			break
 	check(drifting.state == "offroad" and drifting.motion.velocity.length() > 5, "excessive slide releases the vehicle from the road with momentum")
 	var carried: Vector3 = (drifting.node.position - drifting.previous) * 60.0
 	carried.y = 0.0
@@ -208,7 +213,8 @@ func run() -> void:
 			game.course.red_flag = true
 			game._update_racers(1.0 / 60.0)
 			check(red_flag_car.drive_speed > 0.0 and red_flag_car.drive_speed < 20.0 and red_flag_car.s > 150.0, "red flag brakes progressively instead of freezing immediately")
-			game._update_racers(2.0)
+			# Brakes at the tyres' grip, about 1 g: 20 m/s needs over two seconds.
+			game._update_racers(3.0)
 			check(red_flag_car.drive_speed == 0.0 and red_flag_car.state == "racing", "competitors and zeros stop without becoming stranded")
 			var held: Vector3 = red_flag_car.node.position
 			red_flag_car.age = 25.0

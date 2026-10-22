@@ -353,7 +353,8 @@ static func _finite_number(value) -> bool:
 func valid_sync_reply(data: Dictionary) -> bool:
 	for key in ["server_time", "world_time"]:
 		if data.has(key) and not _finite_number(data[key]): return false
-	if not data.get("players") is Array or data.players.size() > NetProtocol.max_players(): return false
+	# One more entry than max_players: a dedicated host, who takes no place.
+	if not data.get("players") is Array or data.players.size() > NetProtocol.max_players() + 1: return false
 	for player in data.players:
 		if not player is Dictionary or not player.get("id") is String: return false
 	if data.get("world") != null and not data.world is Dictionary: return false

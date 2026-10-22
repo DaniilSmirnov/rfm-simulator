@@ -178,6 +178,8 @@ static func player_avatar(variant: int = 0, outfit: String = "") -> Node3D:
 # Wheel rolling lives with the wheels (car_parts.gd).
 static func animate_wheels(car_root: Node3D) -> void:
 	CarParts.animate_wheels(car_root)
+	if car_root.has_meta("helicopter"):
+		load("res://scripts/cars/helicopter_model.gd").animate(car_root)
 
 # Player fleet, one record per car in res://data/cars.json (car_registry.gd).
 const CarRegistry = preload("res://scripts/cars/car_registry.gd")
@@ -355,6 +357,8 @@ static func player_car(variant: int = 0, bake: bool = true) -> Node3D:
 	var p: Dictionary = PLAYER_MODELS[variant]
 	var car: Node3D = null
 	match str(p.model):
+		"helicopter":
+			car = load("res://scripts/cars/helicopter_model.gd").build(variant)
 		"granta":
 			car = load("res://scripts/cars/granta_model.gd").build()
 		"niva":
@@ -634,6 +638,10 @@ static func pose_cauldron(root: Node3D, phase: String, progress: float, servings
 	load("res://scripts/camp/cauldron_model.gd").pose(root, phase, progress, servings, time)
 
 static func cargo_point(profile: Dictionary, index: int) -> Vector3:
+	if profile.get("side", false):
+		if index == 5: return Vector3(0.85, 1.65, 0)
+		if index < 3: return Vector3(0.85, 0.85, (index - 1) * 0.48)
+		return Vector3(0.85, 1.33, -0.4 if index == 3 else 0.4)
 	if index == 5:
 		return Vector3(0, profile.floor + 0.65, profile.rear - 0.30)
 	if index < 3:
@@ -743,6 +751,8 @@ static func panel_mesh(vertices: PackedVector3Array) -> ArrayMesh:
 static func trunk_profile(variant: int) -> Dictionary:
 	var p: Dictionary = PLAYER_MODELS[posmod(variant, PLAYER_MODELS.size())]
 	var trunk: Dictionary = p.trunk
+	if trunk.get("side", false):
+		return {"side": true, "rear": 0.0, "half": 0.8, "hinge": 0.0, "floor": 0.65, "top": 1.8, "hatch": false}
 	var hatch: bool = trunk.hatch
 	var rear: float = p.length / 2
 	var hinge: float = trunk.get("hinge", 1.26 if hatch else rear - 0.80)
@@ -892,8 +902,11 @@ static func update_player_trunk(root: Node3D, opened: bool, stored: Array, delta
 	var hinge = root.get_node_or_null("TrunkHinge")
 	if hinge == null:
 		return
-	hinge.rotation.x = move_toward(hinge.rotation.x, -1.18 if opened else 0.0, delta * 1.75)
+	if root.has_meta("helicopter"):
+		hinge.position.z = move_toward(hinge.position.z, 1.35 if opened else 0.0, delta * 1.75)
+	else:
+		hinge.rotation.x = move_toward(hinge.rotation.x, -1.18 if opened else 0.0, delta * 1.75)
 	var boxes = root.get_node("TrunkBoxes")
-	boxes.visible = absf(hinge.rotation.x) > 0.12
+	boxes.visible = hinge.position.z > 0.12 if root.has_meta("helicopter") else absf(hinge.rotation.x) > 0.12
 	for i in range(boxes.get_child_count()):
 		boxes.get_child(i).visible = bool(stored[i]) if i < stored.size() else true

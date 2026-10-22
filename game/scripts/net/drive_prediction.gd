@@ -1,6 +1,7 @@
 extends RefCounted
 const Hitbox = preload("res://scripts/cars/car_hitbox.gd")
 const PropContact = preload("res://scripts/cars/prop_contact.gd")
+const Flight = preload("res://scripts/cars/helicopter_motion.gd")
 const Motion = preload("res://scripts/cars/vehicle_motion.gd")
 const CarRegistry = preload("res://scripts/cars/car_registry.gd")
 # Commands sent per sync. The backlog itself is bounded by simulated time so
@@ -123,6 +124,9 @@ func step(c: Dictionary, stage, model: int) -> void:
 		visual_yaw = 0.0
 	var dt = motion.handling.STEP
 	for tick in range(int(c.ticks)):
+		if CarRegistry.flies(model):
+			Flight.step(self, c, stage, model, dt)
+			continue
 		# Same rule as player_motion.gd: a broken car only rolls to a stop.
 		# Freezing it kept the crash speed forever, and nobody could get out.
 		var wrecked = condition <= 0
@@ -198,22 +202,23 @@ func outgoing() -> Array:
 static func quantize(value: float) -> float:
 	return snappedf(clampf(value, -1.0, 1.0), INPUT_STEP)
 
-func predict(ticks: int, throttle: float, steer: float, brake: bool, stage, model: int, recover: bool = false) -> void:
+func predict(ticks: int, throttle: float, steer: float, brake: bool, stage, model: int, recover: bool = false, lift: float = 0.0) -> void:
 	if ticks <= 0 or full():
 		return
 	ticks = mini(ticks, MAX_TICKS)
+	lift = quantize(lift)
 	if coalesce:
 		throttle = quantize(throttle)
 		steer = quantize(steer)
 		if not recover and not pending.is_empty():
 			var last: Dictionary = pending.back()
-			if int(last.seq) > sealed_seq and not last.get("recover", false) and float(last.throttle) == throttle and float(last.steer) == steer and bool(last.brake) == brake and int(last.ticks) + ticks <= MAX_TICKS:
+			if int(last.seq) > sealed_seq and not last.get("recover", false) and float(last.throttle) == throttle and float(last.steer) == steer and bool(last.brake) == brake and float(last.get("lift", 0)) == lift and int(last.ticks) + ticks <= MAX_TICKS:
 				last.ticks = int(last.ticks) + ticks
-				step({"seq": last.seq, "ticks": ticks, "throttle": throttle, "steer": steer, "brake": brake}, stage, model)
+				step({"seq": last.seq, "ticks": ticks, "throttle": throttle, "steer": steer, "brake": brake, "lift": lift}, stage, model)
 				predicted[int(last.seq)] = snapshot()
 				return
 	seq += 1
-	var c = {"seq": seq, "ticks": ticks, "throttle": throttle, "steer": steer, "brake": brake, "recover": recover}
+	var c = {"seq": seq, "ticks": ticks, "throttle": throttle, "steer": steer, "brake": brake, "recover": recover, "lift": lift}
 	pending.append(c)
 	step(c, stage, model)
 	predicted[seq] = snapshot()

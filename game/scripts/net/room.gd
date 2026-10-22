@@ -612,7 +612,7 @@ func predict_drive(delta: float) -> bool:
 	var ticks = int(input_clock / prediction.motion.handling.STEP)
 	input_clock -= ticks * prediction.motion.handling.STEP
 	prediction.context = drive_context(player_id)
-	prediction.predict(ticks, Input.get_axis("back", "forward"), Input.get_axis("left", "right"), Input.is_action_pressed("brake"), game.stage, game.selected_car)
+	prediction.predict(ticks, Input.get_axis("back", "forward"), Input.get_axis("left", "right"), Input.is_action_pressed("brake"), game.stage, game.selected_car, false, float(Input.is_action_pressed("jump")) - float(Input.is_action_pressed("sprint")))
 	apply_drive_events(prediction, false)
 	game.condition = prediction.condition
 	game.car.position = prediction.node.position

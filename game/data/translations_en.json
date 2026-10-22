@@ -59,7 +59,6 @@
 "Флаг собран.": "Flag taken down.",
 "Предмет в руках. Верни его в открытый багажник через F.": "You are holding an item. Put it back into the open trunk with F.",
 "Походный хэтчбек": "Camping hatchback",
-"Подойди к задней части своей машины — багажник откроется сам.": "Walk up to the back of your car — the trunk opens by itself.",
 "Общий предмет уже установлен. Возьми свой стул.": "The shared item is already set up. Take your own chair.",
 "Общий предмет уже установлен другим игроком. Верни коробку.": "Another player already set up the shared item. Put the box back.",
 "Сначала верни предмет в открытый багажник.": "Put the item back into the open trunk first.",
@@ -639,5 +638,13 @@
   "Микрофон не найден: рация работает только на приём.": "No microphone found: the radio can only receive.",
   "РАЦИЯ · В ЭФИРЕ": "RADIO · ON AIR",
   "РАЦИЯ · %s": "RADIO · %s",
+"Гражданский вертолёт": "Civilian helicopter",
+"Вверх": "Ascend",
+"Вниз": "Descend",
+"Сначала приземлись: Shift — снижение.": "Land first: Shift to descend.",
+"Подойди к багажному отсеку своего транспорта — он откроется сам.": "Approach your vehicle cargo compartment \u2014 it opens automatically.",
+"ВЕРТОЛЁТ · %02d КМ/Ч · %d%%": "HELICOPTER · %02d KM/H · %d%%",
+"WASD — полёт и поворот · Space — вверх · Shift — вниз · F — выйти после посадки": "WASD — fly and turn · Space — ascend · Shift — descend · F — exit after landing",
+"Дождись посадки вертолёта.": "Wait for the helicopter to land.",
   "Плохая связь, голосовой чат не работает": "Poor connection, voice chat is not working"
 }

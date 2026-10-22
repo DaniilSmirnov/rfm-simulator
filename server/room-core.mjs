@@ -57,7 +57,8 @@ export class RoomState {
     if (host && options.dedicated === true && this.data.host && (this.data.closed || this.data.players[this.data.host]?.dedicated === true)) this.data = new RoomState().data;
     if (!host && (!this.data.host || this.data.closed)) throw new RoomError(404, 'Комната не найдена или закрыта.');
     if (host && this.data.host) throw new RoomError(409, 'Этот ID занят.');
-    if (Object.keys(this.data.players).length >= MAX_PLAYERS) throw new RoomError(409, `Комната заполнена: максимум ${MAX_PLAYERS} игроков.`);
+    // A dedicated host takes no place: its room holds MAX_PLAYERS guests.
+    if (Object.values(this.data.players).filter(p => !p.dedicated).length >= MAX_PLAYERS) throw new RoomError(409, `Комната заполнена: максимум ${MAX_PLAYERS} игроков.`);
     // Hot-world and state encodings change between protocol versions: a guest
     // from another build would misread the host's snapshots, so it is refused.
     const hostProtocol = this.data.players[this.data.host]?.protocol ?? 0;
@@ -108,8 +109,8 @@ export class RoomState {
     if (!s || !vec(s.pos) || !vec(s.car) || !number(s.heading) || !number(s.yaw) || !number(s.pitch) || typeof s.in_car !== 'boolean') throw new RoomError(400, 'Некорректное состояние игрока.');
     const drive_inputs = (Array.isArray(s.drive_inputs) ? s.drive_inputs.slice(0, LIMIT.drive_inputs_per_sync) : []).filter(c =>
       Number.isSafeInteger(c?.seq) && c.seq > 0 && Number.isSafeInteger(c.ticks) && c.ticks >= 1 && c.ticks <= LIMIT.ticks_per_input
-      && Number.isFinite(c.throttle) && Math.abs(c.throttle) <= 1 && Number.isFinite(c.steer) && Math.abs(c.steer) <= 1 && typeof c.brake === 'boolean')
-      .map(({seq,ticks,throttle,steer,brake,recover}) => ({seq,ticks,throttle,steer,brake, ...(recover === true ? {recover: true} : {})}));
+      && Number.isFinite(c.throttle) && Math.abs(c.throttle) <= 1 && Number.isFinite(c.steer) && Math.abs(c.steer) <= 1 && typeof c.brake === 'boolean' && (c.lift === undefined || (Number.isFinite(c.lift) && Math.abs(c.lift) <= 1)))
+      .map(({seq,ticks,throttle,steer,brake,recover,lift}) => ({seq,ticks,throttle,steer,brake, ...(lift !== undefined ? {lift} : {}), ...(recover === true ? {recover: true} : {})}));
     // A passenger names the friend whose car they sit in; a driver, the car on their tow rope.
     const ride = s.in_car ? this.carOwner(p, s.ride) : '';
     p.state = { drive_enabled: this.driveEnabled(p, s), drive_inputs, pos: s.pos, car: s.car, heading: s.heading, tilt: vec(s.tilt) ? s.tilt : [0, s.heading, 0], yaw: s.yaw, pitch: s.pitch, in_car: s.in_car, tow: s.tow === true && !s.in_car, push: vec(s.push) ? s.push.map((n, i) => i === 1 ? 0 : Math.max(-1, Math.min(1, n))) : [0, 0, 0], speed: number(s.speed) ? Math.max(-50, Math.min(50, s.speed)) : 0, beers: Number.isSafeInteger(s.beers) ? Math.max(0, Math.min(100000, s.beers)) : 0, trees: Array.isArray(s.trees) ? s.trees.slice(0, LIMIT.object_requests_per_sync).filter(t => Number.isSafeInteger(t?.id) && t.id >= 0 && t.id < 20000 && vec(t.dir)).map(t => ({ id: t.id, dir: t.dir })) : [], lamps: Array.isArray(s.lamps) ? s.lamps.slice(0, LIMIT.object_requests_per_sync).filter(t => Number.isSafeInteger(t?.id) && t.id >= 0 && t.id < 512 && vec(t.dir)).map(t => ({ id: t.id, dir: t.dir })) : [], seated: s.seated === true && !s.in_car, running: s.running === true && !s.in_car && s.seated !== true, airborne: s.airborne === true && !s.in_car && s.seated !== true, relief: s.relief === true && !s.in_car && s.seated !== true, radio: s.radio === true, ride, hitch: s.in_car && !ride ? this.carOwner(p, s.hitch) : '', broken: s.broken === true, food_species: ['edible', 'fly_agaric', 'toadstool'].includes(s.food_species) ? s.food_species : 'edible', food_kind: ['meat', 'mushroom', 'berries', 'plov', 'kuyrdak'].includes(s.food_kind) ? s.food_kind : 'meat', eat: Number.isFinite(s.eat) ? Math.max(-1, Math.min(protocol.durations.eat, s.eat)) : -1, beer: Math.max(-1, Math.min(protocol.durations.drink, Number(s.beer) || 0)), ...standing(s) };

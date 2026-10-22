@@ -83,6 +83,7 @@ func run() -> void:
 	# and the wheel carries visible detail (not a bare cylinder) on its pivot.
 	var builders: Array = []
 	for i in range(props.PLAYER_MODELS.size()):
+		if props.CarRegistry.flies(i): continue # Aircraft use animated rotors and skids.
 		builders.append(func(): return props.player_car(i))
 	for i in range(props.RALLY_MODELS.size()):
 		builders.append(func(): return props.rally_car(i))

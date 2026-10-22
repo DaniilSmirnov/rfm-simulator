@@ -54,12 +54,27 @@ func probe(index: int, role: String) -> void:
 	var lat_max = 0.0
 	var jerk_frames = 0
 	var prev_acc = 0.0
+	var mistakes: Array = []
+	var last_mistake = ""
+	var last_state = "racing"
 	for frame in range(fps * 240):
 		var tick = Time.get_ticks_usec()
 		game._update_racers(dt)
 		cost += Time.get_ticks_usec() - tick
-		if r.state != "racing" or r.s >= game.stage.length - 2:
+		if r.has("mistake") and str(r.mistake.kind) != last_mistake:
+			mistakes.append("%s@%.0f" % [r.mistake.kind, r.s])
+		last_mistake = str(r.mistake.kind) if r.has("mistake") else ""
+		if r.state != last_state:
+			mistakes.append("%s@%.0f" % [r.state, r.s])
+			last_state = r.state
+		if r.state in ["stranded", "stopped"] or r.s >= game.stage.length - 2:
 			break
+		if r.state != "racing":
+			prev_yaw = r.node.rotation.y
+			prev_rate = 0.0
+			prev_pos = r.node.position
+			prev_speed = r.drive_speed
+			continue
 		frames += 1
 		var yaw = r.node.rotation.y
 		var rate = wrapf(yaw - prev_yaw, -PI, PI) / dt
@@ -89,6 +104,7 @@ func probe(index: int, role: String) -> void:
 		prev_speed = r.drive_speed
 		prev_pos = r.node.position
 	var seconds = frames * dt
+	print("  %s: %s" % [r.get("class", "?"), ", ".join(mistakes)])
 	print("%d %-6s %-5s len=%4.0fm t=%5.1fs avg=%4.0fkm/h | yawacc rms=%5.1f max=%6.0f rad/s2 | yawclamp=%4.1f%% | maxbrake=%4.1f%% | thr<->brk=%3d (%.1f/min) | accjerk=%4.1f%% | slip corner=%4.1f° max=%4.1f° | lat max=%4.1fg | %.3f ms/frame" % [index, role, "baked" if not r.track_parts.is_empty() else "heur", game.stage.length, seconds, speeds / maxf(frames, 1) * 3.6, sqrt(yaw_acc_sq / maxf(frames, 1)), yaw_acc_max, 100.0 * clamp_frames / maxf(frames, 1), 100.0 * brake_frames / maxf(frames, 1), switches, switches / maxf(seconds / 60.0, 0.01), 100.0 * jerk_frames / maxf(frames, 1), rad_to_deg(slip_sum / maxf(corner_frames, 1)), rad_to_deg(slip_max), lat_max / 9.8, cost / 1000.0 / maxf(frames, 1)])
 	game.stage.free()
 	game.free()

@@ -9,7 +9,7 @@ import {basename} from 'node:path';
 export const groups = Object.freeze({
  core: [
   "test_character_asset.gd", "test_character_rig.gd", "test_player_handling.gd", "test_prop_physics.gd", "test_prop_sleep.gd", "test_stage_start.gd", "test_rolling_wheels.gd",
-  "test_vehicle_contract.gd", "test_cargo_selection_order.gd", "test_trunk.gd",
+  "test_helicopter.gd", "test_vehicle_contract.gd", "test_cargo_selection_order.gd", "test_trunk.gd",
   "test_niva_integration.gd", "test_packing.gd", "test_interaction_hold.gd", "test_demo.gd", "test_mobile.gd",
   "test_stage_safety_gate.gd", "test_how_to_play.gd", "test_demo_build.gd", "test_tree_relief.gd", "test_view_clearance.gd", "test_pointer_capture.gd", "test_party.gd", "test_selection.gd",
   "test_vk_access.gd", "test_vk_catalog_matrix.gd", "test_vk_invite_ui.gd",
@@ -19,7 +19,7 @@ export const groups = Object.freeze({
  ],
  simulation: [
   "test_stage_meals.gd", "test_camp_cooking.gd", "test_camp_ground.gd", "test_course_schedule.gd", "test_course_schedule_late.gd", "test_service_parks.gd", "test_rally_handling.gd",
-  "test_rally_rejoin.gd", "test_rally_smoothness.gd", "test_rally_tracks.gd", "test_rally_traffic.gd", "test_room.gd", "test_room_recovery.gd", "test_direct_link.gd", "test_world_validation.gd", "test_voice_radio.gd", "test_voice_native.gd",
+  "test_rally_rejoin.gd", "test_rally_driver.gd", "test_rally_smoothness.gd", "test_rally_tracks.gd", "test_rally_traffic.gd", "test_room.gd", "test_room_recovery.gd", "test_direct_link.gd", "test_world_validation.gd", "test_voice_radio.gd", "test_voice_native.gd",
   "test_physics.gd", "test_prop_contact.gd", "test_car_hitbox.gd", "test_food_fleet.gd", "test_foraging.gd", "test_grill_fire.gd", "test_camp_models.gd",
   "test_poison_mushrooms.gd", "test_network_motion.gd", "test_tow_recovery.gd", "test_car_rides.gd", "test_police_bridge.gd",
   "test_crew_limit.gd", "test_drive_prediction.gd", "test_route_index.gd", "test_knockdown.gd", "test_ambulance_medics.gd", "test_ambulance_right_of_way.gd", "test_ambulance_ford.gd", "test_away_players.gd", "test_ambulance_unreachable.gd",

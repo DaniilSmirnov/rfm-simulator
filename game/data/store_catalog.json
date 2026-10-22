@@ -186,6 +186,16 @@
     "price": 3
   },
   {
+    "sku": "car_12",
+    "type": "car",
+    "content_id": 11,
+    "title": "Гражданский вертолёт",
+    "free": false,
+    "enabled": true,
+    "purchase_enabled": true,
+    "price": 20
+  },
+  {
     "sku": "character_01",
     "type": "character",
     "content_id": 0,
