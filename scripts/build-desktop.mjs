@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { verifyWindowsBuild } from './verify-windows-build.mjs';
 import { getGodot, root, run } from './godot.mjs';
 
-// Native exports (Steam desktop, Android). Usage: node scripts/build-desktop.mjs --platform=macos|linux|windows|android|windows-demo|macos-demo
+// Native exports (Steam desktop, Android, iOS). Usage: node scripts/build-desktop.mjs --platform=macos|linux|windows|android|ios|windows-demo|macos-demo
 // The official 4.4.1 export templates are downloaded once into .cache/templates and
 // checked against a pinned SHA-256; only the selected platform templates are unpacked.
 // Linux exports a separate .pck; Windows embeds all game data into each executable.
@@ -25,6 +25,9 @@ const platforms = {
   ], patch: windowsPatch, prepare: prepareWindows, verify: 'Rally_Fans_Simulator_Demo' },
   'macos-demo': { preset: 'macOS Demo', template: 'macos.zip', output: 'Rally Fans Simulator Demo.zip', patch: macosPatch, mobileTextures: true },
   android: { preset: 'Android', template: 'android_release.apk', output: 'Rally Fans Simulator.apk', patch: androidPatch, prepare: prepareAndroid, mobileTextures: true },
+  // Godot writes an Xcode project; Xcode builds it without code signing into an unsigned IPA
+  // (install it with your own certificate: Sideloadly, AltStore or codesign). No radio library yet.
+  ios: { preset: 'iOS', template: 'ios.zip', output: 'xcode/RallyFansSimulator.ipa', patch: iosPatch, prepare: prepareIos, finish: buildIos, mobileTextures: true },
 };
 const name = process.argv.find(arg => arg.startsWith('--platform='))?.split('=')[1] ?? 'macos';
 const platform = platforms[name];
@@ -80,6 +83,36 @@ function androidPatch(preset) {
   return preset
     .replaceAll('version/code=1', `version/code=${major * 1000000 + minor * 1000 + patch}`)
     .replaceAll('version/name="0.10.29"', `version/name=${JSON.stringify(version)}`);
+}
+
+// Godot refuses an iOS export without a team ID even when it only writes the Xcode project.
+// The placeholder never signs anything: Xcode builds with signing turned off.
+function iosPatch(preset) {
+  return macosPatch(preset).replace('application/app_store_team_id=""', 'application/app_store_team_id="UNSIGNED00"');
+}
+
+async function prepareIos() {
+  if (process.platform !== 'darwin') throw new Error('The iOS build needs macOS with Xcode.');
+  const xcode = spawnSync('xcodebuild', ['-version'], { encoding: 'utf8' });
+  if (xcode.status !== 0) throw new Error('xcodebuild is missing. Install Xcode and accept its license.');
+  await mkdir(join(output, 'xcode'), { recursive: true });
+  return `Unsigned, ${xcode.stdout.split('\n')[0]}.`;
+}
+
+// Build the exported project for devices with signing off and pack the .app as Payload/*.app.
+async function buildIos() {
+  const derived = join(root, '.cache', 'ios-derived');
+  await rm(derived, { recursive: true, force: true });
+  run('xcodebuild', ['-project', join(output, 'xcode', 'RallyFansSimulator.xcodeproj'), '-scheme', 'RallyFansSimulator',
+    '-configuration', 'Release', '-sdk', 'iphoneos', '-destination', 'generic/platform=iOS', '-derivedDataPath', derived,
+    'CODE_SIGNING_ALLOWED=NO', 'CODE_SIGNING_REQUIRED=NO', 'CODE_SIGN_IDENTITY=', 'DEVELOPMENT_TEAM=', '-quiet', 'build'], { timeout: 1800000 });
+  const payload = join(root, '.cache', 'ios-payload');
+  await rm(payload, { recursive: true, force: true });
+  await mkdir(join(payload, 'Payload'), { recursive: true });
+  run('ditto', [join(derived, 'Build', 'Products', 'Release-iphoneos', 'RallyFansSimulator.app'), join(payload, 'Payload', 'RallyFansSimulator.app')]);
+  const ipa = join(output, 'Rally Fans Simulator (unsigned).ipa');
+  run('ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', join(payload, 'Payload'), ipa]);
+  return ipa;
 }
 
 // Godot reads the SDK and JDK locations from its editor settings, not from the preset.
@@ -180,9 +213,10 @@ run(godot, ['--headless', '--path', project, '--script', 'res://tools/bake/bake_
 run(godot, ['--headless', '--path', project, '--script', 'res://tools/bake/bake_village.gd']);
 for (const target of targets) {
   run(godot, ['--headless', '--path', project, '--export-release', target.preset, join(output, target.output)]);
-  const size = (await stat(join(output, target.output))).size;
+  const product = target.finish ? await target.finish() : join(output, target.output);
+  const size = (await stat(product)).size;
   if (size < 1024 * 1024) throw new Error('Exported archive is suspiciously small.');
   if (target.pck && (await stat(join(output, target.pck))).size < 1024 * 1024) throw new Error('Exported game data (.pck) is suspiciously small.');
-  console.log(`${target.preset} ready: ${join(output, target.output)} (${(size / 1048576).toFixed(1)} MiB). ${note}`);
+  console.log(`${target.preset} ready: ${product} (${(size / 1048576).toFixed(1)} MiB). ${note}`);
 }
 if (platform.verify) await verifyWindowsBuild(output, platform.verify);

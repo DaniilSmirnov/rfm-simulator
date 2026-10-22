@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # Release exports (desktop, Android, the radio library for every platform,
+  # Release exports (desktop, Android, iOS, the radio library for every platform,
   # the VK prototype) run on main and on manual runs. A pull request runs them
   # only when it changes files those builds depend on; game code is covered by
   # the tests, and main still checks every merged commit.
@@ -506,6 +506,44 @@ jobs:
         with:
           name: android-apk
           path: dist-android/
+          retention-days: 7
+          if-no-files-found: error
+
+  ios:
+    name: iOS build (unsigned)
+    needs: changes
+    if: needs.changes.outputs.export == 'true'
+    # Xcode 16: the Godot 4.4.1 iOS libraries need it to link.
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Export the Xcode project and build an unsigned IPA (arm64, production server, no radio library)
+        run: npm run build:ios
+      - name: Check bundle id, version, architecture and that nothing is signed
+        run: |
+          rm -rf ios-check && mkdir ios-check
+          unzip -q dist-ios/*.ipa -d ios-check
+          app=ios-check/Payload/RallyFansSimulator.app
+          plutil -p "$app/Info.plist" | tee plist.txt | grep -E "CFBundleIdentifier|CFBundleShortVersionString|MinimumOSVersion"
+          grep -q '"CFBundleIdentifier" => "ru.rallyfansmap.rallyfanssimulator"' plist.txt
+          grep -q "\"CFBundleShortVersionString\" => \"$(node -p 'require("./package.json").version')\"" plist.txt
+          test -s "$app/RallyFansSimulator.pck"
+          lipo -info "$app/RallyFansSimulator" | grep -q arm64
+          if codesign -dv "$app" 2>/dev/null; then echo "The app is signed" >&2; exit 1; fi
+          test ! -e "$app/embedded.mobileprovision"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-ipa-unsigned
+          path: dist-ios/*.ipa
           retention-days: 7
           if-no-files-found: error
 
