@@ -19,7 +19,7 @@ func run() -> void:
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(SETTINGS))
 	var game = await open_game()
 	var guide = game.how_to_play
-	check(guide.pages.size() == 4 and guide.tab_buttons.size() == 4 and not guide.is_open(), "four tabs, closed in the main menu")
+	check(guide.pages.size() == 5 and guide.tab_buttons.size() == 5 and not guide.is_open(), "five tabs, closed in the main menu")
 	await game.start_game()
 	# Standalone: no section, the memo opens at once.
 	game.platform_service.profile = {"platform": "standalone"}
@@ -38,9 +38,9 @@ func run() -> void:
 	esc.pressed = true
 	game._unhandled_input(esc)
 	check(guide.is_open() and game.menu.visible == paused_menu, "Esc neither closes the first-visit section nor opens the pause menu")
-	for i in range(3):
+	for i in range(4):
 		guide.next_button.pressed.emit()
-	check(guide.page == 3 and guide.next_button.text == "К ПАМЯТКЕ", "last tab leads to the memo")
+	check(guide.page == 4 and guide.next_button.text == "К ПАМЯТКЕ", "last tab leads to the memo")
 	guide.next_button.pressed.emit()
 	check(not guide.is_open() and game.safety_gate != null and guide.seen(), "finishing opens the memo and remembers the section")
 	var gate = game.safety_gate
