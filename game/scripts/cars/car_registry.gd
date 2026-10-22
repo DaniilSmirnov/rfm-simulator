@@ -61,6 +61,10 @@ static func car(variant: int) -> Dictionary:
 static func flies(variant: int) -> bool:
 	return bool(car(variant).get("flight", false))
 
+# Variants that drive on wheels, in fleet order.
+static func ground_cars() -> Array:
+	return range(cars.size()).filter(func(variant): return not flies(variant))
+
 # Optional `stages` (stage ids from data/stages.json) limits where a car is
 # offered; without it the car goes everywhere.
 static func allowed_on(variant: int, stage_id: String) -> bool:
