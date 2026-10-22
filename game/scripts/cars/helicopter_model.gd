@@ -11,7 +11,7 @@ static func build(variant: int) -> Node3D:
 	root.name = "CivilHelicopter"
 	root.set_meta("helicopter", true)
 	root.set_meta("variant", variant)
-	root.set_meta("model", "Гражданский вертолёт")
+	root.set_meta("model", "Вертолет")
 	var cabin = P.car_shell(root, [Vector4(-2.65, 0.45, 0.65, 1.3), Vector4(-1.65, 1.0, 0.55, 2.05), Vector4(-0.8, 1.0, 0.55, 2.25), Vector4(1.25, 1.0, 0.55, 2.15), Vector4(2.1, 0.55, 0.8, 1.6)], PAINT)
 	cabin.name = "Cabin"
 	_cut_bay(cabin)

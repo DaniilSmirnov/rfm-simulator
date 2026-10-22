@@ -58,9 +58,16 @@ static func count() -> int:
 static func car(variant: int) -> Dictionary:
 	return cars[posmod(variant, cars.size())]
 
-# Share of drive torque sent to the rear axle.
 static func flies(variant: int) -> bool:
 	return bool(car(variant).get("flight", false))
+
+# Optional `stages` (stage ids from data/stages.json) limits where a car is
+# offered; without it the car goes everywhere.
+static func allowed_on(variant: int, stage_id: String) -> bool:
+	var stages = car(variant).get("stages", [])
+	return stages.is_empty() or stage_id in stages
+
+# Share of drive torque sent to the rear axle.
 
 static func rear_bias(variant: int) -> float:
 	match str(car(variant).handling.drive):

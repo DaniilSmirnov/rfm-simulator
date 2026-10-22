@@ -189,7 +189,7 @@
     "sku": "car_12",
     "type": "car",
     "content_id": 11,
-    "title": "Гражданский вертолёт",
+    "title": "Вертолет",
     "free": false,
     "enabled": true,
     "purchase_enabled": true,

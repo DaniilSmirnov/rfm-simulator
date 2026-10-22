@@ -1,6 +1,6 @@
 extends SceneTree
 # Frame cost of the civil helicopter over the road, low over forest and high.
-# godot --headless --path game -s res://tools/profile/profile_helicopter.gd -- [stage]
+# godot --headless --path game -s res://tools/profile/profile_helicopter.gd -- [stage, default 3: the helicopter flies in Charyn canyon only]
 func _initialize():
 	call_deferred("run")
 
@@ -11,7 +11,7 @@ func run():
 	root.add_child(game)
 	await process_frame
 	game.set_process(false)
-	game.select_stage(clampi(int(args[0]), 0, RallyStage.STAGES.size() - 1) if not args.is_empty() else 0)
+	game.select_stage(clampi(int(args[0]), 0, RallyStage.STAGES.size() - 1) if not args.is_empty() else 3)
 	game.select_player_car(11)
 	game.rng.seed = 20261008
 	await game.start_game()

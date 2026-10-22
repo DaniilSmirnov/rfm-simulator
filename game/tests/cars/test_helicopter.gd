@@ -74,7 +74,9 @@ func run() -> void:
 	await process_frame
 	game.set_process(false)
 	game.room.set_process(false)
+	game.select_stage(3)
 	game.select_player_car(11)
+	check(game.selected_car == 11, "helicopter is offered in Charyn canyon")
 	game.start_game()
 	game.car.position = game.stage.at(15) + Vector3(0, 35, 0)
 	game.vehicle_motion.initialized = true
