@@ -16,6 +16,10 @@ const CACHE_LIMIT = 96
 # pattern strobes and looks frozen (or rolls backward). Below half the period
 # of an eight-spoke rim, a fast wheel always reads as spinning forward.
 const MAX_WHEEL_STEP = 0.35
+# Front wheel lock (rad) drawn, and the share of the gap to the target steering
+# closed each frame, so snapshot noise does not make the wheels flutter.
+const MAX_STEER = 0.55
+const STEER_SMOOTHING = 0.25
 static var _meshes: Dictionary = {}
 static var _material: StandardMaterial3D
 
@@ -124,17 +128,23 @@ static func _commit(parts: Dictionary) -> ArrayMesh:
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 	return mesh
 
-# Roll wheel and hub meshes according to signed longitudinal travel.
+# Roll wheel and hub meshes according to signed longitudinal travel, and
+# steer the front pair by the curve the car is driving: a car seen turning
+# into a bend shows its wheels turned, whoever moves it (driver, AI, snapshots).
 # Cache references once per car; skip teleports to prevent large visual jumps.
 static func animate_wheels(car_root: Node3D) -> void:
 	if car_root == null:
 		return
 	var current_position = car_root.global_position
+	var heading = car_root.global_rotation.y
 	if not car_root.has_meta("wheel_previous_position"):
 		car_root.set_meta("wheel_previous_position", current_position)
+		car_root.set_meta("wheel_previous_heading", heading)
 		return
 	var previous: Vector3 = car_root.get_meta("wheel_previous_position")
+	var previous_heading = float(car_root.get_meta("wheel_previous_heading", heading))
 	car_root.set_meta("wheel_previous_position", current_position)
+	car_root.set_meta("wheel_previous_heading", heading)
 	var travelled = current_position - previous
 	if travelled.length_squared() < 0.000001 or travelled.length_squared() > 64.0:
 		return
@@ -152,6 +162,16 @@ static func animate_wheels(car_root: Node3D) -> void:
 					wheels.append(child)
 		car_root.set_meta("wheel_parts", wheels)
 	var parts: Array = car_root.get_meta("wheel_parts")
+	if not car_root.has_meta("wheel_base"):
+		_measure_axles(car_root, parts)
+	var wheelbase = float(car_root.get_meta("wheel_base"))
+	var steer = float(car_root.get_meta("wheel_steer", 0.0))
+	if wheelbase > 0.0:
+		# Bicycle model: the front wheels point along the path's curvature.
+		var curvature = angle_difference(previous_heading, heading) / signed_distance
+		var target = clampf(atan(curvature * wheelbase), -MAX_STEER, MAX_STEER)
+		steer = lerpf(steer, target, STEER_SMOOTHING)
+		car_root.set_meta("wheel_steer", steer)
 	for wheel in parts:
 		if not is_instance_valid(wheel):
 			continue
@@ -159,4 +179,29 @@ static func animate_wheels(car_root: Node3D) -> void:
 		if radius is String:
 			radius = 0.4
 		var angle = clampf(signed_distance / maxf(float(radius), 0.1), -MAX_WHEEL_STEP, MAX_WHEEL_STEP)
-		wheel.rotate_object_local(wheel.get_meta("rolling_wheel_axis", Vector3.UP), angle)
+		if wheelbase <= 0.0:
+			wheel.rotate_object_local(wheel.get_meta("rolling_wheel_axis", Vector3.UP), angle)
+			continue
+		var roll = fposmod(float(wheel.get_meta("rolling_wheel_angle", 0.0)) + angle, TAU)
+		wheel.set_meta("rolling_wheel_angle", roll)
+		var rest: Basis = wheel.get_meta("rolling_wheel_rest")
+		var turn = steer if wheel.get_meta("rolling_wheel_front", false) else 0.0
+		wheel.basis = Basis(Vector3.UP, turn) * rest * Basis(wheel.get_meta("rolling_wheel_axis", Vector3.UP), roll)
+
+# Splits the wheels into axles once. A car without two distinct axles
+# (a wheelbase of 0) only rolls its wheels.
+static func _measure_axles(car_root: Node3D, parts: Array) -> void:
+	var front = INF
+	var rear = -INF
+	var along: Dictionary = {}
+	var to_car = car_root.global_transform.affine_inverse()
+	for wheel in parts:
+		if is_instance_valid(wheel):
+			along[wheel] = (to_car * wheel.global_position).z
+			front = minf(front, along[wheel])
+			rear = maxf(rear, along[wheel])
+			wheel.set_meta("rolling_wheel_rest", wheel.basis)
+	var wheelbase = rear - front if rear - front > 1.0 else 0.0
+	for wheel in along:
+		wheel.set_meta("rolling_wheel_front", along[wheel] < (front + rear) * 0.5)
+	car_root.set_meta("wheel_base", wheelbase)

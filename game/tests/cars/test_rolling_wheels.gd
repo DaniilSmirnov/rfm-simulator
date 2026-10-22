@@ -59,6 +59,24 @@ func run() -> void:
 	rally.position.z -= 2
 	props.animate_wheels(rally)
 	check(not rally_part.quaternion.is_equal_approx(before), "moving rally car spins wheels")
+	# Driving a left-hand arc turns the front wheels left; the rear stay straight.
+	for step in range(30):
+		rally.rotation.y += 0.05
+		rally.position += Vector3(-sin(rally.rotation.y), 0, -cos(rally.rotation.y)) * 0.5
+		props.animate_wheels(rally)
+	var front_turn = -INF
+	var rear_turn = INF
+	for part in rally.find_children("*", "Node3D", true, false):
+		if part.has_meta("rolling_wheel_front"):
+			var axle: Vector3 = part.basis * part.get_meta("rolling_wheel_axis")
+			var turned = absf(Vector2(axle.x, axle.z).angle_to(Vector2(1, 0)))
+			turned = minf(turned, PI - turned)
+			if part.get_meta("rolling_wheel_front"):
+				front_turn = maxf(front_turn, turned)
+			else:
+				rear_turn = minf(rear_turn, turned)
+	check(front_turn > 0.1 and front_turn <= props.CarParts.MAX_STEER + 0.01, "front wheels steer into a bend (%.2f rad)" % front_turn)
+	check(rear_turn < 0.01, "rear wheels stay straight in a bend")
 	rally.free()
 
 	# Every car in every fleet: the tread top moves forward when the car does,

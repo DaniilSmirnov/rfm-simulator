@@ -28,6 +28,8 @@ func drive(fps: int, reverse: bool = false) -> Dictionary:
 	r.node.position = game.race_at(r.s)
 	r.node.rotation.y = atan2(-game.race_direction(r.s).x, -game.race_direction(r.s).z)
 	var smooth = true
+	var steady = true
+	var turn_rate = 0.0
 	var measured = true
 	var slide = 0.0
 	var worst = 0.0
@@ -41,6 +43,11 @@ func drive(fps: int, reverse: bool = false) -> Dictionary:
 				print("DEPARTURE s=", r.s, " slide=", r.slide)
 			break
 		smooth = smooth and absf(wrapf(r.node.rotation.y - yaw, -PI, PI)) <= 2.5 / fps + 0.001 and absf(r.drive_speed - speed) <= 18.0 / fps + 0.001
+		# The body's turn rate itself changes gradually: no snapping from one
+		# side's full lock to the other between frames.
+		var rate = wrapf(r.node.rotation.y - yaw, -PI, PI) * fps
+		steady = steady and absf(rate - turn_rate) <= game.crews.YAW_ACCEL / fps + 0.001
+		turn_rate = rate
 		var movement: Vector3 = r.node.position - before
 		var velocity = Vector2(movement.x, movement.z).length() * fps
 		if velocity - r.drive_speed > worst:
@@ -49,6 +56,7 @@ func drive(fps: int, reverse: bool = false) -> Dictionary:
 		measured = measured and velocity < r.drive_speed * 1.3 + 1.0
 		slide = maxf(slide, maxf(absf(r.slide), absf(float(r.get("track_reference", {}).get("yaw", 0.0)))))
 	check(smooth, "heading and acceleration are bounded at %d FPS" % fps)
+	check(steady, "turn rate changes gradually at %d FPS" % fps)
 	check(measured, "world-space speed matches intended speed at %d FPS" % fps)
 	# A crew that gets to the end drives on into the service park.
 	check(r.state in ["racing", "to_park"] and r.s > 400, "crew negotiates village junctions at %d FPS" % fps)
