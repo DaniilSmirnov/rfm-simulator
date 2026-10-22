@@ -6,6 +6,7 @@
  *   syncMembers(ids)       open/close one connection per other member
  *   onSignal(from, data)   relayed offer/answer/candidate/bye
  *   setPtt(pressed)        first press asks for the microphone
+ *   setVolume(gain)        the game's Radio and Master faders, linear
  *   tick(json)             [{id, distance, talking}] -> JSON {signals, mic, events}
  */
 (() => {
@@ -24,6 +25,9 @@
   const DIAL_MS = 15000;
   const MAX_ATTEMPTS = 3;
   const MAX_QUEUE = 128;
+  // The same chain as the game's Radio bus (default_bus_layout.tres): voices
+  // are evened out, raised and kept below clipping before the volume fader.
+  const BOOST = 10 ** (14 / 20);
   const state = {
     joined: false, localId: '', session: '', iceServers: [], members: [],
     peers: new Map(), attempts: new Map(), muted: new Set(),
@@ -31,7 +35,8 @@
   };
   const outgoing = [];
   const events = [];
-  let context = null, master = null, noiseBuffer = null;
+  let context = null, master = null, fader = null, noiseBuffer = null;
+  let volume = 1;
 
   function quality(distance) {
     const d = Math.max(0, Number(distance) || 0);
@@ -53,12 +58,33 @@
     const Ctx = window.AudioContext || window.webkitAudioContext;
     if (!Ctx) return null;
     context = new Ctx();
-    master = context.createGain();
-    master.connect(context.destination);
+    master = context.createDynamicsCompressor();
+    master.threshold.value = -24;
+    master.knee.value = 6;
+    master.ratio.value = 4;
+    master.attack.value = 0.005;
+    master.release.value = 0.15;
+    const boost = context.createGain();
+    boost.gain.value = BOOST;
+    const limiter = context.createDynamicsCompressor();
+    limiter.threshold.value = -1;
+    limiter.knee.value = 0;
+    limiter.ratio.value = 20;
+    limiter.attack.value = 0.001;
+    limiter.release.value = 0.1;
+    fader = context.createGain();
+    fader.gain.value = volume;
+    master.connect(boost).connect(limiter).connect(fader).connect(context.destination);
     noiseBuffer = context.createBuffer(1, context.sampleRate, context.sampleRate);
     const samples = noiseBuffer.getChannelData(0);
     for (let i = 0; i < samples.length; i++) samples[i] = Math.random() * 2 - 1;
     return context;
+  }
+
+  function setVolume(value) {
+    const gain = Number(value);
+    volume = Number.isFinite(gain) ? Math.min(Math.max(gain, 0), 4) : 1;
+    if (fader) fader.gain.setTargetAtTime(volume, context.currentTime, 0.05);
   }
 
   function resumeAudio() { if (context && context.state === 'suspended') context.resume().catch(() => {}); }
@@ -351,7 +377,7 @@
   }
 
   // One batch from Godot, in order. onSignal is not awaited, as before.
-  const CALLS = { join, leave, syncMembers, onSignal, setPtt, mute, ringAgain };
+  const CALLS = { join, leave, syncMembers, onSignal, setPtt, setVolume, mute, ringAgain };
   function bridge(calls) {
     const results = [];
     for (const call of Array.isArray(calls) ? calls : []) {
@@ -370,5 +396,5 @@
   document.addEventListener('visibilitychange', () => { if (document.hidden) releasePtt(); });
   for (const name of ['pointerdown', 'keydown', 'touchend']) addEventListener(name, resumeAudio, { capture: true, passive: true });
 
-  window.RallyVoice = { join, leave, syncMembers, onSignal, setPtt, ringAgain, update, mute, poll, tick, bridge, quality, state };
+  window.RallyVoice = { join, leave, syncMembers, onSignal, setPtt, setVolume, ringAgain, update, mute, poll, tick, bridge, quality, state };
 })();

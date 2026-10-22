@@ -7,6 +7,8 @@ extends Node
 const NetProtocol = preload("res://scripts/net/net_protocol.gd")
 
 const MIC_BUS = "RadioMic"
+# Every speaker plays here: the radio's own fader, boost and limiter.
+const RADIO_BUS = "Radio"
 # A lost offer or answer would leave a link waiting forever.
 const DIAL_MSEC = 15000
 # A member who reloaded never says bye: give a silent link a few seconds.
@@ -406,6 +408,7 @@ func _pump_speakers() -> void:
 			var player = AudioStreamPlayer.new()
 			player.name = "Radio_%s" % peer.id
 			player.stream = generator
+			player.bus = RADIO_BUS
 			add_child(player)
 			player.play()
 			peer.player = player

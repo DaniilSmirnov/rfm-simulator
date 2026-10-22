@@ -124,6 +124,10 @@ func mesh_rules() -> void:
 	check(nodes.a.peers.b.distance == 320.0 and nodes.a.peers.b.talking, "levels reach the peer")
 	check(VoiceNative.quality(nodes.a.bands, 5.0).level == 1 and VoiceNative.quality(nodes.a.bands, 600.0).level == 5, "distance bands come from net_protocol.json")
 	check(VoiceNative.quality(nodes.a.bands, 600.0).volume < VoiceNative.quality(nodes.a.bands, 5.0).volume, "farther radios are quieter")
+	nodes.a.audio_enabled = true
+	nodes.a._pump_speakers()
+	nodes.a.audio_enabled = false
+	check(nodes.a.peers.b.player != null and nodes.a.peers.b.player.bus == &"Radio" and AudioServer.get_bus_index(VoiceNative.RADIO_BUS) > 0, "voices play through the radio's own bus")
 	nodes.a.set_ptt(true)
 	check(nodes.a.mic == "unavailable", "without audio input the radio stays receive-only")
 	check(nodes.a.tick([]).events.any(func(e): return e.type == "mic"), "the microphone state is reported")

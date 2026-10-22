@@ -34,7 +34,7 @@ class FakePeer {
   close() { this.connectionState = 'closed'; }
 }
 
-function load({ mic = 'grant' } = {}) {
+function load({ mic = 'grant', AudioContext } = {}) {
   const tracks = [];
   const listeners = () => {};
   const sandbox = {
@@ -48,7 +48,7 @@ function load({ mic = 'grant' } = {}) {
       tracks.push(track);
       return { getAudioTracks: () => [track], getTracks: () => [track] };
     } } },
-    addEventListener: listeners,
+    addEventListener: listeners, AudioContext,
   };
   sandbox.window = sandbox;
   runInNewContext(source, sandbox);
@@ -89,6 +89,45 @@ test('radio quality follows distance bands', () => {
   assert.deepEqual([0, 31, 101, 251, 501].map(d => q(d).level), [1, 2, 3, 4, 5]);
   for (const key of ['volume', 'cutoff']) assert.ok(q(0)[key] > q(600)[key], key + ' falls with distance');
   assert.ok(q(0).noise < q(600).noise);
+});
+
+// Records the Web Audio graph: which node feeds which.
+class FakeAudio {
+  constructor() { this.destination = { kind: 'destination' }; this.nodes = []; this.currentTime = 0; this.sampleRate = 8000; this.state = 'running'; }
+  node(kind, params = []) {
+    const node = { kind, outputs: [], connect: next => { node.outputs.push(next); return next; }, disconnect() {}, start() {}, stop() {} };
+    for (const name of params) node[name] = { value: 0, setTargetAtTime(v) { this.value = v; } };
+    this.nodes.push(node);
+    return node;
+  }
+  createGain() { return this.node('gain', ['gain']); }
+  createDynamicsCompressor() { return this.node('compressor', ['threshold', 'knee', 'ratio', 'attack', 'release']); }
+  createBiquadFilter() { return this.node('filter', ['frequency']); }
+  createBufferSource() { return this.node('noise'); }
+  createMediaStreamSource() { return this.node('voice'); }
+  createBuffer(_c, length) { return { getChannelData: () => new Float32Array(length) }; }
+}
+
+test('voices are boosted, limited and then follow the radio volume', () => {
+  let ctx;
+  const { voice } = load({ AudioContext: class extends FakeAudio { constructor() { super(); ctx = this; } } });
+  voice.bridge([['setVolume', 0.25]]);
+  voice.join({ localId: 'a', session: 'session-a' });
+  voice.syncMembers(['a', 'b']);
+  voice.state.peers.get('b').pc.ontrack({ streams: [{}] });
+  const path = [];
+  for (let node = ctx.nodes.find(n => n.kind === 'voice'); node && node !== ctx.destination; node = node.outputs[0]) path.push(node);
+  assert.equal(path.at(-1).outputs[0], ctx.destination, 'the chain reaches the speakers');
+  const [compressor, boost, limiter, fader] = path.slice(-4);
+  assert.equal(compressor.kind, 'compressor');
+  assert.ok(boost.gain.value > 2, 'quiet voices are raised');
+  assert.ok(limiter.kind === 'compressor' && limiter.threshold.value <= -1 && limiter.ratio.value >= 20, 'a limiter keeps them below clipping');
+  assert.equal(fader.gain.value, 0.25, 'the volume set before the first voice applies');
+  voice.bridge([['setVolume', 0]]);
+  assert.equal(fader.gain.value, 0);
+  voice.setVolume('nonsense');
+  assert.equal(fader.gain.value, 1);
+  voice.leave();
 });
 
 test('every pair of members negotiates one audio line, the smaller id calls', async () => {
