@@ -92,7 +92,13 @@ export class RallyRoom {
       const action = url.pathname.split('/').at(-1);
       let result;
       if (action === 'create' || action === 'join') result = this.room.add(body.name, now, action === 'create', body);
-      else if (action === 'heartbeat') result = this.room.heartbeat(body.token, now, body.background === true);
+      else if (action === 'heartbeat') {
+        const before = this.room.data.players[this.room.data.host]?.background;
+        result = this.room.heartbeat(body.token, now, body.background === true);
+        // The host's background mark decides how long the room waits for it, so
+        // it is saved at once: a locked phone may send nothing for minutes.
+        if (this.room.data.players[this.room.data.host]?.background !== before) await this.persist(now, true);
+      }
       else if (action === 'sync') { result = this.room.sync(body, now); this.fanOut(this.room.member(body.token).id); }
       else if (action === 'leave') { this.room.leave(body.token); result = { left: true }; }
       else return json({ error: 'Не найдено.' }, 404);

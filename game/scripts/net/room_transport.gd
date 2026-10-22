@@ -21,6 +21,7 @@ const SOCKET_REPLY_TIMEOUT = 8.0
 
 var room
 var http: HTTPRequest
+var beacon: HTTPRequest
 var server = "http://127.0.0.1:8787"
 var busy = false
 var request_kind = ""
@@ -86,6 +87,22 @@ func _notification(what: int) -> void:
 		if socket_waiting_since != -INF:
 			socket_waiting_since += now() - maxf(suspended_at, socket_waiting_since)
 		suspended_at = -INF
+	# A phone stops the engine in the background, so a native host reports it
+	# before sleeping and the server keeps the room (web: room-session.js).
+	if what == NOTIFICATION_APPLICATION_PAUSED or what == NOTIFICATION_APPLICATION_RESUMED:
+		report_background(what == NOTIFICATION_APPLICATION_PAUSED)
+
+# Sent on its own threaded request: the engine may stop polling right after.
+func report_background(background: bool) -> void:
+	if OS.has_feature("web") or room == null or not room.connected or not room.is_host:
+		return
+	if beacon == null:
+		beacon = HTTPRequest.new()
+		beacon.use_threads = true
+		beacon.timeout = 8
+		add_child(beacon)
+	beacon.cancel_request()
+	beacon.request(endpoint("heartbeat", room.room_id), ["Content-Type: application/json"], HTTPClient.METHOD_POST, JSON.stringify({"token": room.token, "background": background}))
 
 func endpoint(kind: String, room_id: String) -> String:
 	return server + ("/api/rooms" if kind == "create" else "/api/rooms/%s/%s" % [room_id, kind])
