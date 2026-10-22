@@ -139,7 +139,6 @@ func stop_at_obstacle(racer: Dictionary) -> void:
 	racer.drive_speed = 0.0
 	racer.self_rejoin = false
 	racer.state = "stranded" if racer.kind in ["stuck", "crash"] else "stopped"
-	print("DBG stop line141 id=%d s=%.1f line=%.2f slide=%.2f avoid=%s" % [racer.id, racer.s, racer.line, racer.slide, racer.avoiding])
 	racer.age = 0.0
 
 # Every client rolls the wheels of the crews, course cars and park convoy it
@@ -221,7 +220,6 @@ func update_racers_step(delta: float) -> void:
 				if racer.held >= CREW_PATIENCE:
 					stop_at_obstacle(racer)
 					racer.state = "stopped"
-					print("DBG stop line224 id=%d s=%.1f line=%.2f slide=%.2f avoid=%s" % [racer.id, racer.s, racer.line, racer.slide, racer.avoiding])
 					racer.retired = true
 					game.toast("Экипаж не может проехать и сошёл с дистанции.")
 					continue
@@ -320,7 +318,6 @@ func update_racers_step(delta: float) -> void:
 			if racer.state != "racing" and not racer.get("self_rejoin", false) and racer.motion.grounded and racer.motion.velocity.length() < 0.65:
 				racer.motion.velocity = Vector3.ZERO
 				racer.state = "stranded" if racer.kind in ["stuck", "crash"] else "stopped"
-				print("DBG stop line322 id=%d s=%.1f line=%.2f slide=%.2f avoid=%s" % [racer.id, racer.s, racer.line, racer.slide, racer.avoiding])
 				racer.age = 0.0
 				if racer.state == "stranded":
 					game.toast("Экипаж застрял. Нужен трос — T рядом с машиной.")
@@ -404,7 +401,6 @@ func car_contact(racer: Dictionary, delta: float) -> void:
 			var collision_speed = racer.motion.velocity.length() if racer.state in ["offroad", "rock_bounce"] else racer.previous.distance_to(node.position) / maxf(delta, 0.001)
 			node.position = racer.previous
 			racer.state = "stranded" if racer.kind in ["stuck", "crash"] else "stopped"
-			print("DBG stop line402 id=%d s=%.1f line=%.2f slide=%.2f avoid=%s" % [racer.id, racer.s, racer.line, racer.slide, racer.avoiding])
 			racer.age = 0
 			game.toast("Столкновение машин! Экипаж остановился.")
 			if blocker.position == game.car.position:
