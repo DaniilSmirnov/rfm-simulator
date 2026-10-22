@@ -84,6 +84,9 @@ static func step(game, racer: Dictionary, dt: float) -> bool:
 		racer.slide_speed = 0.0
 		racer.drift_yaw = 0.0
 		racer.yaw_rate = 0.0
+		racer.heading_rate = 0.0
+		racer.line_speed = 0.0
+		racer.pedal = 0.0
 		racer.drive_speed = speed
 		racer.state = "racing"
 		racer.kind = "pass"

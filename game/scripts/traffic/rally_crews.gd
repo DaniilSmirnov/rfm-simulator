@@ -39,6 +39,20 @@ const CREW_PATIENCE = 30.0
 # share of that launch it starts with.
 const RECOVERY_RAMP = 6.0
 const RECOVERY_PULL = 0.2
+# Driving smoothness. The pedal (m/s²) aims at SPEED_RESPONSE times the speed
+# gap (BRAKE_RESPONSE when slowing, at least MIN_BRAKE so a stop ends) and
+# moves by at most PEDAL_JERK m/s³, faster behind a blocker.
+const SPEED_RESPONSE = 1.2
+const BRAKE_RESPONSE = 4.0
+const MIN_BRAKE = 3.0
+const PEDAL_JERK = 40.0
+const PEDAL_JERK_BLOCKED = 160.0
+# Sideways (m/s per m of gap, m/s²) and heading (rad/s per rad, rad/s, rad/s²).
+const LINE_RESPONSE = 3.0
+const LINE_ACCEL = 6.0
+const YAW_RESPONSE = 5.0
+const MAX_TURN = 2.5
+const YAW_ACCEL = 12.0
 
 func car_ram_damage(impact_speed: float) -> float:
 	return CAR_RAM_MAX_DAMAGE * clampf((impact_speed - CAR_RAM_MIN_SPEED) / (CAR_RAM_FULL_SPEED - CAR_RAM_MIN_SPEED), 0.0, 1.0)
@@ -83,7 +97,7 @@ func add_course_vehicle(node: Node3D, id: int, kind: String, variant: int, role:
 	node.rotation.y = atan2(-direction.x, -direction.z)
 	node.set_meta("room_id", id)
 	var driver = Traffic.profile(id)
-	var racer = {"bias": driver.bias, "phase": driver.phase, "pace": driver.pace, "line": 0.0, "drive_speed": race_speed(s) * driver.pace, "avoiding": false, "avoid_line": 0.0, "role": role, "zero_index": zero_index, "id": id, "node": node, "s": s, "focus": focus, "kind": kind, "state": "racing", "offset": 0.0, "age": 0.0, "counted": false, "start": Vector3.ZERO, "target": Vector3.ZERO, "variant": variant, "launch": CarRegistry.launch(float(node.get_meta("zero_to_100", 2.0))), "motion": Motion.new(), "previous": node.position, "slide": 0.0, "slide_speed": 0.0}
+	var racer = {"bias": driver.bias, "phase": driver.phase, "pace": driver.pace, "line": 0.0, "drive_speed": race_speed(s) * driver.pace, "avoiding": false, "avoid_line": 0.0, "role": role, "zero_index": zero_index, "id": id, "node": node, "s": s, "focus": focus, "kind": kind, "state": "racing", "offset": 0.0, "age": 0.0, "counted": false, "start": Vector3.ZERO, "target": Vector3.ZERO, "variant": variant, "launch": CarRegistry.launch(float(node.get_meta("zero_to_100", 2.0))), "motion": Motion.new(), "previous": node.position, "slide": 0.0, "slide_speed": 0.0, "line_speed": 0.0, "heading_rate": 0.0, "pedal": 0.0}
 	racer.track_parts = RallyTracks.choose(game.stage, game.rng, role)
 	if role == "racer":
 		racer.nerve = Traffic.nerve(id)
@@ -189,12 +203,7 @@ func update_racers_step(delta: float) -> void:
 				traffic.can_pass = false
 			racer.avoiding = traffic.avoiding
 			racer.avoid_line = traffic.line
-			# Speed up along the car's launch curve (2 s to 100 km/h for crews).
-			var current_speed = float(racer.get("drive_speed", race_speed(racer.s)))
-			var throttle = recovery_pull(racer, delta)
-			var gain = Traffic.BRAKE if traffic.speed < current_speed else CarRegistry.pull(float(racer.get("launch", CarRegistry.launch(2.0))), current_speed) * throttle
-			var actual_speed = move_toward(current_speed, float(traffic.speed), delta * gain)
-			actual_speed = minf(actual_speed, float(traffic.get("advance", INF)) / maxf(delta, 0.001))
+			var actual_speed = drive_pedals(racer, traffic, delta)
 			racer.drive_speed = actual_speed
 			if not ServiceTraffic.applies(racer) and not red_hold:
 				racer.held = float(racer.get("held", 0.0)) + delta if actual_speed < 0.3 else 0.0
@@ -208,6 +217,8 @@ func update_racers_step(delta: float) -> void:
 			# waiting. Freeze lateral corrections too, so stopped cars cannot creep.
 			if red_hold and actual_speed <= 0.0:
 				racer.slide_speed = 0.0
+				racer.line_speed = 0.0
+				racer.heading_rate = 0.0
 				racer.motion.suspension(node, game.stage, delta, node.rotation.y)
 				continue
 			var race_speed = maxf(actual_speed, 0.1)
@@ -220,7 +231,7 @@ func update_racers_step(delta: float) -> void:
 			var lateral_rate = minf(2.8, actual_speed * 0.14)
 			if traffic.get("can_pass", false):
 				lateral_rate = maxf(lateral_rate, float(traffic.get("lateral_rate", 0.6)))
-			racer.line = move_toward(float(racer.get("line", 0.0)), float(traffic.line), delta * lateral_rate)
+			ease_line(racer, float(traffic.line), lateral_rate, delta)
 
 			var s: float = racer.s
 			var road_yaw = atan2(-race_direction(s).x, -race_direction(s).z)
@@ -242,10 +253,7 @@ func update_racers_step(delta: float) -> void:
 				node.position.y = height
 			node.position.y = height
 			var movement = node.position - racer.previous
-			var path_yaw = atan2(-movement.x, -movement.z) if Vector2(movement.x, movement.z).length() > 0.02 else road_yaw
-			var recorded_yaw = float(reference.get("yaw", 0.0)) * clampf(actual_speed / maxf(float(reference.get("speed", 1.0)), 1.0), 0.0, 1.0)
-			var desired_yaw = path_yaw + float(racer.get("drift_yaw", 0.0)) + recorded_yaw
-			var yaw = node.rotation.y + clampf(wrapf(desired_yaw - node.rotation.y, -PI, PI), -2.5 * delta, 2.5 * delta)
+			var yaw = steer_heading(racer, road_yaw, bend, actual_speed, reference, service, delta)
 			racer.motion.suspension(node, game.stage, delta, yaw, lateral_accel)
 			if ServiceTraffic.guard(game, racer, service_before):
 				# A guarded stop can also be the prescribed medical parking
@@ -533,6 +541,9 @@ func recover_racer(racer: Dictionary) -> void:
 	racer.slide_speed = 0.0
 	racer.drift_yaw = 0.0
 	racer.yaw_rate = 0.0
+	racer.heading_rate = 0.0
+	racer.line_speed = 0.0
+	racer.pedal = 0.0
 	racer.line = lateral
 	racer.avoiding = false
 	racer.avoid_line = 0.0
@@ -547,6 +558,44 @@ func recover_racer(racer: Dictionary) -> void:
 	for key in ["towed", "recovery_helpers"]:
 		racer.erase(key)
 	game.helped += 1
+
+# Pedals: speed up along the car's launch curve (2 s to 100 km/h for crews)
+# and brake up to BRAKE, easing in and out of either instead of switching
+# between full throttle and full braking. Returns the speed for this step.
+static func drive_pedals(racer: Dictionary, traffic: Dictionary, delta: float) -> float:
+	var current_speed = float(racer.get("drive_speed", 0.0))
+	var target = float(traffic.speed)
+	var pull = CarRegistry.pull(float(racer.get("launch", CarRegistry.launch(2.0))), current_speed) * recovery_pull(racer, delta)
+	var gap = target - current_speed
+	var wanted = clampf(gap * SPEED_RESPONSE if gap > 0.0 else minf(gap * BRAKE_RESPONSE, -MIN_BRAKE), -Traffic.BRAKE, pull) if absf(gap) > 0.001 else 0.0
+	racer.pedal = move_toward(float(racer.get("pedal", 0.0)), wanted, delta * (PEDAL_JERK_BLOCKED if traffic.avoiding else PEDAL_JERK))
+	var speed = current_speed + racer.pedal * delta
+	# Leftover pedal never carries the car past the speed it is after.
+	if racer.pedal > 0.0:
+		speed = minf(speed, maxf(current_speed, target))
+	else:
+		speed = maxf(speed, minf(current_speed, target))
+	return maxf(0.0, minf(speed, float(traffic.get("advance", INF)) / maxf(delta, 0.001)))
+
+# The line eases sideways like a steered car instead of sliding across at a
+# fixed rate; the sideways speed still never exceeds `rate`.
+static func ease_line(racer: Dictionary, target: float, rate: float, delta: float) -> void:
+	var wanted = clampf((target - float(racer.get("line", 0.0))) * LINE_RESPONSE, -rate, rate)
+	racer.line_speed = move_toward(float(racer.get("line_speed", 0.0)), wanted, delta * LINE_ACCEL)
+	racer.line = float(racer.get("line", 0.0)) + racer.line_speed * delta
+
+# Heading follows the road's tangent plus the sideways drift, not the frame's
+# movement, which jumps at spline seams and line changes. The body turns with
+# the bend (feed-forward) and settles onto the desired heading; the turn rate
+# changes no faster than YAW_ACCEL. Returns the new yaw.
+static func steer_heading(racer: Dictionary, road_yaw: float, bend: float, speed: float, reference: Dictionary, service: bool, delta: float) -> float:
+	var sideways = float(racer.get("line_speed", 0.0)) + (float(racer.get("slide_speed", 0.0)) if not service else 0.0)
+	var recorded_yaw = float(reference.get("yaw", 0.0)) * clampf(speed / maxf(float(reference.get("speed", 1.0)), 1.0), 0.0, 1.0)
+	var desired_yaw = road_yaw - atan2(sideways, maxf(speed, 1.0)) + float(racer.get("drift_yaw", 0.0)) + recorded_yaw
+	var yaw: float = racer.node.rotation.y
+	var turn = clampf(bend * speed + wrapf(desired_yaw - yaw, -PI, PI) * YAW_RESPONSE, -MAX_TURN, MAX_TURN)
+	racer.heading_rate = move_toward(float(racer.get("heading_rate", 0.0)), turn, delta * YAW_ACCEL)
+	return yaw + racer.heading_rate * delta
 
 # Share of the launch a just-recovered crew uses; it eases up to 1 over
 # RECOVERY_RAMP seconds, then the mark is dropped.

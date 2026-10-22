@@ -100,7 +100,8 @@ static func guard(game, racer: Dictionary, before: Dictionary) -> bool:
 	racer.node.rotation = before.rotation
 	racer.drive_speed = 0.0
 	racer.motion.velocity = Vector3.ZERO
-	racer.erase("lane_choice")
+	for key in ["lane_choice", "pedal", "line_speed", "heading_rate"]:
+		racer.erase(key)
 	return true
 
 static func priority(racer: Dictionary) -> bool:
