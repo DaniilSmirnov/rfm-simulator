@@ -122,7 +122,15 @@
 godot --headless --path game --script res://tools/profile/service_route.gd -- --stage=7 --watchdog=1400
 godot --headless --path game --script res://tools/profile/find_camp_ground.gd -- --stage=7
 xvfb-run -a godot --path game --rendering-method gl_compatibility --script res://tools/profile/find_passable.gd -- --stage=7
+xvfb-run -a godot --path game --rendering-method gl_compatibility --script res://tools/profile/find_zfight.gd -- --stage=7 --filter=Quarry
 ```
+
+`find_zfight.gd` ищет мерцающие грани: грани разного цвета, обращённые в одну
+сторону и лежащие ближе 6 см друг к другу. Технику видно с другого борта, за
+200–400 м, а там такой зазор попадает в один шаг буфера глубины. Поэтому
+накладки, стёкла и диски выступают минимум на `PROUD` (10 см). На 2026-10-22
+у техники и таблички карьера таких граней нет. Оставшиеся находки — нижние
+грани, которых не видно.
 
 На 2026-10-22: полиция и скорая проходят СУ в обе стороны, мимо машин на
 обочине и машины поперёк самого узкого места (8/8); 30 предметов лагерей

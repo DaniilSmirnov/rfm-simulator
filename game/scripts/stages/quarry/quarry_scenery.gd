@@ -345,10 +345,11 @@ func _ramp_sign() -> void:
 	for x in [-1.9, 1.9]:
 		Props.cylinder(sign, Vector3(x, 1.4, 0), 0.08, 0.08, 2.8, Color("7d8285"), 6)
 	Props.box(sign, Vector3(0, 2.45, 0), Vector3(4.6, 1.3, 0.08), Color("2f5d8c"))
-	Props.box(sign, Vector3(0, 2.45, 0.045), Vector3(4.4, 1.1, 0.01), Color("f0f0ea"))
-	Props.box(sign, Vector3(0, 2.45, 0.05), Vector3(4.3, 1.0, 0.01), Color("2f5d8c"))
-	Props.label_3d(sign, Vector3(0, 2.68, 0.06), "АСБЕСТОВСКИЙ КАРЬЕР", 64, 0.005, Color("f4f4ee"))
-	Props.label_3d(sign, Vector3(0, 2.25, 0.06), "СПУСК 9%", 48, 0.005, Color("f4f4ee"))
+	# Layers stand several cm apart: thinner ones flicker from a distance.
+	Props.box(sign, Vector3(0, 2.45, 0.065), Vector3(4.4, 1.1, 0.05), Color("f0f0ea"))
+	Props.box(sign, Vector3(0, 2.45, 0.105), Vector3(4.3, 1.0, 0.03), Color("2f5d8c"))
+	Props.label_3d(sign, Vector3(0, 2.68, 0.15), "АСБЕСТОВСКИЙ КАРЬЕР", 64, 0.005, Color("f4f4ee"))
+	Props.label_3d(sign, Vector3(0, 2.25, 0.15), "СПУСК 9%", 48, 0.005, Color("f4f4ee"))
 	Movable.register(stage.solids, sign, 20, true)
 
 # ---------------------------------------------------------------- horizon
