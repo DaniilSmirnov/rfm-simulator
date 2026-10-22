@@ -599,6 +599,8 @@
 "Комната не найдена или закрыта.": "Room not found or closed.",
 "Комната не найдена или закрыта. Если хозяин пересоздал комнату, у неё новый ID: попроси прислать его.": "Room not found or closed. If the host re-created the room, it has a new ID: ask them to send it.",
 "Этот ID занят.": "This ID is taken.",
+"Неверный ключ сервера.": "Wrong server key.",
+"Сервер": "Server",
 "Комната заполнена: максимум 8 игроков.": "The room is full: 8 players maximum.",
 "Версия игры не совпадает с версией хозяина комнаты. Обнови страницу и зайди снова.": "Your game version doesn't match the host's version. Refresh the page and join again.",
 "Слишком много запросов. Подождите немного.": "Too many requests. Please wait a moment.",

@@ -473,7 +473,7 @@ func start_game() -> void:
 	mobile_sidebar.show()
 	_request_game_mouse_capture()
 	toast("Найди подходящее место и разложи лагерь. Установка стола засчитывает выбор места.")
-	if not ("--script" in OS.get_cmdline_args() or "--smoke-test" in OS.get_cmdline_user_args() or "--capture" in OS.get_cmdline_user_args() or "--capture-menu" in OS.get_cmdline_user_args()):
+	if not ("--script" in OS.get_cmdline_args() or "--smoke-test" in OS.get_cmdline_user_args() or "--capture" in OS.get_cmdline_user_args() or "--capture-menu" in OS.get_cmdline_user_args() or "--dedicated" in OS.get_cmdline_user_args()):
 		_show_stage_safety_gate()
 
 func _show_stage_safety_gate() -> void:
@@ -724,7 +724,7 @@ func _update_intoxication(delta: float) -> void:
 	player.update_intoxication(delta)
 
 func player_position() -> Vector3:
-	return rides.seat_position() if in_car else walker
+	return room.Dedicated.focus(self) if room != null and room.Dedicated.active() else rides.seat_position() if in_car else walker
 
 func _drive(delta: float) -> void:
 	player.drive(delta)
