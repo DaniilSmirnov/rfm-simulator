@@ -16,8 +16,10 @@ static func profile(variant: int) -> Dictionary:
 	var handling: Dictionary = CarRegistry.car(variant).handling
 	return {"rear_bias": CarRegistry.rear_bias(variant), "wheelbase": float(handling.wheelbase), "launch": CarRegistry.launch(float(handling.zero_to_100)), "inertia": float(handling.inertia)}
 
-func advance(motion, heading: float, throttle: float, steer: float, brake: bool, grip: float, max_speed: float, variant: int, dt: float) -> float:
-	var spec = profile(variant)
+# `spec` replaces the player car's profile (rally crews pass their own).
+func advance(motion, heading: float, throttle: float, steer: float, brake: bool, grip: float, max_speed: float, variant: int, dt: float, spec: Dictionary = {}) -> float:
+	if spec.is_empty():
+		spec = profile(variant)
 	var forward = Vector3(-sin(heading), 0, -cos(heading))
 	var right = forward.cross(Vector3.UP)
 	var longitudinal: float = motion.velocity.dot(forward)

@@ -129,6 +129,10 @@ func run() -> void:
 	# A moving car knocks the spectator down; the outing goes on.
 	scene.spawn_racer("pass")
 	var moving = scene.racers[-1]
+	# Clear of the start, where the crash above may have sent an ambulance.
+	moving.s = 60.0
+	moving.node.position = scene.stage.at(moving.s)
+	moving.previous = moving.node.position
 	scene.walker = scene.stage.at(moving.s + 2.7)
 	scene._update_racers(0.1)
 	check(scene.injuries.down and not scene.dead, "moving rally car knocks the spectator down")

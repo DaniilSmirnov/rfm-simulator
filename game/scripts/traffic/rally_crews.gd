@@ -15,6 +15,7 @@ const Recovery = preload("res://scripts/cars/recovery.gd")
 const Stage = preload("res://scripts/stages/stage.gd")
 const ServiceTraffic = preload("res://scripts/traffic/service_traffic.gd")
 const Traffic = preload("res://scripts/traffic/rally_traffic.gd")
+const RallyDriver = preload("res://scripts/traffic/rally_driver.gd")
 const Loc = preload("res://scripts/ui/loc.gd")
 
 var game
@@ -101,6 +102,8 @@ func add_course_vehicle(node: Node3D, id: int, kind: String, variant: int, role:
 	racer.track_parts = RallyTracks.choose(game.stage, game.rng, role)
 	if role == "racer":
 		racer.nerve = Traffic.nerve(id)
+	if RallyDriver.applies(racer):
+		RallyDriver.Mistakes.apply(racer)
 	game.racers.append(racer)
 	return racer
 
@@ -203,10 +206,19 @@ func update_racers_step(delta: float) -> void:
 				traffic.can_pass = false
 			racer.avoiding = traffic.avoiding
 			racer.avoid_line = traffic.line
-			var actual_speed = drive_pedals(racer, traffic, delta)
-			racer.drive_speed = actual_speed
+			var physical = RallyDriver.applies(racer)
+			var actual_speed: float
+			if physical:
+				# The driver's own pedals and the tyres shape the speed; the plan
+				# only says what it should be. drive_speed is what the car does.
+				RallyDriver.take_over(self, racer)
+				actual_speed = minf(float(traffic.speed), float(traffic.get("advance", INF)) / maxf(delta, 0.001))
+				racer.drive_speed = racer.motion.velocity.length()
+			else:
+				actual_speed = drive_pedals(racer, traffic, delta)
+				racer.drive_speed = actual_speed
 			if not ServiceTraffic.applies(racer) and not red_hold:
-				racer.held = float(racer.get("held", 0.0)) + delta if actual_speed < 0.3 else 0.0
+				racer.held = float(racer.get("held", 0.0)) + delta if racer.drive_speed < 0.3 else 0.0
 				if racer.held >= CREW_PATIENCE:
 					stop_at_obstacle(racer)
 					racer.state = "stopped"
@@ -215,15 +227,17 @@ func update_racers_step(delta: float) -> void:
 					continue
 			# Keep the racing state: no towing/despawn or timetable transition while
 			# waiting. Freeze lateral corrections too, so stopped cars cannot creep.
-			if red_hold and actual_speed <= 0.0:
+			if red_hold and actual_speed <= 0.0 and (not physical or racer.motion.velocity.length() < RallyDriver.HOLD_SPEED):
 				racer.slide_speed = 0.0
 				racer.line_speed = 0.0
 				racer.heading_rate = 0.0
+				racer.motion.velocity = Vector3.ZERO
 				racer.motion.suspension(node, game.stage, delta, node.rotation.y)
 				continue
 			var race_speed = maxf(actual_speed, 0.1)
-			var advance = RallyHandling.advance(game.stage, racer.s, delta * actual_speed, game.course.pass_index == 2, racer.line + racer.slide)
-			racer.s += minf(advance, float(traffic.get("advance", INF)))
+			if not physical:
+				var advance = RallyHandling.advance(game.stage, racer.s, delta * actual_speed, game.course.pass_index == 2, racer.line + racer.slide)
+				racer.s += minf(advance, float(traffic.get("advance", INF)))
 			if red_hold:
 				racer.s = minf(racer.s, game.stage.length - 1.0)
 			# A crew braking just short of lateral clearance must finish its slow
@@ -232,6 +246,8 @@ func update_racers_step(delta: float) -> void:
 			if traffic.get("can_pass", false):
 				lateral_rate = maxf(lateral_rate, float(traffic.get("lateral_rate", 0.6)))
 			ease_line(racer, float(traffic.line), lateral_rate, delta)
+			if physical:
+				RallyDriver.follow(self, racer, actual_speed, float(traffic.get("advance", INF)), delta)
 
 			var s: float = racer.s
 			var road_yaw = atan2(-race_direction(s).x, -race_direction(s).z)
@@ -239,22 +255,15 @@ func update_racers_step(delta: float) -> void:
 			var bend = wrapf(atan2(-ahead.x, -ahead.z) - road_yaw, -PI, PI) / maxf(Vector2((race_at(s + 7) - race_at(s)).x, (race_at(s + 7) - race_at(s)).z).length(), 1.0)
 			var lateral_accel = 0.0
 			var reference = RallyTracks.sample(racer.get("track_parts", PackedInt32Array()), s, game.course.pass_index == 2, racer.get("role", "racer") == "zero")
-			if not service:
+			if physical:
+				racer.motion.suspension(node, game.stage, delta, node.rotation.y, racer.motion.handling.lateral_accel)
+			elif not service:
 				# Free-road tyre slip is already recorded. Keep live correction while
 				# avoiding blockers and preserve externally applied lateral momentum.
 				lateral_accel = RallyHandling.slide(racer, bend if reference.is_empty() or traffic.avoiding else 0.0, race_speed, game.stage.grip(node.position), delta)
-			if not reference.is_empty() and not traffic.avoiding:
-				lateral_accel = bend * race_speed * race_speed
-			var height = node.position.y
-			node.position = race_at(s) + race_side(s) * (racer.line + racer.slide)
-			if racer.has("rejoin_residual"):
-				racer.rejoin_residual = racer.rejoin_residual.move_toward(Vector3.ZERO, delta * maxf(actual_speed, 0.5) * 0.25)
-				node.position += racer.rejoin_residual
-				node.position.y = height
-			node.position.y = height
+			if not physical:
+				place_on_line(racer, s, road_yaw, bend, race_speed, actual_speed, reference, traffic.avoiding, lateral_accel, service, delta)
 			var movement = node.position - racer.previous
-			var yaw = steer_heading(racer, road_yaw, bend, actual_speed, reference, service, delta)
-			racer.motion.suspension(node, game.stage, delta, yaw, lateral_accel)
 			if ServiceTraffic.guard(game, racer, service_before):
 				# A guarded stop can also be the prescribed medical parking
 				# position; do not skip dispatch while the casualty is ahead.
@@ -267,7 +276,7 @@ func update_racers_step(delta: float) -> void:
 				var spray_depth = game.stage.water.depth(node.position)
 				if spray_depth > 0.0:
 					game.stage.water.wake(node.get_instance_id(), node.position, movement / maxf(delta, 0.001), spray_depth, delta, 1.3)
-			if racer.get("role", "racer") in ["racer", "zero"] and ((not red_hold and s >= racer.focus and racer.kind != "pass") or absf(racer.slide) > 3.4 or absf(racer.line + racer.slide) > Traffic.line_limit(game, s) + 0.8):
+			if racer.get("role", "racer") in ["racer", "zero"] and ((not red_hold and s >= racer.focus and racer.kind != "pass") or (absf(racer.slide) > 3.4 and not physical) or absf(racer.line + racer.slide) > Traffic.line_limit(game, s) + 0.8):
 				racer.state = "offroad"
 				racer.age = 0
 				if racer.kind == "pass":
@@ -335,7 +344,10 @@ func update_racers_step(delta: float) -> void:
 		if was_racing and racer.state in ["racing", "offroad"] and not ServiceTraffic.priority(racer):
 			var velocity: Vector3 = (node.position - racer.previous) / maxf(delta, 0.001)
 			velocity.y = 0
-			racer.motion.velocity = velocity
+			# A crew on the tyre model already carries its own velocity; its
+			# frame movement also holds the driver's low-speed shuffles.
+			if not (racer.state == "racing" and RallyDriver.applies(racer)):
+				racer.motion.velocity = velocity
 			var solid = prop_collision(racer, racer.previous, node.position, delta)
 			node.position = solid.position
 			if not solid.blocked and velocity.length() > 0.001:
@@ -558,6 +570,21 @@ func recover_racer(racer: Dictionary) -> void:
 	for key in ["towed", "recovery_helpers"]:
 		racer.erase(key)
 	game.helped += 1
+
+# A kinematic course car (police, ambulance) sits on its line: position from
+# the line and slide, heading from the road and the bend.
+func place_on_line(racer: Dictionary, s: float, road_yaw: float, bend: float, race_speed: float, actual_speed: float, reference: Dictionary, avoiding: bool, lateral_accel: float, service: bool, delta: float) -> void:
+	var node: Node3D = racer.node
+	if not reference.is_empty() and not avoiding:
+		lateral_accel = bend * race_speed * race_speed
+	var height = node.position.y
+	node.position = race_at(s) + race_side(s) * (racer.line + racer.slide)
+	if racer.has("rejoin_residual"):
+		racer.rejoin_residual = racer.rejoin_residual.move_toward(Vector3.ZERO, delta * maxf(actual_speed, 0.5) * 0.25)
+		node.position += racer.rejoin_residual
+	node.position.y = height
+	var yaw = steer_heading(racer, road_yaw, bend, actual_speed, reference, service, delta)
+	racer.motion.suspension(node, game.stage, delta, yaw, lateral_accel)
 
 # Pedals: speed up along the car's launch curve (2 s to 100 km/h for crews)
 # and brake up to BRAKE, easing in and out of either instead of switching
