@@ -170,6 +170,10 @@ static func animate_wheels(car_root: Node3D) -> void:
 		# Bicycle model: the front wheels point along the path's curvature.
 		var curvature = angle_difference(previous_heading, heading) / signed_distance
 		var target = clampf(atan(curvature * wheelbase), -MAX_STEER, MAX_STEER)
+		# A car driven on the tyre model reports its real wheel angle, so a
+		# slide shows opposite lock instead of the curve it travels.
+		if car_root.has_meta("steer_angle"):
+			target = clampf(float(car_root.get_meta("steer_angle")), -MAX_STEER, MAX_STEER)
 		steer = lerpf(steer, target, STEER_SMOOTHING)
 		car_root.set_meta("wheel_steer", steer)
 	for wheel in parts:

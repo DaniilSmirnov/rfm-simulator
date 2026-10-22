@@ -8,6 +8,9 @@ const CarRegistry = preload("res://scripts/cars/car_registry.gd")
 const CLEARANCE = 2.85
 const MAX_LINE = 3.05
 const BRAKE = 18.0
+# Crews and zero cars brake on their tyres (rally_driver.gd): plan stops
+# behind a blocker at what gravel gives.
+const CREW_BRAKE = 7.0
 # Every car shares the top speed; bends keep the speeds tuned for 140 km/h.
 const MAX_COMPETITION_SPEED = CarRegistry.TOP_SPEED
 const CORNER_SPEED = 140.0 / 3.6
@@ -18,7 +21,7 @@ const SPEED_LOOKAHEAD = [0.0, 16.0, 32.0, 48.0]
 # bends this far ahead (m) limit the speed through PLAN_BRAKE (m/s²).
 const BRAKE_LOOKAHEAD = 150.0
 const BRAKE_STEP = 10.0
-const PLAN_BRAKE = 12.0
+const PLAN_BRAKE = 8.0
 # A driver with no nerve for braking takes every bend up to this much faster
 # than the safe speed; a bold one often runs wide and leaves the road.
 const BEND_OVERSHOOT = 0.3
@@ -118,9 +121,14 @@ static func _speed_limit(game: Node3D, racer: Dictionary, s: float) -> float:
 	var cap = Injuries.ambulance_speed(racer, s) if role == "ambulance" else INF
 	return minf(maxf(0.0, game.race_speed(s) * racer.get("pace", 1.0)), cap)
 
+const SLIDE_SLACK = 0.6
+const SLIDE_RATE_SLACK = 0.8
+
 static func recovery_speed(target: float, racer: Dictionary) -> float:
-	# Lift off progressively when the rear steps out, then regain pace as it settles.
-	var loss = absf(float(racer.get("slide", 0.0))) * 0.22 + absf(float(racer.get("slide_speed", 0.0))) * 0.12
+	# Lift off progressively when the car runs wide of its line, then regain
+	# pace as it settles. A crew on the tyre model always sits a little off
+	# its line, so the first SLIDE_SLACK metres and m/s cost nothing.
+	var loss = maxf(0.0, absf(float(racer.get("slide", 0.0))) - SLIDE_SLACK) * 0.22 + maxf(0.0, absf(float(racer.get("slide_speed", 0.0))) - SLIDE_RATE_SLACK) * 0.12
 	return target * clampf(1.0 - loss, 0.5, 1.0)
 
 static func line_limit(game, progress: float) -> float:
@@ -271,7 +279,7 @@ static func plan(game: Node3D, racer: Dictionary) -> Dictionary:
 	# "racing" while waiting, so towing the blocker lets the queue restart.
 	for blocker in blockers:
 		if blocker.gap >= 0 and (best == INF or absf(current - blocker.line) < clearance):
-			var safe = sqrt(2 * BRAKE * maxf(0, blocker.gap - 8))
+			var safe = sqrt(2 * (CREW_BRAKE if racer.get("role", "racer") in ["racer", "zero"] else BRAKE) * maxf(0, blocker.gap - 8))
 			speed = minf(speed, safe)
 			advance = minf(advance, maxf(0, blocker.gap - 7))
 	if best == INF:

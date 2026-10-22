@@ -89,6 +89,7 @@ func probe(index: int, role: String) -> void:
 		prev_speed = r.drive_speed
 		prev_pos = r.node.position
 	var seconds = frames * dt
+	if r.state != "racing": print("  ended %s at s=%.0f kind=%s slide=%.1f" % [r.state, r.s, r.kind, r.slide])
 	print("%d %-6s %-5s len=%4.0fm t=%5.1fs avg=%4.0fkm/h | yawacc rms=%5.1f max=%6.0f rad/s2 | yawclamp=%4.1f%% | maxbrake=%4.1f%% | thr<->brk=%3d (%.1f/min) | accjerk=%4.1f%% | slip corner=%4.1f° max=%4.1f° | lat max=%4.1fg | %.3f ms/frame" % [index, role, "baked" if not r.track_parts.is_empty() else "heur", game.stage.length, seconds, speeds / maxf(frames, 1) * 3.6, sqrt(yaw_acc_sq / maxf(frames, 1)), yaw_acc_max, 100.0 * clamp_frames / maxf(frames, 1), 100.0 * brake_frames / maxf(frames, 1), switches, switches / maxf(seconds / 60.0, 0.01), 100.0 * jerk_frames / maxf(frames, 1), rad_to_deg(slip_sum / maxf(corner_frames, 1)), rad_to_deg(slip_max), lat_max / 9.8, cost / 1000.0 / maxf(frames, 1)])
 	game.stage.free()
 	game.free()
