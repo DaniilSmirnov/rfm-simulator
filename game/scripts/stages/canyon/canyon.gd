@@ -14,6 +14,7 @@ const Form = preload("res://scripts/stages/canyon/canyon_form.gd")
 const Route = preload("res://scripts/stages/canyon/canyon_route.gd")
 const Scenery = preload("res://scripts/stages/canyon/canyon_scenery.gd")
 const CanyonLife = preload("res://scripts/stages/canyon/canyon_life.gd")
+const Bridge = preload("res://scripts/stages/canyon/canyon_bridge.gd")
 
 const LENGTH = 2040.0
 # Stations of the parts of the stage: rim, hairpin, bench, floor, grove.
@@ -43,6 +44,7 @@ var plan: PackedVector2Array = PackedVector2Array()
 var surface: PackedFloat32Array = PackedFloat32Array()
 var scenery = Scenery.new()
 var canyon_life = CanyonLife.new()
+var bridge = Bridge.new()
 # The gorge has no deformable ground. Keep a bounded working set of exact
 # mesh samples for wheel/foot queries after the build cache is released.
 const CONTACT_CACHE_LIMIT = 2048
@@ -79,6 +81,10 @@ func configure() -> void:
 		var p = stage.at(s) + stage.side(s) * float(camp[1]) * float(camp[2])
 		p.y = base_ground(p)
 		stage.clearings.append(p)
+	# The footbridge from the rim camp at station 410 over to the far table,
+	# and the meadow at the end of its path: the last spectator area.
+	bridge.configure(stage)
+	stage.clearings.append(bridge.meadow)
 
 # ---------------------------------------------------------------- ground
 
@@ -94,7 +100,8 @@ func relief(s: float, lateral: float) -> float:
 
 # The land, with the road graded into it: a bench on the wall, a cut above it
 # and a fill below, easing back into the gorge within BLEND metres. The
-# spectator areas are levelled last, so a camp near the road is flat too.
+# spectator areas are levelled last, so a camp near the road is flat too, and
+# the bridgeheads of the footbridge are dug in under its deck.
 func base_ground(pos: Vector3) -> float:
 	var land = Form.surface(pos)
 	var nearest: Dictionary = stage.route_nearest(pos, BLEND)
@@ -105,7 +112,7 @@ func base_ground(pos: Vector3) -> float:
 		var lateral = (pos - p).dot(stage.side(s))
 		var bench = p.y + relief(s, lateral) * (1.0 - smoothstep(3.7, 9.0, distance))
 		land = lerpf(bench, land, smoothstep(BENCH, BLEND, distance))
-	return stage.blend_clearings(pos, land, CLEARING_FLAT, CLEARING_BLEND)
+	return minf(stage.blend_clearings(pos, land, CLEARING_FLAT, CLEARING_BLEND), bridge.cut(pos))
 
 # ---------------------------------------------------------------- terrain
 
@@ -173,6 +180,9 @@ func terrain_color(v: Vector3) -> Color:
 	var meadow = Color("8d8a4e").lerp(Color("79813f"), Form.grove(v.z))
 	var steppe = meadow.lerp(Color("a79c62"), (sin(v.x * 0.03) * sin(v.z * 0.026) + 1.0) * 0.5)
 	var ground = rock_color(v).lerp(gravel, wash * 0.85)
+	# Greener, mown grass on the meadow at the far end of the footbridge.
+	var lawn = (1.0 - smoothstep(10.0, 19.0, Vector2(v.x - bridge.meadow.x, v.z - bridge.meadow.z).length())) * turf
+	steppe = steppe.lerp(Color("6f8a3e").lerp(Color("7e9446"), (sin(v.x * 0.4) * sin(v.z * 0.33) + 1.0) * 0.5), lawn)
 	return ground.lerp(steppe, maxf(turf, wash * Form.grove(v.z) * 0.7)).lightened(sin(v.x * 0.09 + v.z * 0.06) * 0.03)
 
 # ---------------------------------------------------------------- road
@@ -217,7 +227,8 @@ func roadside_spectators() -> bool:
 
 func walk_blocked(next: Vector3, feet_height: float) -> bool:
 	# Grounded walkers cannot teleport up cliffs; airborne feet must clear a lip.
-	return base_ground(next) > feet_height + 0.18
+	# The railings of the footbridge hold people on its deck.
+	return base_ground(next) > feet_height + 0.18 or bridge.fenced(next, feet_height)
 
 # Tyres climb the graded road and the steppe, not the faces of the walls: a
 # car is stopped by land rising steeper than CLIMB just ahead of it.
@@ -233,7 +244,12 @@ func spectator_camp(_index: int, clearing: Vector3, _s: float, _outward: Vector3
 	return clearing
 
 func camp_allowed(spot: Vector3, _kind: String) -> bool:
-	return camp_supported(spot)
+	return camp_supported(spot) and not bridge.keeps_clear(spot, 0.5)
+
+# The camp on the far meadow has no way to the road but the bridge: its
+# people walk out to the far lip and watch the bench road across the gorge.
+func spectator_watch(home: Vector3) -> Vector3:
+	return bridge.lookout(home) if bridge.far_side(home) else Vector3.INF
 
 # Camp furniture needs level ground: not a cliff bench, not a talus slope.
 func camp_supported(pos: Vector3) -> bool:

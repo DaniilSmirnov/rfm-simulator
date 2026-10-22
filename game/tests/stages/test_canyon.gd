@@ -37,6 +37,7 @@ func run() -> void:
 	_check_gorge(stage)
 	_check_grove(stage, canyon)
 	_check_people(stage, canyon)
+	_check_bridge(stage, canyon.bridge)
 	_check_castle_colliders(canyon)
 	_check_render_chunks(stage)
 	_check_contact_cache(stage)
@@ -213,11 +214,11 @@ func _check_grove(stage, canyon) -> void:
 
 # Spectators, camps and the life of the steppe.
 func _check_people(stage, canyon) -> void:
-	check(stage.clearings.size() == canyon.CAMPS.size(), "every spectator area is placed")
+	check(stage.clearings.size() == canyon.CAMPS.size() + 1, "every spectator area is placed, the meadow over the bridge last")
 	var tilted: Array = []
 	for i in range(stage.clearings.size()):
 		if not canyon.camp_supported(stage.clearings[i]):
-			tilted.append(canyon.CAMPS[i][0])
+			tilted.append(canyon.CAMPS[i][0] if i < canyon.CAMPS.size() else "meadow")
 	check(tilted.is_empty(), "every spectator area is level enough for camp furniture %s" % str(tilted))
 	var life = canyon.canyon_life
 	check(life.camels.size() >= 12 and life.eagles.size() >= 6, "camel herds graze the steppe under circling eagles")
@@ -227,6 +228,92 @@ func _check_people(stage, canyon) -> void:
 	check(on_steppe, "camels stay on the table and never spawn in the gorge")
 	var camel_model: Node3D = life.camels[0].node
 	check(camel_model.get_node_or_null("Graze") != null and camel_model.get_node_or_null("StepA") != null, "the camel model carries its grazing and walking poses")
+
+# The footbridge over the gorge: on the table at both ends, high over the
+# bench road, clear of the rim road, the rock and the drawn land.
+func _check_bridge(stage, bridge) -> void:
+	var a: Vector3 = bridge.a
+	var b: Vector3 = bridge.b
+	check(Form.offset(a) > Form.rim_edge(a.z, 1.0) and Form.offset(b) < -Form.rim_edge(b.z, -1.0), "the footbridge runs from one table to the other, right across the gorge")
+	check(b.distance_to(a) > 80.0 and absf(b.y - a.y) < 4.0, "a span of %.0f m with an easy slope" % b.distance_to(a))
+	var lowest = INF
+	for s in range(0, int(stage.length), 2):
+		var p = stage.at(s)
+		var local: Vector2 = bridge.local(p)
+		if local.x > 0.0 and local.x < 1.0 and absf(local.y) < 6.0:
+			lowest = minf(lowest, bridge.deck(local.x).y - p.y)
+	check(lowest > 30.0 and lowest < INF, "the bench road passes %.0f m under the deck" % lowest)
+	var clear_of_road = true
+	for end in [a, b]:
+		clear_of_road = clear_of_road and stage.road_distance(end, 60.0) > 20.0
+	for rock in stage.rocks:
+		if bridge.keeps_clear(rock.pos) and not rock.has("building") and not rock.has("post"):
+			clear_of_road = clear_of_road and rock.pos.y + rock.height < a.y - 4.0
+	check(clear_of_road, "the rim road keeps 20 m off its ends and no rock rises into it")
+	# The last metre of each end, where people step on, may meet the soil.
+	var drawn = true
+	var dug = true
+	var span = b.distance_to(a)
+	for i in range(0, 101):
+		var p: Vector3 = bridge.deck(lerpf(1.2 / span, 1.0 - 1.2 / span, i / 100.0))
+		for side in [-1.0, 0.0, 1.0]:
+			var q = p + bridge.across * side * bridge.HALF_WIDTH
+			drawn = drawn and stage.terrain_surface_height(q) < q.y - 0.05
+			dug = dug and stage.ground(q) < q.y
+	check(drawn and dug, "the drawn land never shows through the glass deck")
+	var middle = bridge.deck(0.5)
+	check(absf(stage.solids.walking_floor(middle, middle.y) - middle.y) < 0.01, "people walk on the deck")
+	var below = Vector3(middle.x, stage.ground(middle), middle.z)
+	check(absf(stage.solids.walking_floor(below, below.y) - below.y) < 0.01, "nobody in the gorge is lifted on to the deck above")
+	var canyon = stage.canyon
+	check(canyon.walk_blocked(middle + bridge.across * (bridge.HALF_WIDTH + 0.1), middle.y), "the railings hold people on the deck")
+	check(not canyon.walk_blocked(middle + bridge.along * 0.3, middle.y), "the deck itself is open to walk along")
+	check(not canyon.walk_blocked(below + bridge.across * (bridge.HALF_WIDTH + 0.1), below.y), "the railings do not stop people far below")
+	var entrance = a + bridge.along * 0.5
+	var car = stage.rock_hit(entrance - bridge.along * 4.0 + Vector3.UP * 0.3, entrance + bridge.along * 2.0 + Vector3.UP * 0.3, 0.85)
+	var person = stage.rock_hit(entrance - bridge.along * 3.0 + bridge.across * 0.6 + Vector3.UP * 0.3, entrance + bridge.along * 2.0 + bridge.across * 0.6 + Vector3.UP * 0.3, 0.3)
+	check(not car.is_empty() and person.is_empty(), "a bollard keeps cars off the deck, not people")
+	var meadow: Vector3 = stage.clearings[-1]
+	check(meadow == bridge.meadow and Form.offset(meadow) < -Form.rim_edge(meadow.z, -1.0) - 10.0, "the meadow lies on the far table, back from the lip")
+	check(bridge.path_distance(b) < 0.01 and bridge.path_distance(meadow) < 6.0, "a path leads from the bridge to the meadow")
+	var lookout: Vector3 = canyon.spectator_watch(meadow)
+	check(lookout != Vector3.INF and absf(lookout.y - Form.rim_level(lookout)) < 3.0 and canyon.spectator_watch(stage.clearings[2]) == Vector3.INF, "the far camp watches from the far lip, the others from the road")
+	check(stage.get_node_or_null("CharynFootbridge/Glass") != null and stage.get_node_or_null("CharynFootbridge/MeadowPath") != null, "the bridge and its path are built")
+
+# Walks the player over the bridge in the real game and tries to step off it.
+func _check_bridge_walk(game) -> void:
+	var bridge = game.stage.canyon.bridge
+	game.in_car = false
+	game.jump_height = 0.0
+	game.jump_velocity = 0.0
+	# Beside the bollard in the middle of the entrance.
+	game.walker = bridge.a - bridge.along * 3.0 + bridge.across * 0.6
+	game.walker.y = game.stage.ground(game.walker)
+	game.view_yaw = atan2(-bridge.along.x, -bridge.along.z)
+	Input.action_press("forward")
+	var lowest = INF
+	for i in range(60 * 50):
+		game.player.walk_step(1.0 / 60.0)
+		var t: Vector2 = bridge.local(game.walker)
+		if t.x > 0.05 and t.x < 0.95:
+			lowest = minf(lowest, game.walker.y - bridge.deck(t.x).y)
+		if t.x > 1.05:
+			break
+	Input.action_release("forward")
+	check(bridge.local(game.walker).x > 1.0 and lowest > -0.05, "the player walks right across on the deck (lowest %.2f m)" % lowest)
+	game.walker = bridge.deck(0.5)
+	game.view_yaw = atan2(-bridge.across.x, -bridge.across.z)
+	Input.action_press("forward")
+	for i in range(240):
+		game.player.walk_step(1.0 / 60.0)
+	Input.action_release("forward")
+	check(absf(bridge.local(game.walker).y) < bridge.HALF_WIDTH and absf(game.walker.y - bridge.deck(0.5).y) < 0.05, "nobody walks off the deck into the gorge")
+	var watching = 0
+	for person in game.spectators.people:
+		if bridge.far_side(person.home):
+			watching += 1
+			check(absf(person.watch.y - game.stage.ground(person.watch)) < 0.01 and Form.offset(person.watch) < -Form.rim_edge(person.watch.z, -1.0), "a fan on the far side watches from the table %s" % person.watch)
+	check(watching == 2, "a camp of two stands on the meadow (%d)" % watching)
 
 # Every kind of castle, built on flat ground: a walker (0.3 m) never stands
 # inside the drawn rock, and the colliders keep nobody off open ground more
@@ -327,10 +414,11 @@ func _check_game() -> void:
 		if _blocked(game.stage.rocks_in_bounds(flat - Vector2.ONE, flat + Vector2.ONE).filter(func(rock): return not rock.has("actor")), spot + Vector3.UP * 0.5, 0.0):
 			in_rock.append(spot)
 	check(in_rock.is_empty(), "no player, NPC car or spectator starts inside a rock %s" % str(in_rock))
-	var grove_clearing: Vector3 = game.stage.clearings[-1]
+	var grove_clearing: Vector3 = game.stage.clearings[game.stage.canyon.CAMPS.size() - 1]
 	var toward_road: Vector3 = game.stage.at(game.stage.road_s(grove_clearing)) - grove_clearing
 	var camp_spot: Vector3 = grove_clearing + Vector3(toward_road.x, 0, toward_road.z).normalized() * 3.0
 	camp_spot.y = game.stage.ground(camp_spot)
 	check(game.place_table(camp_spot) and absf(game.camp.position.y - game.stage.ground(camp_spot)) < 0.001, "a real table rests on the floor of the grove")
+	_check_bridge_walk(game)
 	await game._shutdown_audio()
 	game.free()
