@@ -7,6 +7,7 @@ extends RefCounted
 # the car back towards its line with at most `assist` g and catches slides
 # past `max_slip`; a weaker assist lets the car run wide and leave the road.
 const CarRegistry = preload("res://scripts/cars/car_registry.gd")
+const Mistakes = preload("res://scripts/traffic/rally_mistakes.gd")
 const STEP = 1.0 / 120.0
 # Rally cars: four-wheel drive, a short wheelbase and a nimble body.
 const WHEELBASE = 2.5
@@ -68,7 +69,7 @@ static func drive(racer: Dictionary, stage, line_point: Vector3, aim: Vector3, s
 	var motion = racer.motion
 	var handling = motion.handling
 	var car = spec(float(racer.get("launch", CarRegistry.launch(2.0))))
-	var assist = float(racer.get("assist", 1.0)) * 9.8 * (AVOID_ASSIST if racer.get("avoiding", false) else 1.0)
+	var assist = float(racer.get("assist", 1.0)) * float(racer.get("assist_share", 1.0)) * 9.8 * (AVOID_ASSIST if racer.get("avoiding", false) else 1.0)
 	var max_slip = float(racer.get("max_slip", 0.45))
 	var steps = maxi(1, int(ceil(dt / STEP)))
 	var h = dt / steps
@@ -138,6 +139,10 @@ static func follow(crews, racer: Dictionary, speed: float, advance: float, delta
 	var node: Node3D = racer.node
 	var s: float = racer.s
 	var side = crews.race_side(s)
+	var road = crews.race_direction(s)
+	var bend_to = crews.race_direction(s + Mistakes.BEND_SPAN)
+	var bend = wrapf(atan2(-bend_to.x, -bend_to.z) - atan2(-road.x, -road.z), -PI, PI)
+	speed *= Mistakes.update(racer, s, bend, bool(racer.get("avoiding", false)), delta)
 	var ahead = s + LOOK_BASE + LOOK_TIME * racer.motion.velocity.length()
 	var aim = crews.race_at(ahead) + crews.race_side(ahead) * float(racer.line)
 	racer.pull = crews.recovery_pull(racer, delta)
@@ -187,8 +192,13 @@ static func take_over(crews, racer: Dictionary) -> void:
 	var expected = crews.race_at(s) + crews.race_side(s) * (float(racer.line) + float(racer.slide))
 	if Vector2(node.position.x - expected.x, node.position.z - expected.z).length() > 6.0:
 		node.position = Vector3(expected.x, node.position.y, expected.z)
-	var heading = atan2(-crews.race_direction(s).x, -crews.race_direction(s).z)
-	node.rotation.y = heading
-	racer.motion.velocity = Vector3(-sin(heading), 0, -cos(heading)) * float(racer.get("drive_speed", 0.0))
-	racer.motion.handling.yaw_rate = 0.0
 	racer.previous = node.position
+	var road_yaw = atan2(-crews.race_direction(s).x, -crews.race_direction(s).z)
+	# A car that drove back on by itself (rally_rejoin.gd) keeps its heading
+	# and momentum; one put down by a script starts clean along the road.
+	var speed = float(racer.get("drive_speed", 0.0))
+	if absf(wrapf(node.rotation.y - road_yaw, -PI, PI)) < 0.6 and speed > 1.0 and absf(racer.motion.velocity.length() - speed) < 3.0:
+		return
+	node.rotation.y = road_yaw
+	racer.motion.velocity = Vector3(-sin(road_yaw), 0, -cos(road_yaw)) * speed
+	racer.motion.handling.yaw_rate = 0.0

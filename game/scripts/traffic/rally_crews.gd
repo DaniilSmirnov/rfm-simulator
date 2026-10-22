@@ -102,6 +102,8 @@ func add_course_vehicle(node: Node3D, id: int, kind: String, variant: int, role:
 	racer.track_parts = RallyTracks.choose(game.stage, game.rng, role)
 	if role == "racer":
 		racer.nerve = Traffic.nerve(id)
+	if RallyDriver.applies(racer):
+		RallyDriver.Mistakes.apply(racer)
 	game.racers.append(racer)
 	return racer
 

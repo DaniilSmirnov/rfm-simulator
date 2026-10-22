@@ -42,6 +42,10 @@ func drive(fps: int, reverse: bool = false) -> Dictionary:
 			if r.state != "to_park":
 				print("DEPARTURE s=", r.s, " slide=", r.slide)
 			break
+		# A quick driver reaches the finish within the window; the hand-over
+		# to the service park is not part of this check.
+		if r.s >= game.stage.length - 2.0:
+			break
 		smooth = smooth and absf(wrapf(r.node.rotation.y - yaw, -PI, PI)) <= 2.5 / fps + 0.001 and absf(r.drive_speed - speed) <= 18.0 / fps + 0.001
 		# The body's turn rate itself changes gradually: no snapping from one
 		# side's full lock to the other between frames.
