@@ -37,7 +37,7 @@ export const TARGETS = {
   'android-arm64': {suffix: 'android.arm64', ext: 'so', abi: 'arm64-v8a'},
   'android-arm32': {suffix: 'android.arm32', ext: 'so', abi: 'armeabi-v7a'},
   // The iOS export embeds this dylib in the app as a framework (see build-desktop.mjs).
-  'ios-arm64': {suffix: 'ios.arm64', ext: 'dylib', args: ['-DCMAKE_SYSTEM_NAME=iOS', '-DCMAKE_OSX_SYSROOT=iphoneos', '-DCMAKE_OSX_ARCHITECTURES=arm64', '-DCMAKE_OSX_DEPLOYMENT_TARGET=14.0']},
+  'ios-arm64': {suffix: 'ios.arm64', ext: 'dylib', sdk: 'iphoneos', args: ['-DCMAKE_SYSTEM_NAME=iOS', '-DCMAKE_OSX_ARCHITECTURES=arm64', '-DCMAKE_OSX_DEPLOYMENT_TARGET=14.0']},
 };
 
 function run(command, args, cwd = root) {
@@ -80,6 +80,14 @@ function toolchain(target, prefix) {
       `-DCMAKE_RC_COMPILER=${t.mingw}-windres`, `-DCMAKE_FIND_ROOT_PATH=/usr/${t.mingw};${prefix}`,
       '-DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER', '-DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY', '-DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY',
       '-DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=BOTH');
+  }
+  if (t.sdk) {
+    // godot-cpp's macos.cmake resets CMAKE_OSX_SYSROOT to $SDKROOT and requires Cocoa,
+    // which the iOS SDK lacks; it only links Cocoa for macOS, so point it anywhere.
+    const sdk = spawnSync('xcrun', ['--sdk', t.sdk, '--show-sdk-path'], {encoding: 'utf8'}).stdout.trim();
+    if (!sdk) throw new Error(`xcrun found no ${t.sdk} SDK. Install Xcode.`);
+    process.env.SDKROOT = sdk;
+    args.push(`-DCMAKE_OSX_SYSROOT=${sdk}`, `-DCOCOA_LIBRARY=${sdk}/System/Library/Frameworks/Foundation.framework`);
   }
   if (t.abi) {
     const ndk = process.env.ANDROID_NDK_ROOT || process.env.ANDROID_NDK_LATEST_HOME || process.env.ANDROID_NDK_HOME || process.env.ANDROID_NDK;
