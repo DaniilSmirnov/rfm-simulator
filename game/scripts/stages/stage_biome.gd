@@ -294,6 +294,11 @@ func after_baked_load() -> void:
 func spectator_camp(index: int, clearing: Vector3, s: float, outward: Vector3) -> Vector3:
 	return clearing + outward * 6.0
 
+# Where the people of a camp at `home` stand to watch when the verge is out of
+# reach on foot; Vector3.INF to walk out to the verge as usual.
+func spectator_watch(_home: Vector3) -> Vector3:
+	return Vector3.INF
+
 # One-person groups along the roadside.
 func roadside_spectators() -> bool:
 	return true

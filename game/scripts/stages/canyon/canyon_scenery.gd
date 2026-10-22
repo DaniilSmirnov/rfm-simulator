@@ -34,6 +34,7 @@ func build(owner_stage, owner_biome, cooperative: bool = false) -> void:
 	biome = owner_biome
 	rng.seed = 20261017
 	_camps()
+	biome.bridge.build(stage)
 	await _castles(cooperative)
 	await _talus(cooperative)
 	await _steppe_cover(cooperative)
@@ -189,6 +190,10 @@ func _castle(builders: Dictionary, z: float, side: float, index: int) -> String:
 		for end in [p + axis, p - axis]:
 			if not open_ground(end, radius + 5.0, 0.0):
 				return ""
+	# Nothing stands up into the footbridge (checked after every draw of the
+	# generator, so the rest of the valley keeps its forms).
+	if biome.bridge.keeps_clear(p, radius + 2.0) and p.y + height > biome.bridge.a.y - 6.0:
+		return ""
 	var sink = 1.5 if place == "foot" else 0.8
 	var tile = Vector2i(floori(p.x / 64.0), floori(p.z / 64.0))
 	if not builders.has(tile):
@@ -263,6 +268,12 @@ func _steppe_cover(cooperative: bool = false) -> void:
 			var size = rng.randf_range(0.8, 1.7)
 			feather_p.append(Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3(size, rng.randf_range(0.9, 1.8), size)), p))
 			feather_c.append(Color("d7c891").lerp(Color("b2a771"), rng.randf()))
+		# The footbridge, its anchors and the trodden path stay bare. Dropped
+		# only after the draws, so the rest of the steppe keeps its plants.
+		if biome.bridge.keeps_clear(p, 0.3):
+			var layer: Array = [bush_p, bush_c] if i % 7 == 0 else ([stone_p, stone_c] if i % 23 == 0 else [feather_p, feather_c])
+			layer[0].pop_back()
+			layer[1].pop_back()
 	stage.detail_batch("SteppeFeatherGrass", stage.NATURE_GRASS, feather_p, feather_c, DetailLayer.tiled(170.0))
 	stage.detail_batch("SteppeWormwood", stage.NATURE_BUSH, bush_p, bush_c, DetailLayer.tiled(210.0))
 	stage.detail_batch("SteppeStones", stage.NATURE_STONE, stone_p, stone_c, DetailLayer.tiled(200.0))

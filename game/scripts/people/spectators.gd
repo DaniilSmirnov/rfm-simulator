@@ -262,6 +262,9 @@ func occupied(spot: Vector3) -> bool:
 	return false
 
 func watch_spot(s: float, home: Vector3) -> Vector3:
+	var lookout: Vector3 = game.stage.biome.spectator_watch(home)
+	if lookout != Vector3.INF:
+		return grounded(lookout)
 	var sign = 1.0 if (home - game.stage.at(s)).dot(game.stage.side(s)) >= 0 else -1.0
 	for shift in [0.0, 4.0, -4.0, 8.0, -8.0]:
 		var point = grounded(game.stage.at(s + shift) + game.stage.side(s + shift) * sign * 6.4)
