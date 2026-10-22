@@ -152,6 +152,7 @@ static func tree(stage, start: Vector3, end: Vector3, car: Dictionary) -> int:
 				candidates.append_array(stage.tree_cells.get(Vector2i(x, z), []))
 	for index in candidates:
 		if not stage.fallen.has(index):
+			if index < stage.forest_data.size() and minf(start.y, end.y) + car.offset.y - car.half.y > stage.trees[index].y + stage.forest_data[index].height: continue
 			if not circle(start, end, car, stage.trees[index], 0.2).is_empty(): return index
 		else:
 			var length: float = stage.forest_data[index].height * 0.64

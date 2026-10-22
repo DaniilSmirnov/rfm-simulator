@@ -3,12 +3,12 @@ import assert from 'node:assert/strict';
 import {catalog,canUseContent,canUseStage,validateRoomSelection,vkEntitlements} from '../server/store.mjs';
 test('catalog has stable unique SKUs; VK has one free stage, three free cars and free characters',()=>{
  assert.equal(new Set(catalog.map(p=>p.sku)).size,catalog.length);
- assert.equal(catalog.length,30);
+ assert.equal(catalog.length,31);
  for(let i=0;i<8;i++) assert.equal(canUseContent('stage',i),i===0);
- for(let i=0;i<11;i++) assert.equal(canUseContent('car',i),i<3);
+ for(let i=0;i<12;i++) assert.equal(canUseContent('car',i),i<3);
  for(let i=0;i<11;i++) assert.equal(canUseContent('character',i),true);
  assert.ok(catalog.every(p=>p.purchase_enabled === !p.free));
- for(const p of catalog.filter(p=>!p.free)) assert.equal(p.price,p.type==='car'?3:20);
+ for(const p of catalog.filter(p=>!p.free)) assert.equal(p.price,p.type==='car' && p.sku !== 'car_12'?3:20);
 });
 test('future verified entitlement grants only the exact known SKU',()=>{
  const rights={mode:'restricted',skus:['car_04','stage_02','unknown']};
@@ -23,7 +23,7 @@ test('borrowed stage does not grant permanent ownership or a personal car',()=>{
  assert.equal(canUseStage(2,rights),false);
  assert.deepEqual(rights.skus,[]);
  assert.match(validateRoomSelection({car_model:3},false),/машина/);
- for(const car of [-1,1.5,'0',11]) assert.match(validateRoomSelection({car_model:car},true),/машина/);
+ for(const car of [-1,1.5,'0',12]) assert.match(validateRoomSelection({car_model:car},true),/машина/);
 });
 test('every playable character is free in VK; the patch collector is not offered',()=>{
  const rights=vkEntitlements();

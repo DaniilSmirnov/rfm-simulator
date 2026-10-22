@@ -55,7 +55,7 @@ test('deployed configuration enables every paid product at its real price',()=>{
  const products=paymentCatalog({...config.vars,PAYMENTS:{}},'100500').filter(p=>p.purchase_enabled);
  assert.equal(products.length,paidSkus.length);assert.equal(products[0].sku,'stage_02');
  assert.equal(products[0].payment_mode,'production');
- for(const p of products)assert.equal(p.price,p.type==='car'?3:20);
+ for(const p of products)assert.equal(p.price,p.type==='car' && p.sku !== 'car_12'?3:20);
 });
 test('signed item lookup has stable SKU item ID and does not grant content',async()=>{
  const {env,data}=setup();
@@ -245,7 +245,7 @@ test('production purchases every paid SKU at catalog price; test rights never gr
  assert.equal(products.length,paidSkus.length);
  await assert.rejects(paymentCallback(signedCallback(order),env));
  for(const [i,p] of products.entries()){
-  const price=p.type==='car'?3:20;
+  const price=p.type==='car' && p.sku !== 'car_12'?3:20;
   assert.equal(p.price,price);
   assert.equal((await paymentCallback(signedCallback({notification_type:'get_item',item:p.sku,user_id:'44'}),env)).response.price,price);
   const fields={...order,notification_type:'order_status_change',order_id:String(800+i),user_id:'44',item_id:p.sku,item_price:String(price)};

@@ -289,7 +289,7 @@ test('Sport sedan model 9 survives joins and restored rooms while out-of-range m
   const restored = new RoomState(structuredClone(r.data));
   const reply = restored.sync({ token: g.token, state: state() }, 1100);
   assert.deepEqual(reply.players.map(p => p.car_model), [9, 9]);
-  const late = restored.add('Late', 1200, false, { car_model: 11 });
+  const late = restored.add('Late', 1200, false, { car_model: 12 });
   assert.equal(late.car_model, late.slot);
 });
 
@@ -526,4 +526,15 @@ test('a walker standing on a car keeps its car key and feet; anything else stand
   assert.equal(reply.players[0].state.stand, '');
   reply = r.sync({ token: h.token, state: { ...state(), stand: 'racer:3' } }, 1400);
   assert.equal(reply.players[0].state.stand, '', 'a key without feet is dropped');
+});
+
+test('helicopter selection and bounded lift survive the Worker relay', () => {
+ const r = new RoomState();
+ const h = r.add('Pilot', 1000, true, {car_model: 11});
+ const g = r.add('Guest pilot', 1000, false, {car_model: 11});
+ assert.equal(g.car_model, 11);
+ const input = {seq: 1, ticks: 12, throttle: 0, steer: 0, brake: false, lift: -1};
+ r.sync({token: g.token, state: {...state(), drive_enabled: true, drive_inputs: [input, {...input, seq:2, lift:2}]}}, 1100);
+ const reply = r.sync({token: h.token, state: state()}, 1200);
+ assert.deepEqual(reply.players.find(p => p.id === g.player).state.drive_inputs, [input]);
 });

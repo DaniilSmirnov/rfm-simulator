@@ -11,7 +11,7 @@ func run() -> void:
 	for model in range(Cars.count()):
 		var node = Props.player_car(model, false)
 		var box = Hitbox.bounds(node)
-		check(box == Hitbox.measure(node) and box == Hitbox.player(model), "model %d uses its closed visible mesh bounds in prediction" % model)
+		check((box.encloses(Hitbox.measure(node)) if Cars.flies(model) else box == Hitbox.measure(node)) and box == Hitbox.player(model), "model %d uses its closed visible mesh bounds in prediction" % model)
 		check(box.size.z > 3 and box.size.x > 1 and box.size.y > 1, "model %d has a full car-sized hitbox" % model)
 		for yaw in [0.0, PI / 2, 0.73]:
 			var shape = Hitbox.shape(box, yaw)
