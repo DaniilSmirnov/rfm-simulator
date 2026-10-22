@@ -60,10 +60,14 @@ export const slowTests = new Set([
  "test_selection.gd", "test_world_loading.gd", "test_baked_village.gd",
  "test_provence_village.gd", "test_stage_solids.gd", "test_service_parks.gd", "test_service_park_layout.gd",
 ]);
+// Tests that outgrow the slow-test limit (180 s), with their own, in ms.
+export const timeouts = Object.freeze({
+ "test_spectators.gd": 300_000,
+});
 // Rough CI seconds per test (2026-10-21), only to balance --part=K/N splits.
 // Unlisted tests count as 10 s, or 60 s when they are in slowTests.
 export const seconds = Object.freeze({
- "test_course_schedule.gd": 147, "test_prop_physics.gd": 72, "test_selection.gd": 36, "test_knockdown.gd": 35,
+ "test_spectators.gd": 160, "test_course_schedule.gd": 147, "test_prop_physics.gd": 72, "test_selection.gd": 36, "test_knockdown.gd": 35,
  "test_camp_cooking.gd": 30, "test_tow_recovery.gd": 30, "test_service_parks.gd": 28, "test_room.gd": 28,
  "test_food_fleet.gd": 28, "test_foraging.gd": 28, "test_grill_fire.gd": 28, "test_ambulance_medics.gd": 28,
  "test_rally_traffic.gd": 25, "test_direct_link.gd": 25, "test_poison_mushrooms.gd": 25, "test_police_bridge.gd": 25, "test_world_loading.gd": 24,

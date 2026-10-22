@@ -5,7 +5,14 @@ func run() -> void:
 	var host = load("res://main.tscn").instantiate()
 	var guest = load("res://main.tscn").instantiate()
 	root.add_child(host)
-	root.add_child(guest)
+	# Each game simulates its own world, as on two machines. Sharing one, the
+	# guest's frozen NPC camps sat exactly inside the host's live ones, and a
+	# tilted grill's coincident boxes turned its physics into NaN.
+	var guest_world = SubViewport.new()
+	guest_world.own_world_3d = true
+	guest_world.size = root.size
+	root.add_child(guest_world)
+	guest_world.add_child(guest)
 	await process_frame
 	for g in [host, guest]:
 		g.set_process(false)

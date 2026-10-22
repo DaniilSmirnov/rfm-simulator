@@ -68,5 +68,17 @@ func run() -> void:
 	for i in range(nodes.size()):
 		var clearance = gap(nodes[i], world.stage.ground)
 		check(absf(clearance) < 0.025, "gear %d remains on the ground after physics settles (%.4f)" % [i, clearance])
+	# A spectator who sets off beside camp gear gets a collider there. Born at
+	# the origin and then posed, it moved there in one physics step: a
+	# kinematic velocity of thousands of m/s, and tables and chairs it touched
+	# flew 5-13 m across the Forest pass and Mineshaft camps.
+	var seat: Node3D = nodes[1]
+	var spot: Vector3 = seat.global_position + Vector3(0.55, 0, 0)
+	world.injuries.entries.append({"key": "walker", "pos": spot})
+	var actors = world.stage.solids.prop_ground.get_node("Actors")
+	actors.frame = -1
+	actors.update(world.stage.solids.prop_ground.tiles)
+	var born: Transform3D = PhysicsServer3D.body_get_state(actors.bodies["walker"].get_rid(), PhysicsServer3D.BODY_STATE_TRANSFORM)
+	check(born.origin.distance_to(spot + Vector3.UP * 0.85) < 0.01, "a walker's collider is born where the walker stands (%s)" % born.origin)
 	world.free()
 	finish()

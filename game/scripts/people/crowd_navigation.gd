@@ -45,6 +45,14 @@ static func context(game, person: Dictionary, start: Vector3, goal: Vector3, roa
 			var p = flat(position)
 			if p.x >= low.x - 2 and p.x <= high.x + 2 and p.y >= low.y - 2 and p.y <= high.y + 2:
 				solids.append({"pos": position, "radius": 1.0, "height": 1.8})
+	# A walker's sweep passes under a tabletop and over a grill's legs, but
+	# the walker's body does not: crowds walked through camp tables and
+	# shoved them along.
+	for group in game.spectators.groups:
+		for gear in [[group.table, 1.1], [group.grill, 0.65]]:
+			var p = flat(gear[0].position)
+			if p.x >= low.x - 2 and p.x <= high.x + 2 and p.y >= low.y - 2 and p.y <= high.y + 2:
+				solids.append({"pos": gear[0].position, "radius": gear[1], "height": 1.0})
 	if game.camp != null:
 		solids.append({"pos": game.camp.position, "radius": 1.1, "height": 1.0})
 	if game.grill != null:

@@ -58,9 +58,9 @@ func run() -> void:
 	var verge = false
 	for group in game.spectators.groups:
 		var station: float = game.race_station(group.car.position)
-		verge = verge or (station > 30.0 and station < 120.0 and absf((group.car.position - game.race_at(station)).dot(game.race_side(station))) > 5.0)
+		verge = verge or (station > 30.0 and station < 150.0 and absf((group.car.position - game.race_at(station)).dot(game.race_side(station))) > 5.0)
 	var dodged = false
-	while racing.s < 120.0 and racing.state == "racing":
+	while racing.s < 150.0 and racing.state == "racing":
 		step(game, 0.1)
 		dodged = dodged or racing.avoiding
 	check(verge and not dodged, "a spectator's car on the verge past the start is no reason for a detour")

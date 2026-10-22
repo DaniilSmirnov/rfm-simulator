@@ -28,12 +28,13 @@ func update(tiles: Dictionary) -> void:
 		_still[person.key] = 0 if moved else int(_still.get(person.key, STILL_TICKS)) + 1
 		if _still[person.key] >= STILL_TICKS: continue
 		present[person.key] = true
+		var stance = Transform3D(Basis.IDENTITY, p + Vector3.UP * 0.85)
 		if not bodies.has(person.key):
 			var shape = CapsuleShape3D.new()
 			shape.radius = 0.28
 			shape.height = 1.7
-			_create(person.key, shape)
-		_pose(bodies[person.key], Transform3D(Basis.IDENTITY, p + Vector3.UP * 0.85))
+			_create(person.key, shape, stance)
+		_pose(bodies[person.key], stance)
 	var cars: Array = [game.car]
 	for peer in game.room.peers.values():
 		if peer.has("car"): cars.append(peer.car)
@@ -45,11 +46,12 @@ func update(tiles: Dictionary) -> void:
 		var key = "car:%d" % car.get_instance_id()
 		present[key] = true
 		var box: AABB = Hitbox.bounds(car)
+		var pose: Transform3D = car.global_transform * Transform3D(Basis.IDENTITY, box.get_center())
 		if not bodies.has(key):
 			var shape = BoxShape3D.new()
 			shape.size = box.size
-			_create(key, shape)
-		_pose(bodies[key], car.global_transform * Transform3D(Basis.IDENTITY, box.get_center()))
+			_create(key, shape, pose)
+		_pose(bodies[key], pose)
 	for key in _last.keys():
 		if not present.has(key) and not _still.has(key):
 			_last.erase(key)
@@ -66,8 +68,12 @@ func _pose(body: Node3D, pose: Transform3D) -> void:
 	if not body.global_transform.is_equal_approx(pose):
 		body.global_transform = pose
 
-func _create(key: String, shape: Shape3D) -> void:
+# A body is born where it stands. Created at the origin and then posed, it
+# moved there in one step: the physics took that for a kinematic velocity of
+# thousands of m/s, and a camp chair beside a spectator who set off flew 10 m.
+func _create(key: String, shape: Shape3D, pose: Transform3D) -> void:
 	var body = AnimatableBody3D.new()
+	body.transform = global_transform.affine_inverse() * pose
 	body.sync_to_physics = false
 	body.collision_layer = 1 << 13
 	body.collision_mask = 1
