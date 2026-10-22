@@ -265,6 +265,8 @@ func _keep_on_land() -> void:
 
 func _keep_trunk_on_land() -> void:
 	var stage = solids.stage
+	# Stood back up (fallen_trees.gd raise): the record goes on the next refresh.
+	if not stage.fallen.has(record.tree): return
 	var length: float = stage.forest_data[record.tree].height * 0.64
 	var f: Dictionary = stage.fallen[record.tree]
 	var axis: Vector3 = (global_basis * Basis(Vector3.UP.cross(f.direction).normalized(), float(f.get("lie", PI * 0.5))) * Vector3.UP).normalized()

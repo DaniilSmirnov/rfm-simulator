@@ -16,6 +16,7 @@ const ROPE_SLACK = 2.4
 # Reach from the measured body, including the walker's collision clearance.
 const PUSH_RANGE = 0.65
 const Hitbox = preload("res://scripts/cars/car_hitbox.gd")
+const FallenTrees = preload("res://scripts/stages/fallen_trees.gd")
 const Motion = preload("res://scripts/cars/vehicle_motion.gd")
 # Speed (m/s) one helper gives a car, and the most any team gives.
 const HELPER_SPEED = 1.1
@@ -80,6 +81,8 @@ static func update(game, players: Dictionary, delta: float) -> void:
 			game.recovery_links.append(link)
 	# Keep car towing available beside camp furniture; an existing prop grip persists.
 	game.movable_props.update(players, occupied, delta)
+	# The same players keep felled trees bounded: far ones stand back up.
+	FallenTrees.recycle(game, players)
 	for racer in game.racers:
 		racer.recovery_helpers = int(helpers.get("racer:%d" % racer.id, 0))
 	for target in targets:

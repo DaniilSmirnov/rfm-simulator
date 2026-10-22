@@ -17,6 +17,8 @@ const SOCKET_RETRY = 5.0
 const SOCKET_MAX_FAILURES = 3
 # Leave time for an 8s HTTP request and capped backoff before membership's 90s TTL.
 const RECOVERY_SECONDS = 45.0
+# Host syncs in a row the server may refuse before the room is given up.
+const MAX_REFUSED_SYNCS = 3
 const SOCKET_REPLY_TIMEOUT = 8.0
 
 var room
@@ -27,6 +29,7 @@ var busy = false
 var request_kind = ""
 var request_sent_at = 0.0
 var errors = 0
+var refused_syncs = 0
 var recovery_started_at = -INF
 var suspended_at = -INF
 var socket_waiting_since = -INF
@@ -159,6 +162,17 @@ func recovery_delay() -> float:
 func reset_recovery() -> void:
 	errors = 0
 	recovery_started_at = -INF
+	refused_syncs = 0
+
+# The host's sync refused as too large or malformed (413, 400) is one bad
+# snapshot, not a closed room: the cold sections are offered again from
+# scratch. Only a run of refusals with no good reply in between is terminal.
+func tolerate_refused_sync(code: int) -> bool:
+	if not room.is_host or code not in [400, 413] or refused_syncs >= MAX_REFUSED_SYNCS:
+		return false
+	refused_syncs += 1
+	room.world_sync.reset()
+	return true
 
 # ---------------------------------------------------------------- clock
 

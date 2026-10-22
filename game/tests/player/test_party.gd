@@ -1,5 +1,6 @@
 extends "res://tests/harness.gd"
 const Props = preload("res://scripts/core/props.gd")
+const FallenTrees = preload("res://scripts/stages/fallen_trees.gd")
 func _initialize() -> void:
 	call_deferred("run")
 func run() -> void:
@@ -138,10 +139,10 @@ func run() -> void:
 	var final_basis = game.stage.fallen[index].basis
 	game.stage.update_fallen(1)
 	check(game.stage.fallen[index].basis == final_basis, "settled trees retain final collision basis")
-	game.stage.apply_trees([{"id": 2, "dir": [0, 0, -1], "age": 1.3}])
+	game.stage.apply_trees([[2, PI, PI * 0.5, 1.3]], game.stage.fallen)
 	check(is_equal_approx(game.stage.fallen[2].basis.y.y, cos(game.stage.fallen[2].lie)) and game.stage.fallen[2].rendered_age == 1.3, "late completed tree snapshot renders the trunk lying down")
 	var snapshot_basis = game.stage.fallen[2].basis
-	game.stage.apply_trees([{"id": 2, "dir": [1, 0, 0], "age": 1.3}])
+	game.stage.apply_trees([[2, PI * 0.5, PI * 0.5, 1.3]], game.stage.fallen)
 	check(game.stage.fallen[2].basis != snapshot_basis, "completed tree snapshot direction change refreshes transform")
 	var remote_tree = game.stage.trees[1]
 	remote.car = game.room.a(remote_tree + Vector3(0, 0, 1))
@@ -160,6 +161,30 @@ func run() -> void:
 	check(guest.stage.fallen.has(index) and guest.stage.fallen[index].age == 1.3, "late join receives fully fallen tree")
 	guest.room.apply_world(game.room.world_state())
 	check(guest.stage.fallen.size() == game.stage.fallen.size(), "repeated snapshot does not duplicate fallen trees")
+	# Past FallenTrees.LIMIT the host stands the oldest far tree back up; the
+	# compact snapshot keeps the trees section small, and guests follow.
+	for i in range(game.stage.trees.size()):
+		if game.stage.fallen.size() >= FallenTrees.LIMIT + 40: break
+		game.stage.fell(i, Vector3.RIGHT)
+	game.stage.update_fallen(2)
+	var bytes = JSON.stringify(game.stage.tree_snapshot()).length()
+	check(game.stage.fallen.size() == FallenTrees.LIMIT + 40 and bytes < game.stage.fallen.size() * 32, "felled tree entries stay compact (%d bytes for %d trees)" % [bytes, game.stage.fallen.size()])
+	var players = {"local": {"pos": game.room.a(game.player_position())}}
+	var before: Array = game.stage.fallen.keys()
+	for i in range(80):
+		FallenTrees.recycle(game, players)
+	var raised = before.filter(func(i): return not game.stage.fallen.has(i))
+	check(game.stage.fallen.size() == FallenTrees.LIMIT and raised.size() == 40, "host keeps at most the limit of felled trees")
+	var near_player = raised.filter(func(i): return Vector2(game.stage.trees[i].x, game.stage.trees[i].z).distance_to(Vector2(game.player_position().x, game.player_position().z)) <= FallenTrees.RAISE_CLEARANCE)
+	check(near_player.is_empty(), "only trees out of the players' sight stand back up")
+	var standing: Vector3 = game.stage.trees[raised[0]]
+	check(game.stage.obstacle_hit(standing + Vector3(-2, 0, 0), standing + Vector3(2, 0, 0), 0.3) == raised[0], "a tree stood back up blocks on its stump again")
+	guest.room.apply_world(game.room.world_state())
+	check(guest.stage.fallen.size() == FallenTrees.LIMIT and not guest.stage.fallen.has(raised[0]), "guests stand the same trees back up")
+	guest.stage.fell(raised[1], Vector3.LEFT)
+	guest.tree_requests[raised[1]] = Vector3.LEFT
+	guest.room.apply_world(game.room.world_state())
+	check(guest.stage.fallen.has(raised[1]), "a guest's own unconfirmed fall survives a host snapshot")
 	for scene in [game, guest]:
 		await scene._shutdown_audio()
 		scene.queue_free()
