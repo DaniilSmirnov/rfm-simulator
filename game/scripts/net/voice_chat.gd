@@ -9,6 +9,7 @@ const VoiceWeb = preload("res://scripts/net/voice_web.gd")
 const VoiceNative = preload("res://scripts/net/voice_native.gd")
 const UiKit = preload("res://scripts/ui/ui_kit.gd")
 const Loc = preload("res://scripts/ui/loc.gd")
+const Dedicated = preload("res://scripts/net/dedicated.gd")
 
 # Distances, the talking flags and signaling are exchanged ten times a second.
 const TICK = 0.1
@@ -55,7 +56,7 @@ func cut_off() -> bool:
 	return not room.transport.socket_open and connected_peers == 0
 
 func join() -> void:
-	if not supported or room.player_id == "":
+	if not supported or room.player_id == "" or Dedicated.active():
 		return
 	var session = ("%s-%s-%d" % [room.room_id, room.player_id, Time.get_ticks_msec()]).left(96)
 	var options = {"localId": room.player_id, "session": session, "iceServers": NetProtocol.direct("ice_servers", [])}

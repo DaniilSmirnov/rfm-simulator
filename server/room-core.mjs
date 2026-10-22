@@ -51,22 +51,28 @@ export class RoomState {
     return p;
   }
   add(name, now, host = false, options = {}) {
+    // A dedicated server (options.dedicated, set only by the Worker after its
+    // key check) may take a fixed ID again: after a restart its old room,
+    // closed or not, gives way to the new one.
+    if (host && options.dedicated === true && this.data.host && (this.data.closed || this.data.players[this.data.host]?.dedicated === true)) this.data = new RoomState().data;
     if (!host && (!this.data.host || this.data.closed)) throw new RoomError(404, 'Комната не найдена или закрыта.');
     if (host && this.data.host) throw new RoomError(409, 'Этот ID занят.');
-    if (Object.keys(this.data.players).length >= MAX_PLAYERS) throw new RoomError(409, `Комната заполнена: максимум ${MAX_PLAYERS} игроков.`);
+    // A dedicated host takes no place: its room holds MAX_PLAYERS guests.
+    if (Object.values(this.data.players).filter(p => !p.dedicated).length >= MAX_PLAYERS) throw new RoomError(409, `Комната заполнена: максимум ${MAX_PLAYERS} игроков.`);
     // Hot-world and state encodings change between protocol versions: a guest
     // from another build would misread the host's snapshots, so it is refused.
     const hostProtocol = this.data.players[this.data.host]?.protocol ?? 0;
     const protocolVersion = Number.isSafeInteger(options.protocol) ? options.protocol : 0;
     if (!host && protocolVersion !== hostProtocol) throw new RoomError(409, 'Версия игры не совпадает с версией хозяина комнаты. Обнови страницу и зайди снова.');
-    const used = new Set(Object.values(this.data.players).map(p => p.slot));
+    // The dedicated host parks nowhere: guests take every slot from the first.
+    const used = new Set(Object.values(this.data.players).filter(p => !p.dedicated).map(p => p.slot));
     let slot = 0;
     while (used.has(slot)) slot++;
     const car_model = Number.isSafeInteger(options.car_model) && options.car_model >= 0 && options.car_model < CAR_COUNT ? options.car_model : slot;
     const character = CHARACTERS.includes(options.character) ? options.character : CHARACTERS[slot % CHARACTERS.length];
     if (host) this.data.stage = Number.isSafeInteger(options.stage) ? Math.max(0, Math.min(STAGE_COUNT - 1, options.stage)) : 0;
     const id = crypto.randomUUID();
-    const p = { id, slot, car_model, character, token: crypto.randomUUID(), name: String(name || 'Фанат').replace(/[\u0000-\u001f]/g, '').trim().slice(0, protocol.name_max_length) || 'Фанат', seen: now, state: null, seq: 0, protocol: protocolVersion };
+    const p = { id, slot, car_model, character, token: crypto.randomUUID(), name: String(name || 'Фанат').replace(/[\u0000-\u001f]/g, '').trim().slice(0, protocol.name_max_length) || 'Фанат', seen: now, state: null, seq: 0, protocol: protocolVersion, ...(host && options.dedicated === true ? {dedicated: true} : {}) };
     this.data.players[id] = p;
     if (host) this.data.host = id;
     return { player: id, token: p.token, host, name: p.name, slot, car_model, character, stage: this.data.stage ?? 0 };
@@ -186,7 +192,7 @@ export class RoomState {
     const viaHost = !isHost && p.direct === true && p.cold_mode === 'split' && world && typeof world === 'object' && !staleHost && host?.background !== true;
     if (viaHost) world = { direct: true, cold_revs: world.cold_revs ?? {}, ...(world.cold ? { cold: world.cold } : {}) };
     // Raw drive inputs are only needed by the host, which simulates them.
-    const players = Object.values(this.data.players).map(({ id, name, slot, car_model, character, state_time, state }) => ({ id, name, slot, car_model: car_model ?? slot, character: character ?? CHARACTERS[slot % CHARACTERS.length], state_time: state_time ?? 0,
+    const players = Object.values(this.data.players).map(({ id, name, slot, car_model, character, state_time, state, dedicated }) => ({ id, name, slot, car_model: car_model ?? slot, character: character ?? CHARACTERS[slot % CHARACTERS.length], state_time: state_time ?? 0, ...(dedicated ? {dedicated: true} : {}),
       state: viaHost ? null : state && !isHost && state.drive_inputs?.length ? {...state, drive_inputs: []} : state }));
     return { server_time: now, world_time: this.data.world_time ?? 0, stage: this.data.stage ?? 0, host: hostId, ...(world === undefined ? {} : {world}), accepted: p.seq,
       ...(isHost ? {cold_revs: this.data.cold_revs ?? {}} : {}),

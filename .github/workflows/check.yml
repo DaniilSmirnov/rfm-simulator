@@ -46,7 +46,7 @@ jobs:
           printf '%s\n' "$files"
           changed() { [ "$files" = ALL ] || printf '%s\n' "$files" | grep -qE "$1"; }
           common='^(\.github/workflows/check\.yml|package(-lock)?\.json|scripts/godot\.mjs)$'
-          export='^(native/|game/export_presets\.cfg$|game/project\.godot$|game/branding/|scripts/(build-desktop|build-voice|verify-windows-build|test-windows-startup)\.mjs$)'
+          export='^(native/|server/dedicated/|game/export_presets\.cfg$|game/project\.godot$|game/branding/|scripts/(build-desktop|build-voice|verify-windows-build|test-windows-startup)\.mjs$)'
           vk='^(web/|engine/|game/scripts/platform/|scripts/(build-web|test-platform-build|test-platform-web)\.mjs$)'
           if changed "$common" || changed "$export"; then e=true; else e=false; fi
           if changed "$common" || changed "$vk"; then v=true; else v=false; fi
@@ -209,6 +209,32 @@ jobs:
         with:
           name: native-multiplayer-log
           path: network-test.log
+          if-no-files-found: ignore
+
+  dedicated-server:
+    name: Dedicated server
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/cache@v4
+        with:
+          path: .cache/godot
+          key: godot-4.4.1-linux-x86_64
+      - run: npm ci
+      - name: Verify a headless server hosting a native guest
+        run: node scripts/test-dedicated.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dedicated-server-log
+          path: dedicated-test.log
           if-no-files-found: ignore
 
   production-web:
@@ -607,6 +633,15 @@ jobs:
             file dist-${{ matrix.platform }}/* | tee file.txt && grep -qE "ELF 64-bit LSB.*x86-64|PE32\+ executable.*x86-64" file.txt
             grep -qa "addons/rally_voice/bin/librally_voice.linux.x86_64.so" dist-linux/*.pck
           fi
+      # The server image boots the export headless; with no room server to
+      # reach it keeps retrying, and its log must say so (unbuffered stdout).
+      - name: Build and start the dedicated server image
+        if: matrix.platform == 'linux'
+        run: |
+          docker build --build-context export=dist-linux -t rally-dedicated server/dedicated
+          docker run -d --name dedicated -e RALLY_DEDICATED_TOKEN=check rally-dedicated --stage=0 --room-server=http://127.0.0.1:9
+          timeout 120 sh -c 'until docker logs dedicated 2>&1 | grep -q "creating the room again"; do sleep 2; done' || { docker logs dedicated; exit 1; }
+          docker rm -f dedicated
 
       - uses: actions/upload-artifact@v4
         with:

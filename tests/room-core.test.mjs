@@ -528,6 +528,35 @@ test('a walker standing on a car keeps its car key and feet; anything else stand
   assert.equal(reply.players[0].state.stand, '', 'a key without feet is dropped');
 });
 
+test('a dedicated host is nobody on the stage and can take its fixed ID again', () => {
+  const r = new RoomState();
+  const server = r.add('Сервер', 1000, true, { dedicated: true, stage: 2 });
+  const g = r.add('Друг', 1000);
+  assert.equal(g.slot, 0, 'the first guest takes the first park slot');
+  const full = new RoomState();
+  full.add('Сервер', 1000, true, { dedicated: true });
+  for (let i = 0; i < MAX_PLAYERS; i++) full.add('g', 1000);
+  assert.throws(() => full.add('overflow', 1000), e => e.status === 409, 'the server takes no place');
+  const view = r.sync({ token: g.token, state: state() }, 1100);
+  assert.equal(view.players.find(p => p.id === server.player).dedicated, true);
+  assert.equal(view.players.find(p => p.id === g.player).dedicated, undefined);
+  // A restarted server takes the room over; the old members are gone.
+  const again = r.add('Сервер', 1200, true, { dedicated: true });
+  assert.equal(r.data.host, again.player);
+  assert.throws(() => r.member(g.token), e => e.status === 401);
+  // A player's room under that ID is not taken over, and a player cannot.
+  const own = new RoomState();
+  own.add('Хозяин', 1000, true);
+  assert.throws(() => own.add('Сервер', 1000, true, { dedicated: true }), e => e.status === 409);
+  const closed = new RoomState();
+  const host = closed.add('Хозяин', 1000, true);
+  closed.leave(host.token);
+  assert.equal(closed.add('Сервер', 1100, true, { dedicated: true }).host, true, 'a closed room gives way');
+  const player = new RoomState();
+  player.add('Сервер', 1000, true, { dedicated: true });
+  assert.throws(() => player.add('Хозяин', 1000, true), e => e.status === 409);
+});
+
 test('helicopter selection and bounded lift survive the Worker relay', () => {
  const r = new RoomState();
  const h = r.add('Pilot', 1000, true, {car_model: 11});
