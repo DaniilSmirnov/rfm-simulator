@@ -1,5 +1,5 @@
 extends Node
-# Native radio backend (desktop and Android): one RallyVoiceLink from the
+# Native radio backend (desktop, Android and iOS): one RallyVoiceLink from the
 # native/voice GDExtension per other member, with the same mesh rules and
 # signaling as web/voice-chat.js, so browser and native players hear each
 # other. The microphone goes through AudioEffectCapture on a silent bus; each
@@ -71,6 +71,7 @@ static func library_name() -> String:
 
 # Loads the extension on first use: Godot cannot open a library inside the
 # pack, so it is copied to user:// with a generated .gdextension next to it.
+# iOS builds embed it in the app and load it at startup (build-desktop.mjs).
 static func load_extension() -> bool:
 	if ClassDB.class_exists("RallyVoiceLink"):
 		return true

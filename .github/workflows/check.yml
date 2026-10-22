@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # Release exports (desktop, Android, the radio library for every platform,
+  # Release exports (desktop, Android, iOS, the radio library for every platform,
   # the VK prototype) run on main and on manual runs. A pull request runs them
   # only when it changes files those builds depend on; game code is covered by
   # the tests, and main still checks every merged commit.
@@ -52,7 +52,7 @@ jobs:
           if changed "$common" || changed "$vk"; then v=true; else v=false; fi
           linux='{"target":"linux-x86_64","os":"ubuntu-24.04","container":"quay.io/pypa/manylinux_2_28_x86_64"}'
           if [ $e = true ]; then
-            voice='[LINUX,{"target":"windows-x86_64","os":"ubuntu-24.04"},{"target":"windows-x86_32","os":"ubuntu-24.04"},{"target":"macos-universal","os":"macos-14"},{"target":"android-arm64","os":"ubuntu-24.04"},{"target":"android-arm32","os":"ubuntu-24.04"}]'
+            voice='[LINUX,{"target":"windows-x86_64","os":"ubuntu-24.04"},{"target":"windows-x86_32","os":"ubuntu-24.04"},{"target":"macos-universal","os":"macos-14"},{"target":"ios-arm64","os":"macos-14"},{"target":"android-arm64","os":"ubuntu-24.04"},{"target":"android-arm32","os":"ubuntu-24.04"}]'
           else
             voice='[LINUX]'
           fi
@@ -391,7 +391,7 @@ jobs:
           case "${{ matrix.target }}" in
             linux-*) echo /opt/python/cp312-cp312/bin >> "$GITHUB_PATH"; /opt/python/cp312-cp312/bin/pip install -q cmake ninja ;;
             windows-*) sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends ninja-build mingw-w64 g++-mingw-w64 ;;
-            macos-*) brew install ninja ;;
+            macos-*|ios-*) brew install ninja ;;
             android-*) sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends ninja-build ;;
           esac
       - uses: actions/cache@v4
@@ -413,6 +413,7 @@ jobs:
           case "${{ matrix.target }}" in
             linux-*) ! objdump -T $lib | grep -oE "GLIBC_2\.(29|[3-9][0-9])" ;;
             macos-*) lipo -info $lib | grep -q "x86_64 arm64\|arm64 x86_64" ;;
+            ios-*) lipo -info $lib | grep -q arm64 && otool -l $lib | grep -A3 LC_BUILD_VERSION | grep -qE "platform (2|IOS)$" ;;
           esac
       - name: Save the built library
         if: steps.lib.outputs.cache-hit != 'true'
@@ -506,6 +507,52 @@ jobs:
         with:
           name: android-apk
           path: dist-android/
+          retention-days: 7
+          if-no-files-found: error
+
+  ios:
+    name: iOS build (unsigned)
+    needs: [changes, native-voice]
+    if: needs.changes.outputs.export == 'true'
+    # Xcode 16: the Godot 4.4.1 iOS libraries need it to link.
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Add the native radio extension
+        uses: actions/download-artifact@v4
+        with:
+          name: voice-ios-arm64
+          path: game/addons/rally_voice/bin
+      - name: Export the Xcode project and build an unsigned IPA (arm64, production server)
+        run: npm run build:ios
+      - name: Check bundle id, version, architecture and that nothing is signed
+        run: |
+          rm -rf ios-check && mkdir ios-check
+          unzip -q dist-ios/*.ipa -d ios-check
+          app=ios-check/Payload/RallyFansSimulator.app
+          plutil -p "$app/Info.plist" | tee plist.txt | grep -E "CFBundleIdentifier|CFBundleShortVersionString|MinimumOSVersion"
+          grep -q '"CFBundleIdentifier" => "ru.rallyfansmap.rallyfanssimulator"' plist.txt
+          grep -q "\"CFBundleShortVersionString\" => \"$(node -p 'require("./package.json").version')\"" plist.txt
+          test -s "$app/RallyFansSimulator.pck"
+          lipo -info "$app/RallyFansSimulator" | grep -q arm64
+          if codesign -dv "$app" 2>/dev/null; then echo "The app is signed" >&2; exit 1; fi
+          test ! -e "$app/embedded.mobileprovision"
+          # The radio library is embedded as a framework, Godot loads it at startup.
+          lipo -info "$app/Frameworks/librally_voice.ios.arm64.framework/librally_voice.ios.arm64" | grep -q arm64
+          grep -qa "rally_voice.gdextension" "$app/RallyFansSimulator.pck"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-ipa-unsigned
+          path: dist-ios/*.ipa
           retention-days: 7
           if-no-files-found: error
 

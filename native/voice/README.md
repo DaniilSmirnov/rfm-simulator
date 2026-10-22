@@ -1,6 +1,6 @@
 # Rally native voice extension
 
-Native backend of the room radio for desktop and Android. Browser builds use
+Native backend of the room radio for desktop, Android and iOS. Browser builds use
 `web/voice-chat.js`. Both backends speak the same WebRTC (Opus over SRTP) and
 the same room signaling (`space: "voice"`, offer/answer/candidate/bye), so
 browser and native players hear each other.
@@ -31,6 +31,7 @@ node scripts/build-voice.mjs --target=linux-x86_64     # host build
 node scripts/build-voice.mjs --target=windows-x86_64   # MinGW cross build (also windows-x86_32)
 node scripts/build-voice.mjs --target=macos-universal  # on macOS
 node scripts/build-voice.mjs --target=android-arm64    # ANDROID_NDK_ROOT (also android-arm32)
+node scripts/build-voice.mjs --target=ios-arm64        # on macOS with Xcode
 ```
 
 The script clones the pinned sources from `deps.json` into `.cache/voice`. It
@@ -55,6 +56,11 @@ writes a `.gdextension` next to it and loads it with
 - Builds without the library (the web, tests) start without extension errors.
 - The library loads only when it is needed: the radio or a room's direct link.
 
+iOS is the exception: an app may only run code signed inside its bundle. For
+the iOS export `build-desktop.mjs` writes `addons/rally_voice/rally_voice.gdextension`
+into its copy of the project, Godot turns the dylib into an embedded framework,
+and the extension loads at startup.
+
 The microphone plays into the `RadioMic` bus from `game/default_bus_layout.tres`
 (an `AudioEffectCapture` before a -80 dB fader). The bus is never added at
 runtime, because `AudioServer.add_bus()` does not lock the mixer. The input
@@ -62,7 +68,9 @@ closes 1.5 s after the key is released and opens again on the next press.
 
 Microphone access: `audio/driver/enable_input` (off on the web), `RECORD_AUDIO`
 on Android (asked on the first press), and `NSMicrophoneUsageDescription`, the
-audio-input entitlement and disabled library validation on macOS.
+audio-input entitlement and disabled library validation on macOS. On iOS the
+audio session is Play and Record (`audio/general/ios/session_category`, sound
+stays on the speaker) and the system asks for the microphone on the first press.
 
 ## Tests
 

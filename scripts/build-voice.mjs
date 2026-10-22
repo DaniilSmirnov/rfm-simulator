@@ -9,6 +9,7 @@
 //   node scripts/build-voice.mjs --target=windows-x86_64   (MinGW cross build)
 //   node scripts/build-voice.mjs --target=macos-universal  (on macOS)
 //   node scripts/build-voice.mjs --target=android-arm64    (ANDROID_NDK_ROOT)
+//   node scripts/build-voice.mjs --target=ios-arm64        (on macOS with Xcode)
 //   node scripts/build-voice.mjs --install                 list installed libraries
 //
 // Sources are pinned in native/voice/deps.json and cached in .cache/voice.
@@ -35,6 +36,8 @@ export const TARGETS = {
     opus: ['-DOPUS_DISABLE_INTRINSICS=ON']},
   'android-arm64': {suffix: 'android.arm64', ext: 'so', abi: 'arm64-v8a'},
   'android-arm32': {suffix: 'android.arm32', ext: 'so', abi: 'armeabi-v7a'},
+  // The iOS export embeds this dylib in the app as a framework (see build-desktop.mjs).
+  'ios-arm64': {suffix: 'ios.arm64', ext: 'dylib', sdk: 'iphoneos', args: ['-DCMAKE_SYSTEM_NAME=iOS', '-DCMAKE_OSX_ARCHITECTURES=arm64', '-DCMAKE_OSX_DEPLOYMENT_TARGET=14.0']},
 };
 
 function run(command, args, cwd = root) {
@@ -77,6 +80,16 @@ function toolchain(target, prefix) {
       `-DCMAKE_RC_COMPILER=${t.mingw}-windres`, `-DCMAKE_FIND_ROOT_PATH=/usr/${t.mingw};${prefix}`,
       '-DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER', '-DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY', '-DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY',
       '-DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=BOTH');
+  }
+  if (t.sdk) {
+    // godot-cpp's macos.cmake resets CMAKE_OSX_SYSROOT to $SDKROOT and requires Cocoa,
+    // which the iOS SDK lacks; it only links Cocoa for macOS, so point it anywhere.
+    const sdk = spawnSync('xcrun', ['--sdk', t.sdk, '--show-sdk-path'], {encoding: 'utf8'}).stdout.trim();
+    if (!sdk) throw new Error(`xcrun found no ${t.sdk} SDK. Install Xcode.`);
+    process.env.SDKROOT = sdk;
+    args.push(`-DCMAKE_OSX_SYSROOT=${sdk}`, `-DCOCOA_LIBRARY=${sdk}/System/Library/Frameworks/Foundation.framework`,
+      // Cross builds for iOS confine find_*() to the SDK; our prefix lives outside it.
+      `-DCMAKE_FIND_ROOT_PATH=${prefix}`, '-DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=BOTH', '-DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=BOTH', '-DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=BOTH');
   }
   if (t.abi) {
     const ndk = process.env.ANDROID_NDK_ROOT || process.env.ANDROID_NDK_LATEST_HOME || process.env.ANDROID_NDK_HOME || process.env.ANDROID_NDK;

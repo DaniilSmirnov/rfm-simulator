@@ -17,6 +17,7 @@ dist-windows/
 # Rebuilt from source before every web export.
 game/generated/
 dist-android/
+dist-ios/
 
 # Native radio extension: built by scripts/build-voice.mjs or downloaded in CI.
 game/addons/rally_voice/

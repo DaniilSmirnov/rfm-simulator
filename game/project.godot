@@ -35,6 +35,7 @@ environment/defaults/default_clear_color=Color(0.64, 0.72, 0.72, 1)
 
 driver/enable_input=true
 driver/enable_input.web=false
+general/ios/session_category=2
 default_bus_layout="res://default_bus_layout.tres"
 
 [internationalization]
