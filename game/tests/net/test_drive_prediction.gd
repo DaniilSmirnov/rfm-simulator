@@ -181,6 +181,24 @@ func run() -> void:
 	client.context = {"racing": true}
 	client.predict(1, 0, 0, true, village, 0, true)
 	check(client.recovery_ack == 0 and client.node.position.distance_to(blocked_recovery) < 1, "recovery is rejected during a rally")
+	# A car broken at speed rolls to a stop so the driver can get out (F needs < 1 m/s).
+	client.reset(stage.at(100), 0)
+	host.reset(stage.at(100), 0)
+	for i in range(120):
+		client.predict(5, 1.0, 0.0, false, stage, 0)
+		if i % 20 == 19:
+			host.accept(client.pending, stage, 0)
+			client.reconcile(host.snapshot(), stage, 0)
+	client.condition = 0.0
+	host.accept(client.pending, stage, 0)
+	host.condition = 0.0
+	client.reconcile(host.snapshot(), stage, 0)
+	var crash_speed = client.motion.velocity.length()
+	for i in range(60):
+		client.predict(5, 1.0, 0.5, false, stage, 0)
+	host.accept(client.pending, stage, 0)
+	client.reconcile(host.snapshot(), stage, 0)
+	check(crash_speed > 5 and client.motion.velocity.length() < 1 and host.motion.velocity.length() < 1, "a broken car ignores throttle and rolls to a stop on client and host (%.1f -> %.1f m/s)" % [crash_speed, client.motion.velocity.length()])
 	village.free()
 	stage.free()
 	print("DRIVE PREDICTION RESULT: %d failures" % failures)

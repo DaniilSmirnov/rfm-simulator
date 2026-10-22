@@ -30,6 +30,9 @@ const SIRENS = {"opening_police": "siren-police", "closing_police": "siren-polic
 const VOICES = 3
 const HEARING = 260.0
 const SIREN_REACH = 320.0
+# A police car held up on the stage gives a short "quack" of its siren this
+# often (s) until the road is clear.
+const CHIRP_INTERVAL = 4.0
 # Seconds a car keeps its engine running after it stopped moving.
 const ENGINE_LINGER = 4.0
 # Speed (m/s) lost faster than braking can that sounds like a crash, and the
@@ -53,6 +56,8 @@ var own_layers: Dictionary = {}
 var voices: Array[Dictionary] = []
 var sirens: Array[AudioStreamPlayer3D] = []
 var siren_cars: Array = []
+# Seconds to the next chirp of a blocked police car; below zero when none is blocked.
+var chirp_wait = -1.0
 var shots: Array[AudioStreamPlayer3D] = []
 var shot_index = 0
 var starter: AudioStreamPlayer
@@ -148,6 +153,7 @@ func update(delta: float, running: bool, paused: bool) -> void:
 	for voice in voices:
 		_sound_voice(voice)
 	_update_sirens()
+	_watch_police(delta)
 	_watch_seats()
 	_watch_trunks_and_ropes()
 
@@ -160,6 +166,7 @@ func silence() -> void:
 		voice.car = 0
 	for i in range(siren_cars.size()):
 		siren_cars[i] = 0
+	chirp_wait = -1.0
 	was_driving = false
 	was_in_car = null
 	peer_seats.clear()
@@ -372,6 +379,22 @@ func _update_sirens() -> void:
 		_layer(node, SIRENS[car.role], 1.0, doppler(car.pos, car.velocity, listener, listener_velocity), -4.0)
 
 # ---------------------------------------------------------------- events
+
+# The police held up on the stage quacks its siren and everybody is told to
+# clear its way; host and guests read the same course flag.
+func _watch_police(delta: float) -> void:
+	if not game.course.police_blocked:
+		chirp_wait = -1.0
+		return
+	if chirp_wait < 0.0:
+		game.toast("Проезд полиции заблокирован! Освободите дорогу: уберите машины и людей с её пути.")
+	chirp_wait -= delta
+	if chirp_wait > 0.0:
+		return
+	chirp_wait = CHIRP_INTERVAL
+	for racer in game.racers:
+		if str(racer.get("role", "")) in ["opening_police", "closing_police"] and is_instance_valid(racer.node):
+			play_at("siren-chirp", racer.node.global_position + Vector3(0, 1.6, 0), -2.0, 24.0)
 
 # Doors open and close when anyone gets in or out; a driver starts the engine.
 func _watch_seats() -> void:

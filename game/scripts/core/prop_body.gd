@@ -1,6 +1,8 @@
 extends RigidBody3D
 # Keep the gameplay node (and its local-space API) while Godot owns its pose.
 const Settler = preload("res://scripts/stages/rigid_settler.gd")
+const RoadCut = preload("res://scripts/stages/road_cut.gd")
+const FallenTrees = preload("res://scripts/stages/fallen_trees.gd")
 var record: Dictionary
 var solids
 var game
@@ -242,15 +244,66 @@ func _ground() -> void:
 		actors.update(solids.prop_ground.tiles)
 
 # A body pushed under the terrain tiles fell for good (a camp table at -80 m)
-# and stayed awake. Put it back on the ground where it went through.
-func _rescue(center: Vector3) -> void:
-	var ground: float = solids.stage.ground(center)
-	if center.y > ground - 1.0: return
-	global_position.y += ground + record.box.size.y * 0.5 + 0.02 - center.y
+# and stayed awake; a dragged one could be squeezed through them, and a felled
+# trunk, which cannot pitch, buried its end where the land rose. Whatever sinks
+# into the land is put back on it at once, before it falls or is let go.
+# The tiles lie up to RoadCut.DEPTH below ground() beside the road and are flat
+# between samples, so only a body below the lowest corner of its tile cell has
+# sunk: one at the foot of a cliff is not lifted onto the clifftop. A trunk
+# is laid along the land again once its centre line is in it anywhere.
+const SINK = 0.4
+const TRUNK_RADIUS = 0.2
+
+func _keep_on_land() -> void:
+	if record.has("tree"):
+		_keep_trunk_on_land()
+		return
+	var center: Vector3 = global_transform * center_of_mass
+	if center.y >= solids.stage.ground(center) - SINK or center.y >= _cell_ground(center).x - SINK: return
+	global_position.y += _cell_ground(center).y + record.box.size.y * 0.5 + 0.02 - center.y
+	_landed()
+
+func _keep_trunk_on_land() -> void:
+	var stage = solids.stage
+	var length: float = stage.forest_data[record.tree].height * 0.64
+	var f: Dictionary = stage.fallen[record.tree]
+	var axis: Vector3 = (global_basis * Basis(Vector3.UP.cross(f.direction).normalized(), float(f.get("lie", PI * 0.5))) * Vector3.UP).normalized()
+	var sunk = false
+	for t in [0.0, 0.5, 1.0]:
+		var p: Vector3 = global_position + axis * length * t
+		sunk = sunk or p.y + TRUNK_RADIUS < _cell_ground(p).x
+	if not sunk: return
+	# Laid along the ground again, as when it fell (FallenTrees.lie_angle).
+	var heading := Vector3(axis.x, 0, axis.z).normalized()
+	if heading.length_squared() < 0.5: heading = f.direction
+	var base: Vector3 = global_position
+	var pitch: float = PI * 0.5 - FallenTrees.lie_angle(stage, base, heading, length)
+	var lying: Vector3 = heading * cos(pitch) + Vector3.UP * sin(pitch)
+	var lift = stage.ground(base) - base.y
+	for t in [0.25, 0.5, 0.75, 1.0]:
+		var p: Vector3 = base + lying * length * t
+		lift = maxf(lift, stage.ground(p) - (base.y + lying.y * length * t))
+	global_transform = Transform3D(Basis(Quaternion(axis, lying)) * global_basis, base + Vector3.UP * lift)
+	_landed()
+
+func _landed() -> void:
 	linear_velocity = Vector3.ZERO
 	angular_velocity = Vector3.ZERO
 	_grounded_at = global_transform * center_of_mass
 	_ground()
+
+# The lowest and highest ground at the corners of the tile cell around p.
+func _cell_ground(p: Vector3) -> Vector2:
+	var step: float = solids.prop_ground.STEP if solids.prop_ground != null else 0.5
+	var x = floorf(p.x / step) * step
+	var z = floorf(p.z / step) * step
+	var low = INF
+	var high = -INF
+	for corner in [Vector3(x, 0, z), Vector3(x + step, 0, z), Vector3(x, 0, z + step), Vector3(x + step, 0, z + step)]:
+		var height: float = solids.stage.ground(corner)
+		low = minf(low, height)
+		high = maxf(high, height)
+	return Vector2(low - RoadCut.DEPTH, high)
 
 func _physics_process(delta: float) -> void:
 	if not is_instance_valid(record.node) or record.node.is_queued_for_deletion(): return
@@ -270,6 +323,7 @@ func _physics_process(delta: float) -> void:
 		if not frozen and asleep:
 			sleeping = true
 	if frozen: return
+	if not sleeping: _keep_on_land()
 	if _tip_time > 0.0 and angular_velocity.length() < TUMBLE_SPIN:
 		_tip_time -= delta
 	if not righting or record.has("tree"):
@@ -322,7 +376,6 @@ func _physics_process(delta: float) -> void:
 		if center.distance_squared_to(_grounded_at) > 1.0:
 			_grounded_at = center
 			_ground()
-			_rescue(center)
 	if active or moving:
 		record.node.global_transform = global_transform
 		if record.has("tree"):

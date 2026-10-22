@@ -166,10 +166,11 @@ func build_notices(ui: Control) -> void:
 	game.consumption_warning = hud_card(ui)
 	game.consumption_warning.name = "ConsumptionWarning"
 	game.consumption_warning.add_theme_stylebox_override("panel", UiKit.panel_style(Color("2b2a1e"), Vector2(18, 12)))
-	game.consumption_warning.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
-	game.consumption_warning.offset_left = -330
-	game.consumption_warning.offset_right = 330
-	game.consumption_warning.offset_top = 24
+	# Centred on the screen, clear of the HUD cards along the edges.
+	game.consumption_warning.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	game.consumption_warning.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	game.consumption_warning.grow_vertical = Control.GROW_DIRECTION_BOTH
+	game.consumption_warning.custom_minimum_size.x = 660
 	game.consumption_warning_text = UiKit.wrap(UiKit.label(game.consumption_warning, "", "body"))
 	game.consumption_warning_text.add_theme_color_override("font_color", UiKit.HIGHLIGHT)
 	game.consumption_warning_text.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -567,9 +568,7 @@ func compact_hud() -> void:
 	game.mobile_sidebar.offset_right = -24
 	game.mobile_sidebar.offset_top = 96
 	game.minimap.custom_minimum_size = Vector2(212, 120)
-	game.consumption_warning.offset_left = -270
-	game.consumption_warning.offset_right = 270
-	game.consumption_warning.offset_top = 96
+	game.consumption_warning.custom_minimum_size.x = 520
 	game.sobriety_panel.anchor_left = 0.2
 	game.sobriety_panel.anchor_right = 0.8
 	game.sobriety_panel.offset_top = 96

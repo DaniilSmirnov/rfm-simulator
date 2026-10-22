@@ -457,6 +457,27 @@ function siren(kind) {
   return closeLoop(out, seconds);
 }
 
+// The police "quack" (крякалка): two short throaty whoops through the same
+// horn speaker, a fast rise and a slower fall, the second a little lower.
+function sirenChirp() {
+  const out = new Float32Array(samples(0.62));
+  let phase = 0;
+  for (let i = 0; i < out.length; i++) {
+    const t = i / RATE;
+    const second = t >= 0.3;
+    const u = second ? t - 0.3 : t;
+    if (u > 0.26) continue;
+    const top = second ? 1250 : 1400;
+    const f = u < 0.04 ? 480 + (top - 480) * (u / 0.04) : 480 + (top - 480) * Math.exp(-(u - 0.04) / 0.07);
+    phase += 2 * Math.PI * f / RATE;
+    const gain = Math.min(1, u / 0.008) * Math.min(1, (0.26 - u) / 0.04);
+    out[i] = Math.tanh(Math.sin(phase) * 5) * gain;
+  }
+  run(out, biquad('bp', 1000, 0.8), biquad('peak', 2300, 2, 4));
+  for (let i = 0; i < out.length; i++) out[i] = Math.tanh(out[i] * 2.5);
+  return fadeEdges(out);
+}
+
 function ropeHook(seed) {
   const rnd = random(seed);
   const out = new Float32Array(samples(0.6));
@@ -645,6 +666,7 @@ sounds['body-thud'] = () => level(bodyThud(seedOf('body-thud')));
 for (let k = 1; k <= 3; k++) sounds[`backfire-${k}`] = () => level(backfire(seedOf(`backfire-${k}`), k));
 sounds['siren-police'] = () => level(siren('police'), LOOP);
 sounds['siren-ambulance'] = () => level(siren('ambulance'), LOOP);
+sounds['siren-chirp'] = () => level(sirenChirp());
 sounds['rope-hook'] = () => level(ropeHook(seedOf('rope-hook')));
 for (const surface of ['gravel', 'grass', 'snow', 'asphalt']) {
   for (let k = 1; k <= 3; k++) sounds[`step-${surface}-${k}`] = () => level(step(surface, k));
@@ -656,7 +678,7 @@ for (let k = 1; k <= 3; k++) sounds[`bird-${k}`] = () => level(bird(k - 1));
 sounds['cicadas'] = () => level(cicadas());
 sounds['church-bell'] = () => level(bell());
 
-export const LOOPS = Object.keys(sounds).filter(name => /^(engine-.*-(low|on|off)|siren-)/.test(name));
+export const LOOPS = Object.keys(sounds).filter(name => /^(engine-.*-(low|on|off)|siren-(police|ambulance))/.test(name));
 
 const SIDECAR = name => `[remap]
 

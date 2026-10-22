@@ -40,6 +40,23 @@ func run() -> void:
 		check(game.course.phase == "opening_police" and game.racers.size() == 1 and game.racers[0].role == "opening_police", "police opens the convoy on every map")
 		var police = game.racers[0]
 		check(police.node.get_node_or_null("BeaconBlue") != null and police.node.get_meta("model").contains("Полиция"), "police has marked model and flashing light bar")
+		# A car standing on the road ahead holds the police up: everybody is told.
+		# Checked on one map, as the police drives the same way everywhere.
+		if variant == 0:
+			game.car.position = game.race_at(police.s + 20.0)
+			for step in range(10):
+				game._update_racers(0.1)
+			check(not game.course.police_blocked, "a police car braking for a moment is not reported blocked")
+			for step in range(40):
+				game._update_racers(0.1)
+			check(game.course.police_blocked and game.course.caption().contains("ПРОЕЗД ПОЛИЦИИ ЗАБЛОКИРОВАН"), "police held up by a car on the road shows the blocked notice")
+			var copy = load("res://scripts/traffic/course_schedule.gd").new()
+			copy.apply_snapshot(game.course.snapshot())
+			check(copy.police_blocked, "guests receive the police blockage with the course")
+			game.car.position = Vector3(190, 30, 30)
+			for step in range(10):
+				game._update_racers(0.1)
+			check(not game.course.police_blocked, "the notice goes once the road is clear")
 		game.count_racer(police)
 		check(game.passed == 0 and game.rally_spawn_count == 0, "opening police is excluded from ten competitors")
 		game.course.update(game, 100)

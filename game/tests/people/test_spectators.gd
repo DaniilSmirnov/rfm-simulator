@@ -1,4 +1,12 @@
 extends "res://tests/harness.gd"
+const CampSite = preload("res://scripts/people/camp_site.gd")
+# A camp's lowest foot, wheel or leg stays this close to the drawn ground:
+# neither sunk into it nor hanging over it. Audit a stage in detail with
+# tools/profile/find_camp_ground.gd.
+const FOOTING = 0.08
+# Gear settling onto its legs moves a few centimetres; a car dropping onto
+# its sills, a table sliding off a slope or a flung chair moves far more.
+const DRIFT = 0.06
 func _initialize() -> void:
 	call_deferred("run")
 func run() -> void:
@@ -17,11 +25,10 @@ func run() -> void:
 		check(crowd.groups.size() == camps + roadside, "NPC camps populate stage %d" % variant)
 		check(crowd.people.size() == camps * 2 + roadside, "NPC spectators populate stage %d" % variant)
 		var clear_road = true
-		var grounded = true
 		for group in crowd.groups:
 			clear_road = clear_road and game.stage.road_distance(group.car.position) > 4.6
-			grounded = grounded and absf(group.car.position.y - game.stage.vehicle_ground(group.car.position)) < 0.01
-		check(clear_road and grounded, "parked NPC cars leave the road open and rest on terrain")
+		check(clear_road, "parked NPC cars leave the road open")
+		await camp_ground(game, variant)
 		var actions = {}
 		var props_match = true
 		for time in range(90):
@@ -60,3 +67,39 @@ func run() -> void:
 	await process_frame
 	print("NPC RESULT: %d failures" % failures)
 	finish()
+
+# Every piece of NPC camp gear stands on the drawn ground, and stays where it
+# stands once its physics runs: no table legs or wheels in the land, no chair
+# tipping off a hillside, no car settling 0.4 m down onto its sills.
+func camp_ground(game, variant: int) -> void:
+	var gear: Array = game.stage.solids.movables.filter(func(r): return is_instance_valid(r.node) and str(r.key).begins_with("npc:"))
+	var placed = {}
+	var footing = true
+	for record in gear:
+		var gap: Vector2 = CampSite.clearance(game.stage, record.node)
+		placed[record.key] = record.node.global_transform
+		if absf(gap.x) > FOOTING:
+			footing = false
+			print("  %s on stage %d: lowest foot %+.3f m" % [record.key, variant, gap.x])
+	check(footing, "NPC camp gear stands on the ground of stage %d" % variant)
+	var car_posts = true
+	for group in game.spectators.groups:
+		var lowest = INF
+		for part in group.car.get_meta("prop_shapes"): lowest = minf(lowest, part.position.y)
+		car_posts = car_posts and lowest < 0.02
+	check(car_posts, "NPC cars collide on their tyres, not on their sills")
+	game.movable_props.refresh()
+	game.playing = true
+	game.paused = false
+	# Long enough for a car to drop onto its sills or a table to slide.
+	for i in range(45):
+		await physics_frame
+	game.playing = false
+	var still = true
+	for record in gear:
+		var moved: float = record.node.global_position.distance_to(placed[record.key].origin)
+		var gap: Vector2 = CampSite.clearance(game.stage, record.node)
+		if moved > DRIFT or absf(gap.x) > FOOTING:
+			still = false
+			print("  %s on stage %d: moved %.3f m, lowest foot %+.3f m" % [record.key, variant, moved, gap.x])
+	check(still, "NPC camp gear stays put and grounded once physics runs on stage %d" % variant)

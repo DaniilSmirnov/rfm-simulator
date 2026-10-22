@@ -6,6 +6,7 @@ const Props = preload("res://scripts/core/props.gd")
 const GrillModel = preload("res://scripts/camp/grill_model.gd")
 const CharacterRig = preload("res://scripts/people/character_rig.gd")
 const SnapshotMotion = preload("res://scripts/net/snapshot_motion.gd")
+const CampSite = preload("res://scripts/people/camp_site.gd")
 var game: Node3D
 var groups: Array[Dictionary] = []
 var people: Array[Dictionary] = []
@@ -35,12 +36,18 @@ func rebuild(cooperative: bool = false) -> void:
 			continue
 		if cooperative:
 			await get_tree().process_frame
-		_add_group(center, s, i, 2)
+		_add_group([[center, s]], i, 2)
 	# The shoulder is already free of trees; leave the driving lane unobstructed.
+	# A roadside crowd on a steep hillside moves along the road, or across it.
 	for i in range(4 if stage.biome.roadside_spectators() else 0):
-		var s = 85.0 + i * 190.0
-		var center = stage.at(s) + stage.side(s) * (7.2 if i % 2 == 0 else -7.2)
-		_add_group(center, s, i + stage.clearings.size(), 1)
+		var spots: Array = []
+		for shift in [0.0, 30.0, -30.0]:
+			var s = 85.0 + i * 190.0 + shift
+			for side in [1.0, -1.0]:
+				spots.append([stage.at(s) + stage.side(s) * side * (7.2 if i % 2 == 0 else -7.2), s])
+		if cooperative:
+			await get_tree().process_frame
+		_add_group(spots, i + stage.clearings.size(), 1)
 	# Pick watching positions only after every camp collider exists.
 	for person in people:
 		person.watch = watch_spot(float(person.station), person.home)
@@ -50,32 +57,40 @@ func grounded(pos: Vector3) -> Vector3:
 	pos.y = game.stage.ground(pos)
 	return pos
 
-func _add_group(center: Vector3, s: float, id: int, count: int) -> void:
-	center = grounded(center)
-	var forward = game.stage.direction(s)
-	var yaw = atan2(-forward.x, -forward.z)
+# The first of the candidate [spot, station] pairs with level ground near it,
+# or the most level.
+func _add_group(candidates: Array, id: int, count: int) -> void:
+	# Layout depends on authored scenery and this crowd's own camps, never on
+	# another crowd's: a second crowd rebuilt beside this one (a late joiner's)
+	# must stand exactly where this one does.
+	var camps = game.stage.solids.movables.filter(func(r): return is_instance_valid(r.node) and str(r.key).begins_with("npc:") and not is_ancestor_of(r.node)).map(func(r): return r.node)
+	var taken: Array = groups.map(func(group): return group.table.position)
+	var site = {}
+	var s = 0.0
+	for candidate in candidates:
+		var found = CampSite.choose(game.stage, candidate[0], candidate[1], count, camps, taken)
+		if site.is_empty() or found.score < site.score:
+			site = found
+			s = candidate[1]
+		if site.score <= CampSite.LEVEL: break
+	var center: Vector3 = site.center
+	# People watch the road straight out from where the camp ended up.
+	var station: float = game.stage.road_s(center)
+	if absf(station - s) < 40.0:
+		s = station
+	var spots = CampSite.layout(game.stage, center, s, count)
+	var yaw: float = spots.yaw
 	var car = Props.player_car((id * 3 + game.stage.variant) % Props.PLAYER_MODELS.size())
 	add_child(car)
-	# 0.8 m clear of the table: at 0.4 m a car settling on a hillside
-	# shouldered the table over.
-	car.position = center + forward * 3.6
-	car.position.y = game.stage.vehicle_ground(car.position)
-	car.rotation.y = yaw
-	# Park it square to the slope, as it settles there anyway.
-	var ahead: Vector3 = forward * 1.3
-	var aside: Vector3 = forward.cross(Vector3.UP) * 0.8
-	var climb: float = game.stage.ground(car.position + ahead) - game.stage.ground(car.position - ahead)
-	var lean: float = game.stage.ground(car.position + aside) - game.stage.ground(car.position - aside)
-	var up: Vector3 = (Vector3.UP - forward * climb / 2.6 - aside.normalized() * lean / 1.6).normalized()
-	car.basis = Basis(Quaternion(Vector3.UP, up)) * car.basis
+	# Square to the slope and on its tyres, as it settles there anyway.
+	car.set_meta("prop_shapes", CampSite.car_shapes(car))
+	CampSite.put(game.stage, car, spots.car, yaw)
 	var table = Node3D.new()
 	add_child(table)
 	Props.table(table, id)
-	table.position = center
-	table.rotation.y = yaw
+	CampSite.put(game.stage, table, spots.table, yaw)
 	var grill = Props.grill(self)
-	grill.position = grounded(center - forward * 2.4)
-	grill.rotation.y = yaw
+	CampSite.put(game.stage, grill, spots.grill, yaw)
 	# A camp of neighbours is always already roasting: bare glowing coals.
 	GrillModel.set_fire(grill, 1.0, 0.0)
 	Movable.register(game.stage.solids, table, 12, false, "npc:%d:table" % id)
@@ -87,15 +102,13 @@ func _add_group(center: Vector3, s: float, id: int, count: int) -> void:
 		var variant = (id + j + game.stage.variant) % Props.SPECTATOR_MODELS.size()
 		var avatar = Props.player_avatar(variant, game.stage.outfit)
 		add_child(avatar)
-		var offset = Vector3(-1.5, 0, 0.4 + j * 1.6).rotated(Vector3.UP, yaw)
-		avatar.position = grounded(center + offset)
+		avatar.position = grounded(spots.people[j])
 		var toward_road = game.stage.at(s) - avatar.position
 		avatar.rotation.y = atan2(-toward_road.x, -toward_road.z)
 		var chair = Node3D.new()
 		add_child(chair)
 		Props.chair(chair, Vector3.ZERO)
-		chair.position = grounded(avatar.position + forward * 0.85)
-		chair.rotation.y = avatar.rotation.y
+		CampSite.put(game.stage, chair, spots.chairs[j], avatar.rotation.y)
 		Movable.register(game.stage.solids, chair, 5, false, "npc:%d:chair:%d" % [id, j])
 		var arm = CharacterRig.hand(avatar)
 		people.append({"id": id * 2 + j, "group": group_index, "avatar": avatar, "arm": arm, "can": arm.get_node("BeerCan"), "food": arm.get_node("Skewer"), "action": "idle", "time": -1.0, "eat_cycle": -1, "home": avatar.position, "station": s + j * 2.0, "watch": avatar.position, "helper": -1})

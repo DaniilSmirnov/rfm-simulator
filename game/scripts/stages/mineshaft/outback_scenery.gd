@@ -32,6 +32,8 @@ var stage
 var biome
 var rng = RandomNumberGenerator.new()
 var counts := {}
+# Foot of the spoil heap beside the headframe, for its collision check.
+var spoil_heap := Vector3.ZERO
 
 func build(owner_stage, owner_biome) -> void:
 	stage = owner_stage
@@ -185,9 +187,13 @@ func _mine_headframe() -> void:
 	var s: float = biome.MINE[0]
 	var mine = _anchor("MineHeadframe", biome.mine, stage.at(s) - biome.mine)
 	var height = 15.0
+	# The frame is open between its legs: only the legs, the raking strut where
+	# it meets the ground and the shaft collar stop a car, not a 3 m circle
+	# around the whole tower.
 	for corner in [Vector3(-2.2, 0, -2.2), Vector3(2.2, 0, -2.2), Vector3(-2.2, 0, 2.2), Vector3(2.2, 0, 2.2)]:
 		var leg = Props.box(mine, corner * 0.75 + Vector3.UP * height * 0.5, Vector3(0.35, height, 0.35), TIMBER)
 		leg.rotation = Vector3(-corner.z * 0.035, 0, corner.x * 0.035)
+		stage.rocks.append(Records.rock(mine.to_global(leg.transform * Vector3(0, -height * 0.5, 0)), 0.25, height, Records.POST))
 	for level in [3.5, 7.5, 11.5]:
 		for side in [-1.0, 1.0]:
 			Props.box(mine, Vector3(0, level, side * 1.55), Vector3(3.6, 0.22, 0.22), TIMBER.darkened(0.1))
@@ -195,6 +201,8 @@ func _mine_headframe() -> void:
 	# Raking back-leg that takes the pull of the hoist rope.
 	var strut = Props.box(mine, Vector3(0, height * 0.45, -5.0), Vector3(0.35, height * 1.05, 0.35), TIMBER)
 	strut.rotation.x = -0.42
+	# Below car height the strut leans from z ≈ -2.0 at the ground to -2.6.
+	stage.rocks.append(Records.rock(mine.to_global(Vector3(0, 0, -2.3)), 0.4, 2.0, Records.POST))
 	Props.box(mine, Vector3(0, height + 0.2, 0), Vector3(3.8, 0.4, 3.8), TIMBER.darkened(0.15))
 	var wheel = Props.cylinder(mine, Vector3(0, height + 1.9, 0), 1.7, 1.7, 0.18, Color("4a4440"), 14)
 	wheel.rotation.z = PI * 0.5
@@ -205,14 +213,37 @@ func _mine_headframe() -> void:
 	Props.box(mine, Vector3(0, 1.6, -9.0), Vector3(5.0, 3.2, 4.0), Color("8e3f26"))
 	var roof = Props.box(mine, Vector3(0, 3.45, -9.0), Vector3(5.6, 0.12, 4.6), IRON)
 	roof.rotation.x = 0.08
-	stage.rocks.append(Records.rock(biome.mine, 3.0, height, Records.BUILDING))
+	stage.solids.solid(mine, Vector3(0, -0.25, 0), Vector3(3.2, 1.5, 3.2), "landmark")
 	stage.solids.solid(mine, Vector3(0, 0.7, -9.0), Vector3(5.0, 5.4, 4.0), "building")
 	stage.rocks.append_array(Records.footprint(mine.to_global(Vector3(0, 0, -9.0)), mine.basis.x, 5.0, 4.0, 3.4))
 	var heap = mine.to_global(Vector3(7.5, 0, -6.0))
 	heap.y = stage.terrain_surface_height(heap) - 0.4
 	Props.cylinder(stage, heap + Vector3.UP * 2.2, 6.5, 1.2, 4.4, Color("9b4f30"), 9)
-	stage.rocks.append(Records.rock(heap, 5.5, 4.0))
+	spoil_heap = heap
+	_spoil_heap_rocks(heap, 6.5, 1.2, 4.4)
 	_flag(mine, Vector3(3.4, 0, 2.6))
+
+# The heap stands on a hillside: uphill the slope buries its foot, downhill
+# its skirt stands high. Collision follows where the cone rises a bumper's
+# height out of the ground: a core circle plus circles out to that edge.
+func _spoil_heap_rocks(base: Vector3, bottom: float, top: float, height: float) -> void:
+	var edges: Array = []
+	for i in range(16):
+		var direction = Vector3.FORWARD.rotated(Vector3.UP, i * TAU / 16.0)
+		var r = bottom
+		while r > top:
+			var p = base + direction * r
+			if base.y + height * (bottom - r) / (bottom - top) - stage.ground(p) >= 0.4:
+				break
+			r -= 0.1
+		edges.append(direction * r)
+	var core = bottom
+	for edge in edges:
+		core = minf(core, edge.length())
+	stage.rocks.append(Records.rock(base, core, height))
+	for edge in edges:
+		if edge.length() > core + 0.3:
+			stage.rocks.append(Records.rock(base + edge.normalized() * (edge.length() - 1.5), 1.5, height))
 
 # Simplified Australian flag on a pole: blue field, Southern Cross, Union corner.
 func _flag(parent: Node3D, at: Vector3) -> void:

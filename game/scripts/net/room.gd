@@ -138,7 +138,7 @@ func _on_failure(kind: String, code: int, message: String, _data) -> void:
 		clock = -retry
 		ui.room_label.text = "Связь прервалась. Переподключаемся…"
 	else:
-		ui.status.text = message
+		ui.status.text = "Комната не найдена или закрыта. Если хозяин пересоздал комнату, у неё новый ID: попроси прислать его." if kind == "join" and code in [404, 410] else message
 		ui.set_entry_enabled(true)
 		if game.invite_after_room_create:
 			game.invite_after_room_create = false

@@ -120,6 +120,44 @@ func run() -> void:
 	# The crew restarts on its own line across the road, where it was brought back.
 	var lane: Vector3 = game.race_at(lead.s) + game.race_side(lead.s) * lead.line - lead.node.position
 	check(lead.state == "racing" and Vector2(lane.x, lane.z).length() < 0.01 and (-lead.node.basis.z).dot(game.race_direction(lead.s)) > 0.99, "recovery rejoins road in reverse travel direction")
+	# The reverse pass finishes into the park where players' cars start the
+	# day, down the aisle past the end of the road: they are not on the road.
+	clear_cars(game)
+	game.course.phase = "racing"
+	game.spawn_racer("pass")
+	var finishing = game.racers[0]
+	finishing.s = game.stage.length - 12.0
+	finishing.focus = 5000.0
+	finishing.node.position = game.race_at(finishing.s)
+	game.car.position = game.stage.parks.visitor_pose(0, 0).origin
+	plan = game.Traffic.plan(game, finishing)
+	check(not plan.avoiding and plan.speed > 5.0, "a player's car in the finish park does not stop crews before the line (%s)" % plan)
+	game.in_car = false
+	game.walker = game.car.position
+	plan = game.Traffic.ServiceTraffic.pedestrian_plan(game, finishing, {"line": 0.0, "speed": 10.0, "avoiding": false})
+	check(plan.speed >= 10.0 and float(plan.get("advance", INF)) == INF, "a player on foot in the finish park does not stop the convoy (%s)" % plan)
+	game.walker = game.race_at(game.stage.length - 1.0)
+	plan = game.Traffic.ServiceTraffic.pedestrian_plan(game, finishing, {"line": 0.0, "speed": 30.0, "avoiding": false})
+	check(plan.speed < 30.0, "a player on foot at the end of the road still stops the convoy")
+	game.walker = Vector3(170, 2, 5)
+	game.car.position = Vector3(170, 2, 5)
+	# Leaving the village in reverse, the Grand-Rue passes a car parked on the
+	# pavement. A crew whose planned line runs too close to it, with every
+	# passing line blocked by the house fronts, keeps the line it drives on.
+	clear_cars(game)
+	game.spawn_racer("pass")
+	var leaving = game.racers[0]
+	leaving.track_parts = PackedInt32Array()
+	leaving.bias = 1.4
+	leaving.s = game.stage.length - 330.0
+	leaving.focus = 5000.0
+	leaving.line = 0.3
+	leaving.drive_speed = 8.0
+	leaving.node.position = game.race_at(leaving.s) + game.race_side(leaving.s) * leaving.line
+	leaving.previous = leaving.node.position
+	for i in range(240):
+		game._update_racers(1.0 / 24)
+	check(leaving.state == "racing" and leaving.s > game.stage.length - 280.0, "a crew leaving the village in reverse drives past the car parked on the pavement (station %.1f, %s)" % [game.stage.length - leaving.s, leaving.state])
 	clear_cars(game)
 	game.course.phase = "racing"
 	game.spawn_racer("pass")

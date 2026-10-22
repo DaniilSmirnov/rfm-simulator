@@ -30,6 +30,14 @@ static func people(game) -> Array:
 			result.append({"key": str(key), "pos": record.pos})
 	return result
 
+# A point beyond either end of the road (a player's car in the service park)
+# projects onto the end station, as if it stood on the road there. It is in
+# the way only when it is level with that end, not some way past it.
+static func past_road_end(game, pos: Vector3, progress: float) -> bool:
+	if progress > 0.5 and progress < game.stage.length - 0.5:
+		return false
+	return absf((pos - game.race_at(progress)).dot(game.race_direction(progress))) > 3.0
+
 static func cars(game, racer: Dictionary) -> Array:
 	var result = [game.car.position]
 	for peer in game.room.peers.values():
@@ -109,7 +117,7 @@ static func pedestrian_plan(game, racer: Dictionary, plan: Dictionary) -> Dictio
 		var gap: float = station - racer.s
 		if gap < -3.0 or gap > 70.0: continue
 		var centre: Vector3 = game.race_at(station)
-		if absf(person.pos.y - centre.y) > 4.0: continue
+		if absf(person.pos.y - centre.y) > 4.0 or past_road_end(game, person.pos, station): continue
 		var line: float = (person.pos - centre).dot(game.race_side(station))
 		# Stop before anyone in the swept lateral corridor; do not steer around
 		# a person who is crossing or lying on the carriageway.

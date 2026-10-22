@@ -2,7 +2,7 @@ import {spawnSync} from 'node:child_process';
 import {mkdir, writeFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import {getGodot, root} from './godot.mjs';
-import {groups,nodeSuites,groupDescriptions,slowTests,verifyRegistry,testPaths,partition} from './test-catalog.mjs';
+import {groups,nodeSuites,groupDescriptions,slowTests,timeouts,verifyRegistry,testPaths,partition} from './test-catalog.mjs';
 
 const project=join(root,'game');
 const argv=process.argv.slice(2);
@@ -73,7 +73,7 @@ if(!importOK) {
     a.endsWith('.mjs')?join(root,a):a),120_000);
   }
   for(const filename of selected){
-   const timeoutMs=slowTests.has(filename)?180_000:90_000;
+   const timeoutMs=timeouts[filename]??(slowTests.has(filename)?180_000:90_000);
    // The shared harness fails the test itself a few seconds before the runner
    // would kill it, so a script error reports FAIL instead of a bare timeout.
    execute('Godot '+filename,godot,

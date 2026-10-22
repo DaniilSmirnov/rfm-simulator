@@ -375,6 +375,7 @@ func _physics_process(delta: float) -> void:
 		lamp_state.body.freeze = not (simulate and lamp_state.fallen)
 		if simulate and lamp_state.fallen:
 			_ground_under(lamp_state, lamp_state.body.position)
+			_keep_lamp_on_land(lamp_state.body)
 			RigidSettler.update(lamp_state.body, stage.ground(lamp_state.body.global_position), delta)
 		if not simulate and lamp_targets.has(i):
 			var target = lamp_targets[i]
@@ -382,6 +383,14 @@ func _physics_process(delta: float) -> void:
 			lamp_state.body.position = lamp_state.body.position.lerp(target.pos, weight)
 			for axis in range(3):
 				lamp_state.body.rotation[axis] = lerp_angle(lamp_state.body.rotation[axis], target.rot[axis], weight)
+
+# A fallen post dragged or knocked under its ground patch is lifted back onto it.
+func _keep_lamp_on_land(body: RigidBody3D) -> void:
+	var ground: float = stage.ground(body.position)
+	if body.position.y >= ground - 0.4: return
+	body.position.y = ground + 0.2
+	body.linear_velocity = Vector3.ZERO
+	body.angular_velocity = Vector3.ZERO
 
 func snapshot() -> Array:
 	var result = []

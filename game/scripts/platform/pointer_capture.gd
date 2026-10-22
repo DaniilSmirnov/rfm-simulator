@@ -37,10 +37,20 @@ func request() -> void:
 	else:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
+# The create/join buttons capture before the server answers (see
+# room.connect_room). A capture left over once nothing is pending (the room
+# was not found, the server is down, any other way back to the menu) would
+# leave the menus with a hidden, locked cursor.
+func stray(is_captured: bool) -> bool:
+	return is_captured and not wanted() and not game.loading_world and not game.room.busy
+
 func captured() -> bool:
 	return Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
 
 func update(is_captured: bool = captured()) -> void:
+	if stray(is_captured):
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		is_captured = false
 	if was_captured and not is_captured and wanted():
 		game._set_paused(true)
 	was_captured = is_captured
