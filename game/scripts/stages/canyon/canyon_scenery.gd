@@ -196,8 +196,8 @@ func _castle(builders: Dictionary, z: float, side: float, index: int) -> String:
 		builder.begin(Mesh.PRIMITIVE_TRIANGLES)
 		builders[tile] = builder
 	var st: SurfaceTool = builders[tile]
-	for circle in Castles.build(st, biome, p - Vector3.UP * sink, kind, height + sink, radius, yaw, index):
-		stage.rocks.append(Records.rock(circle.pos + Vector3.UP * sink, float(circle.radius) * 0.85, height))
+	for circle in Castles.build(st, biome, p - Vector3.UP * sink, kind, height + sink, radius, yaw, index, p.y, stage.terrain_surface_height):
+		stage.rocks.append(Records.rock(circle.pos, float(circle.radius), float(circle.height)))
 	reserved.append({"pos": p, "radius": maxf(radius * 1.3, Castles.reach(kind, radius, index))})
 	return kind
 

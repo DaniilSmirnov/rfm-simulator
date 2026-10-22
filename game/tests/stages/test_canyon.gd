@@ -2,6 +2,7 @@ extends "res://tests/harness.gd"
 const RoadChunks = preload("res://scripts/stages/road_chunks.gd")
 const Stage = preload("res://scripts/stages/stage.gd")
 const Form = preload("res://scripts/stages/canyon/canyon_form.gd")
+const Castles = preload("res://scripts/stages/canyon/canyon_castles.gd")
 func _initialize() -> void:
 	call_deferred("run")
 
@@ -36,6 +37,7 @@ func run() -> void:
 	_check_gorge(stage)
 	_check_grove(stage, canyon)
 	_check_people(stage, canyon)
+	_check_castle_colliders(canyon)
 	_check_render_chunks(stage)
 	_check_contact_cache(stage)
 	var vertices = PackedVector3Array()
@@ -226,6 +228,74 @@ func _check_people(stage, canyon) -> void:
 	var camel_model: Node3D = life.camels[0].node
 	check(camel_model.get_node_or_null("Graze") != null and camel_model.get_node_or_null("StepA") != null, "the camel model carries its grazing and walking poses")
 
+# Every kind of castle, built on flat ground: a walker (0.3 m) never stands
+# inside the drawn rock, and the colliders keep nobody off open ground more
+# than a little way out from it.
+func _check_castle_colliders(biome) -> void:
+	var flat_ground = func(_p: Vector3) -> float: return 0.0
+	var inside = 0
+	var open_rock = 0
+	var walled = 0
+	var blocked = 0
+	for kind in Castles.KINDS:
+		for index in [3, 8, 13]:
+			var st = SurfaceTool.new()
+			st.begin(Mesh.PRIMITIVE_TRIANGLES)
+			var circles = Castles.build(st, biome, Vector3.DOWN * 1.5, kind, 24.0, 24.0 * (0.4 if kind == "slab" else 0.25), 0.4, index, 0.0, flat_ground)
+			var faces: PackedVector3Array = st.commit().get_faces()
+			var rock: Dictionary = {}
+			var outside: Array = []
+			for z in range(-60, 61):
+				var crossings = _crossings(faces, z * 0.5)
+				for x in range(-60, 61):
+					var p = Vector3(x * 0.5, 1.0, z * 0.5)
+					if _inside_row(crossings, p.x):
+						rock[Vector2i(x, z)] = true
+						inside += 1
+						if not _blocked(circles, p, 0.3):
+							open_rock += 1
+					elif _blocked(circles, p, 0.0):
+						outside.append(Vector2i(x, z))
+			blocked += outside.size()
+			for cell in outside:
+				var near = false
+				for dx in range(-3, 4):
+					for dz in range(-3, 4):
+						near = near or rock.has(cell + Vector2i(dx, dz))
+				if not near:
+					walled += 1
+	check(open_rock < inside / 100, "nobody walks into a castle, bastion, fin, block, slab or hoodoo (%d of %d spots inside the rock left open)" % [open_rock, inside])
+	check(walled < inside / 50, "castle colliders keep off open ground only next to the rock (%d spots blocked over 1.5 m out)" % walled)
+
+func _blocked(circles: Array, p: Vector3, slack: float) -> bool:
+	for circle in circles:
+		if Vector2(circle.pos.x - p.x, circle.pos.z - p.z).length() < float(circle.radius) + slack and p.y < circle.pos.y + float(circle.height):
+			return true
+	return false
+
+# Where the line at height 1 m across the form at z enters and leaves the
+# rock: [x, the x of the face normal], ordered along x.
+func _crossings(faces: PackedVector3Array, z: float) -> Array:
+	var crossings: Array = []
+	for i in range(0, faces.size(), 3):
+		if minf(minf(faces[i].z, faces[i + 1].z), faces[i + 2].z) > z or maxf(maxf(faces[i].z, faces[i + 1].z), faces[i + 2].z) < z:
+			continue
+		var hit = Geometry3D.ray_intersects_triangle(Vector3(-100.0, 1.0, z), Vector3.RIGHT, faces[i], faces[i + 1], faces[i + 2])
+		if hit != null:
+			crossings.append([hit.x, (faces[i + 2] - faces[i]).cross(faces[i + 1] - faces[i]).x])
+	crossings.sort_custom(func(a, b): return a[0] < b[0])
+	return crossings
+
+# Inside the rock: more faces entered than left on the way along x (the
+# towers of a castle overlap).
+func _inside_row(crossings: Array, x: float) -> bool:
+	var depth = 0
+	for crossing in crossings:
+		if crossing[0] >= x:
+			break
+		depth += 1 if crossing[1] < 0.0 else -1
+	return depth > 0
+
 # The real game: parked cars, a table in the grove.
 func _check_game() -> void:
 	var game = load("res://main.tscn").instantiate()
@@ -246,6 +316,17 @@ func _check_game() -> void:
 		if not game.stage.canyon.camp_supported(home) or game.stage.road_distance(home) < 6.0 or absf(home.y - game.stage.ground(home)) > 0.05:
 			astray.append(int(person.station))
 	check(astray.is_empty(), "every spectator stands on level ground off the road, never on a cliff %s" % str(astray))
+	var in_rock: Array = []
+	var spots: Array = [game.car.position]
+	for group in game.spectators.groups:
+		spots.append(group.car.position)
+	for person in game.spectators.people:
+		spots.append(person.home)
+	for spot in spots:
+		var flat = Vector2(spot.x, spot.z)
+		if _blocked(game.stage.rocks_in_bounds(flat - Vector2.ONE, flat + Vector2.ONE).filter(func(rock): return not rock.has("actor")), spot + Vector3.UP * 0.5, 0.0):
+			in_rock.append(spot)
+	check(in_rock.is_empty(), "no player, NPC car or spectator starts inside a rock %s" % str(in_rock))
 	var grove_clearing: Vector3 = game.stage.clearings[-1]
 	var toward_road: Vector3 = game.stage.at(game.stage.road_s(grove_clearing)) - grove_clearing
 	var camp_spot: Vector3 = grove_clearing + Vector3(toward_road.x, 0, toward_road.z).normalized() * 3.0

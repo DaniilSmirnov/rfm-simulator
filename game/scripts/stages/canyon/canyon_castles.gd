@@ -21,11 +21,18 @@ const CAPROCK = Color("b9ab94")
 const CLAY = Color("b0603a")
 # Spacing of the towers of a castle, in tower radii.
 const TOWER_SPAN = 1.6
+# The rock is solid from the ground up to this height: people and cars move
+# below it, so the colliders follow the form's outline in this band.
+const WALK_HEIGHT = 2.5
+# Widest row of colliders across a form, in metres.
+const ROW_WIDTH = 4.0
 
-# Builds one form into `st` with its foot at `origin` and returns the circles
-# that stop people and cars: [{"pos": Vector3, "radius": float}].
-static func build(st: SurfaceTool, biome, origin: Vector3, kind: String, height: float, radius: float, yaw: float, seed_index: int) -> Array:
-	var spec = {"biome": biome, "origin": origin, "height": height, "radius": radius, "yaw": yaw, "seed": seed_index, "aspect": 1.0 + float(seed_index % 4) * 0.12, "kind": kind, "tilt": 0.0, "ledges": 2 + seed_index % 3, "crown": 0.04}
+# Builds one form into `st` with its foot at `origin`, `ground` being the
+# height of the ground around it and `terrain` the ground height at any point
+# (benches of the wall behind it), and returns the circles that fill it where
+# people and cars move: [{"pos": Vector3, "radius": float, "height": float}].
+static func build(st: SurfaceTool, biome, origin: Vector3, kind: String, height: float, radius: float, yaw: float, seed_index: int, ground: float, terrain: Callable) -> Array:
+	var spec = {"terrain": terrain, "biome": biome, "origin": origin, "height": height, "radius": radius, "yaw": yaw, "seed": seed_index, "aspect": 1.0 + float(seed_index % 4) * 0.12, "kind": kind, "tilt": 0.0, "ledges": 2 + seed_index % 3, "crown": 0.04}
 	var along = Vector3(cos(yaw), 0.0, -sin(yaw))
 	match kind:
 		"castle":
@@ -41,27 +48,26 @@ static func build(st: SurfaceTool, biome, origin: Vector3, kind: String, height:
 				var tower = spec.duplicate()
 				tower.merge({"origin": at, "height": tall, "radius": wide, "aspect": 0.9 + 0.3 * _hash(i + seed_index), "seed": seed_index * 11 + i, "kind": "block", "ledges": 1 + (seed_index + i) % 3}, true)
 				_column(st, tower)
-				circles.append({"pos": at, "radius": wide})
+				circles.append_array(_cover(tower, ground))
 			return circles
 		"bastion":
 			spec.aspect = 1.6
 			spec.ledges = 3
 			_column(st, spec)
+			var circles = _cover(spec, ground)
 			# Smaller blocks left standing on its top.
 			for i in range(1 + seed_index % 2):
 				var top = spec.duplicate()
 				var at = origin + along * radius * (0.5 - 0.9 * i) + Vector3.UP * height * 0.96
 				top.merge({"origin": at, "height": height * (0.2 + 0.12 * _hash(seed_index + i)), "radius": radius * 0.42, "seed": seed_index * 5 + i, "kind": "block", "ledges": 1}, true)
 				_column(st, top)
-			return [{"pos": origin, "radius": radius * 1.2}]
+				circles.append_array(_cover(top, ground))
+			return circles
 		"fin":
 			spec.aspect = 3.2 + float(seed_index % 3) * 0.5
 			spec.crown = 0.16
 			_column(st, spec)
-			var circles: Array = []
-			for f in [-0.6, 0.0, 0.6]:
-				circles.append({"pos": origin + along * f * radius * spec.aspect, "radius": radius * 1.1})
-			return circles
+			return _cover(spec, ground)
 		"slab":
 			# Leaning across its long axis, as a block that broke off the wall.
 			spec.aspect = 1.5 + 0.4 * _hash(seed_index)
@@ -70,9 +76,9 @@ static func build(st: SurfaceTool, biome, origin: Vector3, kind: String, height:
 			# Sunk by the tilt so its low edge stays buried.
 			spec.origin = origin - Vector3.UP * radius * absf(sin(float(spec.tilt))) * 1.2
 			_column(st, spec)
-			return [{"pos": origin, "radius": radius * 1.2}]
+			return _cover(spec, ground)
 	_column(st, spec)
-	return [{"pos": origin, "radius": radius * (0.7 if kind == "hoodoo" else 1.0)}]
+	return _cover(spec, ground)
 
 # How far a form reaches along its long axis from its centre, in metres.
 static func reach(kind: String, radius: float, seed_index: int) -> float:
@@ -120,6 +126,17 @@ static func _section(angle: float, seed_index: int) -> Vector2:
 	var face = 1.0 + 0.04 * sin(angle * 7.0 + seed_index)
 	return edge * crack * face
 
+# The outline of the form at fraction t of its height, `r` across.
+static func _ring(spec: Dictionary, t: float, r: float) -> Array:
+	var basis = Basis(Vector3.UP, float(spec.yaw)) * Basis(Vector3.RIGHT, float(spec.tilt))
+	var points: Array = []
+	for sector in range(SECTORS):
+		var edge = _section(sector * TAU / SECTORS, spec.seed)
+		# The crest is not quite level: broken where the cracks reach it.
+		var top = 1.0 - float(spec.crown) * smoothstep(0.85, 1.0, t) * _hash(int(spec.seed) * 17 + sector)
+		points.append(spec.origin + basis * Vector3(edge.x * r * float(spec.aspect), t * float(spec.height) * top, edge.y * r))
+	return points
+
 static func _column(st: SurfaceTool, spec: Dictionary) -> void:
 	var height: float = spec.height
 	var rings = clampi(int(height / 1.5), 8, 24)
@@ -132,14 +149,10 @@ static func _column(st: SurfaceTool, spec: Dictionary) -> void:
 		if (ring + int(spec.seed)) % 3 == 0 and t > 0.08 and t < 0.94:
 			r *= 0.94
 		var row: Array = []
+		var outline = _ring(spec, t, r)
 		for sector in range(SECTORS):
-			var angle = sector * TAU / SECTORS
-			var edge = _section(angle, spec.seed)
-			# The crest is not quite level: broken where the cracks reach it.
-			var top = 1.0 - float(spec.crown) * smoothstep(0.85, 1.0, t) * _hash(int(spec.seed) * 17 + sector)
-			var local = Vector3(edge.x * r * float(spec.aspect), t * height * top, edge.y * r)
-			var v: Vector3 = spec.origin + basis * local
-			row.append([v, _color(spec, v, t, edge.length())])
+			var v: Vector3 = outline[sector]
+			row.append([v, _color(spec, v, t, _section(sector * TAU / SECTORS, spec.seed).length())])
 		if not previous.is_empty():
 			for sector in range(SECTORS):
 				var next = (sector + 1) % SECTORS
@@ -149,6 +162,96 @@ static func _column(st: SurfaceTool, spec: Dictionary) -> void:
 	var top_color: Color = previous[0][1].lightened(0.06)
 	for sector in range(SECTORS):
 		_triangle(st, previous[sector], previous[(sector + 1) % SECTORS], [centre, top_color])
+
+# Circles filling the form from the ground to WALK_HEIGHT: its outline in that
+# band (leaning slabs included) and wherever higher ground, a bench of the
+# wall behind it, meets the rock, cut into rows along its long axis, each row a
+# chain of overlapping circles a little wider than the row, so nobody stands
+# inside the rock and the rock keeps nobody off more than about half a metre.
+# Each circle stands as high as the form still covers it, so a bench behind a
+# tapering tower stays open above the tower's narrower crown.
+static func _cover(spec: Dictionary, ground: float) -> Array:
+	var along = Vector3(cos(float(spec.yaw)), 0.0, -sin(float(spec.yaw)))
+	var across = Vector3(sin(float(spec.yaw)), 0.0, cos(float(spec.yaw)))
+	var centre: Vector3 = spec.origin
+	var height: float = spec.height
+	var flat: Array = []
+	var levels: Array = []
+	var base = ground
+	for step in range(ceili(height / 0.25) + 1):
+		var t = minf(step * 0.25 / height, 1.0)
+		var ring = _ring(spec, t, float(spec.radius) * profile(spec, t))
+		if step % 4 == 0:
+			var outline = PackedVector2Array()
+			var bottom = INF
+			for sector in range(SECTORS):
+				var v: Vector3 = ring[sector]
+				outline.append(Vector2(v.x, v.z))
+				bottom = minf(bottom, v.y)
+				for k in [0.0, 0.5]:
+					var w: Vector3 = v.lerp(ring[(sector + 1) % SECTORS], k)
+					var under: float = spec.terrain.call(w)
+					if w.y > under + 0.3 and w.y < under + WALK_HEIGHT:
+						flat.append(Vector2((w - centre).dot(along), (w - centre).dot(across)))
+						base = minf(base, under)
+			levels.append([outline, bottom])
+		var lowest = INF
+		var highest = -INF
+		for v in ring:
+			lowest = minf(lowest, v.y)
+			highest = maxf(highest, v.y)
+		if highest < ground or lowest > ground + WALK_HEIGHT:
+			continue
+		for sector in range(SECTORS):
+			for k in range(8):
+				var v: Vector3 = ring[sector].lerp(ring[(sector + 1) % SECTORS], k / 8.0)
+				if v.y > ground + 0.3 and v.y < ground + WALK_HEIGHT:
+					flat.append(Vector2((v - centre).dot(along), (v - centre).dot(across)))
+	if flat.is_empty():
+		return []
+	var low = INF
+	var high = -INF
+	for q in flat:
+		low = minf(low, q.y)
+		high = maxf(high, q.y)
+	# Every section of a form is convex but for its shallow cracks.
+	var hull = Geometry2D.convex_hull(PackedVector2Array(flat))
+	var rows = maxi(1, ceili((high - low) / ROW_WIDTH))
+	var half = (high - low) / rows * 0.5
+	var radius = half * 1.06 + 0.05
+	var circles: Array = []
+	for row in range(rows):
+		var mid = low + half * (row * 2 + 1)
+		var from = INF
+		var to = -INF
+		for q in flat:
+			if absf(q.y - mid) <= half:
+				from = minf(from, q.x)
+				to = maxf(to, q.x)
+		if from > to:
+			continue
+		# The end circles sit back from the tips, their sides reaching them.
+		var inset = minf(half * 0.75, (to - from) * 0.5)
+		from += inset
+		to -= inset
+		var count = ceili((to - from) / (half * 0.7))
+		for i in range(count + 1):
+			var x = lerpf(from, to, float(i) / maxi(count, 1))
+			var pos = centre + along * x + across * mid
+			pos.y = base
+			# At the rounded corners a full circle would stand out past the
+			# rock: it reaches only a walker's width beyond the nearest face.
+			var reach = radius
+			if row == 0 or row == rows - 1 or i == 0 or i == count:
+				var at = Vector2(x, mid)
+				for k in range(hull.size() - 1):
+					reach = minf(reach, at.distance_to(Geometry2D.get_closest_point_to_segment(at, hull[k], hull[k + 1])) + 0.5)
+			var top = ground + WALK_HEIGHT
+			for level in levels:
+				if Geometry2D.is_point_in_polygon(Vector2(pos.x, pos.z), level[0]):
+					top = maxf(top, float(level[1]))
+			circles.append({"pos": pos, "radius": reach, "height": top - base})
+	return circles
 
 # The strata of the walls toned towards the clay, with thin beds of their own
 # a metre or so apart; cracks in shade; grey caprock only on a hoodoo's cap.
