@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { RoomState, MAX_PLAYERS, STAGE_COUNT, CHARACTERS } from '../server/room-core.mjs';
+import { RoomState, MAX_PLAYERS, STAGE_COUNT, CHARACTERS, carOffered } from '../server/room-core.mjs';
+import fleet from '../game/data/cars.json' with { type: 'json' };
+import stageList from '../game/data/stages.json' with { type: 'json' };
 const state = (x = 0) => ({ pos: [x, 1, 2], car: [3, 4, 5], heading: 1, yaw: 2, pitch: 0, in_car: false, tow: false, beer: -1 });
 const racer = () => ({id:1,variant:0,pos:[0,0,0],yaw:0,state:'racing'});
 const drive = () => ({ack:0,pos:[0,0,0],yaw:0,velocity:[0,0,0],vertical:0,grounded:true,pitch:0,roll:0,steering:0,yaw_rate:0,longitudinal:0});
@@ -41,6 +43,25 @@ test('host stage and individual car choices persist through joins, sync and rest
   const late = restored.add('Late', 1300, false, { stage: 0, car_model: Infinity });
   assert.equal(late.stage, 1);
   assert.equal(late.car_model, late.slot);
+});
+test('a car limited to other stages joins as car 0, the car the game drives there', () => {
+  const heli = fleet.cars.findIndex(c => c.model === 'helicopter');
+  const canyon = stageList.stages.findIndex(s => s.id === 'canyon');
+  assert.ok(heli > 0 && canyon > 0);
+  assert.equal(carOffered(heli, canyon), true);
+  assert.equal(carOffered(heli, 0), false);
+  assert.equal(carOffered(2, 0), true);
+  // Forest room: a guest with the helicopter still picked in the menu.
+  const forest = new RoomState();
+  forest.add('Host', 1000, true, { stage: 0, car_model: heli });
+  const g = forest.add('Guest', 1000, false, { car_model: heli });
+  assert.equal(g.car_model, 0);
+  assert.deepEqual(forest.sync({ token: g.token, state: state() }, 1100).players.map(p => p.car_model), [0, 0]);
+  // Charyn keeps it.
+  const charyn = new RoomState();
+  const h = charyn.add('Host', 1000, true, { stage: canyon, car_model: heli });
+  assert.equal(h.car_model, heli);
+  assert.equal(charyn.add('Guest', 1000, false, { car_model: heli }).car_model, heli);
 });
 test('each player keeps the character picked in the menu; unknown looks fall back by slot', () => {
   const r = new RoomState();
@@ -559,7 +580,8 @@ test('a dedicated host is nobody on the stage and can take its fixed ID again', 
 
 test('helicopter selection and bounded lift survive the Worker relay', () => {
  const r = new RoomState();
- const h = r.add('Pilot', 1000, true, {car_model: 11});
+ // The helicopter flies only over Charyn (stage 3).
+ const h = r.add('Pilot', 1000, true, {car_model: 11, stage: 3});
  const g = r.add('Guest pilot', 1000, false, {car_model: 11});
  assert.equal(g.car_model, 11);
  const input = {seq: 1, ticks: 12, throttle: 0, steer: 0, brake: false, lift: -1};

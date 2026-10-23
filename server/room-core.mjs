@@ -1,5 +1,7 @@
 import protocol from '../game/data/net_protocol.json' with { type: 'json' };
 import { catalog } from './store.mjs';
+import fleet from '../game/data/cars.json' with { type: 'json' };
+import stageList from '../game/data/stages.json' with { type: 'json' };
 import {validWorld, validCold} from './world-validation.mjs';
 export {validWorld};
 // Limits and the action list come from the protocol file the game reads too.
@@ -14,6 +16,12 @@ export const STAGE_COUNT = catalog.filter(p => p.type === 'stage').length;
 export const CAR_COUNT = catalog.filter(p => p.type === 'car').length;
 // Looks a player may walk as (character_profiles.gd playable()), by look index.
 export const CHARACTERS = catalog.filter(p => p.type === 'character' && p.enabled).map(p => p.content_id).sort((a, b) => a - b);
+// A car limited to some stages (cars.json `stages`, CarRegistry.offered()) is
+// not driven elsewhere: the game swaps it for car 0 when it loads such a stage.
+export function carOffered(car, stage) {
+  const only = fleet.cars[car]?.stages ?? [];
+  return only.length === 0 || only.includes(stageList.stages[stage]?.id);
+}
 const vec = value => Array.isArray(value) && value.length === 3 && value.every(n => Number.isFinite(n) && Math.abs(n) < 3000);
 const number = n => Number.isFinite(n) && Math.abs(n) < 100000;
 // The car a walker stands on (perches.gd key) and the feet in its frame.
@@ -68,9 +76,12 @@ export class RoomState {
     const used = new Set(Object.values(this.data.players).filter(p => !p.dedicated).map(p => p.slot));
     let slot = 0;
     while (used.has(slot)) slot++;
-    const car_model = Number.isSafeInteger(options.car_model) && options.car_model >= 0 && options.car_model < CAR_COUNT ? options.car_model : slot;
-    const character = CHARACTERS.includes(options.character) ? options.character : CHARACTERS[slot % CHARACTERS.length];
     if (host) this.data.stage = Number.isSafeInteger(options.stage) ? Math.max(0, Math.min(STAGE_COUNT - 1, options.stage)) : 0;
+    // The member's car is the one the game will drive on this room's stage, so
+    // the host simulates and peers draw what the player actually sits in.
+    const asked = Number.isSafeInteger(options.car_model) && options.car_model >= 0 && options.car_model < CAR_COUNT ? options.car_model : slot;
+    const car_model = carOffered(asked, this.data.stage ?? 0) ? asked : 0;
+    const character = CHARACTERS.includes(options.character) ? options.character : CHARACTERS[slot % CHARACTERS.length];
     const id = crypto.randomUUID();
     const p = { id, slot, car_model, character, token: crypto.randomUUID(), name: String(name || 'Фанат').replace(/[\u0000-\u001f]/g, '').trim().slice(0, protocol.name_max_length) || 'Фанат', seen: now, state: null, seq: 0, protocol: protocolVersion, ...(host && options.dedicated === true ? {dedicated: true} : {}) };
     this.data.players[id] = p;
