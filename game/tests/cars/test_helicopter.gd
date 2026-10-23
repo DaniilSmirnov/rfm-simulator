@@ -74,7 +74,9 @@ func run() -> void:
 	await process_frame
 	game.set_process(false)
 	game.room.set_process(false)
+	game.select_stage(3)
 	game.select_player_car(11)
+	check(game.selected_car == 11, "helicopter is offered in Charyn canyon")
 	game.start_game()
 	game.car.position = game.stage.at(15) + Vector3(0, 35, 0)
 	game.vehicle_motion.initialized = true
@@ -117,6 +119,17 @@ func run() -> void:
 	game.walker = access
 	game.cargo.update(1)
 	check(game.car.get_node("TrunkHinge").position.z > 1 and game.cargo.take("chairs"), "side cargo opens and releases equipment through the real inventory")
+	# The walker steps under the duct right up to the side door.
+	game.car.position.y = game.stage.vehicle_ground(game.car.position)
+	var door_blocked = false
+	for i in range(24):
+		var from: Vector3 = game.car.to_global(Vector3(4.0 - i * 0.1, 0, 0))
+		var to: Vector3 = game.car.to_global(Vector3(3.9 - i * 0.1, 0, 0))
+		from.y = game.stage.walking_ground(from)
+		to.y = game.stage.walking_ground(to)
+		door_blocked = door_blocked or game.player.contact_blocked(from, to, false)
+	check(not door_blocked, "walker reaches the side door under the duct")
+	check(game.player.contact_blocked(game.car.to_global(Vector3(1.5, 0.05, 0)), game.car.to_global(Vector3(1.0, 0.05, 0)), false), "cabin side still stops the walker")
 	await game._shutdown_audio()
 	game.queue_free()
 	await process_frame

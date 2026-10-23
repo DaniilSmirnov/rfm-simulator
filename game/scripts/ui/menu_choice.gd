@@ -7,6 +7,8 @@ const FONT_SIZE = 18
 const MIN_FONT_SIZE = 15
 var items: Array[String] = []
 var selected = 0
+# Items the arrows step over (still selectable by index).
+var skipped: Dictionary = {}
 var caption: Label
 var item_count: int:
 	get:
@@ -48,8 +50,19 @@ func select(index: int) -> void:
 func cycle(direction: int) -> void:
 	if items.is_empty():
 		return
-	select(selected + direction)
+	var index = selected
+	for step in range(items.size()):
+		index = posmod(index + direction, items.size())
+		if not skipped.has(index):
+			break
+	select(index)
 	item_selected.emit(selected)
+
+func set_skipped(index: int, value: bool) -> void:
+	if value:
+		skipped[index] = true
+	else:
+		skipped.erase(index)
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_TRANSLATION_CHANGED and caption != null:
 		fit.call_deferred()

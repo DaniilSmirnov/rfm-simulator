@@ -80,7 +80,9 @@ func _add_group(candidates: Array, id: int, count: int) -> void:
 		s = station
 	var spots = CampSite.layout(game.stage, center, s, count)
 	var yaw: float = spots.yaw
-	var car = Props.player_car((id * 3 + game.stage.variant) % Props.PLAYER_MODELS.size())
+	# Fans come by road: the helicopter is no camp car.
+	var fleet = Props.CarRegistry.ground_cars()
+	var car = Props.player_car(fleet[(id * 3 + game.stage.variant) % fleet.size()])
 	add_child(car)
 	# Square to the slope and on its tyres, as it settles there anyway.
 	car.set_meta("prop_shapes", CampSite.car_shapes(car))

@@ -58,9 +58,21 @@ static func count() -> int:
 static func car(variant: int) -> Dictionary:
 	return cars[posmod(variant, cars.size())]
 
-# Share of drive torque sent to the rear axle.
 static func flies(variant: int) -> bool:
 	return bool(car(variant).get("flight", false))
+
+# Variants that drive on wheels, in fleet order.
+static func ground_cars() -> Array:
+	return range(cars.size()).filter(func(variant): return not flies(variant))
+
+# Optional `stages` (stage ids from data/stages.json) limits where the menu
+# offers a car (the helicopter only in Charyn canyon); without it the car goes
+# everywhere. Leaving its stage swaps such a car for the first one.
+static func offered(variant: int, stage_index: int) -> bool:
+	var stages = car(variant).get("stages", [])
+	return stages.is_empty() or str(preload("res://scripts/stages/stage_registry.gd").entry(stage_index).get("id", "")) in stages
+
+# Share of drive torque sent to the rear axle.
 
 static func rear_bias(variant: int) -> float:
 	match str(car(variant).handling.drive):
