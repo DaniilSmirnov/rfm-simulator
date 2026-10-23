@@ -28,12 +28,14 @@ var _lag = INF
 var _late = 0.0
 var _behind = 0.0
 var _drawn_at = -INF
+var _seen_movables = []
 
 func refresh() -> void:
 	if game.stage == null:
 		return
 	if stage_id != game.stage.get_instance_id():
 		stage_id = game.stage.get_instance_id()
+		_seen_movables = []
 		records.clear()
 		grips.clear()
 		pending.clear()
@@ -48,17 +50,22 @@ func refresh() -> void:
 		if item.kind in STAKED_KINDS: item.node.set_meta("prop_staked", true)
 		Registry.register(game.stage.solids, item.node, 25.0 if item.kind in ["grill", "cauldron"] else 8.0, fixed or item.kind in STAKED_KINDS, key)
 		if item.kind in HEARTH_KINDS: hearth.append(item.node)
-	game.stage.solids.movables.assign(game.stage.solids.movables.filter(func(r): return is_instance_valid(r.node)))
-	for record in game.stage.solids.movables:
-		if not is_instance_valid(record.node):
-			continue
-		if not records.has(record.key) or records[record.key].node != record.node:
-			var state = record.duplicate()
-			state.velocity = Vector3.ZERO
-			state.spin = Vector3.ZERO
-			state.changed = false
-			records[record.key] = state
-			state.body = Body.create(state, game.stage.solids, game)
+	var movables: Array = game.stage.solids.movables
+	movables.assign(movables.filter(func(r): return is_instance_valid(r.node)))
+	# New props are appended (prop_registry.gd), so an unchanged count and last
+	# entry mean nothing to add. This scan ran several times a frame over every
+	# prop on the stage, about a millisecond each time.
+	var seen = [movables.size(), movables.back().node.get_instance_id() if not movables.is_empty() else 0]
+	if seen != _seen_movables:
+		_seen_movables = seen
+		for record in movables:
+			if not records.has(record.key) or records[record.key].node != record.node:
+				var state = record.duplicate()
+				state.velocity = Vector3.ZERO
+				state.spin = Vector3.ZERO
+				state.changed = false
+				records[record.key] = state
+				state.body = Body.create(state, game.stage.solids, game)
 	_share_hearth(hearth)
 	Specials.refresh(game, records)
 	for r in records.values():
@@ -69,7 +76,9 @@ func refresh() -> void:
 		if not is_instance_valid(records[key].node) or records[key].node.is_queued_for_deletion():
 			records.erase(key)
 			removed = true
-	if removed: game.stage.solids.index()
+	if removed:
+		_seen_movables = []
+		game.stage.solids.index()
 
 func center(r: Dictionary) -> Vector3:
 	return r.node.global_transform * r.box.get_center()
@@ -230,11 +239,20 @@ func snapshot() -> Array:
 	var result: Array = []
 	for r in records.values():
 		if r.changed and not r.has("lamp"):
-			var rotation: Vector3 = r.node.global_rotation
-			var item = {"key": r.key, "pos": game.room.a(r.node.global_position), "rot": [rotation.x, rotation.y, rotation.z], "anchored": r.anchored}
+			# A prop at rest keeps last snapshot's entry (ten snapshots a second
+			# over a hundred-odd camp props).
+			var pose: Transform3D = r.node.global_transform
+			var flying = r.has("body") and not r.has("tree") and not r.body.freeze and not r.body.sleeping and r.body.linear_velocity.length_squared() > 0.01
+			if not flying and r.get("snapshot_pose") == pose and r.snapshot_item.anchored == r.anchored:
+				result.append(r.snapshot_item)
+				continue
+			var rotation: Vector3 = pose.basis.get_euler()
+			var item = {"key": r.key, "pos": game.room.a(pose.origin), "rot": [rotation.x, rotation.y, rotation.z], "anchored": r.anchored}
 			# A flying prop's velocity lets guests draw it where it is now.
-			if r.has("body") and not r.has("tree") and not r.body.freeze and not r.body.sleeping and r.body.linear_velocity.length_squared() > 0.01:
+			if flying:
 				item.velocity = game.room.a(r.body.linear_velocity)
+			r.snapshot_pose = null if flying else pose
+			r.snapshot_item = item
 			result.append(item)
 	return result
 

@@ -50,6 +50,7 @@ var latest_sizes: Dictionary = {}
 var direct_revs: Dictionary = {}
 var direct_sends: Dictionary = {}
 var direct_cold_at: Dictionary = {}
+var _split_cache: Dictionary = {}
 
 static func provider(name: String, section: String, keys: Array, snapshot: Callable, apply: Callable, collision: bool = false, interval: float = 0.0) -> Dictionary:
 	return {"name": name, "section": section, "keys": keys, "snapshot": snapshot, "apply": apply, "collision": collision, "interval": interval}
@@ -144,7 +145,10 @@ func hot_state() -> Dictionary:
 			world.merge(p.snapshot.call(), true)
 	return world
 
-static func split_world_by(full: Dictionary, sections: Dictionary) -> Dictionary:
+# `cache` (section -> last part, revision and size) skips writing out and
+# hashing a section equal to the last one: the props section alone was ~17 KB
+# of JSON ten times a second while the camp stood still.
+static func split_world_by(full: Dictionary, sections: Dictionary, cache = null) -> Dictionary:
 	var hot = full.duplicate()
 	var cold = {}
 	var revisions = {}
@@ -156,14 +160,19 @@ static func split_world_by(full: Dictionary, sections: Dictionary) -> Dictionary
 				part[key] = full[key]
 				hot.erase(key)
 		cold[section] = part
-		var text = JSON.stringify(part)
-		revisions[section] = text.hash()
-		sizes[section] = text.length()
+		var last: Dictionary = cache.get(section, {}) if cache != null else {}
+		if last.is_empty() or last.part != part:
+			var text = JSON.stringify(part)
+			# A copy: a provider may hand out its own arrays and change them later.
+			last = {"part": part.duplicate(true), "revision": text.hash(), "size": text.length()}
+			if cache != null: cache[section] = last
+		revisions[section] = last.revision
+		sizes[section] = last.size
 	hot.cold_revs = revisions
 	return {"hot": hot, "cold": cold, "sizes": sizes}
 
 func split_world(full: Dictionary) -> Dictionary:
-	return split_world_by(full, cold_sections())
+	return split_world_by(full, cold_sections(), _split_cache)
 
 # The host's world, split into the hot part and the slow sections.
 func current_parts() -> Dictionary:

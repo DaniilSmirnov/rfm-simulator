@@ -125,6 +125,9 @@ func _insert_static(id: int) -> void:
 	object["collision_pose"] = pose
 	object["collision_inverse"] = pose.affine_inverse()
 	var bounds = pose * AABB(-object.half, object.half * 2.0)
+	# Fixed solids are dropped by their own bounds in candidates(); props that
+	# can be dragged or simulated may have moved since they were filed.
+	object["fixed_bounds"] = null if object.body is RigidBody3D or object.get("movable", false) else bounds
 	var expansion = pose.basis.x.abs() + pose.basis.y.abs() + pose.basis.z.abs()
 	collision_radius_factor = maxf(collision_radius_factor, maxf(expansion.x, maxf(expansion.y, expansion.z)))
 	var cells = []
@@ -190,7 +193,9 @@ func candidates(start: Vector3, end: Vector3, radius: float) -> Array:
 	for x in range(floori(low.x / COLLISION_CELL), floori(high.x / COLLISION_CELL) + 1):
 		for z in range(floori(low.z / COLLISION_CELL), floori(high.z / COLLISION_CELL) + 1):
 			for id in collision_cells.get(Vector2i(x, z), []):
-				seen[id] = true
+				var fixed = obstacles[id].get("fixed_bounds")
+				if fixed == null or (fixed.end.x >= low.x and fixed.position.x <= high.x and fixed.end.z >= low.z and fixed.position.z <= high.z):
+					seen[id] = true
 	var tick = Engine.get_physics_frames()
 	if moving_pose_tick != tick:
 		moving_pose_tick = tick
@@ -255,7 +260,7 @@ func hit(start: Vector3, end: Vector3, radius: float, escape: bool = true, cente
 		var object: Dictionary = obstacles[id]
 		if not is_instance_valid(object.body) or (ignored != null and (object.body == ignored or ignored.is_ancestor_of(object.body))):
 			continue
-		if ignored_roots.any(func(node): return node == object.body or node.is_ancestor_of(object.body)):
+		if not ignored_roots.is_empty() and ignored_roots.any(func(node): return node == object.body or node.is_ancestor_of(object.body)):
 			continue
 		var live = object.body is RigidBody3D or object.get("movable", false)
 		if live: _cache_live_pose(object)

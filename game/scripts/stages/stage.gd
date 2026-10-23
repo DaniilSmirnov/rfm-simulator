@@ -625,6 +625,11 @@ func obstacle_hit(start: Vector3, end: Vector3, radius: float, allow_escape: boo
 			d += flat(fallen_basis(index) * Vector3.UP) * forest_data[index].height * 0.64
 			width = 0.35
 		var padding = radius + width
+		# Most trees from the wide cell search are far off: drop them before
+		# the escape test's closest-point maths (crowd route searches run this
+		# thousands of times a second).
+		if maxf(a.x, b.x) + padding < minf(c.x, d.x) or minf(a.x, b.x) - padding > maxf(c.x, d.x) or maxf(a.y, b.y) + padding < minf(c.y, d.y) or minf(a.y, b.y) - padding > maxf(c.y, d.y):
+			continue
 		# A growing fallen trunk can overlap a parked car. Permit motion out of
 		# that volume, while retaining swept collision when approaching it.
 		if allow_escape:
@@ -634,8 +639,6 @@ func obstacle_hit(start: Vector3, end: Vector3, radius: float, allow_escape: boo
 			var end_distance = b.distance_to(Geometry2D.get_closest_point_to_segment(b, c, d))
 			if start_distance < padding and end_distance > start_distance + 0.0000001 and outward.dot(b - a) >= 0:
 				continue
-		if maxf(a.x, b.x) + padding < minf(c.x, d.x) or minf(a.x, b.x) - padding > maxf(c.x, d.x) or maxf(a.y, b.y) + padding < minf(c.y, d.y) or minf(a.y, b.y) - padding > maxf(c.y, d.y):
-			continue
 		if Geometry2D.segment_intersects_segment(a, b, c, d) != null:
 			return index
 		var distance = minf(a.distance_to(Geometry2D.get_closest_point_to_segment(a, c, d)), b.distance_to(Geometry2D.get_closest_point_to_segment(b, c, d)))

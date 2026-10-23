@@ -82,7 +82,7 @@ static func solids(solids, start: Vector3, end: Vector3, car: Dictionary, ignore
 	var best: Dictionary = {}
 	for id in solids.candidates(start + car.offset, end + car.offset, car.half.length()):
 		var object: Dictionary = solids.obstacles[id]
-		if not is_instance_valid(object.body) or ignored.any(func(node): return node == object.body or node.is_ancestor_of(object.body)): continue
+		if not is_instance_valid(object.body) or (not ignored.is_empty() and ignored.any(func(node): return node == object.body or node.is_ancestor_of(object.body))): continue
 		var live = object.body is RigidBody3D or object.get("movable", false)
 		if live: solids._cache_live_pose(object)
 		var pose: Transform3D = object.live_pose if live else object.collision_pose

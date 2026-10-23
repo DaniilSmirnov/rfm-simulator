@@ -51,7 +51,13 @@ func run():
 	host = load("res://main.tscn").instantiate()
 	guest = load("res://main.tscn").instantiate()
 	root.add_child(host)
-	root.add_child(guest)
+	# The guest gets its own physics space: in one world the two copies of
+	# every stage prop and camp grill pushed each other apart (NaN grills,
+	# props jittering forever).
+	var guest_world = SubViewport.new()
+	guest_world.own_world_3d = true
+	root.add_child(guest_world)
+	guest_world.add_child(guest)
 	await process_frame
 	for g in [host, guest]:
 		g.set_process(false)
