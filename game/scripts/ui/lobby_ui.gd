@@ -28,6 +28,7 @@ var help_dialog: Control
 var about_button: Button
 var about_dialog: Control
 var settings_button: Button
+var memory = preload("res://scripts/ui/menu_memory.gd").new()
 var last_size = Vector2.ZERO
 var last_playing = false
 
@@ -266,6 +267,12 @@ func finish(parent: Control) -> void:
 	text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	host_pause.hide()
 	refresh.call_deferred()
+	# The room entry (nickname) is built after the menu, so the picks come back a frame later.
+	_restore_choice.call_deferred()
+
+func _restore_choice() -> void:
+	memory.setup(game)
+	memory.restore()
 
 func allowed(kind: String, index: int) -> bool:
 	return game.platform_service == null or game.platform_service.can_use(kind, index)
