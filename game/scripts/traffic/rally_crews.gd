@@ -69,7 +69,7 @@ func spawn_course_car(role: String, id: int, zero_index: int = 0) -> void:
 	racer.drive_speed = 0.0 if waiting != null else Traffic.speed_limit(game, racer, 0.0)
 	racer.bias = 0.0
 	racer.phase = 0.0
-	game.toast(game.course.caption())
+	game.announce(game.course.caption())
 
 func race_station(point: Vector3) -> float:
 	var station = game.stage.road_s(point)
@@ -126,7 +126,7 @@ func spawn_racer(forced: String = "") -> void:
 	var racer = add_course_vehicle(node, game.rally_spawn_count + (game.course.pass_index - 1) * 200, kind, variant)
 	# A standing start from the line; a car placed straight on the road flies.
 	racer.drive_speed = 0.0 if waiting != null else Traffic.speed_limit(game, racer, 0.0)
-	game.toast(Loc.t("Приближается %s, номер %d!") % [Loc.t(node.get_meta("model")), node.get_meta("number")])
+	game.announce(Loc.t("Приближается %s, номер %d!") % [Loc.t(node.get_meta("model")), node.get_meta("number")])
 
 func prop_collision(racer: Dictionary, start: Vector3, end: Vector3, delta: float) -> Dictionary:
 	var result = PropContact.resolve(game.stage, racer.motion, start, end, delta, Hitbox.shape(Hitbox.bounds(racer.node), racer.node.rotation.y))
@@ -223,7 +223,7 @@ func update_racers_step(delta: float) -> void:
 					stop_at_obstacle(racer)
 					racer.state = "stopped"
 					racer.retired = true
-					game.toast("Экипаж не может проехать и сошёл с дистанции.")
+					game.announce("Экипаж не может проехать и сошёл с дистанции.")
 					continue
 			# Keep the racing state: no towing/despawn or timetable transition while
 			# waiting. Freeze lateral corrections too, so stopped cars cannot creep.
@@ -285,7 +285,7 @@ func update_racers_step(delta: float) -> void:
 				racer.rejoin_time = 0.0
 				racer.rejoin_plan = 0.0
 				RallyHandling.departure(racer, movement / maxf(delta, 0.001), race_side(s), bend)
-				game.toast("ВЫЛЕТ! Отойди с траектории!")
+				game.announce("ВЫЛЕТ! Отойди с траектории!")
 			elif s > racer.focus + 45 and not racer.counted:
 				count_racer(racer)
 			if s >= game.stage.length - 1 and not red_hold:
@@ -322,7 +322,7 @@ func update_racers_step(delta: float) -> void:
 				racer.state = "stranded" if racer.kind in ["stuck", "crash"] else "stopped"
 				racer.age = 0.0
 				if racer.state == "stranded":
-					game.toast("Экипаж застрял. Нужен трос — T рядом с машиной.")
+					game.announce("Экипаж застрял. Нужен трос — T рядом с машиной.")
 		elif racer.state in ["stopped", "stranded", "parked"]:
 			racer.motion.suspension(node, game.stage, delta, node.rotation.y)
 			if racer.state == "stopped" and not red_hold and (not service or racer.get("retired", false)) and racer.age > 18 and racer.node != game.tow_target and not racer.get("towed", false) and int(racer.get("recovery_helpers", 0)) == 0:
@@ -404,7 +404,7 @@ func car_contact(racer: Dictionary, delta: float) -> void:
 			node.position = racer.previous
 			racer.state = "stranded" if racer.kind in ["stuck", "crash"] else "stopped"
 			racer.age = 0
-			game.toast("Столкновение машин! Экипаж остановился.")
+			game.announce("Столкновение машин! Экипаж остановился.")
 			if blocker.position == game.car.position:
 				var damage = car_ram_damage(collision_speed)
 				if damage > 0.0:

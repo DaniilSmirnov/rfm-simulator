@@ -182,7 +182,7 @@ static func _drag(game, target: Dictionary, force: Vector3, delta: float, reach:
 		if road_gap(game, next) <= 0.0:
 			game.recover_racer(racer)
 			game.recovery_links = game.recovery_links.filter(func(link): return int(link.get("racer", -1)) != racer.id)
-			game.toast("Вытащили! Экипаж благодарит и продолжает СУ.")
+			game.announce("Вытащили! Экипаж благодарит и продолжает СУ.")
 	else:
 		move_car(game, target.owner, next, yaw, delta)
 

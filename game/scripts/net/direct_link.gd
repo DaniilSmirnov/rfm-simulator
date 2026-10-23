@@ -252,7 +252,11 @@ func _send(delta: float) -> void:
 		if state_clock < interval:
 			return
 		state_clock = fmod(state_clock, interval)
-		if send(room.host_id, {"t": "s", "state": room.local_state()}):
+		var message = {"t": "s", "state": room.local_state()}
+		# Commands also go to the server, which stays their record (see _receive_commands).
+		if not room.commands.is_empty():
+			message.c = room.commands
+		if send(room.host_id, message):
 			room.prediction.seal()
 
 # What the host sends each guest directly: the hot world (slow sections stay on
@@ -271,6 +275,10 @@ func world_packet() -> Dictionary:
 		# A car the host drives is stamped with its simulation time (drive_prediction.gd stamp()).
 		var time = float(room.drive_budgets[id].stamp) if room.drive_budgets.has(id) else float(peer.get("last_state_time", room.server_clock()))
 		players.append(_member_entry(str(id), peer.state, int(time * 1000.0)))
+	var cold: Dictionary = room.world_sync.direct_cold()
+	if not cold.is_empty():
+		hot.cold = cold.parts
+		hot.cold_revs = cold.revs
 	return {"t": "w", "time": now_ms, "world": hot, "players": players}
 
 func _member_entry(id: String, state: Dictionary, state_time: int) -> Dictionary:
@@ -287,6 +295,7 @@ func _receive(from: String, message: Dictionary) -> void:
 		"s":
 			if room.is_host:
 				_receive_state(from, message.get("state"))
+				_receive_commands(from, message.get("c"))
 		"w":
 			if not room.is_host and from == room.host_id and message.get("world") is Dictionary and message.get("players") is Array:
 				if not _timestamp(message.get("time", -1)) or not WorldValidation.valid(message.world): return
@@ -294,6 +303,7 @@ func _receive(from: String, message: Dictionary) -> void:
 				for entry in message.players:
 					if not entry is Dictionary or not entry.get("id") is String or not NetProtocol.valid_compact_state(entry.get("state")) or not _timestamp(entry.get("state_time", 0)): return
 					players.append(_full_entry(entry))
+				room.world_sync.note_direct_cold(message.world)
 				# Checked above: the room applies it without walking it again.
 				WorldValidation.trust(message.world)
 				room._guest_world(message.world, float(message.get("time", -1)), players, false)
@@ -309,6 +319,48 @@ func _receive_state(from: String, raw) -> void:
 		return
 	var member: Dictionary = room.members[from]
 	room._update_peer({"id": from, "name": member.name, "slot": member.slot, "car_model": member.car_model, "character": member.get("character", member.slot), "state_time": int(room.server_clock() * 1000.0), "state": state})
+
+# A guest's commands ride its direct packets too, so the host runs them a hop
+# sooner than through the server. Same checks as the Worker (room-core.mjs) and
+# the same id, so the server's copy is only acknowledged (room.processed).
+func _receive_commands(from: String, raw) -> void:
+	if not raw is Array or not room.peers.has(from) or room.peers[from].state == null:
+		return
+	var applied = false
+	for c in raw.slice(0, NetProtocol.limit("commands_per_sync")):
+		if not c is Dictionary or not _whole(c.get("seq")) or str(c.get("action", "")) not in NetProtocol.actions():
+			continue
+		var id = "%s:%d" % [from, int(c.seq)]
+		if room.processed.has(id):
+			continue
+		room.processed[id] = true
+		var state: Dictionary = room.peers[from].state
+		room._apply_command({"id": id, "player": from, "action": str(c.action), "state": state, "placement": _placement(c.get("placement"), state.pos)})
+		applied = true
+	# The changed sections go out with the next upload and direct packets.
+	if applied:
+		room.sync_now()
+
+static func _placement(raw, pos: Array) -> Dictionary:
+	var placement = {}
+	if not raw is Dictionary:
+		return placement
+	var yaw = raw.get("yaw", 0)
+	var spot = raw.get("pos")
+	if spot is Array and spot.size() == 3 and spot.all(func(x): return _number(x)) and _number(yaw) and Vector3(spot[0], spot[1], spot[2]).distance_to(Vector3(pos[0], pos[1], pos[2])) <= 5.0:
+		placement.pos = spot
+		placement.yaw = yaw
+	if _whole(raw.get("resource_id")) and int(raw.resource_id) >= 0 and int(raw.resource_id) < 10000:
+		placement.resource_id = int(raw.resource_id)
+	if _whole(raw.get("source")) and int(raw.source) >= -1 and int(raw.source) < 100:
+		placement.source = int(raw.source)
+	return placement
+
+static func _number(value) -> bool:
+	return (value is int or value is float) and is_finite(float(value))
+
+static func _whole(value) -> bool:
+	return _number(value) and absf(float(value)) <= 9007199254740991.0 and float(value) == floorf(float(value))
 
 static func _timestamp(value) -> bool:
 	return (value is int or value is float) and is_finite(float(value)) and absf(float(value)) <= 9007199254740991.0

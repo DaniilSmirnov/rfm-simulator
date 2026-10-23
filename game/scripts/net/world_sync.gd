@@ -32,6 +32,24 @@ var last_notice = ""
 var racer_motion: Dictionary = {}
 var racer_targets: Dictionary = {}
 const PEOPLE_INTERVAL = 0.3
+# Guest world clock (advance_clock): seconds off the host before it jumps, and
+# how fast a smaller difference fades (per second).
+const CLOCK_SNAP = 1.0
+const CLOCK_PULL = 2.0
+var host_elapsed = -1.0
+var host_elapsed_at = 0.0
+# Slow sections over the direct link (direct_cold, note_direct_cold): bytes per
+# world packet, packets per change, and how long (ms) the server's copy of a
+# section that came directly is ignored.
+const DIRECT_COLD_BYTES = 5000
+const DIRECT_COLD_REPEATS = 3
+const DIRECT_COLD_HOLD = 1000
+var latest_cold: Dictionary = {}
+var latest_revs: Dictionary = {}
+var latest_sizes: Dictionary = {}
+var direct_revs: Dictionary = {}
+var direct_sends: Dictionary = {}
+var direct_cold_at: Dictionary = {}
 
 static func provider(name: String, section: String, keys: Array, snapshot: Callable, apply: Callable, collision: bool = false, interval: float = 0.0) -> Dictionary:
 	return {"name": name, "section": section, "keys": keys, "snapshot": snapshot, "apply": apply, "collision": collision, "interval": interval}
@@ -55,7 +73,7 @@ func rebuild() -> void:
 	providers.append(provider("camp", "camp", ["camp", "table_yaw", "chairs", "chair_poses", "flag_poses", "cooking", "grill_pose", "grill_fire", "grill_servings", "npc_servings", "eaten"], _camp_snapshot, _camp_apply))
 	providers.append(provider("drive", "", ["drive_protocol", "driving"], _drive_snapshot, func(_f, _t): pass))
 	providers.append(provider("stones", "", ["stones", "stone_ids", "impacts"], _stones_snapshot, _stones_apply))
-	providers.append(provider("status", "", ["paused", "notice", "notice_time", "cook_time"], _status_snapshot, _status_apply))
+	providers.append(provider("status", "", ["paused", "notice", "notice_for", "notice_time", "cook_time"], _status_snapshot, _status_apply))
 	# Spectators, marshals, the schedule, trunks and foraging stand still most of
 	# the time: as their own sections they travel only when they change.
 	# Walking spectators and marshals are smoothed on guests, so three updates a
@@ -130,6 +148,7 @@ static func split_world_by(full: Dictionary, sections: Dictionary) -> Dictionary
 	var hot = full.duplicate()
 	var cold = {}
 	var revisions = {}
+	var sizes = {}
 	for section in sections:
 		var part = {}
 		for key in sections[section]:
@@ -137,9 +156,11 @@ static func split_world_by(full: Dictionary, sections: Dictionary) -> Dictionary
 				part[key] = full[key]
 				hot.erase(key)
 		cold[section] = part
-		revisions[section] = JSON.stringify(part).hash()
+		var text = JSON.stringify(part)
+		revisions[section] = text.hash()
+		sizes[section] = text.length()
 	hot.cold_revs = revisions
-	return {"hot": hot, "cold": cold}
+	return {"hot": hot, "cold": cold, "sizes": sizes}
 
 func split_world(full: Dictionary) -> Dictionary:
 	return split_world_by(full, cold_sections())
@@ -153,6 +174,9 @@ func current_parts() -> Dictionary:
 func host_upload(body: Dictionary) -> void:
 	var parts = current_parts()
 	body.world = parts.hot
+	latest_cold = parts.cold
+	latest_revs = parts.hot.cold_revs
+	latest_sizes = parts.sizes
 	var now = Time.get_ticks_msec()
 	var intervals = section_intervals()
 	var cold = {}
@@ -195,11 +219,60 @@ func _fit(body: Dictionary) -> void:
 		if body.cold.is_empty():
 			body.erase("cold")
 
+# Host: the slow sections that changed since they last went over the direct
+# links, from the latest upload's snapshot (nothing is rebuilt for this). A
+# change rides DIRECT_COLD_REPEATS world packets, as the channel drops packets;
+# a section too large for a packet stays on the server path only. Before this
+# a guest saw its own action (a chair set down, a trunk opened) only after
+# guest -> server -> host -> server -> guest.
+func direct_cold() -> Dictionary:
+	var parts = {}
+	var revs = {}
+	var budget = DIRECT_COLD_BYTES
+	for section in latest_cold:
+		var revision = int(latest_revs.get(section, 0))
+		if int(direct_revs.get(section, -1)) != revision:
+			direct_revs[section] = revision
+			# Characters, not bytes: the budget leaves room for Cyrillic text.
+			var size = int(latest_sizes.get(section, DIRECT_COLD_BYTES + 1))
+			direct_sends[section] = {"size": size, "left": DIRECT_COLD_REPEATS if size <= DIRECT_COLD_BYTES else 0}
+		var send: Dictionary = direct_sends[section]
+		if int(send.left) <= 0 or int(send.size) > budget:
+			continue
+		budget -= int(send.size)
+		send.left = int(send.left) - 1
+		parts[section] = latest_cold[section]
+		revs[section] = revision
+	return {} if parts.is_empty() else {"parts": parts, "revs": revs}
+
+# Guest: when each slow section last came over the direct link. The server's
+# copy may still be the one before it, so for DIRECT_COLD_HOLD it is ignored.
+# A repeat of a revision already applied is dropped: the people sections time
+# their motion by arrivals.
+func note_direct_cold(w: Dictionary) -> void:
+	if not w.get("cold") is Dictionary:
+		return
+	var now = Time.get_ticks_msec()
+	var revisions = w.get("cold_revs", {})
+	for section in w.cold.keys():
+		direct_cold_at[section] = now
+		if revisions is Dictionary and revisions.has(section) and cold_revs.has(section) and int(revisions[section]) == int(cold_revs[section]):
+			w.cold.erase(section)
+	if w.cold.is_empty():
+		w.erase("cold")
+
 func reset() -> void:
+	latest_cold.clear()
+	latest_revs = {}
+	latest_sizes = {}
+	direct_revs.clear()
+	direct_sends.clear()
+	direct_cold_at.clear()
 	cold_revs.clear()
 	server_cold_revs.clear()
 	cold_sent.clear()
 	cold_uploaded_at.clear()
+	host_elapsed = -1.0
 
 # ---------------------------------------------------------------- guest side
 
@@ -236,12 +309,14 @@ func apply_cold(w: Dictionary, sample_time: float) -> void:
 	var cold = cold_part(w)
 	if cold == null:
 		return
+	var now = Time.get_ticks_msec()
+	var sections = cold.sections.filter(func(section): return now - int(direct_cold_at.get(section, -DIRECT_COLD_HOLD)) >= DIRECT_COLD_HOLD)
 	for p in providers:
-		if p.section != "" and p.section in cold.sections:
+		if p.section != "" and p.section in sections:
 			p.apply.call(cold.fields, sample_time)
 	var revisions = w.get("cold_revs", {})
 	if revisions is Dictionary:
-		for section in cold.sections:
+		for section in sections:
 			if revisions.has(section):
 				cold_revs[section] = int(revisions[section])
 
@@ -271,15 +346,18 @@ func _drive_snapshot() -> Dictionary:
 	return {"drive_protocol": 1, "driving": driving}
 
 func _status_snapshot() -> Dictionary:
-	# The toast text only travels while it is on screen.
-	# Idle values are left out: a guest reads a missing field as the idle value.
-	var showing: bool = game.toast_time > 0
+	# Only shared events and a guest's own command results travel, while fresh
+	# (game_hud.gd announce). Idle values are left out: a guest reads a missing
+	# field as the idle value.
+	var left: float = game.hud.notice_left()
 	var status = {}
 	if game.paused:
 		status.paused = true
-	if showing:
-		status.notice = game.toast_label.text
-		status.notice_time = snappedf(game.toast_time, 0.1)
+	if left > 0:
+		status.notice = game.hud.notice
+		status.notice_time = snappedf(left, 0.1)
+		if game.hud.notice_for != "":
+			status.notice_for = game.hud.notice_for
 	if game.camp_grill.meat_time != -1.0:
 		status.cook_time = snappedf(game.camp_grill.meat_time, 0.01)
 	return status
@@ -288,7 +366,8 @@ func _status_apply(w: Dictionary, _t: float) -> void:
 	room.world_paused = bool(w.get("paused", false))
 	if w.get("notice_time", 0) > 0 and w.get("notice", "") != last_notice:
 		last_notice = w.notice
-		game.toast(last_notice)
+		if str(w.get("notice_for", room.player_id)) == room.player_id:
+			game.toast(last_notice)
 	game.camp_grill.meat_time = float(w.get("cook_time", -1.0))
 
 func _progress_snapshot() -> Dictionary:
@@ -305,7 +384,26 @@ func _progress_apply(w: Dictionary, _t: float) -> void:
 	game.racing = bool(w.get("racing", false))
 	game.passed = int(w.get("passed", 0))
 	game.helped = int(w.get("helped", 0))
-	game.elapsed = float(w.get("elapsed", game.elapsed))
+	if w.has("elapsed"):
+		host_elapsed = float(w.elapsed)
+		host_elapsed_at = Time.get_ticks_msec() / 1000.0
+		# A join or a long stall: take the host's time at once.
+		if absf(game.elapsed - host_elapsed) > CLOCK_SNAP:
+			game.elapsed = host_elapsed
+
+# A guest's world clock runs on its own frames, so everything drawn from it
+# (marshals' flags and gait, crew lights, the walking camera) moves every
+# frame instead of stepping with each host packet (10-20 a second). It drifts
+# toward the host's last reported time, carried forward while the world runs.
+func advance_clock(delta: float, frozen: bool) -> void:
+	if frozen or host_elapsed < 0.0:
+		host_elapsed_at = Time.get_ticks_msec() / 1000.0
+		return
+	game.elapsed += delta
+	var now = Time.get_ticks_msec() / 1000.0
+	host_elapsed += now - host_elapsed_at
+	host_elapsed_at = now
+	game.elapsed += (host_elapsed - game.elapsed) * minf(1.0, delta * CLOCK_PULL)
 
 func _outcome_snapshot() -> Dictionary:
 	# The flags and the result text only exist once the shared run ends.

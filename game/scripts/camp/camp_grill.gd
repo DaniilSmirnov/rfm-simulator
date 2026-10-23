@@ -106,11 +106,11 @@ func update(delta: float) -> void:
 	if lit and fire_time < COALS_SECONDS:
 		fire_time = minf(COALS_SECONDS, fire_time + delta)
 		if fire_time >= COALS_SECONDS:
-			game.toast("Угли прогорели. Выложи шампуры: F у мангала.")
+			game.announce("Угли прогорели. Выложи шампуры: F у мангала.")
 	if loaded() and meat_time < MEAT_SECONDS:
 		meat_time = minf(MEAT_SECONDS, meat_time + delta)
 		if meat_time >= MEAT_SECONDS:
-			game.toast("Шашлык готов! Подойди к мангалу и нажми F.")
+			game.announce("Шашлык готов! Подойди к мангалу и нажми F.")
 
 # Flames climb as the wood catches and sink as it turns to coals.
 func flame_height() -> float:

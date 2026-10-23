@@ -338,6 +338,7 @@ func _process(delta: float) -> void:
 
 # Guests move flying gravel and rally cars between host snapshots.
 func _render_guest_world(delta: float) -> void:
+	world_sync.advance_clock(delta, not game.playing or world_paused or game.paused or game.dead or game.finished)
 	if not world_paused and not game.paused and not game.dead and not game.finished:
 		for stone in game.stones:
 			if not game._advance_gravel(stone, delta):

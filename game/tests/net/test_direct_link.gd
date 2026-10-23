@@ -146,7 +146,7 @@ func run() -> void:
 	check(guest.room.authoritative_drives.has("guest") and int(guest.room.authoritative_drives.guest.ack) == guest.room.prediction.seq, "guest reconciles against the host's direct authority")
 	check(guest.room.peers.has("host") and guest.room.peers.host.state != null, "guest sees the host's own state from the direct packet")
 	var packet: Dictionary = host.room.direct.world_packet()
-	check(not packet.world.has("cold_revs") and not packet.world.has("npc_people") and not packet.world.has("camp"), "slow sections stay on the server path")
+	check(not packet.world.has("cold_revs") and not packet.world.has("npc_people") and not packet.world.has("camp"), "before any upload no slow section rides the direct packet")
 	var full_hot: Dictionary = host.room.world_sync.current_parts().hot
 	full_hot.erase("cold_revs")
 	check(JSON.stringify(packet.world, "", true) == JSON.stringify(full_hot, "", true), "the direct packet is the hot world without building the slow sections")
@@ -155,6 +155,59 @@ func run() -> void:
 	for entry in packet.players:
 		check(not entry.state.has("drive_inputs") and not entry.state.has("trees") and not entry.has("name"), "raw driving input, object requests and the roster are never forwarded to guests")
 	check(guest.room.sync_body().get("direct", false) == true and not host.room.sync_body().has("direct"), "a guest with a healthy link tells the server to leave the hot world to it")
+	# A changed slow section follows the host's upload over the link, a few
+	# packets in a row, instead of guest -> server -> host -> server -> guest.
+	host.room.sync_body()
+	var with_cold: Dictionary = host.room.direct.world_packet()
+	check(with_cold.world.get("cold", {}).has("camp") and with_cold.world.cold_revs.camp == host.room.world_sync.latest_revs.camp, "a changed slow section rides the direct packet")
+	for i in range(host.room.world_sync.DIRECT_COLD_REPEATS - 1):
+		host.room.direct.world_packet()
+	check(not host.room.direct.world_packet().world.get("cold", {}).has("camp"), "an unchanged section stops after its repeats")
+	host.room.world_sync.direct_revs.erase("camp")
+	host.room.direct._send(1.0)
+	guest.room.direct.poll()
+	check(guest.room.world_sync.cold_revs.get("camp") == host.room.world_sync.latest_revs.camp, "the guest applies a slow section from the link")
+	var older = {"cold": {"camp": host.room.world_sync.latest_cold.camp}, "cold_revs": {"camp": 12345}}
+	guest.room.world_sync.apply_cold(older, -1.0)
+	check(guest.room.world_sync.cold_revs.camp == host.room.world_sync.latest_revs.camp, "the server's older copy of a section that just came directly is ignored")
+	# Commands ride the guest's packets; the server's copy is only acknowledged.
+	guest.room.commands = [{"seq": 41, "action": "stand_person", "placement": {"pos": [1.0e6, 0, 0], "resource_id": 2.0}}]
+	guest.room.direct._send(1.0)
+	host.room.direct.poll()
+	check(host.room.processed.has("guest:41"), "the host runs a guest command from the direct link")
+	check(host.room.direct._placement({"pos": [1.0e6, 0, 0], "yaw": 0, "resource_id": 2.0}, [0, 0, 0]) == {"resource_id": 2}, "a direct command's placement gets the server's checks")
+	host.room.acknowledgements.clear()
+	host.room._apply_checked_sync({"host": "host", "players": players, "world": null, "commands": [{"id": "guest:41", "player": "guest", "action": "stand_person", "state": players[1].state, "placement": {}}]})
+	check(host.room.acknowledgements == ["guest:41"], "the server's copy of a command already run is acknowledged")
+	guest.room.commands.clear()
+	# The host's own notices stay on its screen; shared events and a guest's
+	# own command results reach that guest.
+	var shared_before: String = host.hud.notice
+	host.hud.toast("Ты выпил пиво.")
+	check(host.hud.notice == shared_before and host.toast_label.text != "", "a host's personal notice is not shared")
+	host.acting = load("res://scripts/player/action_context.gd").from_command({"state": players[1].state}, "guest", 0)
+	var host_text: String = host.toast_label.text
+	host.hud.toast("Мангал разожжён. Дождись, пока угли прогорят.")
+	host.acting = null
+	check(host.toast_label.text == host_text and host.hud.notice_for == "guest", "a guest command's result goes to that guest, not the host's screen")
+	var status: Dictionary = host.room.world_sync._status_snapshot()
+	guest.toast_label.text = ""
+	guest.room.world_sync._status_apply(status, 0.0)
+	check(guest.toast_label.text != "", "the guest sees its own command's result")
+	guest.toast_label.text = ""
+	guest.room.world_sync._status_apply({"notice": "Чужое", "notice_time": 3.0, "notice_for": "someone"}, 0.0)
+	check(guest.toast_label.text == "", "another member's result is not shown")
+	host.hud.announce("Экипаж застрял. Нужен трос — T рядом с машиной.")
+	guest.room.world_sync._status_apply(host.room.world_sync._status_snapshot(), 0.0)
+	check(guest.toast_label.text != "" and host.hud.notice_for == "", "a shared event reaches everyone")
+	# The guest's world clock runs every frame between the host's packets.
+	guest.playing = true
+	guest.room.world_sync._progress_apply({"elapsed": 100.0}, 0.0)
+	var first: float = guest.elapsed
+	guest.room.world_sync.advance_clock(0.05, false)
+	var second: float = guest.elapsed
+	guest.room.world_sync.advance_clock(0.05, true)
+	check(first == 100.0 and second > first + 0.04 and guest.elapsed == second, "a guest's world clock advances locally and stops while frozen")
 	# Compact states expand to what the server would have listed, after a JSON round trip.
 	var original: Dictionary = host.room.local_state()
 	original.beers = 3

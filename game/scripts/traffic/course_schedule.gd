@@ -68,16 +68,16 @@ func vehicle_finished(game, id: int) -> void:
 			else:
 				phase = "racing"
 				game.spawn_clock = 5.0
-				game.toast("Нулевые экипажи прошли. Через 5 секунд стартуют гонщики!")
+				game.announce("Нулевые экипажи прошли. Через 5 секунд стартуют гонщики!")
 		"closing_police":
 			if pass_index == 1:
 				phase = "intermission"
 				remaining = TURNAROUND_SECONDS
-				game.toast("Первый проход завершён. Через минуту СУ откроется в обратную сторону.")
+				game.announce("Первый проход завершён. Через минуту СУ откроется в обратную сторону.")
 			else:
 				phase = "complete"
 				game.cancel_placement()
-				game.toast("Оба прохода завершены. Соберите лагерь и езжайте в парк сервиса — на старте или на финише СУ.")
+				game.announce("Оба прохода завершены. Соберите лагерь и езжайте в парк сервиса — на старте или на финише СУ.")
 
 func service_id(base: int) -> int:
 	return base + (pass_index - 1) * 200
