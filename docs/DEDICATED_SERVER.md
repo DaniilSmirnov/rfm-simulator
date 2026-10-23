@@ -56,9 +56,13 @@ docker logs -f rally-canyon     # ROOM_CONNECTED C0FFEE host=true, затем с
 
 ## Запуск на Mac
 
-Сервером может быть и Mac: та же macOS-сборка игры, запущенная без окна.
-Скрипт `server/dedicated/run-macos.sh` кладёт `override.cfg` в сборку, не даёт
-Mac уснуть (`caffeinate`) и поднимает сервер снова, если тот упал.
+Сервером может быть и Mac: серверная macOS-сборка игры, запущенная без окна.
+Это отдельное приложение «SERVER Rally Fans Simulator» со своей иконкой
+(цвета обычной поменяны местами, `game/branding/rfm-icon-server.svg`), его
+легко отличить от игры в Мониторе системы. Пресет экспорта «macOS Server»
+включает фичу `dedicated`: с ней сборка сама сбрасывает лог, `override.cfg` ей
+не нужен. Скрипт `server/dedicated/run-macos.sh` не даёт Mac уснуть
+(`caffeinate`) и поднимает сервер снова, если тот упал.
 
 1. Ключ. Один раз создай его и положи в Worker (нужен `npx wrangler login`):
 
@@ -70,9 +74,11 @@ Mac уснуть (`caffeinate`) и поднимает сервер снова, �
 
    Скрипт читает ключ из `~/.rally-dedicated-token` или из
    `RALLY_DEDICATED_TOKEN`.
-2. Сборка: `npm ci`, затем `npm run build:macos` (Godot 4.4.1 в `GODOT_BIN`).
-   Получится `dist-macos/Rally Fans Simulator.zip`; скрипт сам распакует его
-   рядом.
+2. Сборка: `npm ci`, затем `npm run build:macos-server` (Godot 4.4.1 в
+   `GODOT_BIN`). Получится `dist-macos-server/SERVER Rally Fans Simulator.zip`;
+   скрипт сам распакует его рядом. Обычную сборку игры тоже можно запустить
+   сервером: `RALLY_APP=путь/к/Rally Fans Simulator.app`, тогда скрипт положит
+   в неё `override.cfg`.
 3. Запуск, например Чарынский каньон под постоянным ID:
 
    ```bash
@@ -99,7 +105,7 @@ Mac уснуть (`caffeinate`) и поднимает сервер снова, �
 `npx wrangler dev --local --var DEDICATED_TOKEN:test` (Worker ждёт папку
 `dist`, хватит пустой), в другом
 `RALLY_DEDICATED_TOKEN=test server/dedicated/run-macos.sh --stage=0 --room=C0FFEE --room-server=http://127.0.0.1:8787`.
-Гость — та же сборка с окном:
+Гость — обычная сборка игры (`npm run build:macos`) с окном:
 `"dist-macos/Rally Fans Simulator.app/Contents/MacOS/Rally Fans Simulator" -- --room-server=http://127.0.0.1:8787`.
 
 Один контейнер — одна комната: симуляция однопоточная и занимает одно ядро.

@@ -9,3 +9,6 @@ Web-сборка копирует этот SVG в `dist/favicon.svg` и испо
 `rfm-splash.png` — растровый экран с тем же логотипом и надписью для внутреннего
 boot splash Godot. PNG нужен движку для splash; SVG остаётся источником favicon.
 Apple touch icon экспортируется Godot из канонического SVG.
+
+`rfm-icon-server.svg` — тот же логотип с обратными цветами (оранжевый на
+белом) для серверной сборки «SERVER Rally Fans Simulator» (docs/DEDICATED_SERVER.md).
