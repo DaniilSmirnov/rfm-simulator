@@ -1,4 +1,4 @@
-import { cp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { join } from 'node:path';
@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { verifyWindowsBuild } from './verify-windows-build.mjs';
 import { getGodot, root, run } from './godot.mjs';
 
-// Native exports (Steam desktop, Android, iOS). Usage: node scripts/build-desktop.mjs --platform=macos|linux|windows|android|ios|windows-demo|macos-demo
+// Native exports (Steam desktop, Android, iOS). Usage: node scripts/build-desktop.mjs --platform=macos|linux|windows|android|ios|windows-demo|macos-demo|macos-server
 // The official 4.4.1 export templates are downloaded once into .cache/templates and
 // checked against a pinned SHA-256; only the selected platform templates are unpacked.
 // Linux exports a separate .pck; Windows embeds all game data into each executable.
@@ -24,6 +24,8 @@ const platforms = {
     { preset: 'Windows x64 Demo', template: 'windows_release_x86_64.exe', output: 'Rally_Fans_Simulator_Demo_x64.exe' },
   ], patch: windowsPatch, prepare: prepareWindows, verify: 'Rally_Fans_Simulator_Demo' },
   'macos-demo': { preset: 'macOS Demo', template: 'macos.zip', output: 'Rally Fans Simulator Demo.zip', patch: macosPatch, mobileTextures: true },
+  // Dedicated room server (export feature "dedicated", see game/scripts/net/dedicated.gd): run headless by server/dedicated/run-macos.sh.
+  'macos-server': { preset: 'macOS Server', template: 'macos.zip', output: 'SERVER Rally Fans Simulator.zip', patch: macosPatch, finish: renameServer, mobileTextures: true },
   android: { preset: 'Android', template: 'android_release.apk', output: 'Rally Fans Simulator.apk', patch: androidPatch, prepare: prepareAndroid, mobileTextures: true },
   // Godot writes an Xcode project; Xcode builds it without code signing into an unsigned IPA
   // (install it with your own certificate: Sideloadly, AltStore or codesign).
@@ -123,6 +125,28 @@ async function buildIos() {
   const ipa = join(output, 'Rally Fans Simulator (unsigned).ipa');
   run('ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', join(payload, 'Payload'), ipa]);
   return ipa;
+}
+
+// Godot names a macOS bundle after config/name and ignores feature overrides of it,
+// so the server app is renamed here: bundle, executable, game data (Godot looks for
+// <executable>.pck) and Info.plist, then signed again ad hoc and zipped back.
+async function renameServer() {
+  if (process.platform !== 'darwin') throw new Error('The macOS server build is renamed and signed with macOS tools.');
+  const name = 'SERVER Rally Fans Simulator';
+  const zip = join(output, name + '.zip');
+  const work = join(root, '.cache', 'macos-server');
+  await rm(work, { recursive: true, force: true });
+  run('ditto', ['-x', '-k', zip, work]);
+  const app = join(work, name + '.app');
+  await rename(join(work, 'Rally Fans Simulator.app'), app);
+  await rename(join(app, 'Contents', 'MacOS', 'Rally Fans Simulator'), join(app, 'Contents', 'MacOS', name));
+  await rename(join(app, 'Contents', 'Resources', 'Rally Fans Simulator.pck'), join(app, 'Contents', 'Resources', name + '.pck'));
+  for (const key of ['CFBundleName', 'CFBundleDisplayName', 'CFBundleExecutable']) run('plutil', ['-replace', key, '-string', name, join(app, 'Contents', 'Info.plist')]);
+  run('codesign', ['--force', '--deep', '--sign', '-', app]);
+  await rm(zip);
+  run('ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', app, zip]);
+  await rm(work, { recursive: true, force: true });
+  return zip;
 }
 
 // Godot reads the SDK and JDK locations from its editor settings, not from the preset.

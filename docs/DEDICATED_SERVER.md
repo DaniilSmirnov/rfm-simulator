@@ -1,6 +1,6 @@
 # Выделенный сервер комнаты
 
-Выделенный сервер — это обычная Linux-сборка игры, запущенная `--headless` на
+Выделенный сервер — это обычная Linux- или macOS-сборка игры, запущенная `--headless` на
 своём хосте. Она создаёт комнату через тот же Worker и становится её хозяином:
 считает СУ, экипажи, мир и машины гостей. Своего игрока у сервера нет, гости
 его не видят. Интерфейса тоже нет: друзья заходят в комнату по ID, как к
@@ -53,6 +53,60 @@ docker logs -f rally-canyon     # ROOM_CONNECTED C0FFEE host=true, затем с
 | `--name=…` | «Сервер» | Имя хозяина в составе комнаты |
 | `--max-fps=N` | 60 | Потолок кадров симуляции |
 | `--idle-restart=S` | 300 | Перезапуск пустой комнаты; 0 — никогда |
+
+## Запуск на Mac
+
+Сервером может быть и Mac: серверная macOS-сборка игры, запущенная без окна.
+Это отдельное приложение «SERVER Rally Fans Simulator» со своей иконкой
+(цвета обычной поменяны местами, `game/branding/rfm-icon-server-macos.icns`), его
+легко отличить от игры в Мониторе системы. Пресет экспорта «macOS Server»
+включает фичу `dedicated`: с ней сборка сама сбрасывает лог, `override.cfg` ей
+не нужен. Скрипт `server/dedicated/run-macos.sh` не даёт Mac уснуть
+(`caffeinate`) и поднимает сервер снова, если тот упал.
+
+1. Ключ. Один раз создай его и положи в Worker (нужен `npx wrangler login`):
+
+   ```bash
+   openssl rand -hex 32 > ~/.rally-dedicated-token
+   chmod 600 ~/.rally-dedicated-token
+   npx wrangler secret put DEDICATED_TOKEN < ~/.rally-dedicated-token
+   ```
+
+   Скрипт читает ключ из `~/.rally-dedicated-token` или из
+   `RALLY_DEDICATED_TOKEN`.
+2. Сборка: `npm ci`, затем `npm run build:macos-server` (Godot 4.4.1 в
+   `GODOT_BIN`). Получится `dist-macos-server/SERVER Rally Fans Simulator.zip`;
+   скрипт сам распакует его рядом. Обычную сборку игры тоже можно запустить
+   сервером: `RALLY_APP=путь/к/Rally Fans Simulator.app`, тогда скрипт положит
+   в неё `override.cfg`.
+3. Запуск, например Чарынский каньон под постоянным ID:
+
+   ```bash
+   server/dedicated/run-macos.sh --stage=3 --room=C0FFEE
+   ```
+
+   В логе появится `ROOM_CONNECTED C0FFEE host=true`, потом раз в минуту строка
+   `[RFM dedicated] room=C0FFEE guests=0 …`. `Ctrl+C` останавливает сервер,
+   и гости сразу видят «Комната закрыта»: Worker закрывает комнату, как только
+   соединение сервера оборвалось.
+   «Неверный ключ сервера» значит, что ключ на Mac не совпадает с секретом
+   Worker. Чтобы сервер работал после закрытия терминала, запусти его в
+   `tmux` или `screen`.
+4. Игроки заходят как к другу: в игре кнопка «ВОЙТИ ПО ID» и ID комнаты
+   (`C0FFEE`). Подходит веб-, VK- и нативная сборка той же версии, что и
+   сервер. Сам сервер в комнате не виден.
+
+Номера СУ для `--stage`: 0 Лесной перевал, 1 Зимний Турини, 2 Виноградники,
+3 Чарынский каньон, 4 Финский лес, 5 Майншафт, 6 Поречье,
+7 Асбестовский карьер (`game/data/stages.json`). Несколько комнат — несколько
+копий скрипта с разными `--room`, по одному ядру на каждую.
+
+Проверить всё локально, не трогая production: в одном терминале
+`npx wrangler dev --local --var DEDICATED_TOKEN:test` (Worker ждёт папку
+`dist`, хватит пустой), в другом
+`RALLY_DEDICATED_TOKEN=test server/dedicated/run-macos.sh --stage=0 --room=C0FFEE --room-server=http://127.0.0.1:8787`.
+Гость — обычная сборка игры (`npm run build:macos`) с окном:
+`"dist-macos/Rally Fans Simulator.app/Contents/MacOS/Rally Fans Simulator" -- --room-server=http://127.0.0.1:8787`.
 
 Один контейнер — одна комната: симуляция однопоточная и занимает одно ядро.
 Нужны выделенные ядра; общие vCPU дешёвых тарифов дают просадки кадра.

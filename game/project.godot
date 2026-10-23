@@ -13,6 +13,7 @@ boot_splash/use_filter=true
 boot_splash/bg_color=Color(0, 0, 0, 1)
 run/max_fps=60
 run/main_scene="res://main.tscn"
+run/flush_stdout_on_print.dedicated=true
 config/features=PackedStringArray("4.4", "GL Compatibility")
 
 [display]

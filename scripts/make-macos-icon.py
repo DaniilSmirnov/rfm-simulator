@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Builds game/branding/rfm-icon-macos.icns from the geometry of rfm-icon.svg.
+"""Builds game/branding/rfm-icon-macos.icns from the geometry of rfm-icon.svg,
+and rfm-icon-server-macos.icns, the same logo with its two colours swapped, for
+the dedicated server app (docs/DEDICATED_SERVER.md).
 
 Godot stretches a plain SVG edge to edge, so the Dock shows a square that is
 larger than every other app. This draws the logo on Apple's icon grid instead:
@@ -13,7 +15,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFilter
 
 ROOT = Path(__file__).resolve().parent.parent
-OUT = ROOT / "game" / "branding" / "rfm-icon-macos.icns"
+BRANDING = ROOT / "game" / "branding"
 
 ORANGE = (0xFF, 0x3B, 0x0A, 255)
 WHITE = (255, 255, 255, 255)
@@ -49,7 +51,7 @@ def squircle(size, n=5.0, steps=720):
     return pts
 
 
-def render():
+def render(back, front):
     body = squircle(BODY)
 
     shadow = Image.new("RGBA", (CANVAS, CANVAS), (0, 0, 0, 0))
@@ -58,11 +60,11 @@ def render():
 
     icon = Image.new("RGBA", (CANVAS, CANVAS), (0, 0, 0, 0))
     draw = ImageDraw.Draw(icon)
-    draw.polygon(body, fill=ORANGE)
+    draw.polygon(body, fill=back)
     for stripe in STRIPES:
-        draw.polygon([pt(x, y) for x, y in stripe], fill=WHITE)
+        draw.polygon([pt(x, y) for x, y in stripe], fill=front)
     cx, cy = pt(114.6, 105.9)
-    for radius, colour in ((34.6, WHITE), (13.1, ORANGE)):
+    for radius, colour in ((34.6, front), (13.1, back)):
         r = radius * SCALE
         draw.ellipse((cx - r, cy - r, cx + r, cy + r), fill=colour)
 
@@ -75,8 +77,7 @@ def png(image, size):
     return buf.getvalue()
 
 
-def main():
-    master = render()
+def write(out, master):
     # (OSType, pixel size): 1x and @2x variants from 16 to 512 pt.
     chunks = [
         ("icp4", 16), ("ic11", 32), ("icp5", 32), ("ic12", 64),
@@ -87,8 +88,13 @@ def main():
         kind.encode() + struct.pack(">I", 8 + len(data)) + data
         for kind, data in ((kind, png(master, size)) for kind, size in chunks)
     )
-    OUT.write_bytes(b"icns" + struct.pack(">I", 8 + len(body)) + body)
-    print(f"wrote {OUT.relative_to(ROOT)} ({OUT.stat().st_size} bytes)")
+    out.write_bytes(b"icns" + struct.pack(">I", 8 + len(body)) + body)
+    print(f"wrote {out.relative_to(ROOT)} ({out.stat().st_size} bytes)")
+
+
+def main():
+    write(BRANDING / "rfm-icon-macos.icns", render(ORANGE, WHITE))
+    write(BRANDING / "rfm-icon-server-macos.icns", render(WHITE, ORANGE))
 
 
 if __name__ == "__main__":

@@ -234,7 +234,25 @@ export class RallyRoom {
     }
   }
   async webSocketClose(ws, code) {
+    const player = ws.deserializeAttachment()?.player;
     this.retire(ws, code === 1005 || code === 1006 ? 1000 : code, 'closed');
+    // A dedicated server has no page to come back from: its socket closing
+    // means the process stopped, so its guests learn at once rather than after
+    // MEMBER_TTL. A restarted server creates the room again under its ID.
+    const host = this.room.data.players[this.room.data.host];
+    if (player && player === this.room.data.host && host?.dedicated === true && !this.room.data.closed) {
+      this.room.data.closed = true;
+      await this.close();
+    }
+  }
+  // Tells every socket that the room is gone (room.gd shows "Комната закрыта")
+  // and forgets the room.
+  async close() {
+    for (const ws of this.ctx.getWebSockets()) {
+      if (ws.deserializeAttachment()?.player) this.send(ws, { type: 'error', status: 410, error: 'Создатель вышел. Комната закрыта.' });
+      this.retire(ws, 4410, 'closed');
+    }
+    await this.ctx.storage.deleteAll();
   }
   async webSocketError(ws) {
     this.retire(ws, 1011, 'error');
@@ -243,10 +261,7 @@ export class RallyRoom {
     const now = Date.now();
     this.expirePending(now);
     this.room.expire(now);
-    if (this.room.data.closed || !this.room.data.host) {
-      for (const ws of this.ctx.getWebSockets()) this.retire(ws, 4410, 'closed');
-      await this.ctx.storage.deleteAll();
-    }
+    if (this.room.data.closed || !this.room.data.host) await this.close();
     else {
       const deadlines = this.ctx.getWebSockets().map(ws => ws.deserializeAttachment()?.hello_deadline).filter(Boolean);
       await this.ctx.storage.setAlarm(Math.min(now + 30000, ...deadlines));

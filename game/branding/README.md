@@ -13,3 +13,7 @@ Apple touch icon экспортируется Godot из каноническо�
 `rfm-icon-macos.icns` — иконка macOS-сборок (presets «macOS» и «macOS Demo»): тот же логотип
 на сетке Apple (squircle 824 на холсте 1024, прозрачные поля и тень), чтобы в Dock она была
 одного размера с другими приложениями. Пересобрать: `python3 scripts/make-macos-icon.py` (нужен Pillow).
+
+`rfm-icon-server-macos.icns` — то же, но с поменянными цветами (оранжевый логотип на белом):
+иконка серверного приложения «SERVER Rally Fans Simulator» (preset «macOS Server»,
+[DEDICATED_SERVER.md](../../docs/DEDICATED_SERVER.md)). Её пишет тот же скрипт.

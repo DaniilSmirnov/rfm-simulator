@@ -8,6 +8,7 @@ dist/
 dist-vk/
 dist-vk-prototype/
 dist-macos/
+dist-macos-server/
 dist-linux/
 dist-windows/
 
