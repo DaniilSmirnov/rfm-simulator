@@ -58,7 +58,7 @@ docker logs -f rally-canyon     # ROOM_CONNECTED C0FFEE host=true, затем с
 
 Сервером может быть и Mac: серверная macOS-сборка игры, запущенная без окна.
 Это отдельное приложение «SERVER Rally Fans Simulator» со своей иконкой
-(цвета обычной поменяны местами, `game/branding/rfm-icon-server.svg`), его
+(цвета обычной поменяны местами, `game/branding/rfm-icon-server-macos.icns`), его
 легко отличить от игры в Мониторе системы. Пресет экспорта «macOS Server»
 включает фичу `dedicated`: с ней сборка сама сбрасывает лог, `override.cfg` ей
 не нужен. Скрипт `server/dedicated/run-macos.sh` не даёт Mac уснуть

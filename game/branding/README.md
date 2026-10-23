@@ -10,5 +10,10 @@ Web-сборка копирует этот SVG в `dist/favicon.svg` и испо
 boot splash Godot. PNG нужен движку для splash; SVG остаётся источником favicon.
 Apple touch icon экспортируется Godot из канонического SVG.
 
-`rfm-icon-server.svg` — тот же логотип с обратными цветами (оранжевый на
-белом) для серверной сборки «SERVER Rally Fans Simulator» (docs/DEDICATED_SERVER.md).
+`rfm-icon-macos.icns` — иконка macOS-сборок (presets «macOS» и «macOS Demo»): тот же логотип
+на сетке Apple (squircle 824 на холсте 1024, прозрачные поля и тень), чтобы в Dock она была
+одного размера с другими приложениями. Пересобрать: `python3 scripts/make-macos-icon.py` (нужен Pillow).
+
+`rfm-icon-server-macos.icns` — то же, но с поменянными цветами (оранжевый логотип на белом):
+иконка серверного приложения «SERVER Rally Fans Simulator» (preset «macOS Server»,
+[DEDICATED_SERVER.md](../../docs/DEDICATED_SERVER.md)). Её пишет тот же скрипт.
