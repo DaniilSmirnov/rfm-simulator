@@ -619,6 +619,8 @@ jobs:
             unzip -q dist-${{ matrix.platform }}/*.zip -d macos-check
             file macos-check/*.app/Contents/MacOS/* | tee file.txt
             grep -q "Mach-O universal binary with 2 architectures" file.txt
+            # Godot copies an .icns icon as is; a regenerated one would mean the preset lost it.
+            cmp game/branding/rfm-icon-macos.icns macos-check/*.app/Contents/Resources/icon.icns
             if [ "${{ matrix.platform }}" = macos ]; then
               grep -qa "addons/rally_voice/bin/librally_voice.macos.universal.dylib" macos-check/*.app/Contents/Resources/*.pck
             fi

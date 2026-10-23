@@ -9,3 +9,7 @@ Web-сборка копирует этот SVG в `dist/favicon.svg` и испо
 `rfm-splash.png` — растровый экран с тем же логотипом и надписью для внутреннего
 boot splash Godot. PNG нужен движку для splash; SVG остаётся источником favicon.
 Apple touch icon экспортируется Godot из канонического SVG.
+
+`rfm-icon-macos.icns` — иконка macOS-сборок (presets «macOS» и «macOS Demo»): тот же логотип
+на сетке Apple (squircle 824 на холсте 1024, прозрачные поля и тень), чтобы в Dock она была
+одного размера с другими приложениями. Пересобрать: `python3 scripts/make-macos-icon.py` (нужен Pillow).

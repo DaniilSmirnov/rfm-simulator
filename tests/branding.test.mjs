@@ -115,3 +115,15 @@ test('authored game content has no third-party vehicle brands or named crews', a
   const room = await readFile(new URL('../game/scripts/net/room_lobby.gd', import.meta.url), 'utf8');
   assert.match(room, /"Твой ник"/);
 });
+
+test('macOS builds use the Apple-grid icns icon', async () => {
+  const presets = await readFile(new URL('../game/export_presets.cfg', import.meta.url), 'utf8');
+  for (const name of ['macOS', 'macOS Demo']) {
+    const block = presets.split(`name="${name}"`)[1].split('[preset.')[1];
+    assert.match(block, /application\/icon="res:\/\/branding\/rfm-icon-macos\.icns"/, name);
+  }
+  const icns = await readFile(new URL('../game/branding/rfm-icon-macos.icns', import.meta.url));
+  assert.equal(icns.subarray(0, 4).toString(), 'icns');
+  assert.equal(icns.readUInt32BE(4), icns.length);
+  assert.ok(icns.includes(Buffer.from('ic10')), '1024 px variant');
+});
