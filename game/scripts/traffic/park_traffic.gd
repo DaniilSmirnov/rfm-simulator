@@ -147,8 +147,9 @@ func next_key() -> String:
 	if called_pass != pass_now():
 		called_pass = pass_now()
 		called.clear()
+	# Crews past the day's number (game.rally_crew_limit) stay in their bays.
 	for key in Parks.KEYS:
-		if not called.has(key) and parked[start_end()].has(key):
+		if not called.has(key) and parked[start_end()].has(key) and crew_of(key) < game.rally_crew_limit:
 			return key
 	return ""
 

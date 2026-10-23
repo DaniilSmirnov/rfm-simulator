@@ -8,6 +8,8 @@
 # the game as they are; RALLY_APP points at another build, such as the player's
 # Rally Fans Simulator.app.
 # The Mac stays awake while the server runs, and a crashed server starts again.
+# Commands typed here (help, stage, crews, players, pause, resume) go to the
+# running server.
 set -euo pipefail
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 app="${RALLY_APP:-$root/dist-macos-server/SERVER Rally Fans Simulator.app}"

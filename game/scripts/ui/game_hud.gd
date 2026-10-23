@@ -399,10 +399,10 @@ func update_hud() -> void:
 		set_hud_text(game.sobriety_label, Loc.t("ПРОТРЕЗВЛЕНИЕ · ВСТАНЕШЬ ЧЕРЕЗ %02d:%02d") % [seconds / 60, seconds % 60])
 		game.sobriety_bar.value = game.SOBER_SECONDS - (game.sober_remaining if game.sober_remaining > 0 else game.SOBER_SECONDS)
 	course_text = game.course.caption()
-	quest_text = Loc.t("%s Выбрать место для лагеря\n%s Разложить стол\n%s Поставить стулья\n%s Пожарить и съесть шашлык\n%s Посмотреть %d экипажей") % ["[x]" if game.camp != null else "[ ]", "[x]" if game.camp != null else "[ ]", "[x]" if game.has_chairs else "[ ]", "[x]" if game.eaten else "[ ]", "[x]" if game.passed >= game.RALLY_CREW_LIMIT else "[ ]", game.RALLY_CREW_LIMIT]
+	quest_text = Loc.t("%s Выбрать место для лагеря\n%s Разложить стол\n%s Поставить стулья\n%s Пожарить и съесть шашлык\n%s Посмотреть %d экипажей") % ["[x]" if game.camp != null else "[ ]", "[x]" if game.camp != null else "[ ]", "[x]" if game.has_chairs else "[ ]", "[x]" if game.eaten else "[ ]", "[x]" if game.passed >= game.rally_crew_limit else "[ ]", game.rally_crew_limit]
 	if game.packing.active():
 		quest_text = Loc.t("Оба прохода завершены\nВернуть вещи в багажники: осталось %d\nБагажник открывается при подходе\nF — взять предмет / вернуть коробку\nЗатем все садятся в машины, свои или к друзьям") % remaining_items
-	status_text = Loc.t("ПРОХОД %d/2 · ЭКИПАЖИ %d/%d · ПОМОЩЬ %d\nВЫЕЗД %02d:%02d") % [game.course.pass_index, game.passed, game.RALLY_CREW_LIMIT, game.helped, int(game.elapsed) / 60, int(game.elapsed) % 60]
+	status_text = Loc.t("ПРОХОД %d/2 · ЭКИПАЖИ %d/%d · ПОМОЩЬ %d\nВЫЕЗД %02d:%02d") % [game.course.pass_index, game.passed, game.rally_crew_limit, game.helped, int(game.elapsed) / 60, int(game.elapsed) % 60]
 	if game.rides.riding():
 		info_text = Loc.t("ПАССАЖИР    ·    МАШИНА: %s    ·    %02d КМ/Ч") % [game.rides.name_of(game.rides.ride).to_upper(), int(absf(game.rides.speed()) * 3.6)]
 		hint_text = Loc.t("Мышь — смотреть   ·   F — выйти, когда машина стоит")

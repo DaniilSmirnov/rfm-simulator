@@ -140,7 +140,7 @@ func run() -> void:
 	scene.injuries.down = false
 	# Victory is separate from death and includes complete picnic.
 	scene.dead = false
-	scene.passed = scene.RALLY_CREW_LIMIT
+	scene.passed = scene.rally_crew_limit
 	scene._check_finish()
 	check(not scene.finished, "ten crews cannot finish before closing police")
 	scene.course.phase = "complete"

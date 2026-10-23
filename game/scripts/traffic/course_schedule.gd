@@ -36,12 +36,12 @@ func update(game, delta: float) -> void:
 			game.race_clock += delta
 			if red_flag:
 				pass
-			elif game.rally_spawn_count < game.RALLY_CREW_LIMIT:
+			elif game.rally_spawn_count < game.rally_crew_limit:
 				game.spawn_clock -= delta
 				if game.spawn_clock <= 0:
 					game.spawn_racer()
 					game.spawn_clock = game.rng.randf_range(17, 23)
-			elif game.passed >= game.RALLY_CREW_LIMIT:
+			elif game.passed >= game.rally_crew_limit:
 				var moving = false
 				for racer in game.racers:
 					moving = moving or racer.state in ["racing", "offroad", "rock_bounce"]

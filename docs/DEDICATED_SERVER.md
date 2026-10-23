@@ -37,7 +37,7 @@ npx wrangler secret put DEDICATED_TOKEN
 ```bash
 npm run build:linux
 docker build --build-context export=dist-linux -t rally-dedicated server/dedicated
-docker run -d --restart=always --name rally-canyon \
+docker run -dit --restart=always --name rally-canyon \
   -e RALLY_DEDICATED_TOKEN=… rally-dedicated --stage=3 --room=C0FFEE
 docker logs -f rally-canyon     # ROOM_CONNECTED C0FFEE host=true, затем статус раз в минуту
 ```
@@ -53,6 +53,34 @@ docker logs -f rally-canyon     # ROOM_CONNECTED C0FFEE host=true, затем с
 | `--name=…` | «Сервер» | Имя хозяина в составе комнаты |
 | `--max-fps=N` | 60 | Потолок кадров симуляции |
 | `--idle-restart=S` | 300 | Перезапуск пустой комнаты; 0 — никогда |
+| `--crews=N` | 10 | Раллийных экипажей в каждом проходе, 0–10 |
+| `--max-players=N` | 8 | Сколько гостей пускать в комнату, 1–8 |
+
+## Команды
+
+Работающий сервер читает команды из своего терминала: набери команду и нажми
+Enter, ответ появится в логе строкой `[RFM dedicated] …`. Настройки, заданные
+командами, переживают перезапуски комнаты, но не перезапуск процесса (тогда
+снова действуют аргументы).
+
+| Команда | Что делает |
+| --- | --- |
+| `help` | Список команд |
+| `status` | ID, СУ, гости/лимит, экипажи, фаза дня, время, fps |
+| `stage N` или `stage id` | Сменить СУ (`stage 3`, `stage canyon`). Комната начинается заново под тем же ID: гости видят уведомление, через 4 с комната закрывается, и они заходят снова по тому же ID |
+| `crews N` | Экипажей в каждом проходе, 0–10. Сразу: если уже стартовало больше, проход закроется после них. Лишние машины остаются в боксах парка сервиса (их там 10) |
+| `players N` | Сколько гостей пускать, 1–8. Кто уже в комнате, остаются; новые получают «Комната заполнена: максимум N игроков» |
+| `pause` / `resume` | Поставить день на паузу / снять. У гостей пишется «ПАУЗА ХОЗЯИНА». Пустая комната ждёт гостей и без паузы |
+| `restart` | Начать день заново на том же СУ (гости заходят снова) |
+
+На Mac команды вводятся прямо в окне терминала, где запущен
+`run-macos.sh` (и в `tmux`/`screen`). В Docker контейнеру нужен stdin:
+`docker run -dit …`, потом `docker attach rally-canyon` (выйти, не останавливая
+сервер, — `Ctrl+P`, `Ctrl+Q`). Без stdin (`docker run -d`, `< /dev/null`)
+консоль просто выключается.
+
+Лимит гостей хранит Worker: команда `players` работает после того, как
+обновлённый Worker выкачен (`npx wrangler deploy`).
 
 ## Запуск на Mac
 
@@ -117,7 +145,8 @@ docker logs -f rally-canyon     # ROOM_CONNECTED C0FFEE host=true, затем с
 
 - `node scripts/test-dedicated.mjs`: локальный Worker, сервер с постоянным ID,
   нативный гость входит по ID, едет на симуляции сервера, не видит сервер;
-  пустая комната перезапускается под тем же ID; неверный ключ получает 403.
+  пустая комната перезапускается под тем же ID; неверный ключ получает 403;
+  команды `crews`, `pause`/`resume`, `players`, `stage` и `status` из stdin.
   В CI это джоб «Dedicated server».
 - Linux-сборка в CI собирает образ и проверяет, что он стартует.
 - `tests/room-core.test.mjs`, `tests/room-socket.test.mjs`: правила Worker.

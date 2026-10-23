@@ -225,6 +225,7 @@ func _apply_checked_sync(data: Dictionary) -> void:
 	if is_host and data.get("cold_revs") is Dictionary:
 		world_sync.server_cold_revs = data.cold_revs
 	host_id = str(data.get("host", host_id))
+	ui.limit = int(data.get("max_players", NetProtocol.max_players()))
 	_update_members(data.players)
 	var world = data.get("world")
 	var stamp = float(data.get("world_time", -1))

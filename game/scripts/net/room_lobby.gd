@@ -8,6 +8,8 @@ const DEFAULT_NAME = "Фанат"
 var default_hint = Loc.t("До %d фанатов в одном лагере. Создатель выезда должен оставаться в комнате.") % NetProtocol.max_players()
 var room
 var game
+# Guests the room lets in: fewer than max_players when its dedicated server says so.
+var limit = NetProtocol.max_players()
 var panel: PanelContainer
 var status: Label
 var caption: Label
@@ -83,4 +85,4 @@ func show_connected() -> void:
 	room_label.show()
 
 func show_room_status(room_id: String, players: int, is_host: bool, host_paused: bool) -> void:
-	room_label.text = Loc.t("КОМНАТА %s · %d/%d · %s%s") % [room_id, players, NetProtocol.max_players(), Loc.t("СОЗДАТЕЛЬ") if is_host else Loc.t("ГОСТЬ"), Loc.t(" · ПАУЗА ХОЗЯИНА") if host_paused else ""]
+	room_label.text = Loc.t("КОМНАТА %s · %d/%d · %s%s") % [room_id, players, limit, Loc.t("СОЗДАТЕЛЬ") if is_host else Loc.t("ГОСТЬ"), Loc.t(" · ПАУЗА ХОЗЯИНА") if host_paused else ""]
