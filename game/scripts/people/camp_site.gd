@@ -102,8 +102,9 @@ static func roughness(stage, spots: Dictionary, ignored: Array = [], bound: floa
 			return INF
 		# Gear rests on the collision floor. Where that is not the drawn land
 		# (it lies under it beside the road cut, above the coarse terrain mesh
-		# on a curved hillside) gear would sink in or hover.
-		if reach < 0.6: continue
+		# on a curved hillside) gear would sink in or hover. Chairs too: one in
+		# Mineshaft hung 9 cm over the drawn land. People stand on the land.
+		if reach < 0.4: continue
 		result = maxf(result, absf(floor_height(stage, spot, memo) - floor_spot.y) / MISMATCH * LEVEL)
 		for offset in [Vector3(reach, 0, 0), Vector3(-reach, 0, 0), Vector3(0, 0, reach), Vector3(0, 0, -reach)]:
 			if result > bound: return result
