@@ -297,3 +297,26 @@ test('only the dedicated key marks a room as served and picks its ID', () => {
     assert.throws(() => dedicatedCreate(raw, key, secret), e => e.status === 403);
   }
 });
+
+test('a dedicated server whose socket closes closes its room at once', async () => {
+  const { room, sockets, storage } = fakeRoom();
+  await wait(0);
+  const server = room.room.add('Сервер', Date.now(), true, { dedicated: true });
+  const guest = room.room.add('Guest', Date.now(), false);
+  const serverWs = await connect(room, sockets, server.token);
+  const guestWs = await connect(room, sockets, guest.token);
+  guestWs.take();
+  await room.webSocketClose(serverWs, 1006);
+  assert.equal(room.room.data.closed, true);
+  assert.deepEqual(guestWs.take('error').map(m => m.status), [410], 'the guest is told the room is closed');
+  assert.equal(guestWs.closed, 4410);
+  assert.equal(storage.size, 0);
+
+  // An ordinary host may come back over HTTP: its socket closing keeps the room.
+  const other = fakeRoom();
+  await wait(0);
+  const host = other.room.room.add('Host', Date.now(), true);
+  const hostWs = await connect(other.room, other.sockets, host.token);
+  await other.room.webSocketClose(hostWs, 1006);
+  assert.equal(other.room.room.data.closed, false);
+});
