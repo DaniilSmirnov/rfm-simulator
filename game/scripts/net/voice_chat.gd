@@ -61,6 +61,7 @@ func join() -> void:
 	var session = ("%s-%s-%d" % [room.room_id, room.player_id, Time.get_ticks_msec()]).left(96)
 	var options = {"localId": room.player_id, "session": session, "iceServers": NetProtocol.direct("ice_servers", [])}
 	joined = backend.join(options)
+	print("RADIO %s as %s, room socket %s" % ["joined" if joined else "did not join", room.player_id, "open" if room.transport.socket_open else "closed"])
 	socket_was_open = false
 	if joined:
 		sync_members(room.members.keys())

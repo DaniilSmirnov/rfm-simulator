@@ -92,6 +92,7 @@ static func load_extension() -> bool:
 	if stale:
 		var file = FileAccess.open(target, FileAccess.WRITE)
 		if file == null:
+			print("RADIO cannot write %s (%s)" % [ProjectSettings.globalize_path(target), error_string(FileAccess.get_open_error())])
 			return false
 		file.store_buffer(bytes)
 		file.close()
@@ -104,7 +105,10 @@ static func load_extension() -> bool:
 	var status = GDExtensionManager.load_extension(dir.path_join("rally_voice.gdextension"))
 	if status != GDExtensionManager.LOAD_STATUS_OK and status != GDExtensionManager.LOAD_STATUS_ALREADY_LOADED:
 		push_warning("Radio extension did not load (%d)" % status)
-	return ClassDB.class_exists("RallyVoiceLink")
+	var loaded = ClassDB.class_exists("RallyVoiceLink")
+	# Players send this log when the radio is silent: say what loaded and from where.
+	print("RADIO extension %s: %s" % ["loaded" if loaded else "failed (%d)" % status, ProjectSettings.globalize_path(target)])
+	return loaded
 
 func _ready() -> void:
 	bands = NetProtocol.spec.get("voice", {}).get("bands", [])
@@ -206,6 +210,7 @@ func on_signal(from: String, data: Dictionary) -> void:
 			if not c is Dictionary:
 				return
 			var entry = {"candidate": str(c.get("candidate", "")), "mid": str(c.get("sdpMid", ""))}
+			_count_candidate(peer.remote, entry.candidate)
 			if peer.described:
 				link.add_ice_candidate(entry.candidate, entry.mid)
 			else:
@@ -229,8 +234,9 @@ func _open(id: String, initiator: bool) -> Dictionary:
 	var link = link_factory.call()
 	if link == null or link.initialize(ice_servers, initiator) != OK:
 		_note_failure(id)
+		print("RADIO %s: link did not initialize" % id)
 		return {}
-	var peer = {"id": id, "link": link, "offering": initiator, "described": false, "candidates": [], "remote_session": "",
+	var peer = {"id": id, "link": link, "offering": initiator, "described": false, "candidates": [], "remote_session": "", "local": {}, "remote": {},
 		"opened_at": Time.get_ticks_msec(), "connected": false, "distance": 9999.0, "talking": false, "player": null}
 	peers[id] = peer
 	return peer
@@ -274,19 +280,23 @@ func _poll_links() -> void:
 				"description":
 					_send(id, {"kind": str(event.sdp_type), "description": {"type": str(event.sdp_type), "sdp": str(event.sdp)}})
 				"candidate":
+					_count_candidate(peer.local, str(event.candidate))
 					_send(id, {"kind": "candidate", "candidate": {"candidate": str(event.candidate), "sdpMid": str(event.mid), "sdpMLineIndex": 0}})
 				"state":
 					_state_changed(id, peer, str(event.state), now)
 				"error":
+					print("RADIO %s: %s" % [id, event.get("message", "")])
 					events.append({"type": "error", "stage": "native", "message": str(event.get("message", ""))})
 		if not peers.has(id):
 			continue
 		# "lost_at" exists only while a connected link is silent.
 		if not peer.connected and now - int(peer.opened_at) > DIAL_MSEC or peer.has("lost_at") and now - int(peer.lost_at) > LOST_MSEC:
+			_log_link(id, peer, "timed out" if not peer.connected else "lost")
 			_drop(id, false)
 			_note_failure(id)
 
 func _state_changed(id: String, peer: Dictionary, state: String, now: int) -> void:
+	_log_link(id, peer, state)
 	match state:
 		"connected":
 			peer.connected = true
@@ -297,6 +307,18 @@ func _state_changed(id: String, peer: Dictionary, state: String, now: int) -> vo
 		"failed", "closed":
 			_drop(id, false)
 			_note_failure(id)
+
+# "typ host" / "typ srflx" / "typ relay": which addresses each side offered
+# tells a blocked network (no srflx) from a firewall (both offered, no reply).
+static func _count_candidate(counts: Dictionary, candidate: String) -> void:
+	var at = candidate.find(" typ ")
+	if at >= 0:
+		var kind = candidate.substr(at + 5).get_slice(" ", 0)
+		counts[kind] = int(counts.get(kind, 0)) + 1
+
+func _log_link(id: String, peer: Dictionary, state: String) -> void:
+	print("RADIO %s: %s after %d ms, %s, ours %s, theirs %s" % [id, state, Time.get_ticks_msec() - int(peer.opened_at),
+		"we call" if local_id < id else "they call", peer.local, peer.remote])
 
 func connected_count() -> int:
 	return peers.values().filter(func(p): return p.connected).size()
@@ -366,6 +388,7 @@ func _set_mic(value: String) -> void:
 	if mic == value:
 		return
 	mic = value
+	print("RADIO microphone ", value)
 	events.append({"type": "mic", "value": value})
 
 # Drains the microphone every frame; while the key is held it is sent to everyone.
