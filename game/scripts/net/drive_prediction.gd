@@ -133,7 +133,7 @@ func step(c: Dictionary, stage, model: int) -> void:
 		var previous = node.position
 		var old_yaw = yaw
 		var offroad = stage.road_distance(previous) > 4.1
-		yaw = motion.handling.advance(motion, yaw, 0.0 if wrecked else c.throttle, 0.0 if wrecked else c.steer, wrecked or c.brake, stage.grip(previous), CarRegistry.OFFROAD_SPEED if offroad else CarRegistry.TOP_SPEED, model, dt)
+		yaw = motion.handling.advance(motion, yaw, 0.0 if wrecked else c.throttle, 0.0 if wrecked else c.steer, wrecked or c.brake, stage.grip(previous), CarRegistry.TOP_SPEED, model, dt, {}, offroad)
 		var forward = Vector3(-sin(yaw), 0, -cos(yaw))
 		var next = previous + motion.velocity * dt
 		next.x = clampf(next.x, -185, 185)

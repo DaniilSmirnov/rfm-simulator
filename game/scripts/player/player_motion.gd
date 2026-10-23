@@ -48,10 +48,9 @@ func drive(delta: float) -> void:
 		var throttle = 0.0 if wrecked else Input.get_axis("back", "forward")
 		var steer = 0.0 if wrecked else Input.get_axis("left", "right")
 		var offroad = game.stage.road_distance(game.car.position) > 4.1
-		var max_speed = CarRegistry.OFFROAD_SPEED if offroad else CarRegistry.TOP_SPEED
 		var braking = wrecked or Input.is_action_pressed("brake")
 		var previous_heading = game.heading
-		game.heading = game.vehicle_motion.handling.advance(game.vehicle_motion, game.heading, throttle, steer, braking, game.stage.grip(game.car.position), max_speed, game.selected_car, dt)
+		game.heading = game.vehicle_motion.handling.advance(game.vehicle_motion, game.heading, throttle, steer, braking, game.stage.grip(game.car.position), CarRegistry.TOP_SPEED, game.selected_car, dt, {}, offroad)
 		var forward = Vector3(-sin(game.heading), 0, -cos(game.heading))
 		game.speed = game.vehicle_motion.velocity.dot(forward)
 		game.rock_impact_timer = maxf(0.0, game.rock_impact_timer - dt)

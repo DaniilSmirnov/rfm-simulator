@@ -17,7 +17,8 @@ static func profile(variant: int) -> Dictionary:
 	return {"rear_bias": CarRegistry.rear_bias(variant), "wheelbase": float(handling.wheelbase), "launch": CarRegistry.launch(float(handling.zero_to_100)), "inertia": float(handling.inertia)}
 
 # `spec` replaces the player car's profile (rally crews pass their own).
-func advance(motion, heading: float, throttle: float, steer: float, brake: bool, grip: float, max_speed: float, variant: int, dt: float, spec: Dictionary = {}) -> float:
+# `offroad` slows the pull above CarRegistry.OFFROAD_SPEED without capping speed.
+func advance(motion, heading: float, throttle: float, steer: float, brake: bool, grip: float, max_speed: float, variant: int, dt: float, spec: Dictionary = {}, offroad: bool = false) -> float:
 	if spec.is_empty():
 		spec = profile(variant)
 	var forward = Vector3(-sin(heading), 0, -cos(heading))
@@ -32,12 +33,14 @@ func advance(motion, heading: float, throttle: float, steer: float, brake: bool,
 	var adhesion = maxf(0.05, grip) * 12.0 if motion.grounded else 0.0
 	# Forward throttle follows the car's launch curve, which already includes
 	# drag and levels off at the shared top speed; partial throttle settles
-	# lower. Coasting, reversing and running over a limit (off road) roll out.
+	# lower. Coasting, reversing and running over a limit roll out.
 	var launch: float = spec.launch
 	var drive: float = throttle * launch
 	var pulling = throttle > 0 and longitudinal > -0.2
 	if pulling:
 		drive = launch * throttle - (launch - CarRegistry.pull(launch, magnitude))
+		if offroad:
+			drive *= lerpf(1.0, CarRegistry.OFFROAD_PULL, clampf((magnitude - CarRegistry.OFFROAD_SPEED) / 2.0, 0, 1))
 	# Opposite pedal brakes first; reverse engages only after slowing down.
 	if throttle * longitudinal < -0.2:
 		drive = throttle * 10.0
@@ -45,8 +48,8 @@ func advance(motion, heading: float, throttle: float, steer: float, brake: bool,
 	var over = throttle * longitudinal > 0 and magnitude > limit
 	if over:
 		drive *= clampf((limit + 1.0 - magnitude), 0, 1)
-	# Over a limit (off the road at speed) the rough ground scrubs speed fast.
-	var drag = 0.008 if magnitude > max_speed else 0.002
+	# Over a limit, or coasting off the road at speed, the ground scrubs speed fast.
+	var drag = 0.008 if magnitude > max_speed or (offroad and magnitude > CarRegistry.OFFROAD_SPEED) else 0.002
 	var resistance = 0.0 if pulling and not over else (0.65 + magnitude * magnitude * drag) * signf(longitudinal)
 	if brake:
 		drive = -signf(longitudinal) * 16.0

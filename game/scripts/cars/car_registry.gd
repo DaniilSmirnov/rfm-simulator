@@ -10,7 +10,10 @@ const PATH = "res://data/cars.json"
 # launch * (1 - (v / TOP_SPEED)^3), so it pulls hard at first and levels off
 # at the top speed.
 const TOP_SPEED = 220.0 / 3.6
+# Off the road there is no speed limit, only slow progress: a car pulls as on
+# the road up to OFFROAD_SPEED, then at OFFROAD_PULL of its launch curve.
 const OFFROAD_SPEED = 7.0
+const OFFROAD_PULL = 0.3
 const REVERSE_SPEED = 7.6
 # ∫ dv / (1 - (v / TOP_SPEED)^3) from 0 to 100 km/h: seconds to 100 km/h at a
 # launch of 1 m/s².

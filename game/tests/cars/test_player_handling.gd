@@ -86,11 +86,27 @@ func run() -> void:
 	print("\n".join(report))
 	check(launch_ok, "every player car reaches 100 km/h in its own zero_to_100 time")
 	check(top_ok, "every player car tops out at the shared 220 km/h")
+	# Off the road nothing caps the speed, but past OFFROAD_SPEED it builds slowly.
+	var paved = Motion.new()
 	motion = Motion.new()
-	motion.velocity = Vector3(0, 0, -40)
+	var road_sixty = INF
+	var field_sixty = INF
+	var same_start = true
+	for step in range(int(60.0 / Handling.STEP)):
+		paved.handling.advance(paved, 0, 1, 0, false, 0.46, CarRegistry.TOP_SPEED, 0, Handling.STEP)
+		motion.handling.advance(motion, 0, 1, 0, false, 0.46, CarRegistry.TOP_SPEED, 0, Handling.STEP, {}, true)
+		if motion.velocity.length() < CarRegistry.OFFROAD_SPEED:
+			same_start = same_start and is_equal_approx(motion.velocity.length(), paved.velocity.length())
+		if road_sixty == INF and paved.velocity.length() >= 60.0 / 3.6: road_sixty = (step + 1) * Handling.STEP
+		if field_sixty == INF and motion.velocity.length() >= 60.0 / 3.6: field_sixty = (step + 1) * Handling.STEP
+	print("0-60 km/h on grip 0.46: road %.1f s, off road %.1f s; off road after 60 s: %d km/h" % [road_sixty, field_sixty, int(motion.velocity.length() * 3.6)])
+	check(same_start, "off the road a car starts as on the road up to the off-road speed")
+	check(field_sixty < 60.0 and field_sixty > road_sixty * 2.0, "off the road a car passes 60 km/h, just much later than on the road")
+	motion = Motion.new()
+	motion.velocity = Vector3(0, 0, -30)
 	for step in range(240):
-		motion.handling.advance(motion, 0, 1, 0, false, 1.0, CarRegistry.OFFROAD_SPEED, 0, Handling.STEP)
-	check(motion.velocity.length() < 25, "full throttle off the road still rolls down to the off-road limit")
+		motion.handling.advance(motion, 0, 0, 0, false, 0.46, CarRegistry.TOP_SPEED, 0, Handling.STEP, {}, true)
+	check(motion.velocity.length() < 20, "coasting off the road the rough ground still scrubs speed fast")
 	motion = Motion.new()
 	for step in range(1200):
 		motion.handling.advance(motion, 0, -1, 0, false, 1.0, CarRegistry.TOP_SPEED, 9, Handling.STEP)
