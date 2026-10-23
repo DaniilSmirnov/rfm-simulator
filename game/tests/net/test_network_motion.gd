@@ -169,7 +169,8 @@ func run() -> void:
 	reply.world_time = stamp + 100
 	reply.world.elapsed = 10.2
 	game.room._response(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), JSON.stringify(reply).to_utf8_buffer())
-	check(absf(game.elapsed - 10.2) < 0.001, "new world snapshot still applies shared state")
+	# The guest clock runs locally and drifts toward the host's time (world_sync.advance_clock).
+	check(absf(game.room.world_sync.host_elapsed - 10.2) < 0.001 and game.elapsed == 10.1, "new world snapshot still applies shared state without jumping the guest clock")
 	# A guest car driven on the host is stamped by its simulated ticks, so
 	# input bursts that arrive with jitter still give evenly spaced samples.
 	var Prediction = load("res://scripts/net/drive_prediction.gd")
