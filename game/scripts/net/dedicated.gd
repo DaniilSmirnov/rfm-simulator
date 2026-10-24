@@ -85,6 +85,8 @@ var status_clock = 0.0
 var joined = false
 # Held by the `pause` command; an empty room waits anyway.
 var held = false
+# A guest has been in since the room began: only then does an empty room start over.
+var visited = false
 var switch_clock = -1.0
 
 func _ready() -> void:
@@ -121,9 +123,10 @@ func _process(delta: float) -> void:
 		game.walker = OFF_MAP
 		game.car.position = OFF_MAP
 		game.paused = held or room.peers.is_empty()
+		visited = visited or not room.peers.is_empty()
 		idle = 0.0 if not room.peers.is_empty() else idle + delta
 		var limit = float(option("idle-restart", "300"))
-		if limit > 0 and idle > limit and game.elapsed > 0:
+		if limit > 0 and idle > limit and visited:
 			print("[RFM dedicated] nobody for %d s: starting the room over" % int(idle))
 			restart()
 		_status(delta)

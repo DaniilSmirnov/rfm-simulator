@@ -1,0 +1,16 @@
+name: Browser test runtime
+description: Installs Playwright and its Chromium, cached between runs.
+runs:
+  using: composite
+  steps:
+    # The runner image already has Chromium's system libraries; --with-deps
+    # only added fonts through apt, which at times took 5-10 minutes.
+    - uses: actions/cache@v4
+      with:
+        path: ~/.cache/ms-playwright
+        key: playwright-1.63.0-chromium-${{ runner.os }}
+    - name: Install Playwright and Chromium
+      shell: bash
+      run: |
+        npm install --no-save --package-lock=false playwright@1.63.0
+        npx playwright install chromium

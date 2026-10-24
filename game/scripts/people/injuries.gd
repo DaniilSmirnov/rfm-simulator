@@ -204,7 +204,7 @@ func knock(key: String, feet: Vector3, velocity: Vector3, car: Vector3, playful:
 	if playful:
 		if key == local_key():
 			_go_down()
-		game.toast("Человек упал! Удерживай T: стой, чтобы поднять, иди, чтобы тащить. Пробел — встать.")
+		game.announce("Человек упал! Удерживай T: стой, чтобы поднять, иди, чтобы тащить. Пробел — встать.")
 		return true
 	_assign(record, key)
 	# Broadcast the emergency immediately, not only on the next update tick.
@@ -270,9 +270,9 @@ func _knocked(key: String) -> void:
 		_go_down()
 		game.toast("Тебя сбила машина! Лежи — скорая уже выехала со старта.")
 	elif key.begins_with("player:"):
-		game.toast("Сбили участника компании! Красный флаг, вызвана скорая.")
+		game.announce("Сбили участника компании! Красный флаг, вызвана скорая.")
 	else:
-		game.toast("Машина сбила человека! Красный флаг, вызвана скорая.")
+		game.announce("Машина сбила человека! Красный флаг, вызвана скорая.")
 
 # ---------------------------------------------------------------- ambulance
 
@@ -598,6 +598,9 @@ func apply_snapshot(entries: Array) -> void:
 	if mine != null and str(mine.phase) != "limp":
 		if not down:
 			_go_down()
+			# The host announces a struck friend; the one struck reads it as theirs.
+			if not bool(mine.get("play", false)):
+				game.toast("Тебя сбила машина! Лежи — скорая уже выехала со старта.")
 	elif was_down:
 		var spot = game.walker
 		if mine != null:

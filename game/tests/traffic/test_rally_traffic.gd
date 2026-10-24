@@ -47,6 +47,8 @@ func run() -> void:
 	game.start_game()
 	game.in_car = false
 	game.walker = Vector3(170, 2, 5)
+	# The player waits far off the road; these check the crews' own motion.
+	game.crews.full_rate = true
 	game.course.phase = "racing"
 	var biases = []
 	for i in range(10):

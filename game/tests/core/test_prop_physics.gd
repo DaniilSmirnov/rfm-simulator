@@ -28,9 +28,11 @@ class Terrain extends Node3D:
 class Room extends RefCounted:
 	var guest = false
 	var peers: Dictionary = {}
+	var transport = null
 	func is_authority() -> bool: return not guest
 	func is_guest() -> bool: return guest
 	func a(p: Vector3) -> Array: return [p.x, p.y, p.z]
+	func av(p: Vector3) -> Array: return [p.x, p.y, p.z]
 	func v(p: Array) -> Vector3: return Vector3(p[0], p[1], p[2])
 
 class Packing extends RefCounted:

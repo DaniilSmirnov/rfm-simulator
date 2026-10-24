@@ -336,7 +336,31 @@ func show_consumption_warning(kind: String) -> void:
 	game.consumption_warning_time = 8.0
 	game.consumption_warning.show()
 
+# What the host passes on to guests: a shared event (announce) for everyone,
+# or the outcome of a guest's own command for that guest. Everything else the
+# host sees ("you drank a beer") stays on the host's screen.
+const NOTICE_SECONDS = 5.0
+var notice = ""
+var notice_for = ""
+var _notice_at = -INF
+
+func announce(message: String) -> void:
+	toast(message)
+	_share(message, "")
+
+func notice_left() -> float:
+	return maxf(0.0, NOTICE_SECONDS - (Time.get_ticks_msec() / 1000.0 - _notice_at))
+
+func _share(message: String, owner: String) -> void:
+	notice = message
+	notice_for = owner
+	_notice_at = Time.get_ticks_msec() / 1000.0
+
 func toast(message: String) -> void:
+	# The host running a guest's command: the notice is that guest's.
+	if game.acting != null:
+		_share(message, str(game.acting.owner))
+		return
 	message = Loc.t(message)
 	if game.mobile_mode:
 		var labels = {"Space —": Loc.t("Тормоз —"), "F —": Loc.t("Действие —"), "Z —": Loc.t("Стол —"), "C —": Loc.t("Стулья —"), "G —": Loc.t("Мангал —"), "X —": Loc.t("Есть —"), "R —": Loc.t("Заезды —"), "— T": Loc.t("— Трос"), ": E.": Loc.t(": Выйти."), Loc.t("нажми X"): Loc.t("нажми Есть"), Loc.t("Удерживай T"): Loc.t("Удерживай Трос")}

@@ -50,7 +50,18 @@ func run() -> void:
 		await physics_frame
 	Input.action_release("forward")
 	await process_frame
-	check(node.global_position.distance_to(walk_start) > 0.05, "walking into a sleeping prop wakes and pushes it through actual player movement")
+	check(node.global_position.distance_to(walk_start) < 0.01, "walking into a prop does not push it")
+	game.walker = walk_start + Vector3.RIGHT * 1.5
+	Input.action_press("forward")
+	Input.action_press("sprint")
+	for i in range(90):
+		game.player.walk_step(1.0 / 60.0)
+		game._update_tow(1.0 / 60.0)
+		await physics_frame
+	Input.action_release("sprint")
+	Input.action_release("forward")
+	await process_frame
+	check(node.global_position.distance_to(walk_start) > 0.05, "running into a sleeping prop wakes and pushes it through actual player movement")
 	var hit = game.stage.solids.hit(pos + Vector3(-3, 0.4, 0), node.position + Vector3(0, 0.4, 0), 0.1)
 	check(hit.get("prop", "") == "test:prop", "collision follows the moving prop")
 	var data = props.snapshot()

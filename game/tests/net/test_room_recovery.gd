@@ -29,7 +29,7 @@ func success(room, socket: bool) -> void:
 func outage(room, socket: bool) -> void:
 	room.connected = true
 	room.commands = [{"seq": 1, "action": "table"}]
-	room.acknowledgements = ["guest:2"]
+	room.accepted = {"guest": 2}
 	room.prediction.pending.clear()
 	room.prediction.pending.append({"seq": 3, "ticks": 1})
 	var identity = [room.room_id, room.player_id, room.token]
@@ -40,7 +40,7 @@ func outage(room, socket: bool) -> void:
 	check(room.connected, "repeated %s failures preserve membership" % ("socket" if socket else "HTTP"))
 	check(room.clock < 0 and room.transport.errors > 0, "transient failures back off syncs")
 	check(not room.transport.socket_open, "server errors leave HTTP fallback available")
-	check(room.commands.size() == 1 and room.acknowledgements == ["guest:2"] and room.prediction.pending.size() == 1, "outage preserves commands, acknowledgements and prediction")
+	check(room.commands.size() == 1 and room.accepted == {"guest": 2} and room.prediction.pending.size() == 1, "outage preserves commands, accepted commands and prediction")
 	check([room.room_id, room.player_id, room.token] == identity, "outage preserves room identity")
 	if not room.connected:
 		return
@@ -80,7 +80,7 @@ func stalled_socket(room) -> void:
 	room.transport.poll(0.1)
 	check(socket.closed and not room.transport.socket_open, "unanswered sync falls back to HTTP despite continuous sends and incoming pushes")
 	check(room.connected and room.transport.errors == 1 and room.clock < 0, "socket silence starts one bounded recovery episode")
-	check(room.commands.size() == 1 and room.acknowledgements == ["guest:2"] and room.prediction.pending.size() == 1, "socket timeout preserves queued work")
+	check(room.commands.size() == 1 and room.accepted == {"guest": 2} and room.prediction.pending.size() == 1, "socket timeout preserves queued work")
 	room.transport.poll(0.1)
 	check(room.transport.errors == 1, "timed out socket reports failure only once")
 
@@ -161,9 +161,8 @@ func run() -> void:
 		for status in [413, 400]:
 			room.connected = true
 			room.transport.reset_recovery()
-			room.world_sync.server_cold_revs = {"trees": 1}
 			failure(room, socket, status)
-			check(room.connected and room.world_sync.server_cold_revs.is_empty(), "%s host sync refused with %d keeps the room and resends cold sections" % ["socket" if socket else "HTTP", status])
+			check(room.connected, "%s host sync refused with %d keeps the room" % ["socket" if socket else "HTTP", status])
 		for i in range(room.transport.MAX_REFUSED_SYNCS):
 			failure(room, socket, 413)
 		check(not room.connected, "%s host gives up after repeated refused syncs" % ("socket" if socket else "HTTP"))

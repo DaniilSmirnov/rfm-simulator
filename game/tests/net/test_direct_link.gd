@@ -1,7 +1,7 @@
 extends "res://tests/harness.gd"
 # Direct (WebRTC) links between host and guest, with an in-process stand-in for
-# the browser's peer connection: setup over the relayed signals, the hot world
-# and guest input over the channel, server fallback when the link goes quiet.
+# the browser's peer connection: setup over the relayed signals, then the whole
+# game over the channel, and leaving the room when the link does not come.
 const NetProtocol = preload("res://scripts/net/net_protocol.gd")
 
 class FakeChannel extends RefCounted:
@@ -89,6 +89,69 @@ func wire(a, b, a_id: String, b_id: String, created: Array) -> void:
 			return true
 		from.room.transport.socket_open = true
 
+# The hot world as per-guest deltas (world_delta.gd), on hand-made providers.
+func delta_checks() -> void:
+	var Delta = load("res://scripts/net/world_delta.gd")
+	var providers = [{"name": "status", "section": "", "keys": ["notice"]}, {"name": "progress", "section": "", "keys": ["elapsed"]}, {"name": "racers", "section": "", "keys": ["racers", "recovery_links"]}, {"name": "camp", "section": "camp", "keys": ["camp"]}]
+	var crews = func(far_x: float) -> Array: return [{"id": 1, "pos": [0, 0, 0], "yaw": 0.0}, {"id": 2, "pos": [far_x, 0, 0], "yaw": 0.0}]
+	var hot = {"notice": "a", "elapsed": 1.0, "racers": crews.call(500.0)}
+	var link = {}
+	var packet = func(time: int, world: Dictionary) -> Dictionary:
+		var whole = {"t": "w", "time": time, "world": world, "players": [], "accepted": {}}
+		return JSON.parse_string(JSON.stringify(Delta.packet(link, whole, Delta.parts(world, providers), [0, 0, 0])))
+	var first = packet.call(1000, hot)
+	check(first.get("full", false) and first.parts.size() == 3 and first.world.racers.size() == 2 and not first.world.has("camp"), "a link's first world is whole and carries no slow section")
+	var again = packet.call(1050, hot)
+	check(again.parts.size() == 3, "unconfirmed parts ride every packet")
+	link.acked = 1050
+	hot.elapsed = 2.0
+	var quiet = packet.call(1100, hot)
+	check(quiet.parts == ["progress"] and quiet.world.keys() == ["elapsed"], "after the guest confirms, only the part that changed goes")
+	hot.notice = ""
+	hot.erase("notice")
+	var emptied = packet.call(1150, hot)
+	check(emptied.parts.has("status") and not emptied.world.has("notice"), "a part that became empty is named without fields")
+	link.acked = 1150
+	hot.racers = crews.call(510.0)
+	hot.racers[0].yaw = 1.0
+	var near_only = packet.call(1200, hot)
+	check(near_only.world.racers.size() == 1 and near_only.world.racers[0].id == 1 and near_only.crews.map(func(id): return int(id)) == [1, 2], "a far crew waits for its refresh while a near one goes at once")
+	var refreshed = packet.call(1200 + int(Delta.FAR_INTERVAL * 1000.0), hot)
+	var sends = 0
+	for i in range(4):
+		var later = packet.call(1300 + int(Delta.FAR_INTERVAL * 1000.0) + i * 50, hot)
+		if later.has("world") and later.world.get("racers", []).any(func(r): return r.id == 2): sends += 1
+	check(refreshed.world.racers.any(func(r): return r.id == 2) and sends == Delta.FAR_SENDS - 1, "a far crew's refresh goes a bounded number of times")
+	var whole_again = packet.call(1000 + int(Delta.FULL_EVERY * 1000.0), hot)
+	check(whole_again.get("full", false) and whole_again.parts.size() == 3 and whole_again.world.racers.size() == 2, "a whole world goes every FULL_EVERY")
+	# The guest merges what arrives into what it holds.
+	var base = {}
+	var merged = Delta.merge(base, first, providers)
+	check(merged.world.notice == "a" and merged.world.racers.size() == 2 and merged.changed.size() == 3, "a whole world fills the guest's copy")
+	merged = Delta.merge(base, quiet, providers)
+	check(merged.world.notice == "a" and merged.world.elapsed == 2.0 and merged.world.racers.size() == 2 and merged.changed.keys() == ["progress"], "a delta keeps the parts it does not carry")
+	merged = Delta.merge(base, emptied, providers)
+	check(not merged.world.has("notice"), "an emptied part clears its fields")
+	merged = Delta.merge(base, near_only, providers)
+	check(merged.world.racers.size() == 2 and merged.crews.keys() == ["1"] and float(merged.world.racers[0].yaw) == 1.0, "unchanged crews stay and only the arrived ones count as fresh")
+	var left = near_only.duplicate(true)
+	left.crews = [2]
+	left.world.racers = []
+	merged = Delta.merge(base, left, providers)
+	check(merged.world.racers.size() == 1 and merged.world.racers[0].id == 2, "a crew missing from the ids leaves")
+	check(Delta.merge(base, {"world": {"elapsed": 3.0}}, providers).changed == null and base.is_empty(), "a world without parts is whole")
+	check(not Delta.valid({"parts": [1]}) and not Delta.valid({"parts": ["racers"]}) and Delta.valid({"parts": ["racers"], "crews": []}), "malformed delta fields are refused")
+
+# Guests index flying gravel by id.
+func stone_checks(guest) -> void:
+	guest.stones.clear()
+	guest.room.apply_stones({"stones": [{"id": 1, "pos": [0, 5, 0], "velocity": [0, 0, 0]}, {"id": 2, "pos": [1, 5, 0], "velocity": [0, 0, 0]}], "stone_ids": [1, 2]})
+	guest.room.apply_stones({"stones": [{"id": 2, "pos": [1, 6, 0], "velocity": [0, 0, 0]}], "stone_ids": [2]})
+	check(guest.stones.size() == 1 and guest.stones[0].id == 2 and guest.stones[0].node.position.y > 5.0, "a stone moves by its id and a gone one is removed")
+	for stone in guest.stones:
+		stone.node.queue_free()
+	guest.stones.clear()
+
 func _initialize() -> void:
 	call_deferred("run")
 
@@ -146,7 +209,7 @@ func run() -> void:
 	check(guest.room.authoritative_drives.has("guest") and int(guest.room.authoritative_drives.guest.ack) == guest.room.prediction.seq, "guest reconciles against the host's direct authority")
 	check(guest.room.peers.has("host") and guest.room.peers.host.state != null, "guest sees the host's own state from the direct packet")
 	var packet: Dictionary = host.room.direct.world_packet()
-	check(not packet.world.has("cold_revs") and not packet.world.has("npc_people") and not packet.world.has("camp"), "slow sections stay on the server path")
+	check(not packet.world.has("cold_revs") and not packet.world.has("npc_people") and not packet.world.has("camp"), "no slow section rides the world packet")
 	var full_hot: Dictionary = host.room.world_sync.current_parts().hot
 	full_hot.erase("cold_revs")
 	check(JSON.stringify(packet.world, "", true) == JSON.stringify(full_hot, "", true), "the direct packet is the hot world without building the slow sections")
@@ -154,7 +217,112 @@ func run() -> void:
 	check(guest_entry.size() == 1 and int(guest_entry[0].state_time) == int(float(host.room.drive_budgets.guest.stamp) * 1000.0), "a guest car the host drives is stamped with its simulation time")
 	for entry in packet.players:
 		check(not entry.state.has("drive_inputs") and not entry.state.has("trees") and not entry.has("name"), "raw driving input, object requests and the roster are never forwarded to guests")
-	check(guest.room.sync_body().get("direct", false) == true and not host.room.sync_body().has("direct"), "a guest with a healthy link tells the server to leave the hot world to it")
+	var body: Dictionary = guest.room.sync_body()
+	check(body.keys().all(func(key): return key in ["token", "state", "direct"]) and not body.state.has("drive_inputs") and not host.room.sync_body().has("world"), "the server gets only the membership: no world, commands or driving input")
+	# Slow sections go over the link in pieces until the guest reports holding them.
+	host.room.world_sync.refresh_cold()
+	var sections: Array = host.room.world_sync.latest_revs.keys()
+	var rounds = 0
+	while rounds < 20 and sections.any(func(section): return guest.room.world_sync.cold_revs.get(section) != host.room.world_sync.latest_revs[section]):
+		host.room.direct._send(1.0)
+		guest.room.direct.poll()
+		guest.room.direct._send(1.0)
+		host.room.direct.poll()
+		rounds += 1
+	check(rounds < 20 and guest.room.world_sync.cold_revs.get("camp") == host.room.world_sync.latest_revs.camp, "the guest gets every slow section over the link")
+	check(host.room.direct.cold_messages("guest").is_empty(), "sections the guest reported are not sent again")
+	var big = "x".repeat(host.room.direct.COLD_PIECE * 2 + 10)
+	host.room.world_sync.latest_texts.camp = JSON.stringify({"camp": null, "padding": big})
+	host.room.world_sync.latest_revs.camp = 4242
+	host.room.world_sync.latest_at += 1000
+	var first_pieces: Array = host.room.direct.cold_messages("guest")
+	check(first_pieces.size() == 3 and first_pieces.all(func(m): return m.s == "camp" and m.n == 3), "a large section goes in pieces")
+	check(host.room.direct.cold_messages("guest").is_empty(), "a sent copy waits for the guest's report before it goes again")
+	host.room.direct.links.guest.cold.camp.sent -= 10.0
+	check(host.room.direct.cold_messages("guest").size() == 3, "an unconfirmed copy goes again")
+	guest.room.world_sync.receive_piece(first_pieces[2])
+	guest.room.world_sync.receive_piece(first_pieces[0])
+	check(guest.room.world_sync.pieces.has("camp") and guest.room.world_sync.cold_revs.camp != 4242, "a section waits for all its pieces")
+	var stale: Dictionary = first_pieces[1].duplicate()
+	stale.v = 0
+	guest.room.world_sync.receive_piece(stale)
+	check(guest.room.world_sync.cold_revs.camp != 4242, "a piece of an older copy is ignored")
+	host.room.world_sync.refresh_cold()
+	# Commands ride the guest's packets until the host's world lists them as run.
+	guest.room.commands = [{"seq": 41, "action": "stand_person", "placement": {"pos": [1.0e6, 0, 0], "resource_id": 2.0}}]
+	guest.room.direct._send(1.0)
+	host.room.direct.poll()
+	check(host.room.processed.has("guest:41") and host.room.accepted.guest == 41, "the host runs a guest command from the direct link")
+	check(host.room.direct._placement({"pos": [1.0e6, 0, 0], "yaw": 0, "resource_id": 2.0}, [0, 0, 0]) == {"resource_id": 2}, "a direct command's placement gets the server's checks")
+	host.room.processed.erase("guest:41")
+	guest.room.direct._send(1.0)
+	host.room.direct.poll()
+	check(not host.room.processed.has("guest:41"), "a repeated command is not run twice")
+	host.room.direct._send(1.0)
+	guest.room.direct.poll()
+	check(guest.room.commands.is_empty(), "the guest drops commands the host ran")
+	# The host's own notices stay on its screen; shared events and a guest's
+	# own command results reach that guest.
+	var shared_before: String = host.hud.notice
+	host.hud.toast("Ты выпил пиво.")
+	check(host.hud.notice == shared_before and host.toast_label.text != "", "a host's personal notice is not shared")
+	host.acting = load("res://scripts/player/action_context.gd").from_command({"state": players[1].state}, "guest", 0)
+	var host_text: String = host.toast_label.text
+	host.hud.toast("Мангал разожжён. Дождись, пока угли прогорят.")
+	host.acting = null
+	check(host.toast_label.text == host_text and host.hud.notice_for == "guest", "a guest command's result goes to that guest, not the host's screen")
+	var status: Dictionary = host.room.world_sync._status_snapshot()
+	guest.toast_label.text = ""
+	guest.room.world_sync._status_apply(status, 0.0)
+	check(guest.toast_label.text != "", "the guest sees its own command's result")
+	guest.toast_label.text = ""
+	guest.room.world_sync._status_apply({"notice": "Чужое", "notice_time": 3.0, "notice_for": "someone"}, 0.0)
+	check(guest.toast_label.text == "", "another member's result is not shown")
+	host.hud.announce("Экипаж застрял. Нужен трос — T рядом с машиной.")
+	guest.room.world_sync._status_apply(host.room.world_sync._status_snapshot(), 0.0)
+	check(guest.toast_label.text != "" and host.hud.notice_for == "", "a shared event reaches everyone")
+	# The guest's world clock runs every frame between the host's packets.
+	guest.playing = true
+	guest.room.world_sync._progress_apply({"elapsed": 100.0}, 0.0)
+	var first: float = guest.elapsed
+	guest.room.world_sync.advance_clock(0.05, false)
+	var second: float = guest.elapsed
+	guest.room.world_sync.advance_clock(0.05, true)
+	check(first == 100.0 and second > first + 0.04 and guest.elapsed == second, "a guest's world clock advances locally and stops while frozen")
+	# A client's own state leaves its idle fields out; the receiver's checks fill
+	# in the same values (and beer, which they would read as 0, still goes).
+	var own: Dictionary = guest.room.local_state()
+	var sent: Dictionary = NetProtocol.outgoing_state(own)
+	check(not sent.has("food_kind") and not sent.has("trees") and not sent.has("stand_at") and sent.has("beer") and NetProtocol.clean_state(JSON.parse_string(JSON.stringify(sent))) == NetProtocol.clean_state(JSON.parse_string(JSON.stringify(own))), "a client's own state leaves out idle fields the receiver fills in alike")
+	own.drive_inputs = [{"seq": 1, "ticks": 2, "throttle": 1.0, "steer": 0.0, "brake": false}]
+	check(NetProtocol.outgoing_state(own).has("drive_inputs") and not NetProtocol.outgoing_state(own, true).has("drive_inputs"), "with the direct link alive the server copy carries no drive input")
+	own.drive_inputs = [{"seq": 1, "ticks": 2, "throttle": 1.0, "steer": 0.0, "brake": false, "lift": 0.0, "recover": false}, {"seq": 2, "ticks": 2, "throttle": 1.0, "steer": 0.0, "brake": false, "lift": 0.5, "recover": true}]
+	var trimmed: Array = NetProtocol.outgoing_state(own).drive_inputs
+	check(not trimmed[0].has("lift") and not trimmed[0].has("recover") and trimmed[1].lift == 0.5 and trimmed[1].recover == true and own.drive_inputs[0].has("lift"), "input without lift or recovery sends neither, the queue keeps them")
+	check(NetProtocol.clean_state(JSON.parse_string(JSON.stringify(NetProtocol.outgoing_state(own)))).drive_inputs.size() == 2, "trimmed input still passes the host's checks")
+	# A world that reads the same goes at still_world_rate; a change goes at once.
+	var direct = host.room.direct
+	direct.still_signature = ""
+	direct._send(1.0)
+	var sent_at: float = direct.still_sent_at
+	host.elapsed += 1.0
+	direct._send(1.0)
+	check(direct.still_sent_at == sent_at, "a still world (its clock aside) is not sent again at the full rate")
+	direct.still_sent_at -= 1.0 / float(NetProtocol.direct("still_world_rate", 5))
+	direct._send(1.0)
+	check(direct.still_sent_at >= sent_at, "a still world still goes at still_world_rate, so links stay fresh")
+	check(1.0 / float(NetProtocol.direct("still_world_rate", 5)) < float(NetProtocol.direct("stale", 0.5)), "the still rate is faster than a link turns stale")
+	sent_at = direct.still_sent_at
+	var accepted_before: Dictionary = host.room.accepted.duplicate()
+	host.room.accepted["guest"] = 999
+	direct._send(1.0)
+	check(direct.still_sent_at != sent_at, "a change (a command run) goes at once")
+	host.room.accepted = accepted_before
+	var parked = {"t": "w", "world": {"elapsed": 1.0, "driving": {"guest": {"ack": 1, "pos": [0, 0, 0]}}}, "players": [{"id": "guest", "state": {}, "state_time": 5}], "accepted": {}}
+	var later = {"t": "w", "world": {"elapsed": 2.0, "driving": {"guest": {"ack": 7, "pos": [0, 0, 0]}}}, "players": [{"id": "guest", "state": {}, "state_time": 9}], "accepted": {}}
+	check(direct.still_signature_of(parked) == direct.still_signature_of(later) and parked.world.driving.guest.ack == 1 and parked.players[0].has("state_time"), "clocks, stamps and a parked car's acks do not count as change, and the packet keeps them")
+	later.world.driving.guest.pos = [0, 0, 0.01]
+	check(direct.still_signature_of(parked) != direct.still_signature_of(later), "a car moving a centimetre counts as change")
 	# Compact states expand to what the server would have listed, after a JSON round trip.
 	var original: Dictionary = host.room.local_state()
 	original.beers = 3
@@ -203,18 +371,22 @@ func run() -> void:
 	check(guest.stones.is_empty(), "a stone that left the list is removed")
 	host.stones.clear()
 	node.queue_free()
-	# While the link is healthy, server snapshots only bring slow sections.
+	# The server's reply brings only the membership.
 	var stale_world = host.room.world_sync.current_parts().hot.duplicate()
 	stale_world.racers = []
-	stale_world.cold = {"camp": host.room.world_sync.current_parts().cold.camp}
 	guest.room._apply_sync({"host": "host", "players": players, "world": stale_world, "world_time": 10.0e12, "accepted": 0, "commands": []})
-	check(guest.racers.size() == 1, "server hot world is ignored while the direct link is healthy")
-	check(guest.room.world_sync.cold_revs.has("camp"), "slow sections still arrive from the server")
-	# A quiet link falls back to the server path.
+	check(guest.racers.size() == 1, "a world from the server is ignored")
+	# A guest without a link waits, then leaves the room with a message.
 	guest.room.direct.links.host.last_received -= 1.0
 	check(not guest.room.direct.healthy("host"), "a link without packets for half a second is stale")
-	guest.room._apply_sync({"host": "host", "players": players, "world": stale_world, "world_time": 10.0e12, "accepted": 0, "commands": []})
-	check(guest.racers.is_empty(), "the server path takes over from a stale link")
+	check(guest.room._linked(1.0) and guest.room.connected, "a guest waits for a quiet link")
+	guest.room._linked(guest.room.LINK_GIVE_UP)
+	check(not guest.room.connected and guest.menu_title.text == "Не удалось соединиться", "a guest whose link does not come back leaves the room")
+	guest.room.connected = true
+	guest.dead = false
+	guest.paused = false
+	guest.room.link_lost = 0.0
+	guest.room.transport.socket_open = true
 	# Hosts check direct states like the server does.
 	check(NetProtocol.clean_state({"pos": [0, 0, 0]}) == null, "malformed direct state is rejected")
 	var cleaned = NetProtocol.clean_state({"pos": [0, 0, 0], "car": [1, 1, 1], "heading": 0, "yaw": 0, "pitch": 0, "in_car": true, "speed": 999, "drive_inputs": [{"seq": 1, "ticks": 99, "throttle": 1, "steer": 0, "brake": false}, {"seq": 2, "ticks": 2, "throttle": 5, "steer": 0, "brake": false}, {"seq": 3, "ticks": 2, "throttle": 1, "steer": 0, "brake": false}]})
@@ -238,10 +410,12 @@ func run() -> void:
 	guest.room.direct.poll()
 	guest.room.direct.links.host.retry_at = 0.0
 	guest.room._update_members(players)
-	check(guest.room.direct.links.host.pc == null, "after the last attempt the room stays on the server path")
+	check(guest.room.direct.links.host.pc == null, "after the last attempt the guest stops calling")
 	# A departed member's link closes.
 	host.room._update_members([players[0]])
 	check(not host.room.direct.links.has("guest"), "links to departed members close")
+	delta_checks()
+	stone_checks(guest)
 	print("DIRECT LINK RESULT: %d checks, %d failures" % [checks, failures])
 	for g in [host, guest]:
 		g.queue_free()

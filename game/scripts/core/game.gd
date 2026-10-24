@@ -640,9 +640,6 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif event.physical_keycode == KEY_F9:
 			spawn_racer("crash")
 
-func _update_fps_counter(delta: float) -> void:
-	hud.update_fps_counter(delta)
-
 func show_consumption_warning(kind: String) -> void:
 	hud.show_consumption_warning(kind)
 
@@ -652,7 +649,7 @@ func _process(delta: float) -> void:
 	consumption_warning_time = maxf(0, consumption_warning_time - delta)
 	consumption_warning.visible = consumption_warning_time > 0 and playing and not paused and not dead and not finished
 	update_mobile_safe_area(delta)
-	_update_fps_counter(delta)
+	hud.update_fps_counter(delta)
 	if soundscape != null: soundscape.update(delta)
 	camp_cooking.animate_flames(Time.get_ticks_msec() / 1000.0)
 	camp_grill.animate(Time.get_ticks_msec() / 1000.0)
@@ -913,6 +910,9 @@ func _cancel_tow() -> void:
 
 func toast(message: String) -> void:
 	hud.toast(message)
+
+func announce(message: String) -> void:
+	(hud.announce if hud != null else toast).call(message)
 
 func _update_hud() -> void:
 	hud.update_hud()

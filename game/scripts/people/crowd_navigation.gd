@@ -220,17 +220,16 @@ static func move(game, person: Dictionary, goal: Vector3, delta: float, roadside
 	state.recheck = float(state.get("recheck", 0.0)) - delta
 	var blocked = false
 	var needs_plan = changed or (route.is_empty() and state.retry <= 0 and not state.has("search"))
-	var ctx: Dictionary = {}
-	if needs_plan or (not route.is_empty() and state.recheck <= 0.0):
-		ctx = context(game, person, start, goal, roadside)
-	if not route.is_empty() and state.recheck <= 0.0:
+	# Only obstacles along the leg can block it; the wide context (13 m around
+	# the whole trip) is gathered just for a new search.
+	if not needs_plan and not route.is_empty() and state.recheck <= 0.0:
 		state.recheck = RECHECK
-		blocked = not clear(game, start, route[0], ctx)
+		blocked = not clear(game, start, route[0], context(game, person, start, route[0], roadside, STEP_MARGIN))
 	if needs_plan or blocked:
 		if not person.get("navigation_budget", game.spectators.navigation_budget).request(person.avatar.get_instance_id()):
 			return
 		state.goal = goal
-		state.search = begin(game, start, goal, ctx)
+		state.search = begin(game, start, goal, context(game, person, start, goal, roadside))
 	if state.has("search"):
 		var search: Dictionary = state.search
 		var deadline = _frame_deadline()

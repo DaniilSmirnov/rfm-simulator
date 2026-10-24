@@ -30,6 +30,11 @@ static func duration(name: String) -> float:
 static func sync_interval() -> float:
 	return float(spec.get("sync_interval", 0.1))
 
+# Seconds between room server syncs: membership, the server clock and the
+# signaling socket's liveness. The game itself goes over the direct links.
+static func membership_interval() -> float:
+	return float(spec.get("membership_interval", 1.0))
+
 static func max_message_bytes() -> int:
 	return int(spec.get("max_message_bytes", 65536))
 
@@ -138,6 +143,31 @@ const STATE_DEFAULTS = {"airborne": false, "beer": -1.0, "beers": 0, "broken": f
 	"food_species": "edible", "hitch": "", "relief": false, "ride": "", "running": false, "seated": false, "tow": false, "speed": 0.0,
 	"stand": "", "stand_at": [0.0, 0.0, 0.0]}
 const STATE_HOST_ONLY = ["drive_inputs", "trees", "lamps"]
+
+# What a client sends of its own state, to the server and over the direct
+# link: fields equal to what both the Worker and clean_state() fill in when
+# they are missing stay out (about 40 % of the state). "beer" always goes: a
+# missing one reads as 0 there, not -1. With `direct_alive` the server copy
+# leaves out the drive input too: the host takes it from the link.
+const OUTGOING_DEFAULTS = {"airborne": false, "beers": 0, "broken": false, "drive_enabled": false, "drive_inputs": [], "eat": -1.0, "food_kind": "meat",
+	"food_species": "edible", "hitch": "", "lamps": [], "push": [0.0, 0.0, 0.0], "radio": false, "relief": false, "ride": "", "running": false,
+	"seated": false, "speed": 0.0, "stand": "", "stand_at": [0.0, 0.0, 0.0], "tow": false, "trees": []}
+
+static func outgoing_state(s: Dictionary, direct_alive: bool = false) -> Dictionary:
+	var out = {}
+	for key in s:
+		if not (OUTGOING_DEFAULTS.has(key) and s[key] == OUTGOING_DEFAULTS[key]) and not (direct_alive and key == "drive_inputs"):
+			out[key] = s[key]
+	# An input without lift or recovery sends neither; both read as off then.
+	if out.has("drive_inputs"):
+		var inputs: Array = []
+		for c in out.drive_inputs:
+			var trimmed: Dictionary = c.duplicate()
+			if float(trimmed.get("lift", 0.0)) == 0.0: trimmed.erase("lift")
+			if trimmed.get("recover") != true: trimmed.erase("recover")
+			inputs.append(trimmed)
+		out.drive_inputs = inputs
+	return out
 
 static func compact_state(s: Dictionary) -> Dictionary:
 	var out = {"pos": s.pos, "heading": snappedf(float(s.heading), 0.001), "yaw": snappedf(float(s.yaw), 0.001), "pitch": snappedf(float(s.pitch), 0.001), "in_car": s.in_car}

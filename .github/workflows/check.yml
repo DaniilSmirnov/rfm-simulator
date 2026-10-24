@@ -9,6 +9,11 @@ on:
 permissions:
   contents: read
 
+env:
+  # Bump to rebuild every radio library without a source change, for example
+  # after a toolchain change in .github/actions/native-voice.
+  VOICE_BUILD_EPOCH: "1"
+
 # A newer push to the same pull request replaces the older run. Runs on main
 # are never cancelled: every merged commit gets a complete result.
 concurrency:
@@ -30,7 +35,6 @@ jobs:
     outputs:
       export: ${{ steps.filter.outputs.export }}
       vk: ${{ steps.filter.outputs.vk }}
-      voice: ${{ steps.filter.outputs.voice }}
     steps:
       - id: filter
         env:
@@ -45,20 +49,13 @@ jobs:
           fi
           printf '%s\n' "$files"
           changed() { [ "$files" = ALL ] || printf '%s\n' "$files" | grep -qE "$1"; }
-          common='^(\.github/workflows/check\.yml|package(-lock)?\.json|scripts/godot\.mjs)$'
+          common='^(\.github/workflows/check\.yml|\.github/actions/.*|package(-lock)?\.json|scripts/godot\.mjs)$'
           export='^(native/|server/dedicated/|game/export_presets\.cfg$|game/project\.godot$|game/branding/|scripts/(build-desktop|build-voice|verify-windows-build|test-windows-startup)\.mjs$)'
           vk='^(web/|engine/|game/scripts/platform/|scripts/(build-web|test-platform-build|test-platform-web)\.mjs$)'
           if changed "$common" || changed "$export"; then e=true; else e=false; fi
           if changed "$common" || changed "$vk"; then v=true; else v=false; fi
-          linux='{"target":"linux-x86_64","os":"ubuntu-24.04","container":"quay.io/pypa/manylinux_2_28_x86_64"}'
-          if [ $e = true ]; then
-            voice='[LINUX,{"target":"windows-x86_64","os":"ubuntu-24.04"},{"target":"windows-x86_32","os":"ubuntu-24.04"},{"target":"macos-universal","os":"macos-14"},{"target":"ios-arm64","os":"macos-14"},{"target":"android-arm64","os":"ubuntu-24.04"},{"target":"android-arm32","os":"ubuntu-24.04"}]'
-          else
-            voice='[LINUX]'
-          fi
-          voice=${voice/LINUX/$linux}
           echo "export=$e vk=$v"
-          { echo "export=$e"; echo "vk=$v"; echo "voice={\"include\":$voice}"; } >> "$GITHUB_OUTPUT"
+          { echo "export=$e"; echo "vk=$v"; } >> "$GITHUB_OUTPUT"
 
   lint:
     name: Lint GDScript
@@ -183,6 +180,7 @@ jobs:
 
   native-multiplayer:
     name: Native multiplayer
+    needs: native-voice
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -198,11 +196,18 @@ jobs:
           path: .cache/godot
           key: godot-4.4.1-linux-x86_64
       - run: npm ci
+      # Native clients link to each other through the native/voice extension;
+      # without it a guest cannot play (game/scripts/net/direct_link.gd).
+      - uses: actions/download-artifact@v4
+        with:
+          name: voice-linux-x86_64
+          path: game/addons/rally_voice/bin
+      - run: node scripts/build-voice.mjs --install
       # The local Worker serves its room API next to the built site.
       - run: npm run build
-      - name: Verify two native multiplayer clients
+      - name: Verify a guest without a direct link is told it could not connect
         run: node scripts/test-multiplayer.mjs
-      - name: Verify two native multiplayer clients over WebSocket
+      - name: Verify two native multiplayer clients over the direct link
         run: node scripts/test-multiplayer.mjs --socket
       - uses: actions/upload-artifact@v4
         if: always()
@@ -213,6 +218,7 @@ jobs:
 
   dedicated-server:
     name: Dedicated server
+    needs: native-voice
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -228,6 +234,13 @@ jobs:
           path: .cache/godot
           key: godot-4.4.1-linux-x86_64
       - run: npm ci
+      # Native clients link to each other through the native/voice extension;
+      # without it a guest cannot play (game/scripts/net/direct_link.gd).
+      - uses: actions/download-artifact@v4
+        with:
+          name: voice-linux-x86_64
+          path: game/addons/rally_voice/bin
+      - run: node scripts/build-voice.mjs --install
       - name: Verify a headless server hosting a native guest
         run: node scripts/test-dedicated.mjs
       - uses: actions/upload-artifact@v4
@@ -273,9 +286,7 @@ jobs:
           rm -f .cache/ci-secrets.json
 
       - name: Install browser test runtime
-        run: |
-          npm install --no-save --package-lock=false playwright@1.63.0
-          npx playwright install --with-deps chromium
+        uses: ./.github/actions/playwright
 
       - name: Verify standalone and VK browser roundtrips
         run: |
@@ -325,13 +336,11 @@ jobs:
       - run: npm ci
       - run: npm run build
       - name: Install browser test runtime
-        run: |
-          npm install --no-save --package-lock=false playwright@1.63.0
-          npx playwright install --with-deps chromium
+        uses: ./.github/actions/playwright
       - name: Detect physical Web template
         id: physics
         run: node -e 'const fs = require("node:fs"); const m = JSON.parse(fs.readFileSync("engine/manifest.json")); fs.appendFileSync(process.env.GITHUB_OUTPUT, "enabled=" + Boolean(m.physics_3d) + "\nwebsocket=" + Boolean(m.websocket) + "\nwebrtc=" + Boolean(m.webrtc) + "\n");'
-      - name: Verify browser multiplayer
+      - name: Verify a browser guest without a direct link is told it could not connect
         if: steps.physics.outputs.enabled == 'true'
         run: node scripts/test-multiplayer.mjs --web
       - name: Verify browser multiplayer over WebSocket and the WebRTC direct link
@@ -365,9 +374,7 @@ jobs:
       - run: node scripts/test-platform-build.mjs dist-vk-prototype
 
       - name: Install browser test runtime
-        run: |
-          npm install --no-save --package-lock=false playwright@1.63.0
-          npx playwright install --with-deps chromium
+        uses: ./.github/actions/playwright
 
       - name: Verify prototype browser roundtrip
         run: node scripts/test-platform-web.mjs dist-vk-prototype
@@ -378,85 +385,53 @@ jobs:
           path: dist-vk-prototype/
           if-no-files-found: error
 
-  native-voice:
-    name: Native radio (${{ matrix.target }})
-    runs-on: ${{ matrix.os }}
-    needs: changes
-    container: ${{ matrix.container }}
+  # The Linux library is built on every run (the radio tests load it) and
+  # waits for nothing, so the radio tests start as early as possible. It uses
+  # manylinux glibc 2.28, so the library loads on every distribution Godot
+  # supports. The steps live in .github/actions/native-voice.
+  native-voice-linux:
+    name: Native radio (linux-x86_64)
+    runs-on: ubuntu-24.04
+    container: quay.io/pypa/manylinux_2_28_x86_64
     timeout-minutes: 45
-    strategy:
-      fail-fast: false
-      # Linux always (the radio tests load it); the other targets only with
-      # the exports. The linux build uses manylinux glibc 2.28, so the library
-      # loads on every distribution Godot supports.
-      matrix: ${{ fromJSON(needs.changes.outputs.voice) }}
-    env:
-      # Bump to rebuild every library without a source change, for example
-      # after a toolchain change in the install step below.
-      VOICE_BUILD_EPOCH: "1"
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: ./.github/actions/native-voice
         with:
-          node-version: 22
-      # The library depends only on its sources, the pinned deps and the build
-      # script. A run that changes none of them reuses the library built for
-      # them earlier and skips the toolchain and the build.
-      - name: Restore a built library
-        id: lib
-        uses: actions/cache/restore@v4
+          target: linux-x86_64
+          epoch: ${{ env.VOICE_BUILD_EPOCH }}
+
+  # The other targets only with the exports.
+  native-voice:
+    name: Native radio (${{ matrix.target }})
+    needs: changes
+    if: needs.changes.outputs.export == 'true'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {target: windows-x86_64, os: ubuntu-24.04}
+          - {target: windows-x86_32, os: ubuntu-24.04}
+          - {target: macos-universal, os: macos-14}
+          - {target: ios-arm64, os: macos-14}
+          - {target: android-arm64, os: ubuntu-24.04}
+          - {target: android-arm32, os: ubuntu-24.04}
+    steps:
+      - uses: actions/checkout@v4
         with:
-          path: game/addons/rally_voice/bin
-          key: voice-lib-${{ matrix.target }}-${{ env.VOICE_BUILD_EPOCH }}-${{ hashFiles('native/voice/**', 'scripts/build-voice.mjs') }}
-      - name: Install build tools
-        if: steps.lib.outputs.cache-hit != 'true'
-        shell: bash
-        run: |
-          case "${{ matrix.target }}" in
-            linux-*) echo /opt/python/cp312-cp312/bin >> "$GITHUB_PATH"; /opt/python/cp312-cp312/bin/pip install -q cmake ninja ;;
-            windows-*) sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends ninja-build mingw-w64 g++-mingw-w64 ;;
-            macos-*|ios-*) brew install ninja ;;
-            android-*) sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends ninja-build ;;
-          esac
-      - uses: actions/cache@v4
-        if: steps.lib.outputs.cache-hit != 'true'
+          persist-credentials: false
+      - uses: ./.github/actions/native-voice
         with:
-          path: .cache/voice
-          key: voice-${{ matrix.target }}-${{ hashFiles('native/voice/deps.json') }}-${{ hashFiles('native/voice/**') }}
-          restore-keys: voice-${{ matrix.target }}-${{ hashFiles('native/voice/deps.json') }}-
-      - name: Build the extension
-        if: steps.lib.outputs.cache-hit != 'true'
-        shell: bash
-        run: node scripts/build-voice.mjs --target=${{ matrix.target }}
-      - name: Check the library
-        shell: bash
-        run: |
-          lib=$(ls game/addons/rally_voice/bin/librally_voice.*)
-          ls -la $lib
-          if command -v file >/dev/null; then file $lib; fi
-          case "${{ matrix.target }}" in
-            linux-*) ! objdump -T $lib | grep -oE "GLIBC_2\.(29|[3-9][0-9])" ;;
-            macos-*) lipo -info $lib | grep -q "x86_64 arm64\|arm64 x86_64" ;;
-            ios-*) lipo -info $lib | grep -q arm64 && otool -l $lib | grep -A3 LC_BUILD_VERSION | grep -qE "platform (2|IOS)$" ;;
-          esac
-      - name: Save the built library
-        if: steps.lib.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: game/addons/rally_voice/bin
-          key: ${{ steps.lib.outputs.cache-primary-key }}
-      - uses: actions/upload-artifact@v4
-        with:
-          name: voice-${{ matrix.target }}
-          path: game/addons/rally_voice/bin/
-          retention-days: 7
-          if-no-files-found: error
+          target: ${{ matrix.target }}
+          epoch: ${{ env.VOICE_BUILD_EPOCH }}
 
   native-voice-test:
     name: Native radio (loopback and browser interop)
-    needs: native-voice
+    needs: native-voice-linux
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -476,9 +451,7 @@ jobs:
       - name: Native links, Opus and the mesh in Godot
         run: RFM_REQUIRE_NATIVE_VOICE=1 node scripts/test-game.mjs --only=test_voice_native.gd
       - name: Install browser test runtime
-        run: |
-          npm install --no-save --package-lock=false playwright@1.63.0
-          npx playwright install --with-deps chromium
+        uses: ./.github/actions/playwright
       - name: Native Godot client talks with a Chromium client
         run: node scripts/test-voice-interop.mjs
       - name: Native direct link opens with a Chromium client
@@ -486,7 +459,7 @@ jobs:
 
   android:
     name: Android build
-    needs: [changes, native-voice]
+    needs: [changes, native-voice-linux, native-voice]
     if: needs.changes.outputs.export == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -538,7 +511,7 @@ jobs:
 
   ios:
     name: iOS build (unsigned)
-    needs: [changes, native-voice]
+    needs: [changes, native-voice-linux, native-voice]
     if: needs.changes.outputs.export == 'true'
     # Xcode 16: the Godot 4.4.1 iOS libraries need it to link.
     runs-on: macos-15
@@ -584,7 +557,7 @@ jobs:
 
   desktop:
     name: Desktop build (${{ matrix.platform }})
-    needs: [changes, native-voice]
+    needs: [changes, native-voice-linux, native-voice]
     if: needs.changes.outputs.export == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
