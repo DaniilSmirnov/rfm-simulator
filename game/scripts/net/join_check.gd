@@ -48,14 +48,18 @@ func update(delta: float) -> bool:
 	room.direct.poll()
 	waited += delta
 	if room.direct.links.get(room.host_id, {}).get("open", false):
-		active = false
-		print("ROOM_JOIN_CHECK linked ", room.host_id)
-		room._joined(data)
+		linked()
 		return true
 	var reason = problem()
 	if reason != "":
 		fail(reason)
 	return true
+
+# The link to the host is open: the guest loads the stage.
+func linked() -> void:
+	active = false
+	print("ROOM_JOIN_CHECK linked ", room.host_id)
+	room._joined(data)
 
 # Why the link cannot come, or "" while it still may.
 func problem() -> String:
