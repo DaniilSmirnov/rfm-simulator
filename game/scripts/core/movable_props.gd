@@ -246,16 +246,18 @@ func snapshot() -> Array:
 			# once, so props at rest match on every machine.
 			var pose: Transform3D = r.node.global_transform
 			var asleep: bool = r.has("body") and r.body.sleeping
-			var near: bool = r.has("snapshot_pose") and r.snapshot_item.anchored == r.anchored and r.snapshot_asleep == asleep and (r.snapshot_pose == pose or _near(r, r.snapshot_pose, pose))
+			var near: bool = r.has("snapshot_pose") and r.snapshot_item.get("anchored", false) == r.anchored and r.snapshot_asleep == asleep and (r.snapshot_pose == pose or _near(r, r.snapshot_pose, pose))
 			if near and not r.snapshot_item.has("velocity"):
 				result.append(r.snapshot_item)
 				continue
 			var rotation: Vector3 = pose.basis.get_euler()
-			var item = {"key": r.key, "pos": game.room.a(pose.origin), "rot": [rotation.x, rotation.y, rotation.z], "anchored": r.anchored}
+			# Angles to 0.001 rad (a millimetre at a metre); anchored only when set.
+			var item = {"key": r.key, "pos": game.room.a(pose.origin), "rot": [snappedf(rotation.x, 0.001), snappedf(rotation.y, 0.001), snappedf(rotation.z, 0.001)]}
+			if r.anchored: item.anchored = true
 			# A flying prop's velocity lets guests draw it where it is now (one
 			# that stayed put only has gravity's from a tick awake).
 			if not near and r.has("body") and not r.has("tree") and not r.body.freeze and not r.body.sleeping and r.body.linear_velocity.length_squared() > 0.01:
-				item.velocity = game.room.a(r.body.linear_velocity)
+				item.velocity = game.room.av(r.body.linear_velocity)
 			r.snapshot_pose = pose
 			r.snapshot_asleep = asleep
 			r.snapshot_item = item

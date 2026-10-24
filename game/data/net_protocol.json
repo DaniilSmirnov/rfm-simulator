@@ -22,10 +22,11 @@
   },
   "durations": {"eat": 3.6, "drink": 3.3},
   "direct": {
-    "comment": "WebRTC data channel between the host and each guest; the whole game goes over it. The room socket relays the connection setup; the room server keeps only the membership. A guest whose link does not open leaves the room.",
+    "comment": "WebRTC data channel between the host and each guest; the whole game goes over it. The room socket relays the connection setup; the room server keeps only the membership. A guest whose link does not open leaves the room. A world that reads the same as the last one sent (clocks aside) goes at still_world_rate, above the guest's stale check.",
     "ice_servers": ["stun:stun.cloudflare.com:3478", "stun:stun.l.google.com:19302"],
     "world_rate": 20,
     "world_rate_crowded": 10,
+    "still_world_rate": 5,
     "crowded_links": 4,
     "state_rate": 30,
     "connect_timeout": 8.0,

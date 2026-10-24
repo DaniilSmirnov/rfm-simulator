@@ -296,6 +296,33 @@ func run() -> void:
 	check(not sent.has("food_kind") and not sent.has("trees") and not sent.has("stand_at") and sent.has("beer") and NetProtocol.clean_state(JSON.parse_string(JSON.stringify(sent))) == NetProtocol.clean_state(JSON.parse_string(JSON.stringify(own))), "a client's own state leaves out idle fields the receiver fills in alike")
 	own.drive_inputs = [{"seq": 1, "ticks": 2, "throttle": 1.0, "steer": 0.0, "brake": false}]
 	check(NetProtocol.outgoing_state(own).has("drive_inputs") and not NetProtocol.outgoing_state(own, true).has("drive_inputs"), "with the direct link alive the server copy carries no drive input")
+	own.drive_inputs = [{"seq": 1, "ticks": 2, "throttle": 1.0, "steer": 0.0, "brake": false, "lift": 0.0, "recover": false}, {"seq": 2, "ticks": 2, "throttle": 1.0, "steer": 0.0, "brake": false, "lift": 0.5, "recover": true}]
+	var trimmed: Array = NetProtocol.outgoing_state(own).drive_inputs
+	check(not trimmed[0].has("lift") and not trimmed[0].has("recover") and trimmed[1].lift == 0.5 and trimmed[1].recover == true and own.drive_inputs[0].has("lift"), "input without lift or recovery sends neither, the queue keeps them")
+	check(NetProtocol.clean_state(JSON.parse_string(JSON.stringify(NetProtocol.outgoing_state(own)))).drive_inputs.size() == 2, "trimmed input still passes the host's checks")
+	# A world that reads the same goes at still_world_rate; a change goes at once.
+	var direct = host.room.direct
+	direct.still_signature = ""
+	direct._send(1.0)
+	var sent_at: float = direct.still_sent_at
+	host.elapsed += 1.0
+	direct._send(1.0)
+	check(direct.still_sent_at == sent_at, "a still world (its clock aside) is not sent again at the full rate")
+	direct.still_sent_at -= 1.0 / float(NetProtocol.direct("still_world_rate", 5))
+	direct._send(1.0)
+	check(direct.still_sent_at >= sent_at, "a still world still goes at still_world_rate, so links stay fresh")
+	check(1.0 / float(NetProtocol.direct("still_world_rate", 5)) < float(NetProtocol.direct("stale", 0.5)), "the still rate is faster than a link turns stale")
+	sent_at = direct.still_sent_at
+	var accepted_before: Dictionary = host.room.accepted.duplicate()
+	host.room.accepted["guest"] = 999
+	direct._send(1.0)
+	check(direct.still_sent_at != sent_at, "a change (a command run) goes at once")
+	host.room.accepted = accepted_before
+	var parked = {"t": "w", "world": {"elapsed": 1.0, "driving": {"guest": {"ack": 1, "pos": [0, 0, 0]}}}, "players": [{"id": "guest", "state": {}, "state_time": 5}], "accepted": {}}
+	var later = {"t": "w", "world": {"elapsed": 2.0, "driving": {"guest": {"ack": 7, "pos": [0, 0, 0]}}}, "players": [{"id": "guest", "state": {}, "state_time": 9}], "accepted": {}}
+	check(direct.still_signature_of(parked) == direct.still_signature_of(later) and parked.world.driving.guest.ack == 1 and parked.players[0].has("state_time"), "clocks, stamps and a parked car's acks do not count as change, and the packet keeps them")
+	later.world.driving.guest.pos = [0, 0, 0.01]
+	check(direct.still_signature_of(parked) != direct.still_signature_of(later), "a car moving a centimetre counts as change")
 	# Compact states expand to what the server would have listed, after a JSON round trip.
 	var original: Dictionary = host.room.local_state()
 	original.beers = 3

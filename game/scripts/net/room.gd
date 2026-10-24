@@ -348,6 +348,9 @@ func _render_guest_world(delta: float) -> void:
 
 static func a(pos: Vector3) -> Array:
 	return [snappedf(pos.x, 0.01), snappedf(pos.y, 0.01), snappedf(pos.z, 0.01)]
+# Velocities to 0.1 m/s: guests only draw ahead with them, a tenth of a second.
+static func av(velocity: Vector3) -> Array:
+	return [snappedf(velocity.x, 0.1), snappedf(velocity.y, 0.1), snappedf(velocity.z, 0.1)]
 static func v(pos: Array) -> Vector3:
 	return Vector3(pos[0], pos[1], pos[2])
 
@@ -497,7 +500,9 @@ func stone_state() -> Array:
 		if not stone.has("fresh_until"):
 			stone.fresh_until = now + STONE_FRESH_MSEC
 		if now < int(stone.fresh_until):
-			result.append({"id": stone.id, "pos": a(stone.node.position), "velocity": a(stone.velocity), "bounces": int(stone.get("bounces", 0))})
+			var entry = {"id": stone.id, "pos": a(stone.node.position), "velocity": av(stone.velocity)}
+			if int(stone.get("bounces", 0)) > 0: entry.bounces = int(stone.bounces)
+			result.append(entry)
 	return result
 
 func apply_stones(w: Dictionary, sample_time: float = -1.0) -> void:

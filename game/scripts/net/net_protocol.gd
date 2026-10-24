@@ -158,6 +158,15 @@ static func outgoing_state(s: Dictionary, direct_alive: bool = false) -> Diction
 	for key in s:
 		if not (OUTGOING_DEFAULTS.has(key) and s[key] == OUTGOING_DEFAULTS[key]) and not (direct_alive and key == "drive_inputs"):
 			out[key] = s[key]
+	# An input without lift or recovery sends neither; both read as off then.
+	if out.has("drive_inputs"):
+		var inputs: Array = []
+		for c in out.drive_inputs:
+			var trimmed: Dictionary = c.duplicate()
+			if float(trimmed.get("lift", 0.0)) == 0.0: trimmed.erase("lift")
+			if trimmed.get("recover") != true: trimmed.erase("recover")
+			inputs.append(trimmed)
+		out.drive_inputs = inputs
 	return out
 
 static func compact_state(s: Dictionary) -> Dictionary:

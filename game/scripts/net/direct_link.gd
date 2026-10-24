@@ -45,6 +45,10 @@ var world_clock = 0.0
 var cold_clock = INF
 var cold_reported_at = -INF
 var cold_reported = {}
+# Host: the last world packet sent as it reads with its clocks left out, and
+# when; a world that reads the same goes at still_world_rate only.
+var still_signature = ""
+var still_sent_at = -INF
 # Slow sections in pieces: characters per piece (Cyrillic text stays under
 # max_packet), pieces per link and world packet, and how long a copy the guest
 # has not confirmed waits before it goes again.
@@ -262,12 +266,18 @@ func _send(delta: float) -> void:
 			cold_clock = 0.0
 			room.world_sync.refresh_cold()
 		var whole = world_packet()
+		var signature = still_signature_of(whole)
+		var send_world = signature != still_signature or now() - still_sent_at >= 1.0 / float(NetProtocol.direct("still_world_rate", 5)) - 0.001
+		if send_world:
+			still_signature = signature
+			still_sent_at = now()
 		room.world_sync._ensure()
-		var current = WorldDelta.parts(whole.world, room.world_sync.providers)
+		var current = WorldDelta.parts(whole.world, room.world_sync.providers) if send_world else {}
 		for id in links:
-			var peer = room.peers.get(id)
-			var pos = peer.state.get("pos") if peer != null and peer.state is Dictionary else null
-			send(id, WorldDelta.packet(self.links[id], whole, current, pos))
+			if send_world:
+				var peer = room.peers.get(id)
+				var pos = peer.state.get("pos") if peer != null and peer.state is Dictionary else null
+				send(id, WorldDelta.packet(self.links[id], whole, current, pos))
 			for message in cold_messages(id):
 				send(id, message)
 	elif room.host_id in links:
@@ -296,6 +306,27 @@ func world_ack() -> int:
 # A guest's next state packet goes at once (a command was just queued).
 func send_soon() -> void:
 	state_clock = INF
+
+# A world packet without what moves on its own while the world stands still:
+# the clocks, member state stamps and the input a parked car acknowledges.
+# Equal signatures mean a guest would draw the same frame.
+static func still_signature_of(packet: Dictionary) -> String:
+	var world: Dictionary = packet.world.duplicate()
+	world.erase("elapsed")
+	if world.get("driving") is Dictionary:
+		var driving = {}
+		for id in world.driving:
+			var drive: Dictionary = world.driving[id].duplicate()
+			drive.erase("ack")
+			drive.erase("recovery_ack")
+			driving[id] = drive
+		world.driving = driving
+	var players: Array = []
+	for entry in packet.players:
+		var player: Dictionary = entry.duplicate()
+		player.erase("state_time")
+		players.append(player)
+	return JSON.stringify([world, players, packet.get("accepted", {})])
 
 # What the host sends every guest: the hot world, every member's state (the
 # roster comes from the server) and the last command it ran from each guest.

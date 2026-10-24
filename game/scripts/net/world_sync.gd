@@ -478,7 +478,7 @@ func _racers_snapshot() -> Dictionary:
 		# A moving crew carries its velocity, so guests do not guess it from two snapshots.
 		var velocity: Vector3 = r.get("velocity", Vector3.ZERO)
 		if velocity.length_squared() > 0.0025:
-			entry.velocity = room.a(velocity)
+			entry.velocity = room.av(velocity)
 		# The front wheels' angle of a crew on the tyre model (opposite lock).
 		if r.node.has_meta("steer_angle") and absf(float(r.node.get_meta("steer_angle"))) > 0.01:
 			entry.steer = snappedf(float(r.node.get_meta("steer_angle")), 0.01)
