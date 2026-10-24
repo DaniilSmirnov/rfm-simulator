@@ -325,9 +325,9 @@ func refresh() -> void:
 	images[1].texture = load("res://textures/previews/stage_%d.webp" % game.selected_stage)
 	images[2].texture = load(CharacterProfiles.preview_path(game.avatar_variant, game.stage.outfit if game.stage != null else ""))
 	if game.room != null:
-		game.room.ui.create_button.disabled = game.room.busy or not car_ok or not stage_ok or not character_ok
+		game.room.ui.create_button.disabled = game.room.busy or game.room.join_check.active or not car_ok or not stage_ok or not character_ok
 		# A guest borrows the host's stage. Only their own car and character are required.
-		game.room.ui.join_button.disabled = game.room.busy or not car_ok or not character_ok or game.room.ui.id_input.text.strip_edges().length() != NetProtocol.room_id_length()
+		game.room.ui.join_button.disabled = game.room.busy or game.room.join_check.active or not car_ok or not character_ok or game.room.ui.id_input.text.strip_edges().length() != NetProtocol.room_id_length()
 
 func _process(_delta: float) -> void:
 	var size = game.get_viewport().get_visible_rect().size

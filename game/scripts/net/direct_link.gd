@@ -9,8 +9,9 @@ extends Node
 #                  input and commands, and the slow-section revisions it holds
 #   host -> guest  "w": the hot world, authoritative cars, everyone's state and
 #                  the commands it ran; "c": pieces of changed slow sections
-# A guest whose link does not open, or goes quiet for good, leaves the room
-# (room.gd LINK_GIVE_UP).
+# A guest opens its link before it loads the stage (join_check.gd) and drops
+# the world until it plays; a link that goes quiet for good later makes it
+# leave the room (room.gd LINK_GIVE_UP).
 #
 # Browser builds use the engine's WebRTC; desktop and Android use RallyDataLink
 # from the native/voice extension through direct_native.gd. Both open the same
@@ -219,7 +220,7 @@ func _failed(id: String, link: Dictionary) -> void:
 	close_link(id)
 	if initiator:
 		# Keep a placeholder so the guest retries later instead of at once.
-		links[id] = {"pc": null, "channel": null, "session": 0, "started": now(), "open": false, "last_received": -INF, "attempts": attempts, "retry_at": now() + float(NetProtocol.direct("retry", 20.0)), "initiator": true}
+		links[id] = {"pc": null, "channel": null, "session": 0, "started": now(), "open": false, "last_received": -INF, "attempts": attempts, "retry_at": now() + (1.0 if room.join_check.active else float(NetProtocol.direct("retry", 20.0))), "initiator": true}
 		print("ROOM_DIRECT failed ", id, " attempt ", attempts)
 
 # A link is healthy while packets keep arriving on it.
@@ -404,10 +405,10 @@ func _receive(from: String, message: Dictionary) -> void:
 				if _whole(message.get("wa")) and links.has(from):
 					links[from].acked = int(message.wa)
 		"c":
-			if not room.is_host and from == room.host_id:
+			if not room.is_host and from == room.host_id and room.game.playing:
 				room.world_sync.receive_piece(message)
 		"w":
-			if not room.is_host and from == room.host_id and message.get("world") is Dictionary and message.get("players") is Array:
+			if not room.is_host and from == room.host_id and room.game.playing and message.get("world") is Dictionary and message.get("players") is Array:
 				if not _timestamp(message.get("time", -1)) or not WorldValidation.valid(message.world) or not WorldDelta.valid(message): return
 				var players: Array = []
 				for entry in message.players:
