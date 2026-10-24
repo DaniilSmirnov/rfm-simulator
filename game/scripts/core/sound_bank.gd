@@ -32,8 +32,13 @@ static func set_paused(node: Node, paused: bool) -> void:
 static func take(sound: String, count: int, rng: RandomNumberGenerator) -> AudioStream:
 	return stream("%s-%d" % [sound, rng.randi_range(1, count)])
 
+# Every game sound plays on the Sounds bus, so the general volume slider moves
+# it and leaves the radio (its own bus, default_bus_layout.tres) alone.
+const BUS = &"Sounds"
+
 static func player(parent: Node, volume_db: float, sound: String = "") -> AudioStreamPlayer:
 	var node = AudioStreamPlayer.new()
+	node.bus = BUS
 	node.volume_db = volume_db
 	if sound != "":
 		node.stream = stream(sound)
@@ -43,6 +48,7 @@ static func player(parent: Node, volume_db: float, sound: String = "") -> AudioS
 # A sound in the world: `unit` metres to fall off by half, silent past `reach`.
 static func spatial(parent: Node, volume_db: float, unit: float, reach: float, sound: String = "") -> AudioStreamPlayer3D:
 	var node = AudioStreamPlayer3D.new()
+	node.bus = BUS
 	node.volume_db = volume_db
 	node.unit_size = unit
 	node.max_distance = reach

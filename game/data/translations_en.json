@@ -317,7 +317,7 @@
 "ПОМОЩЬ": "HELP",
 "Написать в поддержку: %s": "Contact support: %s",
 "Адрес поддержки: %s": "Support address: %s",
-"Громкость всех звуков. 0 — без звука.": "Volume of all sounds. 0 — muted.",
+"Громкость звуков игры, кроме рации. 0 — без звука.": "Game sound volume, radio aside. 0 — muted.",
 "Не удалось сохранить громкость.": "Couldn't save the volume.",
 "ЗВУК ВЫКЛЮЧЕН": "SOUND OFF",
 "ГРОМКОСТЬ · %d%%": "VOLUME · %d%%",

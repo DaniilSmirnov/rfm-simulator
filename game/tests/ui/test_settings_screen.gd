@@ -1,5 +1,6 @@
 extends "res://tests/harness.gd"
 const VoiceWeb = preload("res://scripts/net/voice_web.gd")
+const SoundBank = preload("res://scripts/core/sound_bank.gd")
 # The settings window: the gear in the menu header (main menu and pause), draw
 # distance, master and radio volume and the desktop screen options, all kept between launches.
 func _initialize() -> void:
@@ -33,8 +34,17 @@ func run() -> void:
 	saved = ConfigFile.new()
 	check(saved.load(screen.audio_path) == OK and is_equal_approx(float(saved.get_value("audio", "radio_volume")), 30.0) and is_equal_approx(float(saved.get_value("audio", "volume")), 40.0) and screen.radio_label.text.contains("30"), "radio volume is saved next to the master volume")
 	check(is_equal_approx(AudioServer.get_bus_volume_db(radio), linear_to_db(0.3)) and is_equal_approx(VoiceWeb.volume(), snappedf(db_to_linear(linear_to_db(0.3) + AudioServer.get_bus_volume_db(AudioServer.get_bus_index("Master"))), 0.001)), "the radio fader moves and the browser voice gets the same gain")
+	var master_db = AudioServer.get_bus_volume_db(AudioServer.get_bus_index("Master"))
+	var radio_gain = VoiceWeb.volume()
+	screen.volume_slider.value = 0
+	var sounds = AudioServer.get_bus_index(SoundBank.BUS)
+	var probe = SoundBank.player(game, 0.0)
+	check(sounds >= 0 and AudioServer.get_bus_send(sounds) == &"Master" and AudioServer.is_bus_mute(sounds) and probe.bus == SoundBank.BUS, "game sounds play on their own bus and the general slider mutes it")
+	probe.free()
+	check(not AudioServer.is_bus_mute(AudioServer.get_bus_index("Master")) and is_equal_approx(AudioServer.get_bus_volume_db(AudioServer.get_bus_index("Master")), master_db) and not AudioServer.is_bus_mute(radio) and VoiceWeb.volume() == radio_gain, "the general slider leaves the radio alone")
+	screen.volume_slider.value = 40
 	screen.radio_slider.value = 0
-	check(AudioServer.is_bus_mute(radio) and VoiceWeb.volume() == 0.0, "zero silences the radio")
+	check(AudioServer.is_bus_mute(radio) and VoiceWeb.volume() == 0.0 and not AudioServer.is_bus_mute(sounds), "zero silences the radio and only the radio")
 	screen.radio_slider.value = 100
 	check(not AudioServer.is_bus_mute(radio), "the radio comes back")
 	screen.volume_slider.value = 100
