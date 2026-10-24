@@ -173,8 +173,15 @@ func loop() -> void:
 			var parts = host.room.world_sync.current_parts()
 			add("host_world_state_and_split", Time.get_ticks_usec() - t0)
 			t0 = Time.get_ticks_usec()
-			var bytes = JSON.stringify(host.room.direct.world_packet()).to_utf8_buffer()
+			# What the link sends this guest: a delta against what it confirmed.
+			var whole = host.room.direct.world_packet()
+			host.room.world_sync._ensure()
+			var current = host.room.direct.WorldDelta.parts(whole.world, host.room.world_sync.providers)
+			var packet = host.room.direct.WorldDelta.packet(host.room.direct.links["guest"], whole, current, guest.room.a(guest.car.position))
+			var bytes = JSON.stringify(packet).to_utf8_buffer()
 			add("host_world_packet_total", Time.get_ticks_usec() - t0)
+			add("whole_world_packet_bytes", JSON.stringify(whole).length())
+			add("delta_crews_sent", packet.world.get("racers", []).size())
 			add("world_packet_bytes", bytes.size())
 			_queue(to_guest, t, bytes)
 			if int((t - start) / NetProtocol.sync_interval()) != int((t - start - delta) / NetProtocol.sync_interval()):
@@ -219,7 +226,7 @@ func loop() -> void:
 		if guest_state_clock >= state_interval and guest.room.prediction_enabled:
 			guest_state_clock = fmod(guest_state_clock, state_interval)
 			t0 = Time.get_ticks_usec()
-			var bytes = JSON.stringify({"t": "s", "state": NetProtocol.outgoing_state(guest.room.local_state()), "cr": guest.room.world_sync.cold_revs}).to_utf8_buffer()
+			var bytes = JSON.stringify({"t": "s", "state": NetProtocol.outgoing_state(guest.room.local_state()), "cr": guest.room.world_sync.cold_revs, "wa": guest.room.direct.world_ack()}).to_utf8_buffer()
 			guest.room.prediction.seal()
 			add("guest_state_packet", Time.get_ticks_usec() - t0)
 			add("guest_state_bytes", bytes.size())

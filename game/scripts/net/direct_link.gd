@@ -19,6 +19,7 @@ extends Node
 const WorldValidation = preload("res://scripts/net/world_validation.gd")
 const DirectNative = preload("res://scripts/net/direct_native.gd")
 const NetProtocol = preload("res://scripts/net/net_protocol.gd")
+const WorldDelta = preload("res://scripts/net/world_delta.gd")
 # Numeric engine enums, so the script parses without the WebRTC module.
 const PEER_CONNECTED = 2
 const PEER_FAILED = 4
@@ -260,9 +261,13 @@ func _send(delta: float) -> void:
 		if cold_clock >= NetProtocol.sync_interval():
 			cold_clock = 0.0
 			room.world_sync.refresh_cold()
-		var bytes = JSON.stringify(world_packet()).to_utf8_buffer()
+		var whole = world_packet()
+		room.world_sync._ensure()
+		var current = WorldDelta.parts(whole.world, room.world_sync.providers)
 		for id in links:
-			send_bytes(id, bytes)
+			var peer = room.peers.get(id)
+			var pos = peer.state.get("pos") if peer != null and peer.state is Dictionary else null
+			send(id, WorldDelta.packet(self.links[id], whole, current, pos))
 			for message in cold_messages(id):
 				send(id, message)
 	elif room.host_id in links:
@@ -271,7 +276,7 @@ func _send(delta: float) -> void:
 		if state_clock < interval:
 			return
 		state_clock = fmod(state_clock, interval)
-		var message = {"t": "s", "state": NetProtocol.outgoing_state(room.local_state())}
+		var message = {"t": "s", "state": NetProtocol.outgoing_state(room.local_state()), "wa": world_ack()}
 		# Commands go in every packet until the host's world lists them as run.
 		if not room.commands.is_empty():
 			message.c = room.commands
@@ -282,6 +287,11 @@ func _send(delta: float) -> void:
 			if message.has("cr"):
 				cold_reported = room.world_sync.cold_revs.duplicate()
 				cold_reported_at = now()
+
+# "wa": the newest world a guest applied, so the host stops resending what it
+# holds (world_delta.gd); -1 while it holds none.
+func world_ack() -> int:
+	return int(room.last_world_time) if room.last_world_time >= 0 and not room.world_sync.delta_base.is_empty() else -1
 
 # A guest's next state packet goes at once (a command was just queued).
 func send_soon() -> void:
@@ -360,12 +370,14 @@ func _receive(from: String, message: Dictionary) -> void:
 				_receive_commands(from, message.get("c"))
 				if message.get("cr") is Dictionary and links.has(from):
 					links[from].cold_revs = message.cr
+				if _whole(message.get("wa")) and links.has(from):
+					links[from].acked = int(message.wa)
 		"c":
 			if not room.is_host and from == room.host_id:
 				room.world_sync.receive_piece(message)
 		"w":
 			if not room.is_host and from == room.host_id and message.get("world") is Dictionary and message.get("players") is Array:
-				if not _timestamp(message.get("time", -1)) or not WorldValidation.valid(message.world): return
+				if not _timestamp(message.get("time", -1)) or not WorldValidation.valid(message.world) or not WorldDelta.valid(message): return
 				var players: Array = []
 				for entry in message.players:
 					if not entry is Dictionary or not entry.get("id") is String or not NetProtocol.valid_compact_state(entry.get("state")) or not _timestamp(entry.get("state_time", 0)): return
@@ -373,9 +385,15 @@ func _receive(from: String, message: Dictionary) -> void:
 				var accepted = message.get("accepted", {})
 				if accepted is Dictionary and _whole(accepted.get(room.player_id)):
 					room.commands = room.commands.filter(func(c): return int(c.seq) > int(accepted[room.player_id]))
+				if float(message.get("time", -1)) <= room.last_world_time: return
+				var sync = room.world_sync
+				sync._ensure()
+				var merged = WorldDelta.merge(sync.delta_base, message, sync.providers)
 				# Checked above: the room applies it without walking it again.
-				WorldValidation.trust(message.world)
-				room._guest_world(message.world, float(message.get("time", -1)), players, false)
+				WorldValidation.trust(merged.world)
+				sync.fresh_crews = merged.crews
+				room._guest_world(merged.world, float(message.get("time", -1)), players, false, merged.changed)
+				sync.fresh_crews = null
 				WorldValidation.trust(null)
 
 # The host takes a guest's state straight from its link, with the checks the

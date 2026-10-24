@@ -11,6 +11,7 @@ extends RefCounted
 #            "collision": bool (applied before guest drive reconciliation),
 #            "interval": float (seconds; a busy section goes to guests at most this often)}
 const Props = preload("res://scripts/core/props.gd")
+const WorldDelta = preload("res://scripts/net/world_delta.gd")
 const SnapshotMotion = preload("res://scripts/net/snapshot_motion.gd")
 const Validation = preload("res://scripts/net/world_validation.gd")
 const NetProtocol = preload("res://scripts/net/net_protocol.gd")
@@ -44,6 +45,10 @@ var latest_at = 0
 var pieces: Dictionary = {}
 var applied_at: Dictionary = {}
 var _split_cache: Dictionary = {}
+# Guest: the hot world held by provider (world_delta.gd merge()), and the crews
+# of the packet being applied (null: all of them).
+var delta_base: Dictionary = {}
+var fresh_crews = null
 
 static func provider(name: String, section: String, keys: Array, snapshot: Callable, apply: Callable, collision: bool = false, interval: float = 0.0) -> Dictionary:
 	return {"name": name, "section": section, "keys": keys, "snapshot": snapshot, "apply": apply, "collision": collision, "interval": interval}
@@ -227,6 +232,7 @@ func reset() -> void:
 	pieces.clear()
 	applied_at.clear()
 	cold_revs.clear()
+	delta_base.clear()
 	host_elapsed = -1.0
 
 # ---------------------------------------------------------------- guest side
@@ -273,7 +279,8 @@ func apply_cold(w: Dictionary, sample_time: float) -> void:
 			if revisions.has(section):
 				cold_revs[section] = int(revisions[section])
 
-func apply_world(w: Dictionary, sample_time: float) -> void:
+# `only`: the hot providers to apply (null: all).
+func apply_world(w: Dictionary, sample_time: float, only = null) -> void:
 	if not Validation.valid(w): return
 	_ensure()
 	var cold = cold_part(w)
@@ -287,7 +294,7 @@ func apply_world(w: Dictionary, sample_time: float) -> void:
 				if revisions.has(section):
 					cold_revs[section] = int(revisions[section])
 	for p in providers:
-		if p.section == "":
+		if p.section == "" and (only == null or only.has(p.name)):
 			p.apply.call(w, sample_time)
 
 # ---------------------------------------------------------------- providers
@@ -503,6 +510,9 @@ func _racers_apply(w: Dictionary, sample_time: float) -> void:
 	var present = {}
 	for r in w.racers:
 		present[r.id] = true
+		# A crew that did not change keeps its motion samples (world_delta.gd).
+		if fresh_crews != null and not fresh_crews.has(WorldDelta.key(r.id)):
+			continue
 		var exists = false
 		for local in game.racers:
 			if local.id == r.id:

@@ -89,6 +89,69 @@ func wire(a, b, a_id: String, b_id: String, created: Array) -> void:
 			return true
 		from.room.transport.socket_open = true
 
+# The hot world as per-guest deltas (world_delta.gd), on hand-made providers.
+func delta_checks() -> void:
+	var Delta = load("res://scripts/net/world_delta.gd")
+	var providers = [{"name": "status", "section": "", "keys": ["notice"]}, {"name": "progress", "section": "", "keys": ["elapsed"]}, {"name": "racers", "section": "", "keys": ["racers", "recovery_links"]}, {"name": "camp", "section": "camp", "keys": ["camp"]}]
+	var crews = func(far_x: float) -> Array: return [{"id": 1, "pos": [0, 0, 0], "yaw": 0.0}, {"id": 2, "pos": [far_x, 0, 0], "yaw": 0.0}]
+	var hot = {"notice": "a", "elapsed": 1.0, "racers": crews.call(500.0)}
+	var link = {}
+	var packet = func(time: int, world: Dictionary) -> Dictionary:
+		var whole = {"t": "w", "time": time, "world": world, "players": [], "accepted": {}}
+		return JSON.parse_string(JSON.stringify(Delta.packet(link, whole, Delta.parts(world, providers), [0, 0, 0])))
+	var first = packet.call(1000, hot)
+	check(first.get("full", false) and first.parts.size() == 3 and first.world.racers.size() == 2 and not first.world.has("camp"), "a link's first world is whole and carries no slow section")
+	var again = packet.call(1050, hot)
+	check(again.parts.size() == 3, "unconfirmed parts ride every packet")
+	link.acked = 1050
+	hot.elapsed = 2.0
+	var quiet = packet.call(1100, hot)
+	check(quiet.parts == ["progress"] and quiet.world.keys() == ["elapsed"], "after the guest confirms, only the part that changed goes")
+	hot.notice = ""
+	hot.erase("notice")
+	var emptied = packet.call(1150, hot)
+	check(emptied.parts.has("status") and not emptied.world.has("notice"), "a part that became empty is named without fields")
+	link.acked = 1150
+	hot.racers = crews.call(510.0)
+	hot.racers[0].yaw = 1.0
+	var near_only = packet.call(1200, hot)
+	check(near_only.world.racers.size() == 1 and near_only.world.racers[0].id == 1 and near_only.crews.map(func(id): return int(id)) == [1, 2], "a far crew waits for its refresh while a near one goes at once")
+	var refreshed = packet.call(1200 + int(Delta.FAR_INTERVAL * 1000.0), hot)
+	var sends = 0
+	for i in range(4):
+		var later = packet.call(1300 + int(Delta.FAR_INTERVAL * 1000.0) + i * 50, hot)
+		if later.has("world") and later.world.get("racers", []).any(func(r): return r.id == 2): sends += 1
+	check(refreshed.world.racers.any(func(r): return r.id == 2) and sends == Delta.FAR_SENDS - 1, "a far crew's refresh goes a bounded number of times")
+	var whole_again = packet.call(1000 + int(Delta.FULL_EVERY * 1000.0), hot)
+	check(whole_again.get("full", false) and whole_again.parts.size() == 3 and whole_again.world.racers.size() == 2, "a whole world goes every FULL_EVERY")
+	# The guest merges what arrives into what it holds.
+	var base = {}
+	var merged = Delta.merge(base, first, providers)
+	check(merged.world.notice == "a" and merged.world.racers.size() == 2 and merged.changed.size() == 3, "a whole world fills the guest's copy")
+	merged = Delta.merge(base, quiet, providers)
+	check(merged.world.notice == "a" and merged.world.elapsed == 2.0 and merged.world.racers.size() == 2 and merged.changed.keys() == ["progress"], "a delta keeps the parts it does not carry")
+	merged = Delta.merge(base, emptied, providers)
+	check(not merged.world.has("notice"), "an emptied part clears its fields")
+	merged = Delta.merge(base, near_only, providers)
+	check(merged.world.racers.size() == 2 and merged.crews.keys() == ["1"] and float(merged.world.racers[0].yaw) == 1.0, "unchanged crews stay and only the arrived ones count as fresh")
+	var left = near_only.duplicate(true)
+	left.crews = [2]
+	left.world.racers = []
+	merged = Delta.merge(base, left, providers)
+	check(merged.world.racers.size() == 1 and merged.world.racers[0].id == 2, "a crew missing from the ids leaves")
+	check(Delta.merge(base, {"world": {"elapsed": 3.0}}, providers).changed == null and base.is_empty(), "a world without parts is whole")
+	check(not Delta.valid({"parts": [1]}) and not Delta.valid({"parts": ["racers"]}) and Delta.valid({"parts": ["racers"], "crews": []}), "malformed delta fields are refused")
+
+# Guests index flying gravel by id.
+func stone_checks(guest) -> void:
+	guest.stones.clear()
+	guest.room.apply_stones({"stones": [{"id": 1, "pos": [0, 5, 0], "velocity": [0, 0, 0]}, {"id": 2, "pos": [1, 5, 0], "velocity": [0, 0, 0]}], "stone_ids": [1, 2]})
+	guest.room.apply_stones({"stones": [{"id": 2, "pos": [1, 6, 0], "velocity": [0, 0, 0]}], "stone_ids": [2]})
+	check(guest.stones.size() == 1 and guest.stones[0].id == 2 and guest.stones[0].node.position.y > 5.0, "a stone moves by its id and a gone one is removed")
+	for stone in guest.stones:
+		stone.node.queue_free()
+	guest.stones.clear()
+
 func _initialize() -> void:
 	call_deferred("run")
 
@@ -324,6 +387,8 @@ func run() -> void:
 	# A departed member's link closes.
 	host.room._update_members([players[0]])
 	check(not host.room.direct.links.has("guest"), "links to departed members close")
+	delta_checks()
+	stone_checks(guest)
 	print("DIRECT LINK RESULT: %d checks, %d failures" % [checks, failures])
 	for g in [host, guest]:
 		g.queue_free()

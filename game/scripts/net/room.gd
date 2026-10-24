@@ -239,13 +239,14 @@ func _apply_checked_sync(data: Dictionary) -> void:
 	ui.show_room_status(room_id, peers.size() + 1, is_host, world_paused)
 
 # A guest applies the host's world from its direct link.
-func _guest_world(world, stamp: float, players: Array, membership: bool) -> void:
+# `changed`: the hot providers this packet changed (null: all).
+func _guest_world(world, stamp: float, players: Array, membership: bool, changed = null) -> void:
 	if world != null and not WorldValidation.valid(world): return
 	WorldValidation.trust(world)
-	_apply_guest_world(world, stamp, players, membership)
+	_apply_guest_world(world, stamp, players, membership, changed)
 	WorldValidation.trust(null)
 
-func _apply_guest_world(world, stamp: float, players: Array, membership: bool) -> void:
+func _apply_guest_world(world, stamp: float, players: Array, membership: bool, changed = null) -> void:
 	if world is Dictionary and stamp > authority_stamp:
 		authoritative_drives = world.get("driving", {})
 		authority_stamp = stamp
@@ -254,7 +255,7 @@ func _apply_guest_world(world, stamp: float, players: Array, membership: bool) -
 		return
 	prediction_enabled = int(world.get("drive_protocol", 0)) == 1
 	var drive = world.get("driving", {}).get(player_id, {})
-	if prediction_enabled and not drive.is_empty():
+	if prediction_enabled and not drive.is_empty() and (changed == null or changed.has("drive")):
 		if not prediction.active:
 			prediction.reset(v(drive.pos), drive.yaw)
 		prediction.context = drive_context(player_id)
@@ -264,7 +265,7 @@ func _apply_guest_world(world, stamp: float, players: Array, membership: bool) -
 		game.condition = prediction.condition
 		game.car.position = prediction.node.position
 		game.heading = prediction.yaw
-	apply_world(world, stamp / 1000.0 if stamp >= 0 else -1.0)
+	world_sync.apply_world(world, stamp / 1000.0 if stamp >= 0 else server_clock(), changed)
 	last_world_time = stamp
 
 func _update_members(players: Array) -> void:
@@ -510,19 +511,20 @@ func apply_stones(w: Dictionary, sample_time: float = -1.0) -> void:
 		game.toast("Гравий из-под колёс! Отойди дальше от края СУ.")
 	world_sync.last_impact = count
 	var present = {}
+	var local = {}
+	for stone in game.stones:
+		local[stone.id] = stone
 	for remote in w.get("stones", []):
 		var velocity = v(remote.velocity) + Vector3(0, -9.8 * age, 0)
 		var position = v(remote.pos) + v(remote.velocity) * age + Vector3(0, -4.9 * age * age, 0)
 		present[remote.id] = true
-		var found = false
-		for stone in game.stones:
-			if stone.id == remote.id:
-				stone.node.position = stone.node.position.lerp(position, 0.35) if stone.node.position.distance_to(position) < 3 else position
-				stone.velocity = velocity
-				stone.bounces = int(remote.get("bounces", 0))
-				stone.node.show()
-				found = true
-		if not found:
+		var stone = local.get(remote.id)
+		if stone != null:
+			stone.node.position = stone.node.position.lerp(position, 0.35) if stone.node.position.distance_to(position) < 3 else position
+			stone.velocity = velocity
+			stone.bounces = int(remote.get("bounces", 0))
+			stone.node.show()
+		else:
 			var node = Props.box(game, position, Vector3.ONE * 0.10, Color("9b9079"))
 			game.stones.append({"id": remote.id, "node": node, "velocity": velocity, "bounces": int(remote.get("bounces", 0))})
 	# With the list of living stones, a stone missing from "stones" just flies on.
@@ -531,10 +533,9 @@ func apply_stones(w: Dictionary, sample_time: float = -1.0) -> void:
 		alive = {}
 		for id in w.stone_ids:
 			alive[int(id)] = true
-	for stone in game.stones.duplicate():
-		if not (present.has(stone.id) if alive == null else alive.has(int(stone.id))):
-			stone.node.queue_free()
-			game.stones.erase(stone)
+	for stone in game.stones.filter(func(stone): return not (present.has(stone.id) if alive == null else alive.has(int(stone.id)))):
+		stone.node.queue_free()
+		game.stones.erase(stone)
 
 # ---------------------------------------------------------------- host checks
 
