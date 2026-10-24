@@ -90,7 +90,7 @@ func update(delta: float, guest: bool = false) -> void:
 		if cook_time >= COOK_SECONDS:
 			phase = "ready"
 			servings = Props.FOOD_PORTIONS
-			game.toast("Плов готов! F — съесть порцию.")
+			game.announce("Плов готов! F — съесть порцию.")
 	if pot != null:
 		Props.pose_cauldron(pot, phase, cook_time / COOK_SECONDS, servings, game.elapsed)
 

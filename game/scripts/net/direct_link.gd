@@ -1,23 +1,25 @@
 extends Node
-# Direct links: one WebRTC data channel between the host and each guest.
-#
-# The room server stays the source of truth for membership, commands and slow
-# world sections, and it relays the connection setup (offer, answer, ICE
-# candidates) over the room socket. Once a link is open, the latency-critical
-# traffic goes straight between the two browsers on an unordered channel
-# without retransmits: a lost packet is simply superseded by the next one.
-#   guest -> host  the guest's state with its unacknowledged driving input
-#   host -> guest  the hot world, authoritative cars and everyone's state
-# A link that does not open, or goes quiet, falls back to the server path.
+# Direct links: one WebRTC data channel between the host and each guest. The
+# whole game goes over them; the room server keeps the membership and relays
+# the connection setup (offer, answer, ICE candidates) over the room socket.
+# The channel is unordered and without retransmits: a lost packet is
+# superseded by the next one, and what must arrive is repeated until the
+# other side confirms it.
+#   guest -> host  "s": the guest's state with its unacknowledged driving
+#                  input and commands, and the slow-section revisions it holds
+#   host -> guest  "w": the hot world, authoritative cars, everyone's state and
+#                  the commands it ran; "c": pieces of changed slow sections
+# A guest whose link does not open, or goes quiet for good, leaves the room
+# (room.gd LINK_GIVE_UP).
 #
 # Browser builds use the engine's WebRTC; desktop and Android use RallyDataLink
 # from the native/voice extension through direct_native.gd. Both open the same
-# channel with the same signaling, so any two players can link. Without either,
-# the room stays on the server. Tests replace `connection_factory` with an
-# in-process pair.
+# channel with the same signaling, so any two players can link. Tests replace
+# `connection_factory` with an in-process pair.
 const WorldValidation = preload("res://scripts/net/world_validation.gd")
 const DirectNative = preload("res://scripts/net/direct_native.gd")
 const NetProtocol = preload("res://scripts/net/net_protocol.gd")
+const WorldDelta = preload("res://scripts/net/world_delta.gd")
 # Numeric engine enums, so the script parses without the WebRTC module.
 const PEER_CONNECTED = 2
 const PEER_FAILED = 4
@@ -36,9 +38,25 @@ var enabled = false
 #                   "last_received", "attempts", "retry_at", "initiator"}
 var links: Dictionary = {}
 var session_counter = 0
-# Send timers: guest state upstream, host world downstream.
+# Send timers: guest state upstream, host world downstream, and how often the
+# host takes the slow sections afresh.
 var state_clock = 0.0
 var world_clock = 0.0
+var cold_clock = INF
+var cold_reported_at = -INF
+var cold_reported = {}
+# Host: the last world packet sent as it reads with its clocks left out, and
+# when; a world that reads the same goes at still_world_rate only.
+var still_signature = ""
+var still_sent_at = -INF
+# Slow sections in pieces: characters per piece (Cyrillic text stays under
+# max_packet), pieces per link and world packet, and how long a copy the guest
+# has not confirmed waits before it goes again.
+const COLD_PIECE = 6000
+const COLD_PIECES_PER_TICK = 4
+const COLD_RESEND = 0.6
+# Guest: how often the revisions it holds go up even when unchanged.
+const COLD_REPORT = 0.25
 
 func setup(owner_room) -> void:
 	room = owner_room
@@ -243,22 +261,76 @@ func _send(delta: float) -> void:
 		if world_clock < 1.0 / rate:
 			return
 		world_clock = fmod(world_clock, 1.0 / rate)
-		var bytes = JSON.stringify(world_packet()).to_utf8_buffer()
+		cold_clock += 1.0 / rate
+		if cold_clock >= NetProtocol.sync_interval():
+			cold_clock = 0.0
+			room.world_sync.refresh_cold()
+		var whole = world_packet()
+		var signature = still_signature_of(whole)
+		var send_world = signature != still_signature or now() - still_sent_at >= 1.0 / float(NetProtocol.direct("still_world_rate", 5)) - 0.001
+		if send_world:
+			still_signature = signature
+			still_sent_at = now()
+		room.world_sync._ensure()
+		var current = WorldDelta.parts(whole.world, room.world_sync.providers) if send_world else {}
 		for id in links:
-			send_bytes(id, bytes)
+			if send_world:
+				var peer = room.peers.get(id)
+				var pos = peer.state.get("pos") if peer != null and peer.state is Dictionary else null
+				send(id, WorldDelta.packet(self.links[id], whole, current, pos))
+			for message in cold_messages(id):
+				send(id, message)
 	elif room.host_id in links:
 		state_clock += delta
 		var interval = 1.0 / float(NetProtocol.direct("state_rate", 30))
 		if state_clock < interval:
 			return
 		state_clock = fmod(state_clock, interval)
-		if send(room.host_id, {"t": "s", "state": room.local_state()}):
+		var message = {"t": "s", "state": NetProtocol.outgoing_state(room.local_state()), "wa": world_ack()}
+		# Commands go in every packet until the host's world lists them as run.
+		if not room.commands.is_empty():
+			message.c = room.commands
+		if room.world_sync.cold_revs != cold_reported or now() - cold_reported_at >= COLD_REPORT:
+			message.cr = room.world_sync.cold_revs
+		if send(room.host_id, message):
 			room.prediction.seal()
+			if message.has("cr"):
+				cold_reported = room.world_sync.cold_revs.duplicate()
+				cold_reported_at = now()
 
-# What the host sends each guest directly: the hot world (slow sections stay on
-# the server path) and every member's state, as the server would list them. The
-# roster (name, slot, car) is not repeated: the server delivers it. States are
-# compacted by NetProtocol.compact_state().
+# "wa": the newest world a guest applied, so the host stops resending what it
+# holds (world_delta.gd); -1 while it holds none.
+func world_ack() -> int:
+	return int(room.last_world_time) if room.last_world_time >= 0 and not room.world_sync.delta_base.is_empty() else -1
+
+# A guest's next state packet goes at once (a command was just queued).
+func send_soon() -> void:
+	state_clock = INF
+
+# A world packet without what moves on its own while the world stands still:
+# the clocks, member state stamps and the input a parked car acknowledges.
+# Equal signatures mean a guest would draw the same frame.
+static func still_signature_of(packet: Dictionary) -> String:
+	var world: Dictionary = packet.world.duplicate()
+	world.erase("elapsed")
+	if world.get("driving") is Dictionary:
+		var driving = {}
+		for id in world.driving:
+			var drive: Dictionary = world.driving[id].duplicate()
+			drive.erase("ack")
+			drive.erase("recovery_ack")
+			driving[id] = drive
+		world.driving = driving
+	var players: Array = []
+	for entry in packet.players:
+		var player: Dictionary = entry.duplicate()
+		player.erase("state_time")
+		players.append(player)
+	return JSON.stringify([world, players, packet.get("accepted", {})])
+
+# What the host sends every guest: the hot world, every member's state (the
+# roster comes from the server) and the last command it ran from each guest.
+# States are compacted by NetProtocol.compact_state().
 func world_packet() -> Dictionary:
 	var hot: Dictionary = room.world_sync.hot_state()
 	# The frame's clock: the world in this packet is where this frame left it.
@@ -271,7 +343,46 @@ func world_packet() -> Dictionary:
 		# A car the host drives is stamped with its simulation time (drive_prediction.gd stamp()).
 		var time = float(room.drive_budgets[id].stamp) if room.drive_budgets.has(id) else float(peer.get("last_state_time", room.server_clock()))
 		players.append(_member_entry(str(id), peer.state, int(time * 1000.0)))
-	return {"t": "w", "time": now_ms, "world": hot, "players": players}
+	return {"t": "w", "time": now_ms, "world": hot, "players": players, "accepted": room.accepted}
+
+# The pieces of slow sections a guest does not hold yet, as it last reported
+# (its "cr"), up to COLD_PIECES_PER_TICK. A copy is sent whole before a newer
+# one starts, so a section that changes all the time still arrives; a busy
+# section starts a new copy at most once per its interval.
+func cold_messages(id: String) -> Array:
+	var link: Dictionary = links.get(id, {})
+	var sync = room.world_sync
+	if link.is_empty() or sync.latest_revs.is_empty():
+		return []
+	var reported = link.get("cold_revs", {})
+	var sending: Dictionary = link.get("cold", {})
+	link.cold = sending
+	var intervals = sync.section_intervals()
+	var t = now()
+	var budget = COLD_PIECES_PER_TICK
+	var result: Array = []
+	for section in sync.latest_revs:
+		var revision = int(sync.latest_revs[section])
+		var copy: Dictionary = sending.get(section, {})
+		var finished = copy.is_empty() or int(copy.next) >= int(copy.count)
+		if finished and int(reported.get(section, -1)) == revision:
+			continue
+		if finished and (copy.is_empty() or int(copy.r) != revision) and (copy.is_empty() or t - float(copy.started) >= float(intervals.get(section, 0.0))):
+			var text: String = sync.latest_texts[section]
+			copy = {"r": revision, "v": sync.latest_at, "text": text, "count": maxi(1, ceili(text.length() / float(COLD_PIECE))), "next": 0, "started": t, "sent": -INF}
+			sending[section] = copy
+		elif finished and int(copy.r) == revision and t - float(copy.sent) >= COLD_RESEND:
+			copy.next = 0
+		while int(copy.next) < int(copy.count) and budget > 0:
+			var i = int(copy.next)
+			result.append({"t": "c", "s": section, "r": copy.r, "v": copy.v, "i": i, "n": copy.count, "d": copy.text.substr(i * COLD_PIECE, COLD_PIECE)})
+			copy.next = i + 1
+			budget -= 1
+			if int(copy.next) >= int(copy.count):
+				copy.sent = t
+		if budget <= 0:
+			break
+	return result
 
 func _member_entry(id: String, state: Dictionary, state_time: int) -> Dictionary:
 	return {"id": id, "state_time": state_time, "state": NetProtocol.compact_state(state)}
@@ -287,16 +398,33 @@ func _receive(from: String, message: Dictionary) -> void:
 		"s":
 			if room.is_host:
 				_receive_state(from, message.get("state"))
+				_receive_commands(from, message.get("c"))
+				if message.get("cr") is Dictionary and links.has(from):
+					links[from].cold_revs = message.cr
+				if _whole(message.get("wa")) and links.has(from):
+					links[from].acked = int(message.wa)
+		"c":
+			if not room.is_host and from == room.host_id:
+				room.world_sync.receive_piece(message)
 		"w":
 			if not room.is_host and from == room.host_id and message.get("world") is Dictionary and message.get("players") is Array:
-				if not _timestamp(message.get("time", -1)) or not WorldValidation.valid(message.world): return
+				if not _timestamp(message.get("time", -1)) or not WorldValidation.valid(message.world) or not WorldDelta.valid(message): return
 				var players: Array = []
 				for entry in message.players:
 					if not entry is Dictionary or not entry.get("id") is String or not NetProtocol.valid_compact_state(entry.get("state")) or not _timestamp(entry.get("state_time", 0)): return
 					players.append(_full_entry(entry))
+				var accepted = message.get("accepted", {})
+				if accepted is Dictionary and _whole(accepted.get(room.player_id)):
+					room.commands = room.commands.filter(func(c): return int(c.seq) > int(accepted[room.player_id]))
+				if float(message.get("time", -1)) <= room.last_world_time: return
+				var sync = room.world_sync
+				sync._ensure()
+				var merged = WorldDelta.merge(sync.delta_base, message, sync.providers)
 				# Checked above: the room applies it without walking it again.
-				WorldValidation.trust(message.world)
-				room._guest_world(message.world, float(message.get("time", -1)), players, false)
+				WorldValidation.trust(merged.world)
+				sync.fresh_crews = merged.crews
+				room._guest_world(merged.world, float(message.get("time", -1)), players, false, merged.changed)
+				sync.fresh_crews = null
 				WorldValidation.trust(null)
 
 # The host takes a guest's state straight from its link, with the checks the
@@ -309,6 +437,49 @@ func _receive_state(from: String, raw) -> void:
 		return
 	var member: Dictionary = room.members[from]
 	room._update_peer({"id": from, "name": member.name, "slot": member.slot, "car_model": member.car_model, "character": member.get("character", member.slot), "state_time": int(room.server_clock() * 1000.0), "state": state})
+
+# A guest's commands, with the checks the Worker (room-core.mjs) applied when
+# they went through it. Each runs once; the world packets list the last one
+# run from each guest ("accepted"), and the guest stops sending those.
+func _receive_commands(from: String, raw) -> void:
+	if not raw is Array or not room.peers.has(from) or room.peers[from].state == null:
+		return
+	var applied = false
+	for c in raw.slice(0, NetProtocol.limit("commands_per_sync")):
+		if not c is Dictionary or not _whole(c.get("seq")) or str(c.get("action", "")) not in NetProtocol.actions():
+			continue
+		var id = "%s:%d" % [from, int(c.seq)]
+		if room.processed.has(id) or int(c.seq) <= int(room.accepted.get(from, 0)):
+			continue
+		room.processed[id] = true
+		room.accepted[from] = int(c.seq)
+		var state: Dictionary = room.peers[from].state
+		room._apply_command({"id": id, "player": from, "action": str(c.action), "state": state, "placement": _placement(c.get("placement"), state.pos)})
+		applied = true
+	# The changed sections go out with the next world packet.
+	if applied:
+		cold_clock = INF
+
+static func _placement(raw, pos: Array) -> Dictionary:
+	var placement = {}
+	if not raw is Dictionary:
+		return placement
+	var yaw = raw.get("yaw", 0)
+	var spot = raw.get("pos")
+	if spot is Array and spot.size() == 3 and spot.all(func(x): return _number(x)) and _number(yaw) and Vector3(spot[0], spot[1], spot[2]).distance_to(Vector3(pos[0], pos[1], pos[2])) <= 5.0:
+		placement.pos = spot
+		placement.yaw = yaw
+	if _whole(raw.get("resource_id")) and int(raw.resource_id) >= 0 and int(raw.resource_id) < 10000:
+		placement.resource_id = int(raw.resource_id)
+	if _whole(raw.get("source")) and int(raw.source) >= -1 and int(raw.source) < 100:
+		placement.source = int(raw.source)
+	return placement
+
+static func _number(value) -> bool:
+	return (value is int or value is float) and is_finite(float(value))
+
+static func _whole(value) -> bool:
+	return _number(value) and absf(float(value)) <= 9007199254740991.0 and float(value) == floorf(float(value))
 
 static func _timestamp(value) -> bool:
 	return (value is int or value is float) and is_finite(float(value)) and absf(float(value)) <= 9007199254740991.0

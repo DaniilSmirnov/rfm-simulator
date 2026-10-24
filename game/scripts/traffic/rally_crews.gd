@@ -16,11 +16,14 @@ const Stage = preload("res://scripts/stages/stage.gd")
 const ServiceTraffic = preload("res://scripts/traffic/service_traffic.gd")
 const Traffic = preload("res://scripts/traffic/rally_traffic.gd")
 const RallyDriver = preload("res://scripts/traffic/rally_driver.gd")
+const CrewLod = preload("res://scripts/traffic/crew_lod.gd")
 const Loc = preload("res://scripts/ui/loc.gd")
 
 var game
 # Somebody is towing the local player's own car (set by recovery.gd).
 var car_towed = false
+# Every crew steps every frame, near a player or not (tests of the motion).
+var full_rate = false
 # A stone reuses its last floor sample within this sideways distance (m) while
 # it is at least this high (m) above it.
 const FLOOR_REUSE_DISTANCE = 0.4
@@ -69,7 +72,7 @@ func spawn_course_car(role: String, id: int, zero_index: int = 0) -> void:
 	racer.drive_speed = 0.0 if waiting != null else Traffic.speed_limit(game, racer, 0.0)
 	racer.bias = 0.0
 	racer.phase = 0.0
-	game.toast(game.course.caption())
+	game.announce(game.course.caption())
 
 func race_station(point: Vector3) -> float:
 	var station = game.stage.road_s(point)
@@ -126,7 +129,7 @@ func spawn_racer(forced: String = "") -> void:
 	var racer = add_course_vehicle(node, game.rally_spawn_count + (game.course.pass_index - 1) * 200, kind, variant)
 	# A standing start from the line; a car placed straight on the road flies.
 	racer.drive_speed = 0.0 if waiting != null else Traffic.speed_limit(game, racer, 0.0)
-	game.toast(Loc.t("Приближается %s, номер %d!") % [Loc.t(node.get_meta("model")), node.get_meta("number")])
+	game.announce(Loc.t("Приближается %s, номер %d!") % [Loc.t(node.get_meta("model")), node.get_meta("number")])
 
 func prop_collision(racer: Dictionary, start: Vector3, end: Vector3, delta: float) -> Dictionary:
 	var result = PropContact.resolve(game.stage, racer.motion, start, end, delta, Hitbox.shape(Hitbox.bounds(racer.node), racer.node.rotation.y))
@@ -155,16 +158,30 @@ func update_racers(delta: float) -> void:
 	var start = {}
 	for racer in game.racers:
 		start[racer.id] = racer.node.position
+	var lod = CrewLod.split(game, maxf(delta, 0), full_rate)
+	# A far crew covers its collected time in steps of up to FAR_STEP; its
+	# velocity is taken over that time, not over a frame it may skip.
+	for entry in lod.due:
+		var racer: Dictionary = entry[0]
+		var from: Vector3 = racer.node.position
+		var remaining_far: float = entry[1]
+		while remaining_far > 0.000001 and game.racers.has(racer):
+			var far_step = minf(remaining_far, CrewLod.FAR_STEP)
+			update_racers_step(far_step, [racer])
+			remaining_far -= far_step
+		racer.velocity = (racer.node.position - from) / float(entry[1])
+		start.erase(racer.id)
 	var remaining = maxf(delta, 0)
-	while remaining > 0.000001:
+	while remaining > 0.000001 and not lod.close.is_empty():
 		var step = minf(remaining, 1.0 / 60.0)
-		update_racers_step(step)
+		update_racers_step(step, lod.close)
 		remaining -= step
 	# Guests run crews ahead of their last snapshot with this velocity; it is
 	# taken over the whole frame, as a short last step would amplify noise.
 	if delta > 0.001:
-		for racer in game.racers:
-			racer.velocity = (racer.node.position - start[racer.id]) / delta if start.has(racer.id) else Vector3.ZERO
+		for racer in lod.close:
+			if start.has(racer.id):
+				racer.velocity = (racer.node.position - start[racer.id]) / delta
 	watch_police(delta)
 
 # Flags the course while a police car stands still on the stage; a red flag
@@ -182,11 +199,12 @@ func watch_police(delta: float) -> void:
 		blocked = blocked or racer.stall_time >= POLICE_STALL_SECONDS
 	game.course.police_blocked = blocked
 
-func update_racers_step(delta: float) -> void:
+# Steps `crews` (all of them by default) by `delta`.
+func update_racers_step(delta: float, crews = null) -> void:
 	var to_remove: Array[Dictionary] = []
 	var finished_course: Array[int] = []
 	var parked: Array[Dictionary] = []
-	for racer in game.racers:
+	for racer in (game.racers if crews == null else crews.filter(func(r): return game.racers.has(r))):
 		var node: Node3D = racer.node
 		racer.previous = node.position
 		var service_before = ServiceTraffic.save(racer)
@@ -223,7 +241,7 @@ func update_racers_step(delta: float) -> void:
 					stop_at_obstacle(racer)
 					racer.state = "stopped"
 					racer.retired = true
-					game.toast("Экипаж не может проехать и сошёл с дистанции.")
+					game.announce("Экипаж не может проехать и сошёл с дистанции.")
 					continue
 			# Keep the racing state: no towing/despawn or timetable transition while
 			# waiting. Freeze lateral corrections too, so stopped cars cannot creep.
@@ -247,7 +265,7 @@ func update_racers_step(delta: float) -> void:
 				lateral_rate = maxf(lateral_rate, float(traffic.get("lateral_rate", 0.6)))
 			ease_line(racer, float(traffic.line), lateral_rate, delta)
 			if physical:
-				RallyDriver.follow(self, racer, actual_speed, float(traffic.get("advance", INF)), delta)
+				CrewLod.follow(self, racer, actual_speed, float(traffic.get("advance", INF)), delta)
 
 			var s: float = racer.s
 			var road_yaw = atan2(-race_direction(s).x, -race_direction(s).z)
@@ -285,7 +303,7 @@ func update_racers_step(delta: float) -> void:
 				racer.rejoin_time = 0.0
 				racer.rejoin_plan = 0.0
 				RallyHandling.departure(racer, movement / maxf(delta, 0.001), race_side(s), bend)
-				game.toast("ВЫЛЕТ! Отойди с траектории!")
+				game.announce("ВЫЛЕТ! Отойди с траектории!")
 			elif s > racer.focus + 45 and not racer.counted:
 				count_racer(racer)
 			if s >= game.stage.length - 1 and not red_hold:
@@ -322,7 +340,7 @@ func update_racers_step(delta: float) -> void:
 				racer.state = "stranded" if racer.kind in ["stuck", "crash"] else "stopped"
 				racer.age = 0.0
 				if racer.state == "stranded":
-					game.toast("Экипаж застрял. Нужен трос — T рядом с машиной.")
+					game.announce("Экипаж застрял. Нужен трос — T рядом с машиной.")
 		elif racer.state in ["stopped", "stranded", "parked"]:
 			racer.motion.suspension(node, game.stage, delta, node.rotation.y)
 			if racer.state == "stopped" and not red_hold and (not service or racer.get("retired", false)) and racer.age > 18 and racer.node != game.tow_target and not racer.get("towed", false) and int(racer.get("recovery_helpers", 0)) == 0:
@@ -404,7 +422,7 @@ func car_contact(racer: Dictionary, delta: float) -> void:
 			node.position = racer.previous
 			racer.state = "stranded" if racer.kind in ["stuck", "crash"] else "stopped"
 			racer.age = 0
-			game.toast("Столкновение машин! Экипаж остановился.")
+			game.announce("Столкновение машин! Экипаж остановился.")
 			if blocker.position == game.car.position:
 				var damage = car_ram_damage(collision_speed)
 				if damage > 0.0:

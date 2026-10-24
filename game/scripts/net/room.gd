@@ -6,7 +6,7 @@ extends Node
 #   world_sync.gd      the shared world as snapshot providers (hot/cold)
 #   peer_view.gd       how other members look on this client
 #   room_lobby.gd      the menu panel and the in-game room line
-#   direct_link.gd     WebRTC data channels host <-> guest (browser builds)
+#   direct_link.gd     WebRTC data channels host <-> guest: the whole game
 #   drive_prediction.gd  guest car prediction / host-side simulation
 const Hitbox = preload("res://scripts/cars/car_hitbox.gd")
 const Prediction = preload("res://scripts/net/drive_prediction.gd")
@@ -42,11 +42,16 @@ var peers: Dictionary = {}
 var members: Dictionary = {}
 var host_id = ""
 var world_paused = false
-# Commands: a guest queues them, the host applies and acknowledges them.
+# Commands: a guest queues them, the host runs them and reports the last one
+# run from each guest (`accepted`, guest id -> seq).
 var sequence = 0
 var commands: Array = []
-var acknowledgements: Array = []
+var accepted: Dictionary = {}
 var processed: Dictionary = {}
+# Guest: seconds without a working direct link to the host; past LINK_GIVE_UP
+# it leaves the room. The server path no longer carries the game.
+const LINK_GIVE_UP = 20.0
+var link_lost = 0.0
 # Sync timer and diagnostics.
 var clock = 0.0
 var diagnostic_clock = 0.0
@@ -166,6 +171,10 @@ func _joined(data: Dictionary) -> void:
 	drive_budgets.clear()
 	authoritative_drives.clear()
 	authority_stamp = -1.0
+	accepted.clear()
+	processed.clear()
+	link_lost = 0.0
+	clock = INF
 	var converting_solo = game.playing and bool(data.host)
 	player_id = data.player
 	token = data.token
@@ -221,43 +230,23 @@ func _apply_sync(data: Dictionary) -> void:
 	_apply_checked_sync(data)
 	WorldValidation.trust(null)
 
+# The server's reply: membership, the host and the server clock. The world,
+# states and commands go over the direct links.
 func _apply_checked_sync(data: Dictionary) -> void:
-	if is_host and data.get("cold_revs") is Dictionary:
-		world_sync.server_cold_revs = data.cold_revs
 	host_id = str(data.get("host", host_id))
 	_update_members(data.players)
-	var world = data.get("world")
-	var stamp = float(data.get("world_time", -1))
-	if is_host:
-		_update_peers(data.players)
-		for command in data.commands:
-			if not processed.has(command.id):
-				_apply_command(command)
-				processed[command.id] = true
-			if command.id not in acknowledgements:
-				acknowledgements.append(command.id)
-	else:
-		commands = commands.filter(func(c): return c.seq > int(data.accepted))
-		if direct.healthy(host_id) or (world is Dictionary and world.get("direct", false) == true):
-			# The direct link carries the hot world and everyone's state; the
-			# server still delivers slow sections and membership. A reply marked
-			# "direct" has no hot world even when the link just went quiet: the
-			# next sync (sent without the flag) brings the full world back.
-			if world is Dictionary:
-				world_sync.apply_cold(world, stamp / 1000.0 if stamp >= 0 else server_clock())
-			_update_peers(data.players, false)
-		else:
-			_guest_world(world, stamp, data.players, true)
+	_update_peers(data.players, false)
 	ui.show_room_status(room_id, peers.size() + 1, is_host, world_paused)
 
-# A guest applies the host's world: from the server, or straight from the host.
-func _guest_world(world, stamp: float, players: Array, membership: bool) -> void:
+# A guest applies the host's world from its direct link.
+# `changed`: the hot providers this packet changed (null: all).
+func _guest_world(world, stamp: float, players: Array, membership: bool, changed = null) -> void:
 	if world != null and not WorldValidation.valid(world): return
 	WorldValidation.trust(world)
-	_apply_guest_world(world, stamp, players, membership)
+	_apply_guest_world(world, stamp, players, membership, changed)
 	WorldValidation.trust(null)
 
-func _apply_guest_world(world, stamp: float, players: Array, membership: bool) -> void:
+func _apply_guest_world(world, stamp: float, players: Array, membership: bool, changed = null) -> void:
 	if world is Dictionary and stamp > authority_stamp:
 		authoritative_drives = world.get("driving", {})
 		authority_stamp = stamp
@@ -266,7 +255,7 @@ func _apply_guest_world(world, stamp: float, players: Array, membership: bool) -
 		return
 	prediction_enabled = int(world.get("drive_protocol", 0)) == 1
 	var drive = world.get("driving", {}).get(player_id, {})
-	if prediction_enabled and not drive.is_empty():
+	if prediction_enabled and not drive.is_empty() and (changed == null or changed.has("drive")):
 		if not prediction.active:
 			prediction.reset(v(drive.pos), drive.yaw)
 		prediction.context = drive_context(player_id)
@@ -276,7 +265,7 @@ func _apply_guest_world(world, stamp: float, players: Array, membership: bool) -
 		game.condition = prediction.condition
 		game.car.position = prediction.node.position
 		game.heading = prediction.yaw
-	apply_world(world, stamp / 1000.0 if stamp >= 0 else -1.0)
+	world_sync.apply_world(world, stamp / 1000.0 if stamp >= 0 else server_clock(), changed)
 	last_world_time = stamp
 
 func _update_members(players: Array) -> void:
@@ -287,19 +276,10 @@ func _update_members(players: Array) -> void:
 	voice.sync_members(members.keys())
 
 func sync_now() -> void:
-	clock = maxf(clock, NetProtocol.sync_interval())
+	clock = maxf(clock, NetProtocol.membership_interval())
 
 func sync_body() -> Dictionary:
-	var body = {"token": token, "state": local_state(), "commands": commands, "cold_revs": world_sync.cold_revs}
-	if is_host:
-		world_sync.host_upload(body)
-		body.ack = acknowledgements
-	elif direct.healthy(host_id):
-		# The server then leaves the hot world and the states to the direct link.
-		body.direct = true
-	# Commands in this body are on the wire and must not be merged further.
-	prediction.seal()
-	return body
+	return {"token": token, "state": NetProtocol.outgoing_state(local_state(), true), "direct": true}
 
 func world_state() -> Dictionary:
 	return world_sync.world_state()
@@ -320,10 +300,12 @@ func _process(delta: float) -> void:
 	transport.poll(delta)
 	if not connected:
 		return
-	if clock >= NetProtocol.sync_interval() and transport.ready_to_sync():
-		clock = fmod(clock, NetProtocol.sync_interval())
+	if clock >= NetProtocol.membership_interval() and transport.ready_to_sync():
+		clock = 0.0
 		transport.send_sync(sync_body(), room_id)
 	direct.update(delta)
+	if is_guest() and not _linked(delta):
+		return
 	diagnostic_clock += delta
 	if diagnostic_clock >= 5.0:
 		diagnostic_clock = 0.0
@@ -336,8 +318,20 @@ func _process(delta: float) -> void:
 	if is_guest():
 		_render_guest_world(delta)
 
+# A guest without a working link to the host waits for it, then gives up.
+func _linked(delta: float) -> bool:
+	if direct.healthy(host_id):
+		link_lost = 0.0
+		return true
+	link_lost += delta
+	ui.room_label.text = "Соединяемся с хозяином комнаты…"
+	if link_lost > LINK_GIVE_UP or not direct.enabled:
+		disconnect_room("Не удалось соединиться с хозяином комнаты. Проверь интернет или попробуй другую сеть.", "Не удалось соединиться")
+	return connected
+
 # Guests move flying gravel and rally cars between host snapshots.
 func _render_guest_world(delta: float) -> void:
+	world_sync.advance_clock(delta, not game.playing or world_paused or game.paused or game.dead or game.finished)
 	if not world_paused and not game.paused and not game.dead and not game.finished:
 		for stone in game.stones:
 			if not game._advance_gravel(stone, delta):
@@ -354,6 +348,9 @@ func _render_guest_world(delta: float) -> void:
 
 static func a(pos: Vector3) -> Array:
 	return [snappedf(pos.x, 0.01), snappedf(pos.y, 0.01), snappedf(pos.z, 0.01)]
+# Velocities to 0.1 m/s: guests only draw ahead with them, a tenth of a second.
+static func av(velocity: Vector3) -> Array:
+	return [snappedf(velocity.x, 0.1), snappedf(velocity.y, 0.1), snappedf(velocity.z, 0.1)]
 static func v(pos: Array) -> Vector3:
 	return Vector3(pos[0], pos[1], pos[2])
 
@@ -476,13 +473,12 @@ func submit(action: String, placement: Dictionary = {}) -> bool:
 	if commands.size() < NetProtocol.limit("commands_per_sync"):
 		sequence += 1
 		commands.append({"seq": sequence, "action": action, "placement": placement})
-		sync_now()
+		direct.send_soon()
 	return true
 
 # The host runs a guest's command as that guest: an explicit action context
 # (position, car, seat) instead of the host's own player state.
 func _apply_command(c: Dictionary) -> void:
-	acknowledgements = acknowledgements.slice(-NetProtocol.limit("acknowledgements_per_sync"))
 	if game.paused or game.dead or game.finished:
 		return
 	var actor = str(c.get("player", "guest"))
@@ -504,7 +500,9 @@ func stone_state() -> Array:
 		if not stone.has("fresh_until"):
 			stone.fresh_until = now + STONE_FRESH_MSEC
 		if now < int(stone.fresh_until):
-			result.append({"id": stone.id, "pos": a(stone.node.position), "velocity": a(stone.velocity), "bounces": int(stone.get("bounces", 0))})
+			var entry = {"id": stone.id, "pos": a(stone.node.position), "velocity": av(stone.velocity)}
+			if int(stone.get("bounces", 0)) > 0: entry.bounces = int(stone.bounces)
+			result.append(entry)
 	return result
 
 func apply_stones(w: Dictionary, sample_time: float = -1.0) -> void:
@@ -518,19 +516,20 @@ func apply_stones(w: Dictionary, sample_time: float = -1.0) -> void:
 		game.toast("Гравий из-под колёс! Отойди дальше от края СУ.")
 	world_sync.last_impact = count
 	var present = {}
+	var local = {}
+	for stone in game.stones:
+		local[stone.id] = stone
 	for remote in w.get("stones", []):
 		var velocity = v(remote.velocity) + Vector3(0, -9.8 * age, 0)
 		var position = v(remote.pos) + v(remote.velocity) * age + Vector3(0, -4.9 * age * age, 0)
 		present[remote.id] = true
-		var found = false
-		for stone in game.stones:
-			if stone.id == remote.id:
-				stone.node.position = stone.node.position.lerp(position, 0.35) if stone.node.position.distance_to(position) < 3 else position
-				stone.velocity = velocity
-				stone.bounces = int(remote.get("bounces", 0))
-				stone.node.show()
-				found = true
-		if not found:
+		var stone = local.get(remote.id)
+		if stone != null:
+			stone.node.position = stone.node.position.lerp(position, 0.35) if stone.node.position.distance_to(position) < 3 else position
+			stone.velocity = velocity
+			stone.bounces = int(remote.get("bounces", 0))
+			stone.node.show()
+		else:
 			var node = Props.box(game, position, Vector3.ONE * 0.10, Color("9b9079"))
 			game.stones.append({"id": remote.id, "node": node, "velocity": velocity, "bounces": int(remote.get("bounces", 0))})
 	# With the list of living stones, a stone missing from "stones" just flies on.
@@ -539,10 +538,9 @@ func apply_stones(w: Dictionary, sample_time: float = -1.0) -> void:
 		alive = {}
 		for id in w.stone_ids:
 			alive[int(id)] = true
-	for stone in game.stones.duplicate():
-		if not (present.has(stone.id) if alive == null else alive.has(int(stone.id))):
-			stone.node.queue_free()
-			game.stones.erase(stone)
+	for stone in game.stones.filter(func(stone): return not (present.has(stone.id) if alive == null else alive.has(int(stone.id)))):
+		stone.node.queue_free()
+		game.stones.erase(stone)
 
 # ---------------------------------------------------------------- host checks
 
@@ -584,7 +582,7 @@ func leave() -> void:
 	connected = false
 	transport.request("leave", room_id, {"token": token})
 
-func disconnect_room(message: String) -> void:
+func disconnect_room(message: String, title: String = "Комната закрыта") -> void:
 	connected = false
 	voice.leave()
 	direct.close_all()
@@ -592,7 +590,7 @@ func disconnect_room(message: String) -> void:
 	game.paused = true
 	game.menu.show()
 	if not (game.finished or game.dead): # a trip's results stay; their button leads to the menu
-		game.menu_title.text = "Комната закрыта"
+		game.menu_title.text = title
 		game.menu_text.text = message
 		game.start_button.text = "В ГЛАВНОЕ МЕНЮ"
 	game.dead = true

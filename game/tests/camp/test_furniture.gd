@@ -131,7 +131,8 @@ func run() -> void:
 			guest.room.apply_world(sloped_snapshot)
 			for pair in [[host.camp, guest.camp], [host.personal_chairs["host"], guest.personal_chairs["host"]], [host.grill, guest.grill], [placed_flag, guest.personal_flags["host"][0]], [fire, guest.camp_cooking.fire], [host.camp_cooking.pot, guest.camp_cooking.pot]]:
 				if pair[0] != null and pair[1] != null:
-					check(pair[0].basis.is_equal_approx(pair[1].basis), "repeated room snapshots preserve slope and heading")
+					# Prop angles travel rounded to 0.001 rad (movable_props.snapshot).
+					check(pair[0].basis.get_rotation_quaternion().angle_to(pair[1].basis.get_rotation_quaternion()) < 0.002, "repeated room snapshots preserve slope and heading")
 	for game in [host, guest]:
 		await game._shutdown_audio()
 		game.queue_free()

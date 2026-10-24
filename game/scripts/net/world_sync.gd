@@ -9,8 +9,9 @@ extends RefCounted
 # Provider: {"name": String, "section": String ("" = hot), "keys": Array,
 #            "snapshot": Callable() -> Dictionary, "apply": Callable(fields, sample_time),
 #            "collision": bool (applied before guest drive reconciliation),
-#            "interval": float (seconds; a busy section uploads at most this often)}
+#            "interval": float (seconds; a busy section goes to guests at most this often)}
 const Props = preload("res://scripts/core/props.gd")
+const WorldDelta = preload("res://scripts/net/world_delta.gd")
 const SnapshotMotion = preload("res://scripts/net/snapshot_motion.gd")
 const Validation = preload("res://scripts/net/world_validation.gd")
 const NetProtocol = preload("res://scripts/net/net_protocol.gd")
@@ -22,16 +23,32 @@ var providers: Array[Dictionary] = []
 var _stage_instance_id = -1
 # Cold revisions this client has applied, as reported by the host.
 var cold_revs: Dictionary = {}
-# Host: revisions the server already holds, and uploads still in flight.
-var server_cold_revs: Dictionary = {}
-var cold_sent: Dictionary = {}
-# Host: when each section was last uploaded, for sections with an interval.
-var cold_uploaded_at: Dictionary = {}
 var last_impact = 0
 var last_notice = ""
 var racer_motion: Dictionary = {}
 var racer_targets: Dictionary = {}
 const PEOPLE_INTERVAL = 0.3
+# Guest world clock (advance_clock): seconds off the host before it jumps, and
+# how fast a smaller difference fades (per second).
+const CLOCK_SNAP = 1.0
+const CLOCK_PULL = 2.0
+var host_elapsed = -1.0
+var host_elapsed_at = 0.0
+# Host: the slow sections as refresh_cold() last took them, with their
+# revisions and JSON text, for the direct links (direct_link.gd cold_messages).
+var latest_cold: Dictionary = {}
+var latest_revs: Dictionary = {}
+var latest_texts: Dictionary = {}
+var latest_at = 0
+# Guest: pieces of slow sections still arriving (receive_piece), and when the
+# copy of each section it applied was taken on the host.
+var pieces: Dictionary = {}
+var applied_at: Dictionary = {}
+var _split_cache: Dictionary = {}
+# Guest: the hot world held by provider (world_delta.gd merge()), and the crews
+# of the packet being applied (null: all of them).
+var delta_base: Dictionary = {}
+var fresh_crews = null
 
 static func provider(name: String, section: String, keys: Array, snapshot: Callable, apply: Callable, collision: bool = false, interval: float = 0.0) -> Dictionary:
 	return {"name": name, "section": section, "keys": keys, "snapshot": snapshot, "apply": apply, "collision": collision, "interval": interval}
@@ -55,7 +72,7 @@ func rebuild() -> void:
 	providers.append(provider("camp", "camp", ["camp", "table_yaw", "chairs", "chair_poses", "flag_poses", "cooking", "grill_pose", "grill_fire", "grill_servings", "npc_servings", "eaten"], _camp_snapshot, _camp_apply))
 	providers.append(provider("drive", "", ["drive_protocol", "driving"], _drive_snapshot, func(_f, _t): pass))
 	providers.append(provider("stones", "", ["stones", "stone_ids", "impacts"], _stones_snapshot, _stones_apply))
-	providers.append(provider("status", "", ["paused", "notice", "notice_time", "cook_time"], _status_snapshot, _status_apply))
+	providers.append(provider("status", "", ["paused", "notice", "notice_for", "notice_time", "cook_time"], _status_snapshot, _status_apply))
 	# Spectators, marshals, the schedule, trunks and foraging stand still most of
 	# the time: as their own sections they travel only when they change.
 	# Walking spectators and marshals are smoothed on guests, so three updates a
@@ -126,10 +143,14 @@ func hot_state() -> Dictionary:
 			world.merge(p.snapshot.call(), true)
 	return world
 
-static func split_world_by(full: Dictionary, sections: Dictionary) -> Dictionary:
+# `cache` (section -> last part, revision and text) skips writing out and
+# hashing a section equal to the last one: the props section alone was ~17 KB
+# of JSON ten times a second while the camp stood still.
+static func split_world_by(full: Dictionary, sections: Dictionary, cache = null) -> Dictionary:
 	var hot = full.duplicate()
 	var cold = {}
 	var revisions = {}
+	var texts = {}
 	for section in sections:
 		var part = {}
 		for key in sections[section]:
@@ -137,69 +158,82 @@ static func split_world_by(full: Dictionary, sections: Dictionary) -> Dictionary
 				part[key] = full[key]
 				hot.erase(key)
 		cold[section] = part
-		revisions[section] = JSON.stringify(part).hash()
+		var last: Dictionary = cache.get(section, {}) if cache != null else {}
+		if last.is_empty() or last.part != part:
+			var text = JSON.stringify(part)
+			# A copy: a provider may hand out its own arrays and change them later.
+			last = {"part": part.duplicate(true), "revision": text.hash(), "text": text}
+			if cache != null: cache[section] = last
+		revisions[section] = last.revision
+		texts[section] = last.text
 	hot.cold_revs = revisions
-	return {"hot": hot, "cold": cold}
+	return {"hot": hot, "cold": cold, "texts": texts}
 
 func split_world(full: Dictionary) -> Dictionary:
-	return split_world_by(full, cold_sections())
+	return split_world_by(full, cold_sections(), _split_cache)
 
 # The host's world, split into the hot part and the slow sections.
 func current_parts() -> Dictionary:
 	return split_world(world_state())
 
-# What the host uploads: the hot world every time, a cold section only when the
-# server does not hold its revision and it is not already in flight.
-func host_upload(body: Dictionary) -> void:
-	var parts = current_parts()
-	body.world = parts.hot
-	var now = Time.get_ticks_msec()
-	var intervals = section_intervals()
-	var cold = {}
-	for section in parts.cold:
-		var revision = int(parts.hot.cold_revs[section])
-		if server_cold_revs.has(section) and int(server_cold_revs[section]) == revision:
-			continue
-		# A busy section waits for its interval; the change goes with the next upload.
-		var interval_ms = int(float(intervals.get(section, 0.0)) * 1000.0)
-		if interval_ms > 0 and cold_uploaded_at.has(section) and now - int(cold_uploaded_at[section]) < interval_ms:
-			continue
-		# A section in flight is not repeated until the server could have answered.
-		var sent: Dictionary = cold_sent.get(section, {})
-		if int(sent.get("revision", -1)) == revision and now - int(sent.get("time", 0)) < 1000:
-			continue
-		cold[section] = parts.cold[section]
-		cold_sent[section] = {"revision": revision, "time": now}
-		cold_uploaded_at[section] = now
-	if not cold.is_empty():
-		body.cold = cold
-		_fit(body)
+# Only the slow sections' providers.
+func cold_state() -> Dictionary:
+	_ensure()
+	var world = {}
+	for p in providers:
+		if p.section != "":
+			world.merge(p.snapshot.call(), true)
+	return world
 
-# The server refuses a message over max_message_bytes (413). Sections that do
-# not fit, largest first, wait for a later upload instead of the whole sync
-# failing; the room and the hot world keep going meanwhile.
-func _fit(body: Dictionary) -> void:
-	var limit = NetProtocol.max_message_bytes() - 2048
-	while body.has("cold") and JSON.stringify(body).to_utf8_buffer().size() > limit:
-		var largest = ""
-		var largest_size = -1
-		for section in body.cold:
-			var size = JSON.stringify(body.cold[section]).length()
-			if size > largest_size:
-				largest = section
-				largest_size = size
-		body.cold.erase(largest)
-		cold_sent.erase(largest)
-		cold_uploaded_at.erase(largest)
-		push_warning("[RFM network] cold section %s (%d bytes) left out of an oversized sync" % [largest, largest_size])
-		if body.cold.is_empty():
-			body.erase("cold")
+# Host, every sync interval: the slow sections as they stand now. Unchanged
+# ones keep their revision and text without being written out again.
+func refresh_cold() -> void:
+	var parts = split_world_by(cold_state(), cold_sections(), _split_cache)
+	latest_cold = parts.cold
+	latest_revs = parts.hot.cold_revs
+	latest_texts = parts.texts
+	latest_at = int(room.server_clock() * 1000.0)
+
+# Guest: one piece of a slow section from the host (direct_link.gd
+# cold_messages). A section is applied once all its pieces of one copy are in,
+# unless a newer copy of it was applied already.
+func receive_piece(m: Dictionary) -> void:
+	var section = m.get("s")
+	var count = m.get("n")
+	var index = m.get("i")
+	if not section is String or not section in cold_sections() or not _whole(m.get("r")) or not _whole(m.get("v")) or not _whole(count) or not _whole(index) or not m.get("d") is String:
+		return
+	if int(count) < 1 or int(count) > 64 or int(index) < 0 or int(index) >= int(count) or int(m.v) <= int(applied_at.get(section, -1)):
+		return
+	var entry: Dictionary = pieces.get(section, {})
+	if entry.is_empty() or int(entry.r) != int(m.r) or int(entry.v) != int(m.v) or int(entry.n) != int(count):
+		entry = {"r": int(m.r), "v": int(m.v), "n": int(count), "parts": {}}
+		pieces[section] = entry
+	entry.parts[int(index)] = m.d
+	if entry.parts.size() < int(entry.n):
+		return
+	pieces.erase(section)
+	var text = ""
+	for i in range(int(entry.n)):
+		text += entry.parts[i]
+	var part = JSON.parse_string(text)
+	if not part is Dictionary:
+		return
+	applied_at[section] = int(entry.v)
+	apply_cold({"cold": {section: part}, "cold_revs": {section: int(entry.r)}}, float(entry.v) / 1000.0)
+
+static func _whole(value) -> bool:
+	return (value is int or value is float) and is_finite(float(value)) and absf(float(value)) <= 9007199254740991.0 and float(value) == floorf(float(value))
 
 func reset() -> void:
+	latest_cold.clear()
+	latest_revs = {}
+	latest_texts = {}
+	pieces.clear()
+	applied_at.clear()
 	cold_revs.clear()
-	server_cold_revs.clear()
-	cold_sent.clear()
-	cold_uploaded_at.clear()
+	delta_base.clear()
+	host_elapsed = -1.0
 
 # ---------------------------------------------------------------- guest side
 
@@ -228,24 +262,25 @@ func apply_collision(w: Dictionary) -> void:
 		if p.collision and p.section in cold.sections:
 			p.apply.call(cold.fields, -1.0)
 
-# Only the slow sections of a server snapshot, while the hot world arrives over
-# a direct link.
+# Slow sections on their own (receive_piece), apart from the hot world.
 func apply_cold(w: Dictionary, sample_time: float) -> void:
 	if not Validation.valid(w): return
 	_ensure()
 	var cold = cold_part(w)
 	if cold == null:
 		return
+	var sections: Array = cold.sections
 	for p in providers:
-		if p.section != "" and p.section in cold.sections:
+		if p.section != "" and p.section in sections:
 			p.apply.call(cold.fields, sample_time)
 	var revisions = w.get("cold_revs", {})
 	if revisions is Dictionary:
-		for section in cold.sections:
+		for section in sections:
 			if revisions.has(section):
 				cold_revs[section] = int(revisions[section])
 
-func apply_world(w: Dictionary, sample_time: float) -> void:
+# `only`: the hot providers to apply (null: all).
+func apply_world(w: Dictionary, sample_time: float, only = null) -> void:
 	if not Validation.valid(w): return
 	_ensure()
 	var cold = cold_part(w)
@@ -259,7 +294,7 @@ func apply_world(w: Dictionary, sample_time: float) -> void:
 				if revisions.has(section):
 					cold_revs[section] = int(revisions[section])
 	for p in providers:
-		if p.section == "":
+		if p.section == "" and (only == null or only.has(p.name)):
 			p.apply.call(w, sample_time)
 
 # ---------------------------------------------------------------- providers
@@ -271,15 +306,18 @@ func _drive_snapshot() -> Dictionary:
 	return {"drive_protocol": 1, "driving": driving}
 
 func _status_snapshot() -> Dictionary:
-	# The toast text only travels while it is on screen.
-	# Idle values are left out: a guest reads a missing field as the idle value.
-	var showing: bool = game.toast_time > 0
+	# Only shared events and a guest's own command results travel, while fresh
+	# (game_hud.gd announce). Idle values are left out: a guest reads a missing
+	# field as the idle value.
+	var left: float = game.hud.notice_left()
 	var status = {}
 	if game.paused:
 		status.paused = true
-	if showing:
-		status.notice = game.toast_label.text
-		status.notice_time = snappedf(game.toast_time, 0.1)
+	if left > 0:
+		status.notice = game.hud.notice
+		status.notice_time = snappedf(left, 0.1)
+		if game.hud.notice_for != "":
+			status.notice_for = game.hud.notice_for
 	if game.camp_grill.meat_time != -1.0:
 		status.cook_time = snappedf(game.camp_grill.meat_time, 0.01)
 	return status
@@ -288,7 +326,8 @@ func _status_apply(w: Dictionary, _t: float) -> void:
 	room.world_paused = bool(w.get("paused", false))
 	if w.get("notice_time", 0) > 0 and w.get("notice", "") != last_notice:
 		last_notice = w.notice
-		game.toast(last_notice)
+		if str(w.get("notice_for", room.player_id)) == room.player_id:
+			game.toast(last_notice)
 	game.camp_grill.meat_time = float(w.get("cook_time", -1.0))
 
 func _progress_snapshot() -> Dictionary:
@@ -305,7 +344,26 @@ func _progress_apply(w: Dictionary, _t: float) -> void:
 	game.racing = bool(w.get("racing", false))
 	game.passed = int(w.get("passed", 0))
 	game.helped = int(w.get("helped", 0))
-	game.elapsed = float(w.get("elapsed", game.elapsed))
+	if w.has("elapsed"):
+		host_elapsed = float(w.elapsed)
+		host_elapsed_at = Time.get_ticks_msec() / 1000.0
+		# A join or a long stall: take the host's time at once.
+		if absf(game.elapsed - host_elapsed) > CLOCK_SNAP:
+			game.elapsed = host_elapsed
+
+# A guest's world clock runs on its own frames, so everything drawn from it
+# (marshals' flags and gait, crew lights, the walking camera) moves every
+# frame instead of stepping with each host packet (10-20 a second). It drifts
+# toward the host's last reported time, carried forward while the world runs.
+func advance_clock(delta: float, frozen: bool) -> void:
+	if frozen or host_elapsed < 0.0:
+		host_elapsed_at = Time.get_ticks_msec() / 1000.0
+		return
+	game.elapsed += delta
+	var now = Time.get_ticks_msec() / 1000.0
+	host_elapsed += now - host_elapsed_at
+	host_elapsed_at = now
+	game.elapsed += (host_elapsed - game.elapsed) * minf(1.0, delta * CLOCK_PULL)
 
 func _outcome_snapshot() -> Dictionary:
 	# The flags and the result text only exist once the shared run ends.
@@ -420,7 +478,7 @@ func _racers_snapshot() -> Dictionary:
 		# A moving crew carries its velocity, so guests do not guess it from two snapshots.
 		var velocity: Vector3 = r.get("velocity", Vector3.ZERO)
 		if velocity.length_squared() > 0.0025:
-			entry.velocity = room.a(velocity)
+			entry.velocity = room.av(velocity)
 		# The front wheels' angle of a crew on the tyre model (opposite lock).
 		if r.node.has_meta("steer_angle") and absf(float(r.node.get_meta("steer_angle"))) > 0.01:
 			entry.steer = snappedf(float(r.node.get_meta("steer_angle")), 0.01)
@@ -452,6 +510,9 @@ func _racers_apply(w: Dictionary, sample_time: float) -> void:
 	var present = {}
 	for r in w.racers:
 		present[r.id] = true
+		# A crew that did not change keeps its motion samples (world_delta.gd).
+		if fresh_crews != null and not fresh_crews.has(WorldDelta.key(r.id)):
+			continue
 		var exists = false
 		for local in game.racers:
 			if local.id == r.id:
