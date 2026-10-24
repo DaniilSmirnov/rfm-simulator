@@ -239,22 +239,33 @@ func snapshot() -> Array:
 	var result: Array = []
 	for r in records.values():
 		if r.changed and not r.has("lamp"):
-			# A prop at rest keeps last snapshot's entry (ten snapshots a second
-			# over a hundred-odd camp props).
+			# A prop that has not moved by SNAPSHOT_SLACK keeps last snapshot's
+			# entry (ten snapshots a second over a hundred-odd camp props); one
+			# rocking a few millimetres on a bump changed the props section, all
+			# ~17 KB of it, in every upload.
 			var pose: Transform3D = r.node.global_transform
-			var flying = r.has("body") and not r.has("tree") and not r.body.freeze and not r.body.sleeping and r.body.linear_velocity.length_squared() > 0.01
-			if not flying and r.get("snapshot_pose") == pose and r.snapshot_item.anchored == r.anchored:
+			var near: bool = r.has("snapshot_pose") and r.snapshot_item.anchored == r.anchored and (r.snapshot_pose == pose or _near(r, r.snapshot_pose, pose))
+			if near and not r.snapshot_item.has("velocity"):
 				result.append(r.snapshot_item)
 				continue
 			var rotation: Vector3 = pose.basis.get_euler()
 			var item = {"key": r.key, "pos": game.room.a(pose.origin), "rot": [rotation.x, rotation.y, rotation.z], "anchored": r.anchored}
-			# A flying prop's velocity lets guests draw it where it is now.
-			if flying:
+			# A flying prop's velocity lets guests draw it where it is now (one
+			# that stayed put only has gravity's from a tick awake).
+			if not near and r.has("body") and not r.has("tree") and not r.body.freeze and not r.body.sleeping and r.body.linear_velocity.length_squared() > 0.01:
 				item.velocity = game.room.a(r.body.linear_velocity)
-			r.snapshot_pose = null if flying else pose
+			r.snapshot_pose = pose
 			r.snapshot_item = item
 			result.append(item)
 	return result
+
+const SNAPSHOT_SLACK = 0.01
+
+# Within SNAPSHOT_SLACK at the centre and at the ends of the prop.
+func _near(r: Dictionary, a: Transform3D, b: Transform3D) -> bool:
+	var middle: Vector3 = r.box.get_center()
+	var turn: float = a.basis.get_rotation_quaternion().angle_to(b.basis.get_rotation_quaternion())
+	return (a * middle).distance_to(b * middle) < SNAPSHOT_SLACK and turn * r.box.size.length() * 0.5 < SNAPSHOT_SLACK
 
 # `sample_time`: the host's time of the snapshot (server clock); -1 for world
 # collision ahead of a replay, -INF unknown (drawn on arrival).

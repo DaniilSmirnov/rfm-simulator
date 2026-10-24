@@ -252,7 +252,7 @@ func _send(delta: float) -> void:
 		if state_clock < interval:
 			return
 		state_clock = fmod(state_clock, interval)
-		var message = {"t": "s", "state": room.local_state()}
+		var message = {"t": "s", "state": NetProtocol.outgoing_state(room.local_state())}
 		# Commands also go to the server, which stays their record (see _receive_commands).
 		if not room.commands.is_empty():
 			message.c = room.commands

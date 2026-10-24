@@ -290,7 +290,7 @@ func sync_now() -> void:
 	clock = maxf(clock, NetProtocol.sync_interval())
 
 func sync_body() -> Dictionary:
-	var body = {"token": token, "state": local_state(), "commands": commands, "cold_revs": world_sync.cold_revs}
+	var body = {"token": token, "state": NetProtocol.outgoing_state(local_state(), not is_host and direct.healthy(host_id)), "commands": commands, "cold_revs": world_sync.cold_revs}
 	if is_host:
 		world_sync.host_upload(body)
 		body.ack = acknowledgements

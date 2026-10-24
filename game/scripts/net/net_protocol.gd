@@ -139,6 +139,22 @@ const STATE_DEFAULTS = {"airborne": false, "beer": -1.0, "beers": 0, "broken": f
 	"stand": "", "stand_at": [0.0, 0.0, 0.0]}
 const STATE_HOST_ONLY = ["drive_inputs", "trees", "lamps"]
 
+# What a client sends of its own state, to the server and over the direct
+# link: fields equal to what both the Worker and clean_state() fill in when
+# they are missing stay out (about 40 % of the state). "beer" always goes: a
+# missing one reads as 0 there, not -1. With `direct_alive` the server copy
+# leaves out the drive input too: the host takes it from the link.
+const OUTGOING_DEFAULTS = {"airborne": false, "beers": 0, "broken": false, "drive_enabled": false, "drive_inputs": [], "eat": -1.0, "food_kind": "meat",
+	"food_species": "edible", "hitch": "", "lamps": [], "push": [0.0, 0.0, 0.0], "radio": false, "relief": false, "ride": "", "running": false,
+	"seated": false, "speed": 0.0, "stand": "", "stand_at": [0.0, 0.0, 0.0], "tow": false, "trees": []}
+
+static func outgoing_state(s: Dictionary, direct_alive: bool = false) -> Dictionary:
+	var out = {}
+	for key in s:
+		if not (OUTGOING_DEFAULTS.has(key) and s[key] == OUTGOING_DEFAULTS[key]) and not (direct_alive and key == "drive_inputs"):
+			out[key] = s[key]
+	return out
+
 static func compact_state(s: Dictionary) -> Dictionary:
 	var out = {"pos": s.pos, "heading": snappedf(float(s.heading), 0.001), "yaw": snappedf(float(s.yaw), 0.001), "pitch": snappedf(float(s.pitch), 0.001), "in_car": s.in_car}
 	for key in STATE_DEFAULTS:

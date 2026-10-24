@@ -14,10 +14,13 @@ var pull_velocity = Vector3.ZERO
 # full physics step plus a ground refresh each tick. A body that has not really
 # moved for REST_TICKS is put to sleep; any contact wakes it again. A traffic
 # cone free to tilt chattered 1.6 cm up and down every tick and never counted
-# as still with a 1 cm tolerance.
+# as still with a 1 cm tolerance. Turning counts by how far it moves the ends
+# of the prop (REST_TURN): a 0.9 m service-park plank see-sawed on a bump
+# between two poses every tick, 2.7 cm at its ends, and never slept against a
+# fixed 0.01 rad; nor did a 7 m service tent rocking 2 cm at its corners.
 const REST_TICKS = 30
 const REST_DISTANCE = 0.02
-const REST_ANGLE = 0.01
+const REST_TURN = 0.05
 var _rest_pose = Transform3D()
 var _rest_ticks = 0
 var _grounded_at = Vector3.INF
@@ -223,7 +226,12 @@ func _upright_spin() -> Vector3:
 
 func _at_rest() -> bool:
 	var pose = global_transform
-	var still = pose.origin.distance_to(_rest_pose.origin) < REST_DISTANCE and pose.basis.get_rotation_quaternion().angle_to(_rest_pose.basis.get_rotation_quaternion()) < REST_ANGLE
+	# Measured at the centre of mass: a baked service-park prop has its origin
+	# at the park's (~45 m off), where a 0.003 rad wobble moved it 10 cm a tick,
+	# so the props there never slept and resent the props section 10 times a
+	# second.
+	var turn: float = pose.basis.get_rotation_quaternion().angle_to(_rest_pose.basis.get_rotation_quaternion())
+	var still = (pose * center_of_mass).distance_to(_rest_pose * center_of_mass) < REST_DISTANCE and turn * record.box.size.length() * 0.5 < REST_TURN
 	if not still:
 		_rest_pose = pose
 		_rest_ticks = 0

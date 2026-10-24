@@ -207,7 +207,7 @@ func loop() -> void:
 		if guest_state_clock >= state_interval and guest.room.prediction_enabled:
 			guest_state_clock = fmod(guest_state_clock, state_interval)
 			t0 = Time.get_ticks_usec()
-			var bytes = JSON.stringify({"t": "s", "state": guest.room.local_state()}).to_utf8_buffer()
+			var bytes = JSON.stringify({"t": "s", "state": NetProtocol.outgoing_state(guest.room.local_state())}).to_utf8_buffer()
 			guest.room.prediction.seal()
 			add("guest_state_packet", Time.get_ticks_usec() - t0)
 			add("guest_state_bytes", bytes.size())

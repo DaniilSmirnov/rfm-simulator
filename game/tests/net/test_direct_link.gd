@@ -208,6 +208,13 @@ func run() -> void:
 	var second: float = guest.elapsed
 	guest.room.world_sync.advance_clock(0.05, true)
 	check(first == 100.0 and second > first + 0.04 and guest.elapsed == second, "a guest's world clock advances locally and stops while frozen")
+	# A client's own state leaves its idle fields out; the receiver's checks fill
+	# in the same values (and beer, which they would read as 0, still goes).
+	var own: Dictionary = guest.room.local_state()
+	var sent: Dictionary = NetProtocol.outgoing_state(own)
+	check(not sent.has("food_kind") and not sent.has("trees") and not sent.has("stand_at") and sent.has("beer") and NetProtocol.clean_state(JSON.parse_string(JSON.stringify(sent))) == NetProtocol.clean_state(JSON.parse_string(JSON.stringify(own))), "a client's own state leaves out idle fields the receiver fills in alike")
+	own.drive_inputs = [{"seq": 1, "ticks": 2, "throttle": 1.0, "steer": 0.0, "brake": false}]
+	check(NetProtocol.outgoing_state(own).has("drive_inputs") and not NetProtocol.outgoing_state(own, true).has("drive_inputs"), "with the direct link alive the server copy carries no drive input")
 	# Compact states expand to what the server would have listed, after a JSON round trip.
 	var original: Dictionary = host.room.local_state()
 	original.beers = 3
