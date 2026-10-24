@@ -16,11 +16,14 @@ const Stage = preload("res://scripts/stages/stage.gd")
 const ServiceTraffic = preload("res://scripts/traffic/service_traffic.gd")
 const Traffic = preload("res://scripts/traffic/rally_traffic.gd")
 const RallyDriver = preload("res://scripts/traffic/rally_driver.gd")
+const CrewLod = preload("res://scripts/traffic/crew_lod.gd")
 const Loc = preload("res://scripts/ui/loc.gd")
 
 var game
 # Somebody is towing the local player's own car (set by recovery.gd).
 var car_towed = false
+# Every crew steps every frame, near a player or not (tests of the motion).
+var full_rate = false
 # A stone reuses its last floor sample within this sideways distance (m) while
 # it is at least this high (m) above it.
 const FLOOR_REUSE_DISTANCE = 0.4
@@ -155,16 +158,30 @@ func update_racers(delta: float) -> void:
 	var start = {}
 	for racer in game.racers:
 		start[racer.id] = racer.node.position
+	var lod = CrewLod.split(game, maxf(delta, 0), full_rate)
+	# A far crew covers its collected time in steps of up to FAR_STEP; its
+	# velocity is taken over that time, not over a frame it may skip.
+	for entry in lod.due:
+		var racer: Dictionary = entry[0]
+		var from: Vector3 = racer.node.position
+		var remaining_far: float = entry[1]
+		while remaining_far > 0.000001 and game.racers.has(racer):
+			var far_step = minf(remaining_far, CrewLod.FAR_STEP)
+			update_racers_step(far_step, [racer])
+			remaining_far -= far_step
+		racer.velocity = (racer.node.position - from) / float(entry[1])
+		start.erase(racer.id)
 	var remaining = maxf(delta, 0)
-	while remaining > 0.000001:
+	while remaining > 0.000001 and not lod.close.is_empty():
 		var step = minf(remaining, 1.0 / 60.0)
-		update_racers_step(step)
+		update_racers_step(step, lod.close)
 		remaining -= step
 	# Guests run crews ahead of their last snapshot with this velocity; it is
 	# taken over the whole frame, as a short last step would amplify noise.
 	if delta > 0.001:
-		for racer in game.racers:
-			racer.velocity = (racer.node.position - start[racer.id]) / delta if start.has(racer.id) else Vector3.ZERO
+		for racer in lod.close:
+			if start.has(racer.id):
+				racer.velocity = (racer.node.position - start[racer.id]) / delta
 	watch_police(delta)
 
 # Flags the course while a police car stands still on the stage; a red flag
@@ -182,11 +199,12 @@ func watch_police(delta: float) -> void:
 		blocked = blocked or racer.stall_time >= POLICE_STALL_SECONDS
 	game.course.police_blocked = blocked
 
-func update_racers_step(delta: float) -> void:
+# Steps `crews` (all of them by default) by `delta`.
+func update_racers_step(delta: float, crews = null) -> void:
 	var to_remove: Array[Dictionary] = []
 	var finished_course: Array[int] = []
 	var parked: Array[Dictionary] = []
-	for racer in game.racers:
+	for racer in (game.racers if crews == null else crews.filter(func(r): return game.racers.has(r))):
 		var node: Node3D = racer.node
 		racer.previous = node.position
 		var service_before = ServiceTraffic.save(racer)
@@ -247,7 +265,7 @@ func update_racers_step(delta: float) -> void:
 				lateral_rate = maxf(lateral_rate, float(traffic.get("lateral_rate", 0.6)))
 			ease_line(racer, float(traffic.line), lateral_rate, delta)
 			if physical:
-				RallyDriver.follow(self, racer, actual_speed, float(traffic.get("advance", INF)), delta)
+				CrewLod.follow(self, racer, actual_speed, float(traffic.get("advance", INF)), delta)
 
 			var s: float = racer.s
 			var road_yaw = atan2(-race_direction(s).x, -race_direction(s).z)

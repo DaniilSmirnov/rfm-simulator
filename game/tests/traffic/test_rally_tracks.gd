@@ -20,6 +20,8 @@ func harness(reverse: bool = false):
 	game.car.position = Vector3(-300, 2, 100)
 	game.add_child(game.car)
 	game.in_car = true
+	# The player waits far off the road; these check the crews' own motion.
+	game.crews.full_rate = true
 	game.course.pass_index = 2 if reverse else 1
 	game.rng.seed = 12345
 	return game
