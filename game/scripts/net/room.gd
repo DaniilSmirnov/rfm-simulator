@@ -234,6 +234,7 @@ func _apply_sync(data: Dictionary) -> void:
 # states and commands go over the direct links.
 func _apply_checked_sync(data: Dictionary) -> void:
 	host_id = str(data.get("host", host_id))
+	ui.limit = int(data.get("max_players", NetProtocol.max_players()))
 	_update_members(data.players)
 	_update_peers(data.players, false)
 	ui.show_room_status(room_id, peers.size() + 1, is_host, world_paused)

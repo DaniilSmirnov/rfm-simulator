@@ -111,7 +111,7 @@ func add_course_vehicle(node: Node3D, id: int, kind: String, variant: int, role:
 	return racer
 
 func spawn_racer(forced: String = "") -> void:
-	if game.course.phase != "racing" or game.rally_spawn_count >= game.RALLY_CREW_LIMIT or game.dead or game.finished or (game.room.is_guest()):
+	if game.course.phase != "racing" or game.rally_spawn_count >= game.rally_crew_limit or game.dead or game.finished or (game.room.is_guest()):
 		return
 	game.racing = true
 	var kind = forced
@@ -658,7 +658,7 @@ func count_racer(racer: Dictionary) -> void:
 	if racer.get("role", "racer") != "racer" or racer.get("counted", false):
 		return
 	racer.counted = true
-	game.passed = mini(game.RALLY_CREW_LIMIT, game.passed + 1)
+	game.passed = mini(game.rally_crew_limit, game.passed + 1)
 
 func update_tow(delta: float) -> void:
 	Recovery.update(game, {"local": game.room.local_state()}, delta)

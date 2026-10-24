@@ -144,7 +144,7 @@ var drink_time = -1.0
 var drink_committed = false
 var can_opened = false
 var beer_audio: AudioStreamPlayer
-const RALLY_CREW_LIMIT = 10
+var rally_crew_limit = 10 # crews per pass: a dedicated server's console sets it
 var rally_spawn_count = 0
 var course = preload("res://scripts/traffic/course_schedule.gd").new()
 var course_label: Label
@@ -922,7 +922,7 @@ func _check_finish() -> void:
 	if dead or finished or not packing.active() or packing.remaining() > 0 or eat_time >= 0 or drink_time >= 0 or not park_traffic.everyone_home():
 		return
 	finished = true
-	_show_result("Раллийный выезд завершён", Loc.t("Оба прохода посмотрены. Лагерь собран. Все доехали до парка сервиса.\n\nЭкипажи: %d  ·  Помощь: %d\nМашина: %d%%\n\nДо следующего ралли!") % [RALLY_CREW_LIMIT + passed, helped, condition])
+	_show_result("Раллийный выезд завершён", Loc.t("Оба прохода посмотрены. Лагерь собран. Все доехали до парка сервиса.\n\nЭкипажи: %d  ·  Помощь: %d\nМашина: %d%%\n\nДо следующего ралли!") % [rally_crew_limit + passed, helped, condition])
 
 func die(reason: String) -> void:
 	hud.die(reason)

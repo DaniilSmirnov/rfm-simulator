@@ -310,6 +310,8 @@ func poll(delta: float) -> void:
 # Sends a sync body over the open socket or, without one, as an HTTP request.
 # Returns false when nothing could be sent now (a request is still in flight).
 func send_sync(body: Dictionary, room_id: String) -> bool:
+	if Dedicated.active():
+		body.max_players = Dedicated.max_players()
 	if socket_open:
 		_send_socket(body)
 		return true

@@ -2,7 +2,9 @@
 // creates a room with a fixed ID on a local Worker, a native guest joins it by
 // that ID, drives on the server's simulation and does not see the server as a
 // member on the stage. Once the guest is gone, the empty room starts over
-// under the same ID. A wrong server key is refused.
+// under the same ID. A wrong server key is refused. Commands typed into the
+// server's stdin (dedicated_console.gd) set the crews, hold the day, limit the
+// room and switch the stage; the settings outlive the room's restarts.
 //   node scripts/test-dedicated.mjs
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
@@ -12,6 +14,7 @@ import { join } from 'node:path';
 import { setTimeout as wait } from 'node:timers/promises';
 import assert from 'node:assert/strict';
 import { getGodot, root, run } from './godot.mjs';
+import protocol from '../game/data/net_protocol.json' with { type: 'json' };
 
 const KEY = 'ci-dedicated-key';
 const ROOM = 'D0D0D0';
@@ -23,8 +26,8 @@ const errors = [];
 const samples = [];
 let control = { id: 0, action: 'pause' };
 const guest = () => samples.at(-1);
-function launch(args, role, env = {}) {
-  const child = spawn(args[0], args.slice(1), { cwd: root, env: { ...process.env, WRANGLER_SEND_METRICS: 'false', ...env }, stdio: ['ignore', 'pipe', 'pipe'] });
+function launch(args, role, env = {}, stdin = 'ignore') {
+  const child = spawn(args[0], args.slice(1), { cwd: root, env: { ...process.env, WRANGLER_SEND_METRICS: 'false', ...env }, stdio: [stdin, 'pipe', 'pipe'] });
   processes.push(child);
   for (const stream of [child.stdout, child.stderr]) {
     let buffer = '';
@@ -78,7 +81,8 @@ try {
   assert.equal(refused.status, 403, 'a wrong server key is refused');
   const godot = await getGodot();
   run(godot, ['--headless', '--editor', '--path', join(root, 'game'), '--import', '--quit']);
-  launch([godot, '--headless', '--path', 'game', '--', '--dedicated', '--stage=0', `--room=${ROOM}`, `--room-server=${origin}`, `--idle-restart=${IDLE_RESTART}`], 'server', { RALLY_DEDICATED_TOKEN: KEY });
+  const server = launch([godot, '--headless', '--path', 'game', '--', '--dedicated', '--stage=0', `--room=${ROOM}`, `--room-server=${origin}`, `--idle-restart=${IDLE_RESTART}`], 'server', { RALLY_DEDICATED_TOKEN: KEY }, 'pipe');
+  const type = line => server.stdin.write(line + '\n');
   await until(() => logged('server', `ROOM_CONNECTED ${ROOM} host=true`) === 1, 'server creates its room', 90000);
   const guestProcess = launch([godot, '--headless', '--path', 'game', '--max-fps', '60', 'res://tests/network_client.tscn', '--', '--smoke-test', '--network-role=guest', `--network-room=${ROOM}`, `--room-server=${origin}`], 'guest');
   await until(() => guest()?.connected && guest()?.active, 'guest joins by ID and the server takes its car', 90000);
@@ -92,11 +96,31 @@ try {
   control = { id: 3, action: 'pause' };
   await until(() => guest().pending === 0 && guest().seq > 0 && guest().ack === guest().seq, 'server acknowledges every input', 30000);
   assert.equal(guest().dead, false);
+  type('crews 3');
+  await until(() => logged('server', '3 crews a pass') === 1, 'console sets the crews');
+  type('pause');
+  await until(() => guest().world_paused === true, 'console holds the day for the guest', 30000);
+  type('resume');
+  await until(() => guest().world_paused === false, 'console lets the day go on', 30000);
+  type('players 1');
+  await until(() => logged('server', 'up to 1 guests') === 1, 'console limits the room');
+  // A guest of the same build, so only the limit can turn it away; the
+  // server's next syncs carry the limit to the Worker first.
+  await wait(1500);
+  const second = () => fetch(`${origin}/api/rooms/${ROOM}/join`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'second', protocol: protocol.protocol_version }) });
+  await until(async () => { const r = await second(); return r.status === 409 && /максимум 1/.test((await r.json()).error); }, 'the room lets in one guest only', 30000);
+  type('bogus');
+  await until(() => logged('server', "unknown command 'bogus'") === 1, 'console names an unknown command');
   guestProcess.kill('SIGTERM');
   await until(() => logged('server', 'starting the room over') === 1, 'empty room starts over', (IDLE_RESTART + 120) * 1000);
   await until(() => logged('server', `ROOM_CONNECTED ${ROOM} host=true`) === 2, 'the new room takes the same ID', 90000);
+  type('stage 2');
+  await until(() => logged('server', 'switching to stage 2 provence now') === 1, 'console switches the stage of the empty room');
+  await until(() => logged('server', `ROOM_CONNECTED ${ROOM} host=true`) === 3, 'the room on the new stage takes the same ID', 90000);
+  type('status');
+  await until(() => logged('server', 'stage=2 provence guests=0/1 crews=3') === 1, 'the settings outlive the restarts');
   assert.equal(errors.length, 0);
-  console.log(`PASS: dedicated server: key check, fixed room ${ROOM}, guest joins and drives on the server, server invisible, idle restart under the same ID`);
+  console.log(`PASS: dedicated server: key check, fixed room ${ROOM}, guest joins and drives on the server, server invisible, idle restart under the same ID, console commands`);
 } catch (error) {
   console.error(logs.slice(-80).join('\n'));
   if (process.env.GITHUB_ACTIONS) console.log(`::error title=Dedicated server::` + [String(error?.message ?? error).slice(0, 2000), ...logs.slice(-30)].join('\n').slice(-6000).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A'));

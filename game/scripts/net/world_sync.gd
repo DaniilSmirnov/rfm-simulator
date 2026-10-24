@@ -83,7 +83,7 @@ func rebuild() -> void:
 	providers.append(_subsystem("course", func(): return game.course, "snapshot", "apply_snapshot", "course"))
 	providers.append(_subsystem("parks", func(): return game.park_traffic, "snapshot", "apply_snapshot", "parks"))
 	providers.append(_subsystem("cargo", func(): return game.cargo, "snapshot", "apply_snapshot", "cargo"))
-	providers.append(provider("progress", "", ["racing", "passed", "helped", "elapsed"], _progress_snapshot, _progress_apply))
+	providers.append(provider("progress", "", ["racing", "passed", "helped", "elapsed", "crews"], _progress_snapshot, _progress_apply))
 	providers.append(_subsystem("camp_cooking", func(): return game.camp_cooking, "snapshot", "apply_snapshot"))
 	providers.append(provider("racers", "", ["racers", "recovery_links"], _racers_snapshot, _racers_apply))
 	providers.append(provider("park_movers", "", ["park_movers"], func(): return {"park_movers": game.park_traffic.movers_snapshot()}, func(f, t): game.park_traffic.apply_movers(f.get("park_movers", []), t)))
@@ -331,7 +331,7 @@ func _status_apply(w: Dictionary, _t: float) -> void:
 	game.camp_grill.meat_time = float(w.get("cook_time", -1.0))
 
 func _progress_snapshot() -> Dictionary:
-	var progress = {"elapsed": snappedf(game.elapsed, 0.01)}
+	var progress = {"elapsed": snappedf(game.elapsed, 0.01), "crews": game.rally_crew_limit}
 	if game.racing:
 		progress.racing = true
 	if game.passed != 0:
@@ -344,6 +344,7 @@ func _progress_apply(w: Dictionary, _t: float) -> void:
 	game.racing = bool(w.get("racing", false))
 	game.passed = int(w.get("passed", 0))
 	game.helped = int(w.get("helped", 0))
+	game.rally_crew_limit = int(w.get("crews", game.rally_crew_limit))
 	if w.has("elapsed"):
 		host_elapsed = float(w.elapsed)
 		host_elapsed_at = Time.get_ticks_msec() / 1000.0

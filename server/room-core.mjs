@@ -37,6 +37,9 @@ function standing(s) {
 // locked, another app opened) keeps the room longer: its guests stay paused
 // and the game resumes when the host comes back.
 export const MEMBER_TTL = 90000;
+// A dedicated server may hold its room to fewer guests (its console's
+// "players" command); a player's room always takes MAX_PLAYERS.
+export const roomLimit = n => Number.isSafeInteger(n) ? Math.max(1, Math.min(MAX_PLAYERS, n)) : MAX_PLAYERS;
 export const BACKGROUND_HOST_TTL = 600000;
 
 export class RoomError extends Error {
@@ -65,8 +68,10 @@ export class RoomState {
     if (host && options.dedicated === true && this.data.host && (this.data.closed || this.data.players[this.data.host]?.dedicated === true)) this.data = new RoomState().data;
     if (!host && (!this.data.host || this.data.closed)) throw new RoomError(404, 'Комната не найдена или закрыта.');
     if (host && this.data.host) throw new RoomError(409, 'Этот ID занят.');
-    // A dedicated host takes no place: its room holds MAX_PLAYERS guests.
-    if (Object.values(this.data.players).filter(p => !p.dedicated).length >= MAX_PLAYERS) throw new RoomError(409, `Комната заполнена: максимум ${MAX_PLAYERS} игроков.`);
+    if (host && options.dedicated === true) this.data.max_players = roomLimit(options.max_players);
+    // A dedicated host takes no place: its room holds max_players guests.
+    const limit = this.data.max_players ?? MAX_PLAYERS;
+    if (Object.values(this.data.players).filter(p => !p.dedicated).length >= limit) throw new RoomError(409, `Комната заполнена: максимум ${limit} игроков.`);
     // Hot-world and state encodings change between protocol versions: a guest
     // from another build would misread the host's snapshots, so it is refused.
     const hostProtocol = this.data.players[this.data.host]?.protocol ?? 0;
@@ -135,6 +140,8 @@ export class RoomState {
       if (body.world !== undefined) {
         this.data.world = body.world; this.data.world_time = now;
       }
+      // Guests already in stay when the limit drops; it only closes the door.
+      if (p.dedicated === true && body.max_players !== undefined) this.data.max_players = roomLimit(body.max_players);
       // Slowly changing world sections arrive only when their revision changes.
       const revisions = body.world?.cold_revs;
       if (body.cold && typeof body.cold === 'object' && !Array.isArray(body.cold) && revisions && typeof revisions === 'object') {
@@ -205,7 +212,7 @@ export class RoomState {
     // Raw drive inputs are only needed by the host, which simulates them.
     const players = Object.values(this.data.players).map(({ id, name, slot, car_model, character, state_time, state, dedicated }) => ({ id, name, slot, car_model: car_model ?? slot, character: character ?? CHARACTERS[slot % CHARACTERS.length], state_time: state_time ?? 0, ...(dedicated ? {dedicated: true} : {}),
       state: viaHost ? null : state && !isHost && state.drive_inputs?.length ? {...state, drive_inputs: []} : state }));
-    return { server_time: now, world_time: this.data.world_time ?? 0, stage: this.data.stage ?? 0, host: hostId, ...(world === undefined ? {} : {world}), accepted: p.seq,
+    return { server_time: now, world_time: this.data.world_time ?? 0, stage: this.data.stage ?? 0, max_players: this.data.max_players ?? MAX_PLAYERS, host: hostId, ...(world === undefined ? {} : {world}), accepted: p.seq,
       ...(isHost ? {cold_revs: this.data.cold_revs ?? {}} : {}),
       players, commands: isHost ? this.data.commands : [] };
   }

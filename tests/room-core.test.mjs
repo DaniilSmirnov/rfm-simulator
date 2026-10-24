@@ -578,6 +578,26 @@ test('a dedicated host is nobody on the stage and can take its fixed ID again', 
   assert.throws(() => player.add('Хозяин', 1000, true), e => e.status === 409);
 });
 
+test('a dedicated host limits its room to fewer guests', () => {
+  const r = new RoomState();
+  const server = r.add('Сервер', 1000, true, { dedicated: true, max_players: 2 });
+  const a = r.add('a', 1000);
+  r.add('b', 1000);
+  assert.throws(() => r.add('c', 1000), e => e.status === 409 && e.message.includes('2'));
+  assert.equal(r.sync({ token: a.token, state: state() }, 1100).max_players, 2);
+  // Lowered while full: nobody is sent away, the door only closes.
+  r.sync({ token: server.token, state: state(), max_players: 1 }, 1200);
+  assert.equal(Object.keys(r.data.players).length, 3);
+  r.sync({ token: server.token, state: state(), max_players: 99 }, 1300);
+  assert.equal(r.data.max_players, MAX_PLAYERS, 'never above the protocol limit');
+  r.add('c', 1300);
+  // A player's host cannot change it, and its room takes MAX_PLAYERS.
+  const { r: own, h } = setup();
+  own.sync({ token: h.token, state: state(), max_players: 1 }, 1100);
+  assert.equal(own.sync({ token: h.token, state: state() }, 1200).max_players, MAX_PLAYERS);
+  own.add('third', 1200);
+});
+
 test('helicopter selection and bounded lift survive the Worker relay', () => {
  const r = new RoomState();
  // The helicopter flies only over Charyn (stage 3).

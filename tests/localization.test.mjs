@@ -67,7 +67,7 @@ function serverStrings() {
   for (const name of ['room-core.mjs', 'rate-limits.mjs', 'worker.mjs']) {
     for (const line of readFileSync(join(root, 'server', name), 'utf8').split('\n')) {
       for (const m of line.matchAll(/'((?:[^'\\]|\\.)*)'|`((?:[^`\\]|\\.)*)`/g)) {
-        const text = (m[1] ?? m[2]).replace('${MAX_PLAYERS}', '8');
+        const text = (m[1] ?? m[2]).replace(/\$\{(MAX_PLAYERS|limit)\}/, '8');
         if (cyrillic.test(text) && !skip.test(text) && text !== 'Фанат') used.set(text, `server/${name}`);
       }
     }
