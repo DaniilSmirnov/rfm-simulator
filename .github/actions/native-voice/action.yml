@@ -1,0 +1,67 @@
+name: Native radio library
+description: Builds (or restores) librally_voice for one target, checks it and uploads it as the voice-<target> artifact.
+inputs:
+  target:
+    description: build-voice.mjs target, for example linux-x86_64 or ios-arm64
+    required: true
+  epoch:
+    description: Bump to rebuild every library without a source change, for example after a toolchain change in the install step.
+    required: true
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22
+    # The library depends only on its sources, the pinned deps and the build
+    # script. A run that changes none of them reuses the library built for
+    # them earlier and skips the toolchain and the build.
+    - name: Restore a built library
+      id: lib
+      uses: actions/cache/restore@v4
+      with:
+        path: game/addons/rally_voice/bin
+        key: voice-lib-${{ inputs.target }}-${{ inputs.epoch }}-${{ hashFiles('native/voice/**', 'scripts/build-voice.mjs') }}
+    - name: Install build tools
+      if: steps.lib.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        case "${{ inputs.target }}" in
+          linux-*) echo /opt/python/cp312-cp312/bin >> "$GITHUB_PATH"; /opt/python/cp312-cp312/bin/pip install -q cmake ninja ;;
+          windows-*) sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends ninja-build mingw-w64 g++-mingw-w64 ;;
+          macos-*|ios-*) brew install ninja ;;
+          android-*) sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends ninja-build ;;
+        esac
+    - uses: actions/cache@v4
+      if: steps.lib.outputs.cache-hit != 'true'
+      with:
+        path: .cache/voice
+        key: voice-${{ inputs.target }}-${{ hashFiles('native/voice/deps.json') }}-${{ hashFiles('native/voice/**') }}
+        restore-keys: voice-${{ inputs.target }}-${{ hashFiles('native/voice/deps.json') }}-
+    - name: Build the extension
+      if: steps.lib.outputs.cache-hit != 'true'
+      shell: bash
+      run: node scripts/build-voice.mjs --target=${{ inputs.target }}
+    - name: Check the library
+      shell: bash
+      run: |
+        lib=$(ls game/addons/rally_voice/bin/librally_voice.*)
+        ls -la $lib
+        if command -v file >/dev/null; then file $lib; fi
+        case "${{ inputs.target }}" in
+          linux-*) ! objdump -T $lib | grep -oE "GLIBC_2\.(29|[3-9][0-9])" ;;
+          macos-*) lipo -info $lib | grep -q "x86_64 arm64\|arm64 x86_64" ;;
+          ios-*) lipo -info $lib | grep -q arm64 && otool -l $lib | grep -A3 LC_BUILD_VERSION | grep -qE "platform (2|IOS)$" ;;
+        esac
+    - name: Save the built library
+      if: steps.lib.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: game/addons/rally_voice/bin
+        key: ${{ steps.lib.outputs.cache-primary-key }}
+    - uses: actions/upload-artifact@v4
+      with:
+        name: voice-${{ inputs.target }}
+        path: game/addons/rally_voice/bin/
+        retention-days: 7
+        if-no-files-found: error
