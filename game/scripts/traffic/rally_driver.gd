@@ -36,6 +36,13 @@ const CREEP_SETTLE = 8.0
 # yaw towards it (1/s²).
 const DRIFT = 0.4
 const SLIP_CATCH = 8.0
+# How hard (1/s) the driver damps the tail's swing, so a slide settles instead
+# of rocking from side to side; a lapse (a mistake) leaves the tail undamped.
+const SLIP_DAMP = 6.0
+# Share of the grip a bend must ask for before the driver hangs the tail out;
+# the tail angle then grows with the rest of the grip used, so on straights
+# and fast sweepers the nose stays along the road.
+const DRIFT_FROM = 0.3
 # Pedals: throttle and brake per m/s of speed gap; the brake pedal's full
 # travel (m/s²) before the driver stamps on it.
 # Height (m) of the body origin above the ground at which the tyres lose grip.
@@ -76,6 +83,7 @@ static func drive(racer: Dictionary, stage, line_point: Vector3, aim: Vector3, s
 	var error = 0.0
 	for i in range(steps):
 		var heading: float = node.rotation.y
+		var before = heading
 		var flat = Vector3(motion.velocity.x, 0, motion.velocity.z)
 		var velocity = flat.length()
 		var forward = Vector3(-sin(heading), 0, -cos(heading))
@@ -119,13 +127,20 @@ static func drive(racer: Dictionary, stage, line_point: Vector3, aim: Vector3, s
 		motion.velocity += side * clampf(-error * ASSIST_STIFFNESS - drift * ASSIST_DAMPING, -reach_assist, reach_assist) * h
 		# Rally style: the driver holds the nose into the bend by a share of the
 		# grip used (`drift`, rad at the limit); past `max_slip` a slide is caught.
+		# The bend's demand comes from the line the driver steers at, not from
+		# how the car happens to swerve: the assist's and the tyres' own
+		# corrections read as cornering and set the tail rocking on straights.
 		var slip = wrapf(heading - course, -PI, PI)
 		if velocity > 3.0 and not stamp:
-			var turning = flat.length() * (wrapf(atan2(-motion.velocity.x, -motion.velocity.z) - course, -PI, PI) / h) if motion.velocity.length() > 2.0 else 0.0
-			var load = clampf(turning / maxf(grip * 12.0, 1.0), -1.0, 1.0)
-			var wanted = signf(load) * sqrt(absf(load)) * float(racer.get("drift", DRIFT))
-			wanted = clampf(wanted, -max_slip, max_slip)
-			handling.yaw_rate -= (wanted - slip) * SLIP_CATCH * h
+			var now = atan2(-motion.velocity.x, -motion.velocity.z) if Vector2(motion.velocity.x, motion.velocity.z).length() > 2.0 else heading
+			var slip_rate = (wrapf(heading - now, -PI, PI) - wrapf(before - course, -PI, PI)) / h
+			slip = wrapf(heading - now, -PI, PI)
+			var demand = velocity * velocity * 2.0 * sin(alpha) / reach
+			var load = clampf(demand / maxf(grip * 12.0, 1.0), -1.0, 1.0)
+			var share = maxf(absf(load) - DRIFT_FROM, 0.0) / (1.0 - DRIFT_FROM)
+			var wanted = clampf(signf(load) * share * float(racer.get("drift", DRIFT)), -max_slip, max_slip)
+			var damp = SLIP_DAMP * float(racer.get("assist_share", 1.0))
+			handling.yaw_rate -= ((wanted - slip) * SLIP_CATCH - slip_rate * damp) * h
 		node.position += Vector3(motion.velocity.x, 0, motion.velocity.z) * h
 		node.rotation.y = heading
 		line_point += side * line_rate * h
