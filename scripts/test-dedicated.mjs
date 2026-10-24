@@ -14,6 +14,7 @@ import { join } from 'node:path';
 import { setTimeout as wait } from 'node:timers/promises';
 import assert from 'node:assert/strict';
 import { getGodot, root, run } from './godot.mjs';
+import protocol from '../game/data/net_protocol.json' with { type: 'json' };
 
 const KEY = 'ci-dedicated-key';
 const ROOM = 'D0D0D0';
@@ -103,9 +104,11 @@ try {
   await until(() => guest().world_paused === false, 'console lets the day go on', 30000);
   type('players 1');
   await until(() => logged('server', 'up to 1 guests') === 1, 'console limits the room');
-  let full;
-  await until(async () => (full = await fetch(`${origin}/api/rooms/${ROOM}/join`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'second' }) })).status === 409, 'the room lets in one guest only', 30000);
-  assert.match((await full.json()).error, /максимум 1/);
+  // A guest of the same build, so only the limit can turn it away; the
+  // server's next syncs carry the limit to the Worker first.
+  await wait(1500);
+  const second = () => fetch(`${origin}/api/rooms/${ROOM}/join`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'second', protocol: protocol.protocol_version }) });
+  await until(async () => { const r = await second(); return r.status === 409 && /максимум 1/.test((await r.json()).error); }, 'the room lets in one guest only', 30000);
   type('bogus');
   await until(() => logged('server', "unknown command 'bogus'") === 1, 'console names an unknown command');
   guestProcess.kill('SIGTERM');
