@@ -16,6 +16,7 @@ func build() -> void:
 	rope = Props.cylinder(self, Vector3(0.35, -1.45, 0), 0.018, 0.018, 2.7, Color("b7a47b"), 6)
 	handle = Props.cylinder(self, Vector3(0.35, -2.7, 0), 0.06, 0.06, 0.18, Color("73513b"), 8)
 	audio = AudioStreamPlayer3D.new()
+	audio.bus = SoundBank.BUS
 	add_child(audio)
 	audio.stream = SoundBank.stream("church-bell")
 	audio.max_distance = 160

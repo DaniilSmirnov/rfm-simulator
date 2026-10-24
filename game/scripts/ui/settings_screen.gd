@@ -1,12 +1,13 @@
 extends Node
 # The settings window, opened by the gear in the menu header (main menu and
-# pause): draw distance, master and radio volume and, in a desktop window, the window
+# pause): draw distance, game sound and radio volume and, in a desktop window, the window
 # mode and resolution. Every choice applies at once and is kept between
 # launches. The browser page has its own fullscreen button and no window to
 # resize, so the screen section is shown only by native desktop builds.
 const UiKit = preload("res://scripts/ui/ui_kit.gd")
 const Loc = preload("res://scripts/ui/loc.gd")
 const MenuChoice = preload("res://scripts/ui/menu_choice.gd")
+const SoundBank = preload("res://scripts/core/sound_bank.gd")
 const AUDIO_SETTINGS_PATH = "user://audio_settings.cfg"
 const DISPLAY_SETTINGS_PATH = "user://display_settings.cfg"
 # Window sizes offered in windowed mode; ones larger than the screen are left out.
@@ -22,7 +23,6 @@ var volume_label: Label
 var volume_slider: HSlider
 var radio_label: Label
 var radio_slider: HSlider
-var master_base_db = 0.0
 var display_controls: VBoxContainer
 var window_mode_buttons: Array[Button] = []
 var resolution_choice: HBoxContainer
@@ -112,12 +112,11 @@ func update_draw_distance_buttons() -> void:
 # ---------------------------------------------------------------- sound
 
 func _build_audio(parent: Control) -> void:
-	master_base_db = AudioServer.get_bus_volume_db(AudioServer.get_bus_index("Master"))
 	var settings = ConfigFile.new()
 	var loaded = settings.load(audio_path) == OK
 	var column = _section(parent, "ЗВУК", "AudioSettings")
 	volume_label = UiKit.label(column, "", "body")
-	volume_slider = _volume_slider(column, "MasterVolume", "Громкость всех звуков. 0 — без звука.", _saved_percent(settings, "volume") if loaded else 100.0)
+	volume_slider = _volume_slider(column, "MasterVolume", "Громкость звуков игры, кроме рации. 0 — без звука.", _saved_percent(settings, "volume") if loaded else 100.0)
 	radio_label = UiKit.label(column, "", "body")
 	radio_slider = _volume_slider(column, "RadioVolume", "Громкость голосов в рации. 0 — рация молчит.", _saved_percent(settings, "radio_volume") if loaded else 100.0)
 	_apply_volume(volume_slider.value)
@@ -155,10 +154,12 @@ func _save_audio() -> void:
 	if config.save(audio_path) != OK:
 		game.toast("Не удалось сохранить громкость.")
 
+# The general slider is the Sounds bus, not Master: the radio sends to Master
+# too, and it has its own slider.
 func _apply_volume(percent: float) -> void:
-	var master = AudioServer.get_bus_index("Master")
-	AudioServer.set_bus_mute(master, percent <= 0)
-	AudioServer.set_bus_volume_db(master, master_base_db + linear_to_db(maxf(percent / 100.0, 0.0001)))
+	var sounds = AudioServer.get_bus_index(SoundBank.BUS)
+	AudioServer.set_bus_mute(sounds, percent <= 0)
+	AudioServer.set_bus_volume_db(sounds, linear_to_db(maxf(percent / 100.0, 0.0001)))
 	_show_volume(percent)
 
 # The Radio bus (default_bus_layout.tres) carries every voice, native and, as
