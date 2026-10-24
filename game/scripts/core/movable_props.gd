@@ -242,9 +242,11 @@ func snapshot() -> Array:
 			# A prop that has not moved by SNAPSHOT_SLACK keeps last snapshot's
 			# entry (ten snapshots a second over a hundred-odd camp props); one
 			# rocking a few millimetres on a bump changed the props section, all
-			# ~17 KB of it, in every upload.
+			# ~17 KB of it, in every upload. Falling asleep sends the exact pose
+			# once, so props at rest match on every machine.
 			var pose: Transform3D = r.node.global_transform
-			var near: bool = r.has("snapshot_pose") and r.snapshot_item.anchored == r.anchored and (r.snapshot_pose == pose or _near(r, r.snapshot_pose, pose))
+			var asleep: bool = r.has("body") and r.body.sleeping
+			var near: bool = r.has("snapshot_pose") and r.snapshot_item.anchored == r.anchored and r.snapshot_asleep == asleep and (r.snapshot_pose == pose or _near(r, r.snapshot_pose, pose))
 			if near and not r.snapshot_item.has("velocity"):
 				result.append(r.snapshot_item)
 				continue
@@ -255,6 +257,7 @@ func snapshot() -> Array:
 			if not near and r.has("body") and not r.has("tree") and not r.body.freeze and not r.body.sleeping and r.body.linear_velocity.length_squared() > 0.01:
 				item.velocity = game.room.a(r.body.linear_velocity)
 			r.snapshot_pose = pose
+			r.snapshot_asleep = asleep
 			r.snapshot_item = item
 			result.append(item)
 	return result

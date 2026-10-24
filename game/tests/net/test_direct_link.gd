@@ -1,7 +1,7 @@
 extends "res://tests/harness.gd"
 # Direct (WebRTC) links between host and guest, with an in-process stand-in for
-# the browser's peer connection: setup over the relayed signals, the hot world
-# and guest input over the channel, server fallback when the link goes quiet.
+# the browser's peer connection: setup over the relayed signals, then the whole
+# game over the channel, and leaving the room when the link does not come.
 const NetProtocol = preload("res://scripts/net/net_protocol.gd")
 
 class FakeChannel extends RefCounted:
@@ -146,7 +146,7 @@ func run() -> void:
 	check(guest.room.authoritative_drives.has("guest") and int(guest.room.authoritative_drives.guest.ack) == guest.room.prediction.seq, "guest reconciles against the host's direct authority")
 	check(guest.room.peers.has("host") and guest.room.peers.host.state != null, "guest sees the host's own state from the direct packet")
 	var packet: Dictionary = host.room.direct.world_packet()
-	check(not packet.world.has("cold_revs") and not packet.world.has("npc_people") and not packet.world.has("camp"), "before any upload no slow section rides the direct packet")
+	check(not packet.world.has("cold_revs") and not packet.world.has("npc_people") and not packet.world.has("camp"), "no slow section rides the world packet")
 	var full_hot: Dictionary = host.room.world_sync.current_parts().hot
 	full_hot.erase("cold_revs")
 	check(JSON.stringify(packet.world, "", true) == JSON.stringify(full_hot, "", true), "the direct packet is the hot world without building the slow sections")
@@ -154,32 +154,50 @@ func run() -> void:
 	check(guest_entry.size() == 1 and int(guest_entry[0].state_time) == int(float(host.room.drive_budgets.guest.stamp) * 1000.0), "a guest car the host drives is stamped with its simulation time")
 	for entry in packet.players:
 		check(not entry.state.has("drive_inputs") and not entry.state.has("trees") and not entry.has("name"), "raw driving input, object requests and the roster are never forwarded to guests")
-	check(guest.room.sync_body().get("direct", false) == true and not host.room.sync_body().has("direct"), "a guest with a healthy link tells the server to leave the hot world to it")
-	# A changed slow section follows the host's upload over the link, a few
-	# packets in a row, instead of guest -> server -> host -> server -> guest.
-	host.room.sync_body()
-	var with_cold: Dictionary = host.room.direct.world_packet()
-	check(with_cold.world.get("cold", {}).has("camp") and with_cold.world.cold_revs.camp == host.room.world_sync.latest_revs.camp, "a changed slow section rides the direct packet")
-	for i in range(host.room.world_sync.DIRECT_COLD_REPEATS - 1):
-		host.room.direct.world_packet()
-	check(not host.room.direct.world_packet().world.get("cold", {}).has("camp"), "an unchanged section stops after its repeats")
-	host.room.world_sync.direct_revs.erase("camp")
-	host.room.direct._send(1.0)
-	guest.room.direct.poll()
-	check(guest.room.world_sync.cold_revs.get("camp") == host.room.world_sync.latest_revs.camp, "the guest applies a slow section from the link")
-	var older = {"cold": {"camp": host.room.world_sync.latest_cold.camp}, "cold_revs": {"camp": 12345}}
-	guest.room.world_sync.apply_cold(older, -1.0)
-	check(guest.room.world_sync.cold_revs.camp == host.room.world_sync.latest_revs.camp, "the server's older copy of a section that just came directly is ignored")
-	# Commands ride the guest's packets; the server's copy is only acknowledged.
+	var body: Dictionary = guest.room.sync_body()
+	check(body.keys().all(func(key): return key in ["token", "state", "direct"]) and not body.state.has("drive_inputs") and not host.room.sync_body().has("world"), "the server gets only the membership: no world, commands or driving input")
+	# Slow sections go over the link in pieces until the guest reports holding them.
+	host.room.world_sync.refresh_cold()
+	var sections: Array = host.room.world_sync.latest_revs.keys()
+	var rounds = 0
+	while rounds < 20 and sections.any(func(section): return guest.room.world_sync.cold_revs.get(section) != host.room.world_sync.latest_revs[section]):
+		host.room.direct._send(1.0)
+		guest.room.direct.poll()
+		guest.room.direct._send(1.0)
+		host.room.direct.poll()
+		rounds += 1
+	check(rounds < 20 and guest.room.world_sync.cold_revs.get("camp") == host.room.world_sync.latest_revs.camp, "the guest gets every slow section over the link")
+	check(host.room.direct.cold_messages("guest").is_empty(), "sections the guest reported are not sent again")
+	var big = "x".repeat(host.room.direct.COLD_PIECE * 2 + 10)
+	host.room.world_sync.latest_texts.camp = JSON.stringify({"camp": null, "padding": big})
+	host.room.world_sync.latest_revs.camp = 4242
+	host.room.world_sync.latest_at += 1000
+	var first_pieces: Array = host.room.direct.cold_messages("guest")
+	check(first_pieces.size() == 3 and first_pieces.all(func(m): return m.s == "camp" and m.n == 3), "a large section goes in pieces")
+	check(host.room.direct.cold_messages("guest").is_empty(), "a sent copy waits for the guest's report before it goes again")
+	host.room.direct.links.guest.cold.camp.sent -= 10.0
+	check(host.room.direct.cold_messages("guest").size() == 3, "an unconfirmed copy goes again")
+	guest.room.world_sync.receive_piece(first_pieces[2])
+	guest.room.world_sync.receive_piece(first_pieces[0])
+	check(guest.room.world_sync.pieces.has("camp") and guest.room.world_sync.cold_revs.camp != 4242, "a section waits for all its pieces")
+	var stale: Dictionary = first_pieces[1].duplicate()
+	stale.v = 0
+	guest.room.world_sync.receive_piece(stale)
+	check(guest.room.world_sync.cold_revs.camp != 4242, "a piece of an older copy is ignored")
+	host.room.world_sync.refresh_cold()
+	# Commands ride the guest's packets until the host's world lists them as run.
 	guest.room.commands = [{"seq": 41, "action": "stand_person", "placement": {"pos": [1.0e6, 0, 0], "resource_id": 2.0}}]
 	guest.room.direct._send(1.0)
 	host.room.direct.poll()
-	check(host.room.processed.has("guest:41"), "the host runs a guest command from the direct link")
+	check(host.room.processed.has("guest:41") and host.room.accepted.guest == 41, "the host runs a guest command from the direct link")
 	check(host.room.direct._placement({"pos": [1.0e6, 0, 0], "yaw": 0, "resource_id": 2.0}, [0, 0, 0]) == {"resource_id": 2}, "a direct command's placement gets the server's checks")
-	host.room.acknowledgements.clear()
-	host.room._apply_checked_sync({"host": "host", "players": players, "world": null, "commands": [{"id": "guest:41", "player": "guest", "action": "stand_person", "state": players[1].state, "placement": {}}]})
-	check(host.room.acknowledgements == ["guest:41"], "the server's copy of a command already run is acknowledged")
-	guest.room.commands.clear()
+	host.room.processed.erase("guest:41")
+	guest.room.direct._send(1.0)
+	host.room.direct.poll()
+	check(not host.room.processed.has("guest:41"), "a repeated command is not run twice")
+	host.room.direct._send(1.0)
+	guest.room.direct.poll()
+	check(guest.room.commands.is_empty(), "the guest drops commands the host ran")
 	# The host's own notices stay on its screen; shared events and a guest's
 	# own command results reach that guest.
 	var shared_before: String = host.hud.notice
@@ -263,18 +281,22 @@ func run() -> void:
 	check(guest.stones.is_empty(), "a stone that left the list is removed")
 	host.stones.clear()
 	node.queue_free()
-	# While the link is healthy, server snapshots only bring slow sections.
+	# The server's reply brings only the membership.
 	var stale_world = host.room.world_sync.current_parts().hot.duplicate()
 	stale_world.racers = []
-	stale_world.cold = {"camp": host.room.world_sync.current_parts().cold.camp}
 	guest.room._apply_sync({"host": "host", "players": players, "world": stale_world, "world_time": 10.0e12, "accepted": 0, "commands": []})
-	check(guest.racers.size() == 1, "server hot world is ignored while the direct link is healthy")
-	check(guest.room.world_sync.cold_revs.has("camp"), "slow sections still arrive from the server")
-	# A quiet link falls back to the server path.
+	check(guest.racers.size() == 1, "a world from the server is ignored")
+	# A guest without a link waits, then leaves the room with a message.
 	guest.room.direct.links.host.last_received -= 1.0
 	check(not guest.room.direct.healthy("host"), "a link without packets for half a second is stale")
-	guest.room._apply_sync({"host": "host", "players": players, "world": stale_world, "world_time": 10.0e12, "accepted": 0, "commands": []})
-	check(guest.racers.is_empty(), "the server path takes over from a stale link")
+	check(guest.room._linked(1.0) and guest.room.connected, "a guest waits for a quiet link")
+	guest.room._linked(guest.room.LINK_GIVE_UP)
+	check(not guest.room.connected and guest.menu_title.text == "Не удалось соединиться", "a guest whose link does not come back leaves the room")
+	guest.room.connected = true
+	guest.dead = false
+	guest.paused = false
+	guest.room.link_lost = 0.0
+	guest.room.transport.socket_open = true
 	# Hosts check direct states like the server does.
 	check(NetProtocol.clean_state({"pos": [0, 0, 0]}) == null, "malformed direct state is rejected")
 	var cleaned = NetProtocol.clean_state({"pos": [0, 0, 0], "car": [1, 1, 1], "heading": 0, "yaw": 0, "pitch": 0, "in_car": true, "speed": 999, "drive_inputs": [{"seq": 1, "ticks": 99, "throttle": 1, "steer": 0, "brake": false}, {"seq": 2, "ticks": 2, "throttle": 5, "steer": 0, "brake": false}, {"seq": 3, "ticks": 2, "throttle": 1, "steer": 0, "brake": false}]})
@@ -298,7 +320,7 @@ func run() -> void:
 	guest.room.direct.poll()
 	guest.room.direct.links.host.retry_at = 0.0
 	guest.room._update_members(players)
-	check(guest.room.direct.links.host.pc == null, "after the last attempt the room stays on the server path")
+	check(guest.room.direct.links.host.pc == null, "after the last attempt the guest stops calling")
 	# A departed member's link closes.
 	host.room._update_members([players[0]])
 	check(not host.room.direct.links.has("guest"), "links to departed members close")

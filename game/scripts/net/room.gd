@@ -6,7 +6,7 @@ extends Node
 #   world_sync.gd      the shared world as snapshot providers (hot/cold)
 #   peer_view.gd       how other members look on this client
 #   room_lobby.gd      the menu panel and the in-game room line
-#   direct_link.gd     WebRTC data channels host <-> guest (browser builds)
+#   direct_link.gd     WebRTC data channels host <-> guest: the whole game
 #   drive_prediction.gd  guest car prediction / host-side simulation
 const Hitbox = preload("res://scripts/cars/car_hitbox.gd")
 const Prediction = preload("res://scripts/net/drive_prediction.gd")
@@ -42,11 +42,16 @@ var peers: Dictionary = {}
 var members: Dictionary = {}
 var host_id = ""
 var world_paused = false
-# Commands: a guest queues them, the host applies and acknowledges them.
+# Commands: a guest queues them, the host runs them and reports the last one
+# run from each guest (`accepted`, guest id -> seq).
 var sequence = 0
 var commands: Array = []
-var acknowledgements: Array = []
+var accepted: Dictionary = {}
 var processed: Dictionary = {}
+# Guest: seconds without a working direct link to the host; past LINK_GIVE_UP
+# it leaves the room. The server path no longer carries the game.
+const LINK_GIVE_UP = 20.0
+var link_lost = 0.0
 # Sync timer and diagnostics.
 var clock = 0.0
 var diagnostic_clock = 0.0
@@ -166,6 +171,10 @@ func _joined(data: Dictionary) -> void:
 	drive_budgets.clear()
 	authoritative_drives.clear()
 	authority_stamp = -1.0
+	accepted.clear()
+	processed.clear()
+	link_lost = 0.0
+	clock = INF
 	var converting_solo = game.playing and bool(data.host)
 	player_id = data.player
 	token = data.token
@@ -221,36 +230,15 @@ func _apply_sync(data: Dictionary) -> void:
 	_apply_checked_sync(data)
 	WorldValidation.trust(null)
 
+# The server's reply: membership, the host and the server clock. The world,
+# states and commands go over the direct links.
 func _apply_checked_sync(data: Dictionary) -> void:
-	if is_host and data.get("cold_revs") is Dictionary:
-		world_sync.server_cold_revs = data.cold_revs
 	host_id = str(data.get("host", host_id))
 	_update_members(data.players)
-	var world = data.get("world")
-	var stamp = float(data.get("world_time", -1))
-	if is_host:
-		_update_peers(data.players)
-		for command in data.commands:
-			if not processed.has(command.id):
-				_apply_command(command)
-				processed[command.id] = true
-			if command.id not in acknowledgements:
-				acknowledgements.append(command.id)
-	else:
-		commands = commands.filter(func(c): return c.seq > int(data.accepted))
-		if direct.healthy(host_id) or (world is Dictionary and world.get("direct", false) == true):
-			# The direct link carries the hot world and everyone's state; the
-			# server still delivers slow sections and membership. A reply marked
-			# "direct" has no hot world even when the link just went quiet: the
-			# next sync (sent without the flag) brings the full world back.
-			if world is Dictionary:
-				world_sync.apply_cold(world, stamp / 1000.0 if stamp >= 0 else server_clock())
-			_update_peers(data.players, false)
-		else:
-			_guest_world(world, stamp, data.players, true)
+	_update_peers(data.players, false)
 	ui.show_room_status(room_id, peers.size() + 1, is_host, world_paused)
 
-# A guest applies the host's world: from the server, or straight from the host.
+# A guest applies the host's world from its direct link.
 func _guest_world(world, stamp: float, players: Array, membership: bool) -> void:
 	if world != null and not WorldValidation.valid(world): return
 	WorldValidation.trust(world)
@@ -287,19 +275,10 @@ func _update_members(players: Array) -> void:
 	voice.sync_members(members.keys())
 
 func sync_now() -> void:
-	clock = maxf(clock, NetProtocol.sync_interval())
+	clock = maxf(clock, NetProtocol.membership_interval())
 
 func sync_body() -> Dictionary:
-	var body = {"token": token, "state": NetProtocol.outgoing_state(local_state(), not is_host and direct.healthy(host_id)), "commands": commands, "cold_revs": world_sync.cold_revs}
-	if is_host:
-		world_sync.host_upload(body)
-		body.ack = acknowledgements
-	elif direct.healthy(host_id):
-		# The server then leaves the hot world and the states to the direct link.
-		body.direct = true
-	# Commands in this body are on the wire and must not be merged further.
-	prediction.seal()
-	return body
+	return {"token": token, "state": NetProtocol.outgoing_state(local_state(), true), "direct": true}
 
 func world_state() -> Dictionary:
 	return world_sync.world_state()
@@ -320,10 +299,12 @@ func _process(delta: float) -> void:
 	transport.poll(delta)
 	if not connected:
 		return
-	if clock >= NetProtocol.sync_interval() and transport.ready_to_sync():
-		clock = fmod(clock, NetProtocol.sync_interval())
+	if clock >= NetProtocol.membership_interval() and transport.ready_to_sync():
+		clock = 0.0
 		transport.send_sync(sync_body(), room_id)
 	direct.update(delta)
+	if is_guest() and not _linked(delta):
+		return
 	diagnostic_clock += delta
 	if diagnostic_clock >= 5.0:
 		diagnostic_clock = 0.0
@@ -335,6 +316,17 @@ func _process(delta: float) -> void:
 			PeerView.animate(game, peer, delta, transport.view_clock, frozen, world_paused)
 	if is_guest():
 		_render_guest_world(delta)
+
+# A guest without a working link to the host waits for it, then gives up.
+func _linked(delta: float) -> bool:
+	if direct.healthy(host_id):
+		link_lost = 0.0
+		return true
+	link_lost += delta
+	ui.room_label.text = "Соединяемся с хозяином комнаты…"
+	if link_lost > LINK_GIVE_UP or not direct.enabled:
+		disconnect_room("Не удалось соединиться с хозяином комнаты. Проверь интернет или попробуй другую сеть.", "Не удалось соединиться")
+	return connected
 
 # Guests move flying gravel and rally cars between host snapshots.
 func _render_guest_world(delta: float) -> void:
@@ -477,13 +469,12 @@ func submit(action: String, placement: Dictionary = {}) -> bool:
 	if commands.size() < NetProtocol.limit("commands_per_sync"):
 		sequence += 1
 		commands.append({"seq": sequence, "action": action, "placement": placement})
-		sync_now()
+		direct.send_soon()
 	return true
 
 # The host runs a guest's command as that guest: an explicit action context
 # (position, car, seat) instead of the host's own player state.
 func _apply_command(c: Dictionary) -> void:
-	acknowledgements = acknowledgements.slice(-NetProtocol.limit("acknowledgements_per_sync"))
 	if game.paused or game.dead or game.finished:
 		return
 	var actor = str(c.get("player", "guest"))
@@ -585,7 +576,7 @@ func leave() -> void:
 	connected = false
 	transport.request("leave", room_id, {"token": token})
 
-func disconnect_room(message: String) -> void:
+func disconnect_room(message: String, title: String = "Комната закрыта") -> void:
 	connected = false
 	voice.leave()
 	direct.close_all()
@@ -593,7 +584,7 @@ func disconnect_room(message: String) -> void:
 	game.paused = true
 	game.menu.show()
 	if not (game.finished or game.dead): # a trip's results stay; their button leads to the menu
-		game.menu_title.text = "Комната закрыта"
+		game.menu_title.text = title
 		game.menu_text.text = message
 		game.start_button.text = "В ГЛАВНОЕ МЕНЮ"
 	game.dead = true

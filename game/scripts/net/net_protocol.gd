@@ -30,6 +30,11 @@ static func duration(name: String) -> float:
 static func sync_interval() -> float:
 	return float(spec.get("sync_interval", 0.1))
 
+# Seconds between room server syncs: membership, the server clock and the
+# signaling socket's liveness. The game itself goes over the direct links.
+static func membership_interval() -> float:
+	return float(spec.get("membership_interval", 1.0))
+
 static func max_message_bytes() -> int:
 	return int(spec.get("max_message_bytes", 65536))
 

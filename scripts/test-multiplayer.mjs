@@ -10,7 +10,7 @@ import { getGodot, root, run } from './godot.mjs';
 
 const web = process.argv.includes('--web');
 // --socket runs the room over WebSocket with 150 ms added each way; the default
-// pins HTTP polling so injected HTTP losses stay meaningful.
+// pins HTTP polling, which cannot carry the direct link's setup.
 const socketMode = process.argv.includes('--socket');
 const directOff = process.argv.includes('--room-direct=off');
 const transportArgs = [...(socketMode ? [] : ['--room-transport=http']), ...(directOff ? ['--room-direct=off'] : [])];
@@ -23,6 +23,9 @@ const engineManifest = JSON.parse(await readFile(new URL('../engine/manifest.jso
 const nativeLibrary = {darwin: 'macos', linux: 'linux', win32: 'windows'}[process.platform];
 const nativeDirect = !web && socketMode && !directOff && existsSync(join(root, 'game/addons/rally_voice/bin')) && readdirSync(join(root, 'game/addons/rally_voice/bin')).some(name => name.startsWith(`librally_voice.${nativeLibrary}.`));
 const directMode = socketMode && !directOff && (web ? engineManifest.webrtc === true : nativeDirect);
+// The game travels only over the direct link; without one the guest must say it
+// could not connect and leave the room (game/scripts/net/room.gd _linked).
+const linkFails = !directMode;
 const workerPort = 8793;
 const processes = [];
 let browserFactory;
@@ -63,8 +66,8 @@ async function until(predicate, title, timeout=60000) {
   throw Error(`${title} timed out; host=${JSON.stringify(latest('host'))}; guest=${JSON.stringify(latest('guest'))}`);
 }
 function command(role, action, extra = {}) {controls[role] = {id:controls[role].id+1,action,...extra};}
-let syncs=0, dropped=0, outageRejected=0;
-let httpOutage=false, socketBlackholeUntil=0;
+let syncs=0;
+let socketBlackholeUntil=0;
 const output = join(root,'.cache/network-web');
 const proxy = createServer(async(req,res)=> {
   try {
@@ -79,8 +82,7 @@ const proxy = createServer(async(req,res)=> {
       if(slow) {
         syncs++;
         await wait(100 + (syncs%3)*50);
-        if(httpOutage) {outageRejected++;res.writeHead(503,{'Content-Type':'application/json'});res.end('{"error":"Test sustained outage"}');return;}
-        if(syncs===5 || syncs===9) {dropped++;res.writeHead(503,{'Content-Type':'application/json'});res.end('{"error":"Test packet loss"}');return;}
+        if(syncs===5 || syncs===9) {res.writeHead(503,{'Content-Type':'application/json'});res.end('{"error":"Test packet loss"}');return;}
       }
       const response = await fetch(`http://127.0.0.1:${workerPort}${path}`,{method:req.method,headers:{'Content-Type':'application/json'},body});
       const payload=await response.text();
@@ -179,14 +181,22 @@ try {
     launch([godot,'--headless','--path','game','--max-fps','60','res://tests/network_client.tscn','--','--smoke-test',`--network-role=${role}`,`--room-server=${origin}/${role}`, ...transportArgs, ...(room?[`--network-room=${room}`]:[])],role);
   }
   await client('host');await until(()=>latest('host')?.connected,'host connects',web?120000:60000);
-  await client('guest',latest('host').room);await until(()=>latest('guest')?.active,'prediction handshake',web?120000:60000);
-  if(socketMode)await until(()=>['host','guest'].every(role=>logs.some(line=>line.startsWith(`[${role}] `)&&/(^|\] )ROOM_SOCKET open$/.test(line.slice(role.length+3)))),'both clients on WebSocket',web?60000:30000);
+  await client('guest',latest('host').room);
+  if(linkFails) {
+    await until(()=>latest('guest')?.dead && latest('guest').title==='Не удалось соединиться','guest without a direct link says it could not connect',web?120000:60000);
+    assert.equal(latest('guest').connected,false,'the guest left the room');
+    assert.equal(latest('host').connected,true,'the host keeps its room');
+    assert.equal(errors.length,0);
+    console.log(`PASS: ${web?'Chromium':'Godot'} guest ${socketMode?'with no WebRTC':'on HTTP polling'} cannot link to the host and leaves the room with "Не удалось соединиться"`);
+  } else {
+  await until(()=>latest('guest')?.active,'prediction handshake',web?120000:60000);
+  await until(()=>['host','guest'].every(role=>logs.some(line=>line.startsWith(`[${role}] `)&&/(^|\] )ROOM_SOCKET open$/.test(line.slice(role.length+3)))),'both clients on WebSocket',web?60000:30000);
   // The radio joins through the page transport (the engine has no JS bridge).
   // Its WebRTC link is set up over the room socket's voice signaling, so the
   // HTTP-only run checks the join and the socket run checks the link.
   const radio=connected=>until(async()=>(await Promise.all(Object.values(pages).map(page=>page.evaluate(connected=>window.RallyVoice?.state.joined===true&&(!connected||[...RallyVoice.state.peers.values()].some(peer=>peer.connected)),connected)))).every(Boolean),connected?'radio joined and connected between the browser clients':'radio joined in both browser clients',60000);
   if(web)await radio(socketMode);
-  if(directMode)await until(()=>latest('host')?.direct>0 && latest('guest')?.direct_healthy,'direct link open and carrying the world',60000);
+  await until(()=>latest('host')?.direct>0 && latest('guest')?.direct_healthy,'direct link open and carrying the world',60000);
   command('host','resume');command('guest','forward');
   const start=latest('guest').pos;
   await until(()=>latest('guest').speed>1 && latest('guest').pending>0,'responsive prediction before acknowledgement',15000);
@@ -197,10 +207,6 @@ try {
   const authoritative=Object.values(latest('host').driving)[0];
   assert.ok(authoritative,'host owns guest solver');
   assert.ok(Math.hypot(...latest('guest').pos.map((x,i)=>x-authoritative.pos[i]))<0.05,'client converges to host');
-  if(!socketMode) {
-    await until(()=>dropped===2,'two injected HTTP failures');
-    assert.ok(dropped===2,'two real HTTP failures exercised');
-  }
   const identity={room:latest('guest').room,player:latest('guest').player};
   const sameGuest=()=> {
     const guest=latest('guest');
@@ -213,29 +219,7 @@ try {
     const guest=latest('guest'),drive=latest('host').driving[identity.player];
     return drive && guest.pending===0 && guest.ack===guest.seq && Math.hypot(...guest.pos.map((x,i)=>x-drive.pos[i]))<0.05;
   };
-  if(!socketMode) {
-    httpOutage=true;
-    await until(()=>outageRejected>0,'sustained HTTP outage reaches guest',10000);
-    command('guest','outage');
-    await until(()=>latest('guest').control_id===controls.guest.id && latest('guest').commands.length===1 && latest('guest').pending>0,'action and recovery driving input queued during outage',5000);
-    const outageStarted=Date.now(), queuedAction=latest('guest').action_sequence;
-    const pending=latest('guest').pending_sequences.slice();
-    for(const seconds of [5,15,30]) {
-      await until(()=>Date.now()-outageStarted>=seconds*1000,`${seconds}s HTTP outage checkpoint`,seconds*1000+5000);
-      sameGuest();
-      assert.ok(latest('guest').commands.includes(queuedAction),`queued action retained at ${seconds}s`);
-      assert.ok(pending.every(seq=>latest('guest').pending_sequences.includes(seq)),`unacknowledged driving inputs retained at ${seconds}s`);
-    }
-    assert.ok(outageRejected>=3,'outage exercises repeated real HTTP failures');
-    httpOutage=false;
-    command('guest','brake');
-    await until(()=>latest('guest').commands.length===0 && latest('host').processed.includes(`${identity.player}:${queuedAction}`),'queued action accepted and applied after recovery',20000);
-    await until(()=>Math.abs(latest('guest').speed)<0.1 && latest('guest').pending===0,'recovered driving inputs acknowledged and car stopped',30000);
-    command('guest','pause');
-    await until(converged,'HTTP outage recovery converges to authority',15000);
-    sameGuest();
-    assert.equal(latest('host').processed.filter(id=>id===`${identity.player}:${queuedAction}`).length,1,'one command identity is applied after retransmission');
-  } else if(!web) {
+  if(!web) {
     await until(()=>latest('guest').transport==='ws','guest socket ready before blackhole',15000);
     const start=samples.guest.length;
     socketBlackholeUntil=Date.now()+10000;
@@ -274,9 +258,10 @@ try {
   assert.equal(latest('guest').condition,100);
   assert.equal(errors.length,0);
   if(web)assert.equal(latest("guest").safe_area_ready,true,"mobile Web client reads safe area through browser-local transport");
-  if(socketMode)assert.ok(!logs.some(line=>line.includes('ROOM_SOCKET disabled')),'WebSocket stayed in use');
-  if(directMode)await until(()=>latest('guest')?.direct_healthy,'direct link reopened after rejoin',60000);
-  console.log(`PASS: ${web?'two Chromium clients (mobile guest)':'two Godot clients'}: ${directMode?'WebRTC direct link, WebSocket setup with 150ms RTT':socketMode?'WebSocket with 150ms RTT':'delayed HTTP, 2 lost responses'}, ${!socketMode?'30s HTTP recovery':!web?'silent socket fallback/reconnect':'socket/direct transport'}, prediction, braking, convergence, pause/resume, recovery, exit/re-entry, fallen prop and repeated impact, leave/rejoin`);
+  assert.ok(!logs.some(line=>line.includes('ROOM_SOCKET disabled')),'WebSocket stayed in use');
+  await until(()=>latest('guest')?.direct_healthy,'direct link reopened after rejoin',60000);
+  console.log(`PASS: ${web?'two Chromium clients (mobile guest)':'two Godot clients'}: WebRTC direct link, WebSocket setup with 150ms RTT, ${web?'socket/direct transport':'silent socket fallback/reconnect'}, prediction, braking, convergence, pause/resume, recovery, exit/re-entry, fallen prop and repeated impact, leave/rejoin`);
+  }
 } catch (error) {
   console.error(logs.filter(x => !x.includes('NETWORK_SAMPLE ')).slice(-100).join('\n'));
   if(process.env.GITHUB_ACTIONS) {

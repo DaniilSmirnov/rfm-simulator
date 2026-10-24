@@ -158,17 +158,18 @@ func run() -> void:
 	var world = game.room.world_state()
 	world.elapsed = 10
 	var stamp = Time.get_ticks_msec()
-	var reply = {"accepted": 0, "players": [], "world": world, "world_time": stamp}
-	game.room._response(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), JSON.stringify(reply).to_utf8_buffer())
+	# Worlds arrive over the direct link (direct_link.gd "w").
+	var reply = {"world": world, "world_time": stamp}
+	game.room._guest_world(JSON.parse_string(JSON.stringify(reply.world)), reply.world_time, [], false)
 	game.elapsed = 10.1
-	game.room._response(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), JSON.stringify(reply).to_utf8_buffer())
+	game.room._guest_world(JSON.parse_string(JSON.stringify(reply.world)), reply.world_time, [], false)
 	check(game.elapsed == 10.1, "duplicate cached world does not rewind guest timers")
 	reply.world_time = stamp - 1
-	game.room._response(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), JSON.stringify(reply).to_utf8_buffer())
+	game.room._guest_world(JSON.parse_string(JSON.stringify(reply.world)), reply.world_time, [], false)
 	check(game.elapsed == 10.1, "older world snapshots are ignored")
 	reply.world_time = stamp + 100
 	reply.world.elapsed = 10.2
-	game.room._response(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), JSON.stringify(reply).to_utf8_buffer())
+	game.room._guest_world(JSON.parse_string(JSON.stringify(reply.world)), reply.world_time, [], false)
 	# The guest clock runs locally and drifts toward the host's time (world_sync.advance_clock).
 	check(absf(game.room.world_sync.host_elapsed - 10.2) < 0.001 and game.elapsed == 10.1, "new world snapshot still applies shared state without jumping the guest clock")
 	# A guest car driven on the host is stamped by its simulated ticks, so

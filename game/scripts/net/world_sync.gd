@@ -9,7 +9,7 @@ extends RefCounted
 # Provider: {"name": String, "section": String ("" = hot), "keys": Array,
 #            "snapshot": Callable() -> Dictionary, "apply": Callable(fields, sample_time),
 #            "collision": bool (applied before guest drive reconciliation),
-#            "interval": float (seconds; a busy section uploads at most this often)}
+#            "interval": float (seconds; a busy section goes to guests at most this often)}
 const Props = preload("res://scripts/core/props.gd")
 const SnapshotMotion = preload("res://scripts/net/snapshot_motion.gd")
 const Validation = preload("res://scripts/net/world_validation.gd")
@@ -22,11 +22,6 @@ var providers: Array[Dictionary] = []
 var _stage_instance_id = -1
 # Cold revisions this client has applied, as reported by the host.
 var cold_revs: Dictionary = {}
-# Host: revisions the server already holds, and uploads still in flight.
-var server_cold_revs: Dictionary = {}
-var cold_sent: Dictionary = {}
-# Host: when each section was last uploaded, for sections with an interval.
-var cold_uploaded_at: Dictionary = {}
 var last_impact = 0
 var last_notice = ""
 var racer_motion: Dictionary = {}
@@ -38,18 +33,16 @@ const CLOCK_SNAP = 1.0
 const CLOCK_PULL = 2.0
 var host_elapsed = -1.0
 var host_elapsed_at = 0.0
-# Slow sections over the direct link (direct_cold, note_direct_cold): bytes per
-# world packet, packets per change, and how long (ms) the server's copy of a
-# section that came directly is ignored.
-const DIRECT_COLD_BYTES = 5000
-const DIRECT_COLD_REPEATS = 3
-const DIRECT_COLD_HOLD = 1000
+# Host: the slow sections as refresh_cold() last took them, with their
+# revisions and JSON text, for the direct links (direct_link.gd cold_messages).
 var latest_cold: Dictionary = {}
 var latest_revs: Dictionary = {}
-var latest_sizes: Dictionary = {}
-var direct_revs: Dictionary = {}
-var direct_sends: Dictionary = {}
-var direct_cold_at: Dictionary = {}
+var latest_texts: Dictionary = {}
+var latest_at = 0
+# Guest: pieces of slow sections still arriving (receive_piece), and when the
+# copy of each section it applied was taken on the host.
+var pieces: Dictionary = {}
+var applied_at: Dictionary = {}
 var _split_cache: Dictionary = {}
 
 static func provider(name: String, section: String, keys: Array, snapshot: Callable, apply: Callable, collision: bool = false, interval: float = 0.0) -> Dictionary:
@@ -145,14 +138,14 @@ func hot_state() -> Dictionary:
 			world.merge(p.snapshot.call(), true)
 	return world
 
-# `cache` (section -> last part, revision and size) skips writing out and
+# `cache` (section -> last part, revision and text) skips writing out and
 # hashing a section equal to the last one: the props section alone was ~17 KB
 # of JSON ten times a second while the camp stood still.
 static func split_world_by(full: Dictionary, sections: Dictionary, cache = null) -> Dictionary:
 	var hot = full.duplicate()
 	var cold = {}
 	var revisions = {}
-	var sizes = {}
+	var texts = {}
 	for section in sections:
 		var part = {}
 		for key in sections[section]:
@@ -164,12 +157,12 @@ static func split_world_by(full: Dictionary, sections: Dictionary, cache = null)
 		if last.is_empty() or last.part != part:
 			var text = JSON.stringify(part)
 			# A copy: a provider may hand out its own arrays and change them later.
-			last = {"part": part.duplicate(true), "revision": text.hash(), "size": text.length()}
+			last = {"part": part.duplicate(true), "revision": text.hash(), "text": text}
 			if cache != null: cache[section] = last
 		revisions[section] = last.revision
-		sizes[section] = last.size
+		texts[section] = last.text
 	hot.cold_revs = revisions
-	return {"hot": hot, "cold": cold, "sizes": sizes}
+	return {"hot": hot, "cold": cold, "texts": texts}
 
 func split_world(full: Dictionary) -> Dictionary:
 	return split_world_by(full, cold_sections(), _split_cache)
@@ -178,109 +171,62 @@ func split_world(full: Dictionary) -> Dictionary:
 func current_parts() -> Dictionary:
 	return split_world(world_state())
 
-# What the host uploads: the hot world every time, a cold section only when the
-# server does not hold its revision and it is not already in flight.
-func host_upload(body: Dictionary) -> void:
-	var parts = current_parts()
-	body.world = parts.hot
+# Only the slow sections' providers.
+func cold_state() -> Dictionary:
+	_ensure()
+	var world = {}
+	for p in providers:
+		if p.section != "":
+			world.merge(p.snapshot.call(), true)
+	return world
+
+# Host, every sync interval: the slow sections as they stand now. Unchanged
+# ones keep their revision and text without being written out again.
+func refresh_cold() -> void:
+	var parts = split_world_by(cold_state(), cold_sections(), _split_cache)
 	latest_cold = parts.cold
 	latest_revs = parts.hot.cold_revs
-	latest_sizes = parts.sizes
-	var now = Time.get_ticks_msec()
-	var intervals = section_intervals()
-	var cold = {}
-	for section in parts.cold:
-		var revision = int(parts.hot.cold_revs[section])
-		if server_cold_revs.has(section) and int(server_cold_revs[section]) == revision:
-			continue
-		# A busy section waits for its interval; the change goes with the next upload.
-		var interval_ms = int(float(intervals.get(section, 0.0)) * 1000.0)
-		if interval_ms > 0 and cold_uploaded_at.has(section) and now - int(cold_uploaded_at[section]) < interval_ms:
-			continue
-		# A section in flight is not repeated until the server could have answered.
-		var sent: Dictionary = cold_sent.get(section, {})
-		if int(sent.get("revision", -1)) == revision and now - int(sent.get("time", 0)) < 1000:
-			continue
-		cold[section] = parts.cold[section]
-		cold_sent[section] = {"revision": revision, "time": now}
-		cold_uploaded_at[section] = now
-	if not cold.is_empty():
-		body.cold = cold
-		_fit(body)
+	latest_texts = parts.texts
+	latest_at = int(room.server_clock() * 1000.0)
 
-# The server refuses a message over max_message_bytes (413). Sections that do
-# not fit, largest first, wait for a later upload instead of the whole sync
-# failing; the room and the hot world keep going meanwhile.
-func _fit(body: Dictionary) -> void:
-	var limit = NetProtocol.max_message_bytes() - 2048
-	while body.has("cold") and JSON.stringify(body).to_utf8_buffer().size() > limit:
-		var largest = ""
-		var largest_size = -1
-		for section in body.cold:
-			var size = JSON.stringify(body.cold[section]).length()
-			if size > largest_size:
-				largest = section
-				largest_size = size
-		body.cold.erase(largest)
-		cold_sent.erase(largest)
-		cold_uploaded_at.erase(largest)
-		push_warning("[RFM network] cold section %s (%d bytes) left out of an oversized sync" % [largest, largest_size])
-		if body.cold.is_empty():
-			body.erase("cold")
-
-# Host: the slow sections that changed since they last went over the direct
-# links, from the latest upload's snapshot (nothing is rebuilt for this). A
-# change rides DIRECT_COLD_REPEATS world packets, as the channel drops packets;
-# a section too large for a packet stays on the server path only. Before this
-# a guest saw its own action (a chair set down, a trunk opened) only after
-# guest -> server -> host -> server -> guest.
-func direct_cold() -> Dictionary:
-	var parts = {}
-	var revs = {}
-	var budget = DIRECT_COLD_BYTES
-	for section in latest_cold:
-		var revision = int(latest_revs.get(section, 0))
-		if int(direct_revs.get(section, -1)) != revision:
-			direct_revs[section] = revision
-			# Characters, not bytes: the budget leaves room for Cyrillic text.
-			var size = int(latest_sizes.get(section, DIRECT_COLD_BYTES + 1))
-			direct_sends[section] = {"size": size, "left": DIRECT_COLD_REPEATS if size <= DIRECT_COLD_BYTES else 0}
-		var send: Dictionary = direct_sends[section]
-		if int(send.left) <= 0 or int(send.size) > budget:
-			continue
-		budget -= int(send.size)
-		send.left = int(send.left) - 1
-		parts[section] = latest_cold[section]
-		revs[section] = revision
-	return {} if parts.is_empty() else {"parts": parts, "revs": revs}
-
-# Guest: when each slow section last came over the direct link. The server's
-# copy may still be the one before it, so for DIRECT_COLD_HOLD it is ignored.
-# A repeat of a revision already applied is dropped: the people sections time
-# their motion by arrivals.
-func note_direct_cold(w: Dictionary) -> void:
-	if not w.get("cold") is Dictionary:
+# Guest: one piece of a slow section from the host (direct_link.gd
+# cold_messages). A section is applied once all its pieces of one copy are in,
+# unless a newer copy of it was applied already.
+func receive_piece(m: Dictionary) -> void:
+	var section = m.get("s")
+	var count = m.get("n")
+	var index = m.get("i")
+	if not section is String or not section in cold_sections() or not _whole(m.get("r")) or not _whole(m.get("v")) or not _whole(count) or not _whole(index) or not m.get("d") is String:
 		return
-	var now = Time.get_ticks_msec()
-	var revisions = w.get("cold_revs", {})
-	for section in w.cold.keys():
-		direct_cold_at[section] = now
-		if revisions is Dictionary and revisions.has(section) and cold_revs.has(section) and int(revisions[section]) == int(cold_revs[section]):
-			w.cold.erase(section)
-	if w.cold.is_empty():
-		w.erase("cold")
+	if int(count) < 1 or int(count) > 64 or int(index) < 0 or int(index) >= int(count) or int(m.v) <= int(applied_at.get(section, -1)):
+		return
+	var entry: Dictionary = pieces.get(section, {})
+	if entry.is_empty() or int(entry.r) != int(m.r) or int(entry.v) != int(m.v) or int(entry.n) != int(count):
+		entry = {"r": int(m.r), "v": int(m.v), "n": int(count), "parts": {}}
+		pieces[section] = entry
+	entry.parts[int(index)] = m.d
+	if entry.parts.size() < int(entry.n):
+		return
+	pieces.erase(section)
+	var text = ""
+	for i in range(int(entry.n)):
+		text += entry.parts[i]
+	var part = JSON.parse_string(text)
+	if not part is Dictionary:
+		return
+	applied_at[section] = int(entry.v)
+	apply_cold({"cold": {section: part}, "cold_revs": {section: int(entry.r)}}, float(entry.v) / 1000.0)
+
+static func _whole(value) -> bool:
+	return (value is int or value is float) and is_finite(float(value)) and absf(float(value)) <= 9007199254740991.0 and float(value) == floorf(float(value))
 
 func reset() -> void:
 	latest_cold.clear()
 	latest_revs = {}
-	latest_sizes = {}
-	direct_revs.clear()
-	direct_sends.clear()
-	direct_cold_at.clear()
+	latest_texts = {}
+	pieces.clear()
+	applied_at.clear()
 	cold_revs.clear()
-	server_cold_revs.clear()
-	cold_sent.clear()
-	cold_uploaded_at.clear()
 	host_elapsed = -1.0
 
 # ---------------------------------------------------------------- guest side
@@ -310,16 +256,14 @@ func apply_collision(w: Dictionary) -> void:
 		if p.collision and p.section in cold.sections:
 			p.apply.call(cold.fields, -1.0)
 
-# Only the slow sections of a server snapshot, while the hot world arrives over
-# a direct link.
+# Slow sections on their own (receive_piece), apart from the hot world.
 func apply_cold(w: Dictionary, sample_time: float) -> void:
 	if not Validation.valid(w): return
 	_ensure()
 	var cold = cold_part(w)
 	if cold == null:
 		return
-	var now = Time.get_ticks_msec()
-	var sections = cold.sections.filter(func(section): return now - int(direct_cold_at.get(section, -DIRECT_COLD_HOLD)) >= DIRECT_COLD_HOLD)
+	var sections: Array = cold.sections
 	for p in providers:
 		if p.section != "" and p.section in sections:
 			p.apply.call(cold.fields, sample_time)

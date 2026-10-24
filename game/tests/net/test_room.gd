@@ -56,22 +56,13 @@ func run() -> void:
 	with_camp.cold = {"camp": parts.cold.camp}
 	guest.room.apply_world(with_camp)
 	check(int(guest.room.world_sync.cold_revs.get("camp", -1)) == int(parts.hot.cold_revs.camp) and not guest.room.world_sync.cold_revs.has("snow"), "guest records only the cold revisions it applied")
-	host.room.world_sync.server_cold_revs = {}
-	host.room.world_sync.cold_sent.clear()
-	var upload = host.room.sync_body()
-	check(upload.cold.size() == host.room.world_sync.cold_sections().size() and not upload.world.has("camp"), "host uploads every cold section once")
-	check(not host.room.sync_body().has("cold"), "a section in flight is not uploaded again at once")
-	host.room.world_sync.server_cold_revs = upload.world.cold_revs.duplicate()
-	host.room.world_sync.cold_sent.clear()
-	check(not host.room.sync_body().has("cold"), "sections the server holds are not resent")
-	check(not upload.world.has("npc_people") and not upload.world.has("course") and not upload.world.has("foraging") and upload.cold.has("people"), "spectators, schedule and foraging travel as sections")
-	# A busy section (walking spectators) waits for its interval after an upload.
-	host.room.world_sync.server_cold_revs.people = -1
-	host.room.world_sync.cold_sent.clear()
-	check(not host.room.sync_body().get("cold", {}).has("people"), "a changed busy section waits for its upload interval")
-	host.room.world_sync.cold_uploaded_at.people = Time.get_ticks_msec() - 1000
-	host.room.world_sync.cold_sent.clear()
-	check(host.room.sync_body().get("cold", {}).has("people"), "the busy section uploads once its interval passed")
+	# Slow sections go to guests over the links only (direct_link.gd cold_messages).
+	host.room.world_sync.refresh_cold()
+	var latest: Dictionary = host.room.world_sync.latest_cold
+	check(latest.size() == host.room.world_sync.cold_sections().size() and latest.size() == host.room.world_sync.latest_texts.size(), "every slow section is ready for the links")
+	var body = host.room.sync_body()
+	check(not body.has("world") and not body.has("cold") and body.has("state"), "the server gets the host's state and no world")
+	check(not parts.hot.has("npc_people") and not parts.hot.has("course") and not parts.hot.has("foraging") and latest.has("people"), "spectators, schedule and foraging travel as sections")
 	for entry in host.room.world_state().npc_people:
 		check(not entry.has("time") and str(entry.get("yaw", 0.0)).length() <= 6, "spectator entries carry no timer and short angles")
 		break
@@ -112,6 +103,8 @@ func run() -> void:
 	host.stone_impact("guest")
 	guest.room.apply_world(host.room.world_state())
 	await create_timer(0.4).timeout
+	# A guest plays only while its link to the host is fresh (room.gd _linked).
+	guest.room.direct.links[guest.room.host_id] = {"pc": null, "channel": null, "open": true, "last_received": INF, "attempts": 0, "retry_at": INF}
 	guest.room._process(0.1)
 	check(guest.stones.size() == host.stones.size() and guest.stones.size() > 0, "shared gravel is replicated")
 	check(absf(guest.racers[0].node.rotation.z + 0.18) < 0.02, "rally suspension roll replicated")
