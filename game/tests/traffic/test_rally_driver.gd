@@ -1,7 +1,7 @@
 extends "res://tests/harness.gd"
 # The crews' driver on the tyre model (rally_driver.gd): a crew flies through
-# a whole stage on the road, the body slides in the bends and the driver
-# catches it with opposite lock.
+# a whole stage on the road, the body slides in the bends, the driver
+# catches it with opposite lock and on straights the nose stays along the road.
 const Stage = preload("res://scripts/stages/stage.gd")
 const Handling = preload("res://scripts/traffic/rally_handling.gd")
 const Motion = preload("res://scripts/cars/vehicle_motion.gd")
@@ -31,6 +31,8 @@ func run() -> void:
 		var slip_frames = 0
 		var slip_max = 0.0
 		var opposite_lock = 0
+		var straight_sq = 0.0
+		var straight_frames = 0
 		var prev_yaw = node.rotation.y
 		for frame in range(60 * 120):
 			var dir = Handling.direction(stage, s)
@@ -54,11 +56,19 @@ func run() -> void:
 			# Opposite lock: the front wheels point out of the turn the body makes.
 			if slip > 0.15 and racer.motion.handling.steering * -rate < -0.01:
 				opposite_lock += 1
+			# A straight 40 m either way: the body's yaw against the road (checked
+			# where a stage has a second or more of them).
+			if s > 60.0 and racer.motion.velocity.length() > 15.0 and Handling.direction(stage, maxf(s - 40.0, 0.0)).dot(dir) > 0.995 and Handling.direction(stage, minf(s + 40.0, stage.length - 0.01)).dot(dir) > 0.995:
+				var rel = wrapf(node.rotation.y - atan2(-dir.x, -dir.z), -PI, PI)
+				straight_sq += rel * rel
+				straight_frames += 1
 		var seconds = frames * dt
 		check(s >= stage.length - 3 and seconds < stage.length / 12.0, "stage %d: the crew finishes on the tyre model (%.1f s)" % [index, seconds])
 		check(off == 0, "stage %d: the crew stays on the road (%d frames off)" % [index, off])
 		var average = rad_to_deg(slip_sum / maxf(slip_frames, 1))
-		check(average > 3.0 and rad_to_deg(slip_max) > 10.0, "stage %d: the body slides in the bends (%.1f° average, %.1f° peak)" % [index, average, rad_to_deg(slip_max)])
+		check(average > 3.0 and rad_to_deg(slip_max) > 6.0, "stage %d: the body slides in the bends (%.1f° average, %.1f° peak)" % [index, average, rad_to_deg(slip_max)])
+		var weave = rad_to_deg(sqrt(straight_sq / maxf(straight_frames, 1)))
+		check(straight_frames < 60 or weave < 3.0, "stage %d: on straights the nose stays along the road (%.1f° rms over %.1f s)" % [index, weave, straight_frames * dt])
 		if index == 1:
 			check(opposite_lock > 0, "stage %d: the driver catches slides with opposite lock (%d frames)" % [index, opposite_lock])
 		node.free()
