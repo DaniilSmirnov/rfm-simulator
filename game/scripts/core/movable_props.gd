@@ -166,15 +166,16 @@ func update(players: Dictionary, occupied: Dictionary, delta: float) -> Dictiona
 			_move(r, delta)
 	return occupied
 
-# Walkers use swept collision rather than native bodies; transmit the same contact.
+# Walkers use swept collision rather than native bodies; transmit the same
+# contact. Walking only leans on a prop: it moves when a player runs into it.
 func _push_walkers(players: Dictionary, occupied: Dictionary, delta: float) -> void:
 	for id in players:
 		var p: Dictionary = players[id]
-		if occupied.has(str(id)) or p.get("in_car", true) or p.get("seated", false) or p.get("airborne", false) or int(p.get("beers", 0)) >= 30: continue
+		if occupied.has(str(id)) or not p.get("running", false) or p.get("in_car", true) or p.get("seated", false) or p.get("airborne", false) or int(p.get("beers", 0)) >= 30: continue
 		var intent: Vector3 = game.room.v(p.get("push", [0, 0, 0]))
 		if intent.length_squared() < 0.01 or game.injuries.is_down("player:" + str(id)): continue
 		var pos: Vector3 = game.room.v(p.pos)
-		var hit: Dictionary = game.stage.solids.hit(pos, pos + intent * game.WALK_SPEED * minf(delta, 0.05), 0.3)
+		var hit: Dictionary = game.stage.solids.hit(pos, pos + intent * game.RUN_SPEED * minf(delta, 0.05), 0.3)
 		var r: Dictionary = records.get(hit.get("prop", ""), {})
 		if r.is_empty() or r.anchored or not r.has("body"): continue
 		r.body.wake()

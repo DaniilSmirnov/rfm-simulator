@@ -5,7 +5,8 @@ extends RefCounted
 #
 # A rope pulls a car towards the person holding it, from any side and to
 # anywhere on the stage; closer than ROPE_SLACK the rope hangs loose. A push
-# moves the car the way the pusher walks. Helpers add up. A rally crew counts as
+# moves the car the way the pusher walks: a stuck crew at a walk, a player's car
+# only when someone runs into it. Helpers add up. A rally crew counts as
 # recovered as soon as it stands on the carriageway again.
 #
 # recovery_links: one entry per rope, {"player", "pos", "racer": id} or
@@ -139,7 +140,9 @@ static func _effort(game, p: Dictionary, targets: Array) -> Dictionary:
 			var force = -offset / distance if distance > ROPE_SLACK else Vector3.ZERO
 			result = {"target": target, "force": force, "rope": true, "slack": maxf(0.0, distance - ROPE_SLACK)}
 			best = distance
-		elif touching and push.length() > 0.2 and push.normalized().dot(inward.normalized()) > 0.5:
+		# On foot only a stuck crew gives way to a walker; anything else moves
+		# when someone runs into it.
+		elif touching and (target.has("racer") or p.get("running", false)) and push.length() > 0.2 and push.normalized().dot(inward.normalized()) > 0.5:
 			result = {"target": target, "force": push.normalized(), "rope": false}
 			best = distance
 	return result

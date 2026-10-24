@@ -46,6 +46,7 @@ func continuous_push(game) -> void:
 				var start: Vector3 = game.car.position
 				var uninterrupted = true
 				Input.action_press("forward")
+				Input.action_press("sprint")
 				for frame in range(fps * 2):
 					var before: Vector3 = game.car.position
 					game._walk(1.0 / fps)
@@ -54,6 +55,7 @@ func continuous_push(game) -> void:
 					if frame > fps / 2:
 						uninterrupted = uninterrupted and absf(travel - game.Recovery.HELPER_SPEED / fps) < 0.002
 				Input.action_release("forward")
+				Input.action_release("sprint")
 				distances.append(flat_distance(start, game.car.position))
 				check(uninterrupted and distances[-1] > 1.5, "continuous push from %s at yaw %.2f / %d FPS does not lose contact" % [side, yaw, fps])
 				check(absf(angle_difference(yaw, game.heading)) < 0.0001, "a body push preserves the car heading")
@@ -246,6 +248,9 @@ func run() -> void:
 	passive.pos = game.room.a(solver.node.position + Vector3(0, 0, 30))
 	var before_push: Vector3 = solver.node.position
 	var before_yaw: float = solver.yaw
+	game.Recovery.update(game, {"friend": passive, "helper": pushing}, 1.0 / 60)
+	check(solver.node.position == before_push, "walking into a player's car does not push it")
+	pushing.running = true
 	game.Recovery.update(game, {"friend": passive, "helper": pushing}, 1.0 / 60)
 	check((before_push - solver.node.position).dot(side) > 0.01 and solver.yaw == before_yaw, "pushing a predicted guest uses the visible car bounds and preserves heading")
 	game.room.host_drives.clear()
