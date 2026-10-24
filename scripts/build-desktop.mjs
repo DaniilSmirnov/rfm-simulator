@@ -25,7 +25,7 @@ const platforms = {
   ], patch: windowsPatch, prepare: prepareWindows, verify: 'Rally_Fans_Simulator_Demo' },
   'macos-demo': { preset: 'macOS Demo', template: 'macos.zip', output: 'Rally Fans Simulator Demo.zip', patch: macosPatch, mobileTextures: true },
   // Dedicated room server (export feature "dedicated", see game/scripts/net/dedicated.gd): run headless by server/dedicated/run-macos.sh.
-  'macos-server': { preset: 'macOS Server', template: 'macos.zip', output: 'SERVER Rally Fans Simulator.zip', patch: macosPatch, finish: renameServer, mobileTextures: true },
+  'macos-server': { preset: 'macOS Server', template: 'macos.zip', output: 'SERVER Rally Fans Simulator.zip', patch: macosPatch, setup: requireServerLink, finish: renameServer, mobileTextures: true },
   android: { preset: 'Android', template: 'android_release.apk', output: 'Rally Fans Simulator.apk', patch: androidPatch, prepare: prepareAndroid, mobileTextures: true },
   // Godot writes an Xcode project; Xcode builds it without code signing into an unsigned IPA
   // (install it with your own certificate: Sideloadly, AltStore or codesign).
@@ -125,6 +125,14 @@ async function buildIos() {
   const ipa = join(output, 'Rally Fans Simulator (unsigned).ipa');
   run('ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', join(payload, 'Payload'), ipa]);
   return ipa;
+}
+
+// Guests play over a direct link to the host (room.gd _linked), which the radio
+// library provides on native builds; a server without it is one nobody can join.
+async function requireServerLink(project) {
+  if (!await exists(join(project, 'addons/rally_voice/bin/librally_voice.macos.universal.dylib')))
+    throw new Error('No macOS radio library: guests could not link to this server. Build it first: node scripts/build-voice.mjs --target=macos-universal (needs cmake and ninja).');
+  return 'Direct-link library included.';
 }
 
 // Godot names a macOS bundle after config/name and ignores feature overrides of it,
