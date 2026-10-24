@@ -102,8 +102,11 @@ Enter, ответ появится в логе строкой `[RFM dedicated] �
 
    Скрипт читает ключ из `~/.rally-dedicated-token` или из
    `RALLY_DEDICATED_TOKEN`.
-2. Сборка: `npm ci`, затем `npm run build:macos-server` (Godot 4.4.1 в
-   `GODOT_BIN`). Получится `dist-macos-server/SERVER Rally Fans Simulator.zip`;
+2. Сборка. Сначала библиотека прямой связи (один раз, нужны `cmake` и
+   `ninja`): `node scripts/build-voice.mjs --target=macos-universal`. Без неё
+   гости не могут связаться с сервером («Не удалось соединиться»), поэтому
+   серверная сборка без неё не собирается. Затем `npm ci` и
+   `npm run build:macos-server` (Godot 4.4.1 в `GODOT_BIN`). Получится `dist-macos-server/SERVER Rally Fans Simulator.zip`;
    скрипт сам распакует его рядом. Обычную сборку игры тоже можно запустить
    сервером: `RALLY_APP=путь/к/Rally Fans Simulator.app`, тогда скрипт положит
    в неё `override.cfg`.
@@ -151,5 +154,8 @@ Enter, ответ появится в логе строкой `[RFM dedicated] �
 - Linux-сборка в CI собирает образ и проверяет, что он стартует.
 - `tests/room-core.test.mjs`, `tests/room-socket.test.mjs`: правила Worker.
 
-Прямой WebRTC-канал работает, если в сборку попала библиотека
-`native/voice` для linux-x86_64 (так собирает CI). Без неё всё идёт через Worker.
+Гости играют по прямому WebRTC-каналу к хозяину (`room.gd` `_linked`), а у
+нативной сборки он есть, только если в неё попала библиотека `native/voice`
+(`node scripts/build-voice.mjs`, CI собирает её для linux-x86_64 и
+macos-universal). Сервер без неё создаёт комнату, но гости через 20
+секунд получают «Не удалось соединиться».
