@@ -49,6 +49,7 @@ func _process(delta: float) -> void:
 		sample.phase = game.course.phase
 		sample.direct_healthy = not game.room.is_host and game.room.direct.healthy(game.room.host_id)
 		sample.title = game.menu_title.text
+		sample.status = game.room.ui.status.text
 		if game.movable_props.records.has(prop_key):
 			var prop: Dictionary = game.movable_props.records[prop_key]
 			sample.prop = {"key": prop_key, "pos": game.room.a(prop.node.global_position), "rot": [prop.node.global_rotation.x, prop.node.global_rotation.y, prop.node.global_rotation.z], "up": prop.node.global_basis.y.y, "sleeping": prop.body.sleeping}

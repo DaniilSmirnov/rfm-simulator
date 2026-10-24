@@ -100,6 +100,7 @@ func run() -> void:
 	host.room._response(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), JSON.stringify({"player": "host", "token": "h", "host": true, "room": "ABC123", "slot": 0, "car_model": 5, "stage": 1}).to_utf8_buffer())
 	guest.room.transport.request_kind = "join"
 	guest.room._response(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), JSON.stringify({"player": "guest", "token": "g", "host": false, "slot": 1, "car_model": 2, "character": 9, "stage": 1}).to_utf8_buffer())
+	guest.room.join_check.linked()  # the direct link opened (test_join_check.gd)
 	check(guest.stage.winter and guest.playing and not guest.selection_controls.visible, "guest enters host winter stage before gameplay")
 	check(guest.stage.trails.is_empty(), "winter stage keeps its original forest without spectator footpaths")
 	check(guest.car.get_meta("model") == "Лесной внедорожник" and host.car.get_meta("model") == "Дорожный седан", "room handshake preserves individual car choices")

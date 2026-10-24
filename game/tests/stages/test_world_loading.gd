@@ -68,6 +68,7 @@ func run() -> void:
 	guest.room.transport.request_kind = "join"
 	var response = {"player": "guest", "token": "test", "host": false, "stage": 2, "car_model": 0, "slot": 3, "character": 3}
 	guest.room._response(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), JSON.stringify(response).to_utf8_buffer())
+	guest.room.join_check.linked()  # the direct link opened (test_join_check.gd)
 	guest.room._process(1)
 	check(guest.loading_world and not guest.room.busy and guest.room.transport.request_kind == "join", "room does not publish partial world during preparation")
 	while guest.loading_world:

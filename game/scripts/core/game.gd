@@ -449,7 +449,7 @@ func start_game() -> void:
 		return
 	if playing:
 		return
-	if loading_world:
+	if loading_world or room.join_check.active:
 		return
 	# Request pointer lock before prepare_world() can yield. Browsers only honor
 	# pointer-lock requests made during a trusted user gesture.

@@ -24,7 +24,7 @@ const nativeLibrary = {darwin: 'macos', linux: 'linux', win32: 'windows'}[proces
 const nativeDirect = !web && socketMode && !directOff && existsSync(join(root, 'game/addons/rally_voice/bin')) && readdirSync(join(root, 'game/addons/rally_voice/bin')).some(name => name.startsWith(`librally_voice.${nativeLibrary}.`));
 const directMode = socketMode && !directOff && (web ? engineManifest.webrtc === true : nativeDirect);
 // The game travels only over the direct link; without one the guest must say it
-// could not connect and leave the room (game/scripts/net/room.gd _linked).
+// cannot connect, while still joining (game/scripts/net/join_check.gd).
 const linkFails = !directMode;
 const workerPort = 8793;
 const processes = [];
@@ -183,11 +183,13 @@ try {
   await client('host');await until(()=>latest('host')?.connected,'host connects',web?120000:60000);
   await client('guest',latest('host').room);
   if(linkFails) {
-    await until(()=>latest('guest')?.dead && latest('guest').title==='Не удалось соединиться','guest without a direct link says it could not connect',web?120000:60000);
+    // The link is checked while joining (join_check.gd): the guest stays in the menu and the entry panel says why.
+    await until(()=>['Эта версия игры не умеет','Сеть не пропускает'].some(reason=>latest('guest')?.status?.startsWith(reason)),'guest without a direct link is told so on the entry panel',web?120000:60000);
     assert.equal(latest('guest').connected,false,'the guest left the room');
+    assert.equal(latest('guest').dead,false,'the guest never entered the stage');
     assert.equal(latest('host').connected,true,'the host keeps its room');
     assert.equal(errors.length,0);
-    console.log(`PASS: ${web?'Chromium':'Godot'} guest ${socketMode?'with no WebRTC':'on HTTP polling'} cannot link to the host and leaves the room with "Не удалось соединиться"`);
+    console.log(`PASS: ${web?'Chromium':'Godot'} guest ${socketMode?'with no WebRTC':'on HTTP polling'} cannot link to the host and is told so before the stage loads`);
   } else {
   await until(()=>latest('guest')?.active,'prediction handshake',web?120000:60000);
   await until(()=>['host','guest'].every(role=>logs.some(line=>line.startsWith(`[${role}] `)&&/(^|\] )ROOM_SOCKET open$/.test(line.slice(role.length+3)))),'both clients on WebSocket',web?60000:30000);

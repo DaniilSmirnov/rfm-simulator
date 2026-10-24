@@ -42,7 +42,7 @@ func request() -> void:
 # was not found, the server is down, any other way back to the menu) would
 # leave the menus with a hidden, locked cursor.
 func stray(is_captured: bool) -> bool:
-	return is_captured and not wanted() and not game.loading_world and not game.room.busy
+	return is_captured and not wanted() and not game.loading_world and not game.room.busy and not game.room.join_check.active
 
 func captured() -> bool:
 	return Input.mouse_mode == Input.MOUSE_MODE_CAPTURED

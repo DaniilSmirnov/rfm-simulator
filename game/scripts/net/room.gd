@@ -24,6 +24,7 @@ const Loc = preload("res://scripts/ui/loc.gd")
 const WorldValidation = preload("res://scripts/net/world_validation.gd")
 const VoiceChat = preload("res://scripts/net/voice_chat.gd")
 const Dedicated = preload("res://scripts/net/dedicated.gd")
+const JoinCheck = preload("res://scripts/net/join_check.gd")
 
 var game: Node3D
 var voice: Node
@@ -31,6 +32,7 @@ var transport: Node
 var direct: Node
 var world_sync = WorldSync.new()
 var ui = Lobby.new()
+var join_check = JoinCheck.new()
 # Membership.
 var room_id = ""
 var player_id = ""
@@ -134,7 +136,7 @@ func _on_rate_limited(retry: float) -> void:
 	ui.room_label.text = Loc.t("Слишком много запросов. Повторим через %d сек.") % ceili(retry)
 
 func _on_failure(kind: String, code: int, message: String, _data) -> void:
-	if connected and kind == "sync" and transport.tolerate_refused_sync(code): return
+	if join_check.fail(message) or (connected and kind == "sync" and transport.tolerate_refused_sync(code)): return
 	if connected and code in [400, 401, 404, 410, 413]:
 		disconnect_room(message)
 	elif connected:
@@ -157,7 +159,7 @@ func _on_failure(kind: String, code: int, message: String, _data) -> void:
 
 func _on_reply(kind: String, data: Dictionary) -> void:
 	if kind in ["create", "join"]:
-		await _joined(data)
+		join_check.start(self, data)
 	else:
 		_apply_sync(data)
 
@@ -196,7 +198,7 @@ func _joined(data: Dictionary) -> void:
 		# The look picked in the menu, as the server accepted it; others see the same.
 		game.avatar_variant = int(data.get("character", game.avatar_variant))
 		game.heading = game.stage.parks.park_visitor(game.car, lane)
-	transport.open_socket(str(data.get("socket", "")))  # after the load, or the hello is late
+	if not transport.socket_open: transport.open_socket(str(data.get("socket", "")))  # a host's after the load, or the hello is late
 	game.toast(Loc.t("Комната %s · %s. Передай ID друзьям!") % [room_id, Loc.t(game.car.get_meta("model"))])
 	if game.invite_after_room_create:
 		game.invite_after_room_create = false
@@ -236,7 +238,7 @@ func _apply_checked_sync(data: Dictionary) -> void:
 	host_id = str(data.get("host", host_id))
 	ui.limit = int(data.get("max_players", NetProtocol.max_players()))
 	_update_members(data.players)
-	_update_peers(data.players, false)
+	if game.playing: _update_peers(data.players, false)  # a guest still in the menu draws nobody
 	ui.show_room_status(room_id, peers.size() + 1, is_host, world_paused)
 
 # A guest applies the host's world from its direct link.
@@ -295,7 +297,7 @@ func update_server_clock(server_msec: float, sent_at: float = -1.0) -> void:
 	transport.update_server_clock(server_msec, sent_at)
 
 func _process(delta: float) -> void:
-	if not connected or game.loading_world:
+	if not connected or join_check.update(delta) or game.loading_world:
 		return
 	clock += delta
 	transport.poll(delta)
