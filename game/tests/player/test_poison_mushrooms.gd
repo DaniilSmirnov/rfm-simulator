@@ -1,5 +1,6 @@
 extends "res://tests/harness.gd"
 const Props = preload("res://scripts/core/props.gd")
+const Loc = preload("res://scripts/ui/loc.gd")
 func _initialize() -> void:
 	call_deferred("run")
 func run() -> void:
@@ -58,6 +59,18 @@ func run() -> void:
 		host.eat_foraged("mushroom")
 		host._update_eating(2.7)
 		check(host.mushroom_effect.remaining == 10 and host.mushroom_effect.overlay.visible, "completed bite triggers exactly ten seconds")
+		var record: Dictionary = host.injuries.records.get("player:host", {})
+		check(host.injuries.down and record.get("phase", "") == "lying" and record.get("cause", "") == "poison", species + " makes the eater collapse")
+		check(host.meat_prop == null and host.eat_time < 0, "collapsing drops the meal from the hand")
+		var ambulance = host.injuries._ambulance(int(record.get("ambulance", -1)))
+		check(not ambulance.is_empty() and ambulance.role == "ambulance" and ambulance.target_key == "player:host", "an ambulance drives to the poisoned player")
+		check(host.course.red_flag and host.injuries.red_flag(), "poisoning red-flags the stage like a casualty")
+		check(host.injuries.hud_line().begins_with(Loc.t("ОТРАВЛЕНИЕ · СКОРАЯ В ПУТИ · %d М").get_slice("·", 0)), "HUD names the poisoning while the ambulance comes")
+		host.injuries._stand("player:host", record)
+		check(not host.injuries.down and host.injuries.limp > 0, "medics get the poisoned player up as after a hit")
+		host.injuries.records.clear()
+		host.injuries.limp = 0.0
+		host.racers = host.racers.filter(func(racer): return racer.get("role", "") != "ambulance")
 		check(not host.foraging.consume("mushroom", "", -1), "empty skewer cannot retrigger the effect")
 		host._cancel_eat()
 		guest.foraging.apply_snapshot(host.foraging.snapshot())
@@ -73,6 +86,14 @@ func run() -> void:
 	guest.walker = host.grill.position
 	host.room._apply_command({"action": "eat_mushroom", "player": "guest", "state": guest.room.local_state(), "placement": {"source": -1}})
 	check(not host.mushroom_effect.overlay.visible, "remote consumption leaves the host's colors normal")
+	check(not host.injuries.down and host.injuries.records.get("player:guest", {}).get("cause", "") == "poison", "a guest's poisoning lays the guest down, not the host")
+	guest.injuries.apply_snapshot(host.injuries.snapshot())
+	check(guest.injuries.down and guest.toast_label.text == Loc.t(guest.injuries.PoisonCollapse.TOAST), "the guest collapses and reads why")
+	check(guest.injuries.hud_line().begins_with(Loc.t("ОТРАВЛЕНИЕ · СКОРАЯ В ПУТИ · %d М").get_slice("·", 0)), "guest HUD names the poisoning")
+	host.injuries.records.clear()
+	guest.injuries.apply_snapshot(host.injuries.snapshot())
+	check(not guest.injuries.down, "guest stands up when the host's record clears")
+	guest.injuries.limp = 0.0
 	# Effects carry the host's end time; the shared clock (elapsed) is replicated.
 	guest.elapsed = host.elapsed
 	guest.foraging.apply_snapshot(host.foraging.snapshot())
