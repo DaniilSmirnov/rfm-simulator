@@ -35,7 +35,9 @@ class FakeLink:
 	func send_packet(packet: PackedByteArray) -> bool:
 		sent.append(packet)
 		return true
-	func pull(frames: int, _rate: int, _volume: float, _cutoff: float, _noise: float) -> PackedVector2Array:
+	var pulled := []
+	func pull(frames: int, _rate: int, volume: float, cutoff: float, noise: float) -> PackedVector2Array:
+		pulled = [volume, cutoff, noise]
 		var out = PackedVector2Array()
 		out.resize(frames)
 		return out
@@ -122,12 +124,11 @@ func mesh_rules() -> void:
 	# Push-to-talk sends only while the key is held and only to linked members.
 	nodes.a.tick([{"id": "b", "distance": 320.0, "talking": true}])
 	check(nodes.a.peers.b.distance == 320.0 and nodes.a.peers.b.talking, "levels reach the peer")
-	check(VoiceNative.quality(nodes.a.bands, 5.0).level == 1 and VoiceNative.quality(nodes.a.bands, 600.0).level == 5, "distance bands come from net_protocol.json")
-	check(VoiceNative.quality(nodes.a.bands, 600.0).volume < VoiceNative.quality(nodes.a.bands, 5.0).volume, "farther radios are quieter")
 	nodes.a.audio_enabled = true
 	nodes.a._pump_speakers()
 	nodes.a.audio_enabled = false
 	check(nodes.a.peers.b.player != null and nodes.a.peers.b.player.bus == &"Radio" and AudioServer.get_bus_index(VoiceNative.RADIO_BUS) > 0, "voices play through the radio's own bus")
+	check(nodes.a.peers.b.link.pulled == [1.0, VoiceNative.CUTOFF, 0.0], "a far radio is as loud and clean as a near one, without hiss")
 	nodes.a.set_ptt(true)
 	check(nodes.a.mic == "unavailable", "without audio input the radio stays receive-only")
 	check(nodes.a.tick([]).events.any(func(e): return e.type == "mic"), "the microphone state is reported")
