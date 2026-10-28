@@ -84,13 +84,6 @@ function room(ids, options) {
   return clients;
 }
 
-test('radio quality follows distance bands', () => {
-  const q = load().voice.quality;
-  assert.deepEqual([0, 31, 101, 251, 501].map(d => q(d).level), [1, 2, 3, 4, 5]);
-  for (const key of ['volume', 'cutoff']) assert.ok(q(0)[key] > q(600)[key], key + ' falls with distance');
-  assert.ok(q(0).noise < q(600).noise);
-});
-
 // Records the Web Audio graph: which node feeds which.
 class FakeAudio {
   constructor() { this.destination = { kind: 'destination' }; this.nodes = []; this.currentTime = 0; this.sampleRate = 8000; this.state = 'running'; }
@@ -105,7 +98,6 @@ class FakeAudio {
   createBiquadFilter() { return this.node('filter', ['frequency']); }
   createBufferSource() { return this.node('noise'); }
   createMediaStreamSource() { return this.node('voice'); }
-  createBuffer(_c, length) { return { getChannelData: () => new Float32Array(length) }; }
 }
 
 test('voices are boosted, limited and then follow the radio volume', () => {
@@ -251,12 +243,17 @@ test('the radio flag reaches other members through the room server', () => {
   assert.equal(reply.players.find(p => p.id === h.player).state.radio, false);
 });
 
-test('browser and native radios share the distance bands', () => {
-  const protocol = JSON.parse(readFileSync(new URL('../game/data/net_protocol.json', import.meta.url), 'utf8'));
-  const q = load().voice.quality;
-  for (const band of protocol.voice.bands) {
-    const at = band.max < 0 ? 10000 : band.max;
-    const got = q(at);
-    assert.deepEqual([got.volume, got.noise, got.cutoff], [band.volume, band.noise, band.cutoff], `band up to ${band.max} m`);
-  }
+test('a far radio is as loud and clean as a near one, without hiss', () => {
+  let ctx;
+  const { voice } = load({ AudioContext: class extends FakeAudio { constructor() { super(); ctx = this; } } });
+  voice.join({ localId: 'a', session: 'session-a' });
+  voice.syncMembers(['a', 'b']);
+  voice.state.peers.get('b').pc.ontrack({ streams: [{}] });
+  voice.tick(JSON.stringify([{ id: 'b', distance: 5000, talking: true }]));
+  assert.equal(voice.state.peers.get('b').audio.gain.gain.value, 1);
+  assert.ok(!ctx.nodes.some(n => n.kind === 'noise'), 'no noise source is made');
+  assert.deepEqual(ctx.nodes.filter(n => n.kind === 'filter').map(n => n.frequency.value), [300, 3400]);
+  voice.mute('b');
+  assert.equal(voice.state.peers.get('b').audio.gain.gain.value, 0);
+  voice.leave();
 });

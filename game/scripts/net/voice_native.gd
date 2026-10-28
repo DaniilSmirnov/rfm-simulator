@@ -50,9 +50,9 @@ var released_at := 0
 var mic_player: AudioStreamPlayer
 var capture: AudioEffectCapture
 var encoder: RefCounted
-var bands: Array = []
-
 const LIBRARY_DIR = "res://addons/rally_voice/bin"
+# Every radio sounds the same at any distance: a clean voice band, no hiss.
+const CUTOFF = 3400.0
 
 # The library for this platform ships inside the pack (see build-voice.mjs).
 static func supported() -> bool:
@@ -105,16 +105,6 @@ static func load_extension() -> bool:
 	if status != GDExtensionManager.LOAD_STATUS_OK and status != GDExtensionManager.LOAD_STATUS_ALREADY_LOADED:
 		push_warning("Radio extension did not load (%d)" % status)
 	return ClassDB.class_exists("RallyVoiceLink")
-
-func _ready() -> void:
-	bands = NetProtocol.spec.get("voice", {}).get("bands", [])
-
-static func quality(bands_list: Array, distance: float) -> Dictionary:
-	for i in range(bands_list.size()):
-		var band: Dictionary = bands_list[i]
-		if float(band.max) < 0 or distance <= float(band.max):
-			return {"level": i + 1, "volume": float(band.volume), "noise": float(band.noise), "cutoff": float(band.cutoff)}
-	return {"level": 1, "volume": 1.0, "noise": 0.0, "cutoff": 3400.0}
 
 # ---------------------------------------------------------------- room
 
@@ -418,9 +408,7 @@ func _pump_speakers() -> void:
 		var frames = playback.get_frames_available()
 		if frames <= 0:
 			continue
-		var q = quality(bands, float(peer.distance))
-		var silent = muted.has(peer.id)
-		playback.push_buffer(peer.link.pull(frames, rate, 0.0 if silent else q.volume, q.cutoff, 0.0 if silent or not peer.talking else q.noise * 0.25))
+		playback.push_buffer(peer.link.pull(frames, rate, 0.0 if muted.has(peer.id) else 1.0, CUTOFF, 0.0))
 
 func mute(id: String, value: bool = true) -> void:
 	if value:

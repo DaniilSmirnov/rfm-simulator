@@ -10,14 +10,8 @@
  *   tick(json)             [{id, distance, talking}] -> JSON {signals, mic, events}
  */
 (() => {
-  // Distance bands (metres): farther radios are quieter, narrower and noisier.
-  const BANDS = Object.freeze([
-    { max: 30, volume: 1, noise: 0, cutoff: 3400 },
-    { max: 100, volume: 0.92, noise: 0.04, cutoff: 3200 },
-    { max: 250, volume: 0.72, noise: 0.12, cutoff: 2700 },
-    { max: 500, volume: 0.45, noise: 0.24, cutoff: 2100 },
-    { max: Infinity, volume: 0.15, noise: 0.4, cutoff: 1500 },
-  ]);
+  // Every radio sounds the same at any distance: a clean voice band, no hiss.
+  const CUTOFF = 3400;
   // The first redial is quick (a reload), later ones back off like the direct link.
   const FIRST_RETRY_MS = 1000;
   const RETRY_MS = 20000;
@@ -35,14 +29,8 @@
   };
   const outgoing = [];
   const events = [];
-  let context = null, master = null, fader = null, noiseBuffer = null;
+  let context = null, master = null, fader = null;
   let volume = 1;
-
-  function quality(distance) {
-    const d = Math.max(0, Number(distance) || 0);
-    const level = BANDS.findIndex(band => d <= band.max);
-    return { level: level + 1, ...BANDS[level] };
-  }
 
   function send(to, data) {
     if (outgoing.length >= MAX_QUEUE) outgoing.shift();
@@ -75,9 +63,6 @@
     fader = context.createGain();
     fader.gain.value = volume;
     master.connect(boost).connect(limiter).connect(fader).connect(context.destination);
-    noiseBuffer = context.createBuffer(1, context.sampleRate, context.sampleRate);
-    const samples = noiseBuffer.getChannelData(0);
-    for (let i = 0; i < samples.length; i++) samples[i] = Math.random() * 2 - 1;
     return context;
   }
 
@@ -108,32 +93,18 @@
     highpass.frequency.value = 300;
     const lowpass = ctx.createBiquadFilter();
     lowpass.type = 'lowpass';
+    lowpass.frequency.value = CUTOFF;
     const gain = ctx.createGain();
     gain.gain.value = 0;
     source.connect(highpass).connect(lowpass).connect(gain).connect(master);
-    const noise = ctx.createBufferSource();
-    noise.buffer = noiseBuffer;
-    noise.loop = true;
-    const hiss = ctx.createBiquadFilter();
-    hiss.type = 'bandpass';
-    hiss.frequency.value = 2000;
-    const noiseGain = ctx.createGain();
-    noiseGain.gain.value = 0;
-    noise.connect(hiss).connect(noiseGain).connect(master);
-    noise.start();
-    peer.audio = { element, source, lowpass, gain, noise, noiseGain };
+    peer.audio = { element, source, gain };
     applyLevels(peer);
   }
 
   function applyLevels(peer) {
     const audio = peer.audio;
     if (!audio || !context) return;
-    const q = quality(peer.distance);
-    const silent = state.muted.has(peer.id);
-    const now = context.currentTime;
-    audio.gain.gain.setTargetAtTime(silent ? 0 : q.volume, now, 0.05);
-    audio.lowpass.frequency.setTargetAtTime(q.cutoff, now, 0.05);
-    audio.noiseGain.gain.setTargetAtTime(silent || !peer.talking ? 0 : q.noise * 0.25, now, 0.03);
+    audio.gain.gain.setTargetAtTime(state.muted.has(peer.id) ? 0 : 1, context.currentTime, 0.05);
   }
 
   // ------------------------------------------------------------- connections
@@ -200,10 +171,8 @@
     peer.pc.onnegotiationneeded = peer.pc.onicecandidate = peer.pc.ontrack = peer.pc.onconnectionstatechange = null;
     peer.pc.close();
     if (peer.audio) {
-      peer.audio.noise.stop();
       peer.audio.source.disconnect();
       peer.audio.gain.disconnect();
-      peer.audio.noiseGain.disconnect();
       peer.audio.element.srcObject = null;
       peer.audio.element.remove();
     }
@@ -396,5 +365,5 @@
   document.addEventListener('visibilitychange', () => { if (document.hidden) releasePtt(); });
   for (const name of ['pointerdown', 'keydown', 'touchend']) addEventListener(name, resumeAudio, { capture: true, passive: true });
 
-  window.RallyVoice = { join, leave, syncMembers, onSignal, setPtt, setVolume, ringAgain, update, mute, poll, tick, bridge, quality, state };
+  window.RallyVoice = { join, leave, syncMembers, onSignal, setPtt, setVolume, ringAgain, update, mute, poll, tick, bridge, state };
 })();
