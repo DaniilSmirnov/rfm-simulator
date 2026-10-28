@@ -35,6 +35,7 @@ const Perches = preload("res://scripts/player/perches.gd")
 const Navigation = preload("res://scripts/people/crowd_navigation.gd")
 const Budget = preload("res://scripts/people/navigation_budget.gd")
 const Loc = preload("res://scripts/ui/loc.gd")
+const PoisonCollapse = preload("res://scripts/people/poison_collapse.gd")
 const LIMP_SECONDS = 60.0
 const LIMP_FACTOR = 0.55
 # Terrain collision under a flight: PATCH × PATCH vertices, one metre apart.
@@ -549,6 +550,7 @@ func snapshot() -> Array:
 		var rot: Vector3 = r.rot
 		var entry = {"key": key, "phase": r.phase, "pos": [snappedf(p.x, 0.01), snappedf(p.y, 0.01), snappedf(p.z, 0.01)], "rot": [snappedf(rot.x, 0.01), snappedf(rot.y, 0.01), snappedf(rot.z, 0.01)]}
 		entry.play = r.get("play", false)
+		entry.cause = r.get("cause", "hit")
 		if r.phase == "limp":
 			entry.limp = snappedf(float(r.limp), 0.1)
 		else:
@@ -600,7 +602,7 @@ func apply_snapshot(entries: Array) -> void:
 			_go_down()
 			# The host announces a struck friend; the one struck reads it as theirs.
 			if not bool(mine.get("play", false)):
-				game.toast("Тебя сбила машина! Лежи — скорая уже выехала со старта.")
+				game.toast(PoisonCollapse.TOAST if str(mine.get("cause", "")) == "poison" else "Тебя сбила машина! Лежи — скорая уже выехала со старта.")
 	elif was_down:
 		var spot = game.walker
 		if mine != null:
@@ -614,7 +616,7 @@ func apply_snapshot(entries: Array) -> void:
 func _go_down() -> void:
 	down = true
 	game.seated = false
-	game.eat_time = -1.0
+	game._cancel_eat()
 	if game.drink_time >= 0:
 		game._cancel_drink()
 	if local_avatar == null:
@@ -656,7 +658,7 @@ func hud_line() -> String:
 		if treating(local_key()):
 			return Loc.t("МЕДИКИ ОКАЗЫВАЮТ ПОМОЩЬ")
 		var metres = eta(local_key())
-		return Loc.t("ТЕБЯ СБИЛИ · СКОРАЯ В ПУТИ · %d М") % int(metres) if metres >= 0.0 else Loc.t("ТЕБЯ СБИЛИ · СКОРАЯ ВЫЕЗЖАЕТ")
+		return PoisonCollapse.waiting_line(records.get(local_key(), targets.get(local_key(), {})), metres)
 	if limp > 0.0:
 		return Loc.t("ХРОМАЕШЬ · БЕЗ БЕГА И ПРЫЖКОВ · %d С") % ceili(limp)
 	return ""

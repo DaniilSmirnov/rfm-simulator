@@ -1,6 +1,7 @@
 extends RefCounted
 const Props = preload("res://scripts/core/props.gd")
 const Loc = preload("res://scripts/ui/loc.gd")
+const PoisonCollapse = preload("res://scripts/people/poison_collapse.gd")
 const GRILL_SECONDS = 10.0
 var game: Node3D
 var inventories: Dictionary = {}
@@ -148,6 +149,7 @@ func consume(kind: String, owner: String = "", source: int = -2) -> bool:
 		effects[key] = {"serial": serial, "until": game.elapsed + 10.0}
 		if key == game.chair_owner():
 			game.mushroom_effect.trigger(serial)
+		if not PoisonCollapse.collapse(game.injuries, "player:" + key, game.actor_pos()) and key == game.chair_owner():
 			game.toast("Отравление! Движение замедлено на 10 секунд.")
 	update_visuals()
 	return true
