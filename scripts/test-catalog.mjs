@@ -46,7 +46,7 @@ export const nodeSuites = Object.freeze({
    "tests/audio-recovery.test.mjs"],
   ["scripts/test-device.mjs"],
  ],
- simulation: [["--test", "tests/room-core.test.mjs", "tests/room-socket.test.mjs", "tests/room-session.test.mjs", "tests/protocol.test.mjs", "tests/world-validation.test.mjs"]],
+ simulation: [["--test", "tests/room-core.test.mjs", "tests/p2p-rooms-contract.test.mjs", "tests/room-socket.test.mjs", "tests/room-session.test.mjs", "tests/protocol.test.mjs", "tests/world-validation.test.mjs"]],
  world: [],
 });
 export const groupDescriptions = Object.freeze({

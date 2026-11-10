@@ -1,0 +1,9 @@
+; Test and example project for the P2PRooms addon. Copy addons/p2p_rooms into
+; your own project to use it.
+config_version=5
+
+[application]
+
+config/name="P2P Rooms"
+run/main_scene="res://example/lobby.tscn"
+config/features=PackedStringArray("4.4")
