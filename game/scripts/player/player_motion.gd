@@ -283,7 +283,7 @@ func jump() -> bool:
 	game.jump_velocity = game.JUMP_SPEED
 	return true
 
-func update_camera(delta: float) -> void:
+func update_camera(delta: float, snap: bool = false) -> void:
 	if game.capture_mode:
 		return
 	if game.injuries.down:
@@ -295,16 +295,13 @@ func update_camera(delta: float) -> void:
 	if game.in_car:
 		var body: Node3D = game.rides.vehicle()
 		var travel_yaw = game.rides.heading() + (PI if game.rides.speed() < -0.5 else 0.0)
-		game.view_yaw = lerp_angle(game.view_yaw, travel_yaw, 1.0 - exp(-delta * 2.8))
+		game.view_yaw = travel_yaw if snap else lerp_angle(game.view_yaw, travel_yaw, 1.0 - exp(-delta * 2.8))
 		var behind = Vector3(sin(game.view_yaw), 0, cos(game.view_yaw))
 		var elevation = clampf(atan2(4.4, 8.2) - (game.view_pitch + 0.12), 0.14, 1.25)
 		var distance = Vector2(8.2, 4.4).length()
 		var desired = body.position + behind * cos(elevation) * distance + Vector3.UP * sin(elevation) * distance
 		desired.y = maxf(desired.y, game.stage.ground(desired) + 1.1)
-		var eased = game.camera.position.lerp(desired, 1 - exp(-delta * 7))
-		# Snap in front of a tent roof or a crown at once; ease back out.
-		var reach = Hitbox.bounds(body).size.length() * 0.5 + 1.0
-		game.camera.position = ViewClearance.chase_view(game.stage, body.position + Vector3(0, 1.1, 0), eased, body, reach)
+		game.camera.position = chase_position(delta, body, desired, not snap)
 		game.camera.look_at(body.position + Vector3(0, 1.1, 0) - behind * 1.5)
 	else:
 		game.camera.position = game.walker + Vector3(0, lerpf(1.45 if game.seated else 1.72, 0.36, collapse) + sin(game.elapsed * 12) * 0.015, 0)
@@ -316,6 +313,34 @@ func update_camera(delta: float) -> void:
 	game.camera.rotation.z += sin(game.drunk_phase) * deg_to_rad(3.0) * game.drunk_strength + PI / 2 * collapse
 	game.camera.rotation.x += sin(game.drunk_phase * 2.0) * deg_to_rad(0.6) * game.drunk_strength
 	game.camera.position += Vector3(sin(game.elapsed * 91), cos(game.elapsed * 73), 0) * game.impact_shake * 0.12
+
+# Puts the view straight where it settles: behind the car along its heading,
+# or at the fan's eyes. The stage starts here instead of swinging in from the
+# menu camera and slewing around the parked car for its first seconds.
+func snap_camera() -> void:
+	if game.camera != null:
+		update_camera(0.0, true)
+
+# The chase camera eases toward the clear spot behind the car (in front of a
+# tent roof or a crown that hides `desired`), never farther from the car than
+# that spot: it snaps in front of scenery at once and eases back out. The
+# clear spot is found from `desired`, not from last frame's camera, so a
+# parked car's camera settles instead of hopping between two spots at a
+# crown's edge every frame.
+func chase_position(delta: float, body: Node3D, desired: Vector3, ease: bool = true) -> Vector3:
+	var pivot = body.position + Vector3(0, 1.1, 0)
+	var reach = Hitbox.bounds(body).size.length() * 0.5 + 1.0
+	var target = ViewClearance.chase_view(game.stage, pivot, desired, body, reach)
+	if not ease:
+		return target
+	var eased = game.camera.position.lerp(target, 1 - exp(-delta * 7))
+	var limit = pivot.distance_to(target)
+	if pivot.distance_to(eased) > limit:
+		eased = pivot + (eased - pivot).normalized() * limit
+	# Scenery that newly cuts across the eased line (the car turned behind a
+	# tree) still pulls the camera in front of it at once.
+	var seen = ViewClearance.clear_view(game.stage, pivot, eased, body)
+	return seen if pivot.distance_to(seen) < pivot.distance_to(eased) - 0.5 else eased
 
 # Getting into a car (own or a friend's) needs free hands and firm feet.
 func can_change_seat() -> bool:

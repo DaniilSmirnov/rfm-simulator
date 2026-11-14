@@ -434,7 +434,7 @@ func start_game() -> void:
 	course_label.text = course.caption()
 	for panel in hud_panels:
 		panel.show()
-	mobile_sidebar.show()
+	mobile_sidebar.show(); player.snap_camera() # the view starts settled behind the car
 	_request_game_mouse_capture()
 	toast("Найди подходящее место и разложи лагерь. Установка стола засчитывает выбор места.")
 	if not ("--script" in OS.get_cmdline_args() or "--smoke-test" in OS.get_cmdline_user_args() or "--capture" in OS.get_cmdline_user_args() or "--capture-menu" in OS.get_cmdline_user_args() or "--dedicated" in OS.get_cmdline_user_args()):

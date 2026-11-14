@@ -46,6 +46,10 @@ static func chase_view(stage, pivot: Vector3, to: Vector3, car: Node3D, reach: f
 	return best
 
 # Fraction of from..to before it first enters a standing tree's crown (1 = never).
+# The entry is refined between samples and the point it gives is still outside
+# the crown, so a camera put there finds the same line clear on the next frame
+# (a coarse first-sample-inside answer made a parked chase camera hop between
+# two spots every frame at a crown's edge).
 static func crown_fraction(stage, from: Vector3, to: Vector3) -> float:
 	if stage.trees.is_empty():
 		return 1.0
@@ -65,9 +69,21 @@ static func crown_fraction(stage, from: Vector3, to: Vector3) -> float:
 			if f >= best:
 				break
 			if in_crown(base, height, from.lerp(to, f)):
-				best = f
+				best = minf(best, _entry(base, height, from, to, maxf(0.0, f - 1.0 / STEPS), f))
 				break
 	return best
+
+# The last clear fraction in (outside, inside], to a few centimetres.
+static func _entry(base: Vector3, height: float, from: Vector3, to: Vector3, outside: float, inside: float) -> float:
+	if in_crown(base, height, from.lerp(to, outside)):
+		return outside
+	for i in range(8):
+		var mid = (outside + inside) * 0.5
+		if in_crown(base, height, from.lerp(to, mid)):
+			inside = mid
+		else:
+			outside = mid
+	return outside
 
 static func in_crown(base: Vector3, height: float, p: Vector3, margin: float = MARGIN) -> bool:
 	var bottom = height * CROWN_BOTTOM
