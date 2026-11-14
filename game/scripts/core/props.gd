@@ -4,6 +4,7 @@ const CampingHatchbackModel = preload("res://scripts/cars/camping_hatchback_mode
 const CarParts = preload("res://scripts/cars/car_parts.gd")
 const MeshMerge = preload("res://scripts/core/mesh_merge.gd")
 const BlockText = preload("res://scripts/core/block_text.gd")
+const NightLights = preload("res://scripts/core/night_lights.gd")
 const FOOD_PORTIONS = 10
 const CARGO_KINDS = ["table", "chairs", "grill", "firewood", "cauldron", "shovel"]
 const MUSHROOM_TEXTURES = {
@@ -556,6 +557,7 @@ static func course_car(role: String, zero_index: int = 0) -> Node3D:
 	node.set_meta("number", 0)
 	node.set_meta("role", role)
 	for light in [node.get_node("BeaconBlue"), node.get_node("BeaconRed")]:
+		NightLights.mark(light, "beacon_blue" if light.name == "BeaconBlue" else "beacon_red")
 		unique_material(light)
 		light.material_override.emission_enabled = true
 		light.material_override.emission = light.material_override.albedo_color
@@ -703,6 +705,7 @@ static func judges_car() -> Node3D:
 	box(car, Vector3(0, 1.58, 0.1), Vector3(0.95, 0.07, 0.24), Color("293339"))
 	var beacon = cylinder(car, Vector3(0, 1.72, 0.1), 0.12, 0.09, 0.22, Color("ffb52b"), 8)
 	beacon.name = "AmberBeacon"
+	NightLights.mark(beacon, "beacon_amber")
 	unique_material(beacon)
 	beacon.material_override.emission_enabled = true
 	beacon.material_override.emission = Color("ffaf26")

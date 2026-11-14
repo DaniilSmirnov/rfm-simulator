@@ -62,6 +62,7 @@ func run() -> void:
 	check(ui.daytime_choice.selected == 0 and ui.weather_choice.selected == 2, "the pickers show the room's conditions")
 	sky.apply_snapshot({"time": "noon", "weather": "rain"})
 	check(sky.daytime == "day" and sky.weather == "sun", "unknown or unfitting values fall back to day and sun")
+	await check_night_lights(game)
 	var validation = load("res://scripts/net/world_validation.gd")
 	check(validation.valid({"sky": shared}) and not validation.valid({"sky": {"time": 1}}), "the world schema checks the sky section")
 	game.queue_free()
@@ -84,3 +85,44 @@ func check_looks() -> void:
 		check(float(fog.environment.fog_density) > 0.015, "fog closes in (%d)" % i)
 		var rain = SkyWeather.look(i, "day", "rain")
 		check(float(rain.sun.energy) < float(day.sun.energy) and float(rain.environment.fog_density) > float(day.environment.fog_density), "rain is overcast (%d)" % i)
+
+# Campfires, lit grills and roof beacons light up at night, the nearest within
+# the budget; by day the lights go.
+func check_night_lights(game) -> void:
+	var NightLights = load("res://scripts/core/night_lights.gd")
+	var at = game.stage.at(300)
+	var fire = game.Props.campfire(game)
+	fire.position = at
+	var police = game.Props.course_car("police")
+	game.add_child(police)
+	police.position = at + Vector3(8, 0, 0)
+	var judges = game.Props.judges_car()
+	game.add_child(judges)
+	judges.position = at + Vector3(-8, 0, 0)
+	var grill = load("res://scripts/camp/grill_model.gd").build(game)
+	grill.position = at + Vector3(0, 0, 6)
+	load("res://scripts/camp/grill_model.gd").set_fire(grill, 1.0, 1.0)
+	var far_fire = game.Props.campfire(game)
+	far_fire.position = at + Vector3(0, 0, 400)
+	var lights = NightLights.new()
+	lights.update(self, false, at, 0.5)
+	check(fire.get_node_or_null(NightLights.LIGHT_NAME) == null, "no fire light by day")
+	lights.update(self, true, at, 0.5)
+	check(fire.get_node_or_null(NightLights.LIGHT_NAME) is OmniLight3D, "a campfire lights up at night")
+	check(grill.get_node("GrillFire").get_node_or_null(NightLights.LIGHT_NAME) is OmniLight3D, "a lit grill glows at night")
+	check(police.get_node("BeaconBlue").get_node_or_null(NightLights.LIGHT_NAME) is OmniLight3D and police.get_node("BeaconRed").get_node_or_null(NightLights.LIGHT_NAME) is OmniLight3D, "police beacons light up at night")
+	var amber = judges.find_child("AmberBeacon", true, false)
+	check(amber != null and amber.get_node_or_null(NightLights.LIGHT_NAME) is OmniLight3D, "the judges' amber beacon lights up at night")
+	check(far_fire.get_node_or_null(NightLights.LIGHT_NAME) == null, "a fire far from the camera stays unlit")
+	for i in range(NightLights.BUDGET.fire + 2):
+		var extra = game.Props.campfire(game)
+		extra.position = at + Vector3(i * 0.5, 0, -20)
+	lights.update(self, true, at, 0.5)
+	var lit = 0
+	for node in get_nodes_in_group(NightLights.GROUP):
+		if node.get_meta("night_light") in ["fire", "grill"] and node.get_node_or_null(NightLights.LIGHT_NAME) != null:
+			lit += 1
+	check(lit == NightLights.BUDGET.fire, "only the nearest fires are lit (%d)" % lit)
+	lights.update(self, false, at, 0.5)
+	await process_frame
+	check(fire.get_node_or_null(NightLights.LIGHT_NAME) == null and police.get_node("BeaconBlue").get_node_or_null(NightLights.LIGHT_NAME) == null, "the lights go out by day")

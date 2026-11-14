@@ -1,7 +1,8 @@
 extends Node
 # Time of day and weather on the stage: the sky, fog, ambient light and sun of
 # data/stages.json, changed by the conditions picked on the stage card, plus
-# falling rain or snow around the camera, headlights at night and the grip
+# falling rain or snow around the camera, headlights, fires and beacons at
+# night (night_lights.gd) and the grip
 # rain and snow take off the road (stage.weather_grip; the sound is in
 # soundscape.gd).
 # Rain falls only on stages without snow, snow only on snowy ones
@@ -48,6 +49,8 @@ var sun: DirectionalLight3D
 var fall: GPUParticles3D
 var _last_camera = Vector3.INF
 var _drift = Vector3.ZERO
+# Campfires, grills and beacons that light their surroundings at night.
+var night_lights = preload("res://scripts/core/night_lights.gd").new()
 
 static func night_or_day(value) -> String:
 	return str(value) if str(value) in DAYTIMES else "day"
@@ -239,6 +242,9 @@ func _process(delta: float) -> void:
 		_last_camera = at
 		fall.position = _fall_origin(FALL[weather])
 	_update_headlights()
+	var camera: Camera3D = game.camera
+	if camera != null and camera.is_inside_tree():
+		night_lights.update(get_tree(), daytime == "night", camera.global_position, delta)
 
 # Cars on the stage switch their lights on at night: the player's and those
 # of the other room members.
