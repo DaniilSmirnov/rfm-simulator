@@ -50,13 +50,17 @@ func run() -> void:
 		await process_frame
 		check(node.global_position.distance_to(walk_start) < 0.01, "%s into a prop does not push it" % ("running" if sprint else "walking"))
 		check(game.walker.x > walk_start.x + 0.3, "the prop still stops a walker (%s)" % ("running" if sprint else "walking"))
-	check(props.knock("test:prop", Vector3(-1.5, 0, 0)), "a car hit moves the prop")
+	# A slow car (9 km/h): at 1.5 m/s the crate only rocked on its edge.
+	check(props.knock("test:prop", Vector3(-2.5, 0, 0)), "a car hit moves the prop")
 	for i in range(60):
 		props.update({}, {}, 1.0 / 60.0)
 		await physics_frame
 	await process_frame
 	check(node.global_position.distance_to(walk_start) > 0.05, "the car hit slides the prop (%.2f m)" % node.global_position.distance_to(walk_start))
-	var hit = game.stage.solids.hit(pos + Vector3(-3, 0.4, 0), node.position + Vector3(0, 0.4, 0), 0.1)
+	# A car hit can tip the crate onto its side: aim at its middle, not 0.4 m
+	# above its (now sideways) origin.
+	var middle: Vector3 = node.global_transform * Vector3(0, 0.4, 0)
+	var hit = game.stage.solids.hit(middle + Vector3(-3, 0, 0), middle, 0.1)
 	check(hit.get("prop", "") == "test:prop", "collision follows the moving prop")
 	var data = props.snapshot()
 	var saved = node.global_position
@@ -64,12 +68,14 @@ func run() -> void:
 	for item in shifted:
 		if item.key == "test:prop": item.pos[0] += 40
 	props.apply_snapshot(shifted)
-	var moved: Vector3 = node.position + Vector3.UP * 0.4
+	var moved: Vector3 = node.global_transform * Vector3(0, 0.4, 0)
 	check(game.stage.solids.hit(moved - Vector3.RIGHT * 2, moved + Vector3.RIGHT * 2, 0.1).get("prop", "") == "test:prop", "replication updates collision across spatial cells in the same frame")
 	check(game.stage.solids.hit(saved - Vector3.RIGHT * 2, saved + Vector3.RIGHT * 2, 0.1).get("prop", "") != "test:prop", "moving an indexed prop leaves no collision at its former position")
 	props.apply_snapshot(data)
 	check(node.global_position.distance_to(saved) < 0.01, "network snapshot restores prop transform")
 	var placed: Vector3 = saved + Vector3(4, 0, 0)
+	# Placing stands the item upright on the ground, wherever it lay before.
+	placed.y = game.stage.ground(placed)
 	game.camp_actions.ground_item(node, placed, 0.3)
 	await physics_frame
 	await physics_frame
