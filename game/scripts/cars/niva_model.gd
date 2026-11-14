@@ -8,6 +8,7 @@ extends RefCounted
 # leaves them alone; only the tailgate assembly pivots on TrunkHinge.
 const P = preload("res://scripts/core/props.gd")
 const CarParts = preload("res://scripts/cars/car_parts.gd")
+const CarLamps = preload("res://scripts/cars/car_lamps.gd")
 const VARIANT = 2
 const HINGE = Vector3(0.0, 1.56, 1.42)
 const WHEEL_RADIUS = 0.34
@@ -152,7 +153,7 @@ static func _front(parts: Node3D, trim: Color) -> void:
 		var rim = P.cylinder(parts, Vector3(side * 0.59, 0.83, -1.89), 0.135, 0.135, 0.03, LAMP_RIM, 16)
 		rim.rotation.x = PI / 2
 		rim.name = "NivaHeadlampRim"
-		var lens = P.cylinder(parts, Vector3(side * 0.59, 0.83, -1.903), 0.108, 0.108, 0.02, LENS, 16)
+		var lens = CarLamps.mark(P.cylinder(parts, Vector3(side * 0.59, 0.83, -1.903), 0.108, 0.108, 0.02, LENS, 16), "head")
 		lens.rotation.x = PI / 2
 		_box(parts, Vector3(side * 0.56, 0.87, -1.915), Vector3(0.05, 0.03, 0.01), Color("f6f6ee"))
 		_box(parts, Vector3(side * 0.59, 0.645, -1.886), Vector3(0.18, 0.05, 0.03), AMBER, "NivaIndicator")
@@ -188,7 +189,7 @@ static func _rear(parts: Node3D, trim: Color) -> void:
 	for side in [-1.0, 1.0]:
 		var x = side * 0.755
 		_box(parts, Vector3(x, 0.905, 1.886), Vector3(0.13, 0.05, 0.02), AMBER, "NivaRearIndicator")
-		_box(parts, Vector3(x, 0.82, 1.886), Vector3(0.13, 0.11, 0.02), RED, "NivaTailLamp")
+		CarLamps.mark(_box(parts, Vector3(x, 0.82, 1.886), Vector3(0.13, 0.11, 0.02), RED, "NivaTailLamp"), "tail")
 		_box(parts, Vector3(x, 0.735, 1.886), Vector3(0.13, 0.05, 0.02), REVERSE, "NivaReverseLamp")
 	_box(parts, Vector3(0, 0.53, 1.89), Vector3(1.66, 0.14, 0.08), trim, "NivaRearBumper")
 

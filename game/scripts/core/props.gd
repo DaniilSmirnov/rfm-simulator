@@ -1,6 +1,7 @@
 extends RefCounted
 class_name RallyProps
 const CampingHatchbackModel = preload("res://scripts/cars/camping_hatchback_model.gd")
+const CarLamps = preload("res://scripts/cars/car_lamps.gd")
 const CarParts = preload("res://scripts/cars/car_parts.gd")
 const MeshMerge = preload("res://scripts/core/mesh_merge.gd")
 const BlockText = preload("res://scripts/core/block_text.gd")
@@ -394,9 +395,9 @@ static func player_car_sport_sedan() -> Node3D:
 		for eye in range(2):
 			var x = side * (0.51 + eye * 0.20)
 			var z = -2.39 + eye * 0.043
-			box(root, Vector3(x, 0.81, z), Vector3(0.115, 0.025, 0.02), Color("edf4ff"))
+			CarLamps.mark(box(root, Vector3(x, 0.81, z), Vector3(0.115, 0.025, 0.02), Color("edf4ff")), "head")
 			for edge in [-1.0, 1.0]:
-				var led = box(root, Vector3(x + edge * 0.06, 0.846, z), Vector3(0.022, 0.07, 0.02), Color("edf4ff"))
+				var led = CarLamps.mark(box(root, Vector3(x + edge * 0.06, 0.846, z), Vector3(0.022, 0.07, 0.02), Color("edf4ff")), "head")
 				led.rotation.z = edge * 0.24
 		box(root, Vector3(side * 0.66, 0.52, -2.34), Vector3(0.39, 0.23, 0.07), black)
 		box(root, Vector3(side * 0.66, 0.51, -2.384), Vector3(0.33, 0.027, 0.015), Color("424b50"))
@@ -407,9 +408,9 @@ static func player_car_sport_sedan() -> Node3D:
 	box(root, Vector3(0, 1.015, 2.03), Vector3(1.67, 0.045, 0.12), black).name = "SportBootLip"
 	box(root, Vector3(0, 0.40, 2.35), Vector3(1.66, 0.18, 0.075), black).name = "SportRearDiffuser"
 	for side in [-1.0, 1.0]:
-		box(root, Vector3(side * 0.62, 0.84, 2.354), Vector3(0.47, 0.17, 0.04), Color("721c27")).name = "TaillightSport_%s" % side
-		box(root, Vector3(side * 0.62, 0.89, 2.38), Vector3(0.43, 0.028, 0.018), Color("eb4544"))
-		box(root, Vector3(side * 0.82, 0.84, 2.38), Vector3(0.028, 0.10, 0.018), Color("eb4544"))
+		CarLamps.mark(box(root, Vector3(side * 0.62, 0.84, 2.354), Vector3(0.47, 0.17, 0.04), Color("721c27")), "tail").name = "TaillightSport_%s" % side
+		CarLamps.mark(box(root, Vector3(side * 0.62, 0.89, 2.38), Vector3(0.43, 0.028, 0.018), Color("eb4544")), "tail")
+		CarLamps.mark(box(root, Vector3(side * 0.82, 0.84, 2.38), Vector3(0.028, 0.10, 0.018), Color("eb4544")), "tail")
 		for tip in range(2):
 			var pipe = cylinder(root, Vector3(side * (0.52 + tip * 0.16), 0.36, 2.42), 0.065, 0.065, 0.18, silver, 10)
 			pipe.rotation.x = PI / 2
@@ -444,6 +445,7 @@ static func player_car(variant: int = 0, bake: bool = true) -> Node3D:
 # lights that flash stay separate. Identical cars share the baked meshes.
 static func bake_car(car: Node3D, cache_key: String) -> Node3D:
 	load("res://scripts/cars/car_hitbox.gd").bounds(car)
+	CarLamps.build(car, cache_key)
 	MeshMerge.bake(car, cache_key)
 	var hinge = car.get_node_or_null("TrunkHinge")
 	if hinge != null:
@@ -952,6 +954,8 @@ static func add_player_trunk(root: Node3D, variant: int) -> Node3D:
 		lid.position = -hinge.position
 		lid.mesh = panel_mesh(moving)
 		lid.material_override = child.material_override
+		if child.has_meta("lamp"):
+			lid.set_meta("lamp", child.get_meta("lamp"))
 		# Preserve the existing named nodes for model details and tests.
 		child.transform = Transform3D.IDENTITY
 		if fixed.is_empty():
