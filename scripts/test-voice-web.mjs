@@ -91,13 +91,14 @@ try {
   return RallyVoice.state.peers.get('a').audio.gain.gain.value;
  }, distance);
  const near = await gain(5), far = await gain(600);
- assert.ok(near > 0.9 && far < 0.2, `distance lowers the volume (${near} -> ${far})`);
+ // Every radio sounds the same at any distance (#248): no fade with range.
+ assert.ok(near > 0.9 && Math.abs(near - far) < 1e-3, `distance keeps the volume (${near} -> ${far})`);
  // Leaving: c says bye, and the server's next roster no longer lists c.
  await pages.c.evaluate(() => RallyVoice.leave());
  for (const id of ['a', 'b']) await pages[id].evaluate(() => RallyVoice.syncMembers(['a', 'b']));
  await relay(3);
  for (const id of ['a', 'b']) assert.equal(await pages[id].evaluate(() => RallyVoice.state.peers.has('c')), false, `${id} drops c after its bye`);
- console.log('Voice radio: mesh of three, push-to-talk gating, distance levels and leaving passed');
+ console.log('Voice radio: mesh of three, push-to-talk gating, level at any distance and leaving passed');
 } finally {
  await browser.close();
  server.close();
