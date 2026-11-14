@@ -126,6 +126,42 @@ func run() -> void:
 	check(not sauna.smoke.emitting, "a friend standing up stops it")
 	game.room.peers.erase("friend")
 
+	# --- The second bench, opposite: its own seats facing the window.
+	game.walker = sauna.at(Vector3(0.3, sauna.FLOOR, 0.2))
+	face(game, sauna.bench_point(1.0))
+	target = game.interaction.current()
+	check(target.get("action", "") == "sauna" and float(target.get("value", 0.0)) == 1.0, "the opposite bench offers to steam too")
+	game.interaction.activate()
+	check(game.seated and game.walker.distance_to(sauna.seat(2)) < 0.01, "the fan sits on the opposite bench")
+	game.stand_up()
+	var friend_seat = sauna.seat(2)
+	game.room.peers["friend"] = {"id": "friend", "state": {"seated": true, "in_car": false, "pos": [friend_seat.x, friend_seat.y, friend_seat.z]}}
+	check(steam.free_seat(1.0) == 3, "a friend's seat is taken: the next one on that bench is offered")
+
+	# --- Birch whisk: whisking a friend, and being whisked.
+	game.walker = sauna.at(Vector3(0.4, sauna.FLOOR, -0.6))
+	face(game, friend_seat + Vector3(0, 0.9, 0))
+	target = game.interaction.current()
+	check(target.get("action", "") == "venik" and target.get("label", "") == "Попарить веником", "a friend in the sauna can be whisked")
+	game.interaction.activate()
+	check(steam.whisk.whipping() and game.room.local_state().get("venik", false), "whisking goes into the room state")
+	game.player.update_intoxication(0.1)
+	check(steam.whisk.held != null and steam.whisk.held.visible, "the whisk swings in the hand")
+	for i in range(30):
+		game.player.update_intoxication(0.1)
+	check(not steam.whisk.whipping() and not steam.whisk.held.visible, "a whisking lasts a few seconds")
+	var me = game.walker
+	var whisker = me + Vector3(0, 0, 1.0)
+	game.room.peers["friend"].state = {"seated": false, "in_car": false, "venik": true, "pos": [whisker.x, whisker.y, whisker.z], "yaw": 0.0}
+	steam.heat = 0.0
+	var before = steam.heat
+	game.player.update_intoxication(0.05)
+	check(game.toast_label.text == "Тебя парят веником! Ух, хорошо!" and steam.heat > before + 0.05, "a friend whisking you is felt: notice and heat")
+	game.room.peers["friend"].state.yaw = PI
+	game.player.update_intoxication(0.05)
+	check(not steam.whisk.felt.get("friend", true), "a whisker turned away misses")
+	game.room.peers.erase("friend")
+
 	# --- Outside nobody is offered to steam.
 	game.walker = sauna.at(Vector3(0, 0, sauna.HALF.y + 2.6))
 	game.walker.y = stage.ground(game.walker)

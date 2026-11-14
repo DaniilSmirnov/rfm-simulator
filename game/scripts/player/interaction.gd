@@ -211,6 +211,7 @@ func activate() -> void:
 		"beer": game.drink_beer()
 		"relief": game.player.relief.start()
 		"relief_stop": game.player.relief.stop()
-		"sauna": game.player.sauna.start()
+		"sauna": game.player.sauna.start(float(target.value))
+		"venik": game.player.sauna.whisk.start()
 		"sauna_ladle": game.player.sauna.ladle()
 

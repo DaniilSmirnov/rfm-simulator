@@ -9,6 +9,7 @@ extends RefCounted
 # on every client; who is steaming comes from the room state (seated inside),
 # so the steam and the chimney smoke show for every member (sauna_steam.gd).
 const Props = preload("res://scripts/core/props.gd")
+const Furniture = preload("res://scripts/stages/finnish_forest/sauna_furniture.gd")
 const HALF = Vector2(2.0, 1.7)
 const WALL = 0.22
 const FLOOR = 0.6
@@ -23,7 +24,8 @@ const WINDOW_ROWS = [4, 7]
 const WINDOW_X = [-1.5, 0.5]
 const BENCH_TOP = FLOOR + 0.8
 const STEP_TOP = FLOOR + 0.4
-const BENCH_X = [-1.78, -1.18]
+# Two benches face each other along the side walls (sauna_furniture.gd).
+const BENCH_DEPTH = 0.6
 const BENCH_Z = [-1.48, 0.5]
 const STOVE = Vector3(-1.2, FLOOR, 1.05)
 const LOGS = Color("7a5634")
@@ -57,18 +59,23 @@ func contains(world: Vector3) -> bool:
 	var p = local(world)
 	return absf(p.x) < HALF.x - WALL and absf(p.z) < HALF.y - WALL and p.y > FLOOR - 0.6 and p.y < TOP
 
-# Where a seated steamer's feet go (game.walker): on the upper bench near the
-# window, so that people sitting there look out at the road.
-func seat() -> Vector3:
-	return at(Vector3((BENCH_X[0] + BENCH_X[1]) * 0.5, BENCH_TOP - Props.CHAIR_SEAT, -0.9))
+# Seats on the upper benches: [side, z]. The first on each bench is nearest
+# the window. A seated steamer's feet (game.walker) go there.
+const SEATS = [[-1.0, -0.9], [-1.0, -0.1], [1.0, -0.9], [1.0, -0.1]]
+
+func bench_x(side: float) -> float:
+	return side * (HALF.x - WALL - BENCH_DEPTH * 0.5)
+
+func seat(index: int = 0) -> Vector3:
+	return at(Vector3(bench_x(SEATS[index][0]), BENCH_TOP - Props.CHAIR_SEAT, SEATS[index][1]))
 
 # Looking from the seat at the middle of the window.
-func seat_yaw() -> float:
-	var to = window_center() - seat()
+func seat_yaw(index: int = 0) -> float:
+	var to = window_center() - seat(index)
 	return atan2(-to.x, -to.z)
 
-func bench_point() -> Vector3:
-	return at(Vector3((BENCH_X[0] + BENCH_X[1]) * 0.5, BENCH_TOP + 0.1, -0.2))
+func bench_point(side: float = -1.0) -> Vector3:
+	return at(Vector3(bench_x(side), BENCH_TOP + 0.1, -0.2))
 
 func stones() -> Vector3:
 	return at(STOVE + Vector3(0, 0.82, 0))
@@ -123,6 +130,7 @@ func _walls(stage: Node3D) -> void:
 		stage.solids.solid(root, Vector3((edge[0] + edge[1]) * 0.5, (sill + head) * 0.5, back), Vector3(edge[1] - edge[0], head - sill, WALL), "building")
 	var lintel = _row_bottom(DOOR_ROWS[1] + 1)
 	stage.solids.solid(root, Vector3(0, (lintel + TOP) * 0.5, HALF.y - WALL * 0.5), Vector3(DOOR_HALF * 2.0, TOP - lintel, WALL), "building")
+	stage.solids.solid(root, STOVE + Vector3(0, 0.4, 0), Vector3(0.6, 0.8, 0.6), "building")
 	stage.solids.interior_footprints.append({"inverse": root.transform.affine_inverse(), "half": HALF})
 
 static func _within(row: int, rows: Array) -> bool:
@@ -152,20 +160,7 @@ func _roof() -> void:
 
 func _inside() -> void:
 	Props.box(root, Vector3(0, FLOOR + 0.01, 0), Vector3(HALF.x * 2.0 - WALL * 2.0, 0.02, HALF.y * 2.0 - WALL * 2.0), BOARDS.darkened(0.2))
-	# Upper bench (полок) on posts, with the lower step in front of it.
-	var length = BENCH_Z[1] - BENCH_Z[0]
-	var middle_z = (BENCH_Z[0] + BENCH_Z[1]) * 0.5
-	var depth = BENCH_X[1] - BENCH_X[0]
-	for i in range(4):
-		var x = BENCH_X[0] + depth * (i + 0.5) / 4.0
-		Props.box(root, Vector3(x, BENCH_TOP - 0.03, middle_z), Vector3(depth / 4.0 - 0.02, 0.05, length), BOARDS.lightened((i % 2) * 0.06))
-	for i in range(2):
-		var x = BENCH_X[1] + 0.2 * (i + 0.5)
-		Props.box(root, Vector3(x, STEP_TOP - 0.03, middle_z), Vector3(0.18, 0.05, length), BOARDS.lightened((i % 2) * 0.06))
-	for z in [BENCH_Z[0] + 0.1, middle_z, BENCH_Z[1] - 0.1]:
-		Props.box(root, Vector3(BENCH_X[1] - 0.05, (FLOOR + BENCH_TOP) * 0.5, z), Vector3(0.07, BENCH_TOP - FLOOR, 0.07), BOARDS.darkened(0.2))
-		Props.box(root, Vector3(BENCH_X[1] + 0.35, (FLOOR + STEP_TOP) * 0.5, z), Vector3(0.07, STEP_TOP - FLOOR, 0.07), BOARDS.darkened(0.2))
-	Props.box(root, Vector3(BENCH_X[0] + 0.03, BENCH_TOP + 0.35, middle_z), Vector3(0.04, 0.5, length), BOARDS.darkened(0.05))
+	Furniture.build(self, root)
 	# Stove (каменка): an iron box with a cage of stones on top.
 	Props.box(root, STOVE + Vector3(0, 0.33, 0), Vector3(0.6, 0.66, 0.6), IRON)
 	Props.box(root, STOVE + Vector3(0, 0.7, 0), Vector3(0.66, 0.06, 0.66), IRON.lightened(0.1))
@@ -242,13 +237,13 @@ func _interior(stage: Node3D) -> void:
 	glow.material_override.emission_energy_multiplier = 1.6
 	lamp = OmniLight3D.new()
 	interior.add_child(lamp)
-	lamp.position = Vector3(0, TOP - 0.5, 0)
+	lamp.position = Vector3(0, TOP - 0.45, 0)
 	lamp.light_color = Color("ffbf80")
 	lamp.light_energy = 0.9
 	lamp.omni_range = 3.6
 	lamp.shadow_enabled = false
 	lamp.visible = false
-	steam = _particles(Color(0.95, 0.95, 0.95, 0.16), 0.9, 24, 3.2)
+	steam = _particles(Color(0.95, 0.95, 0.95, 0.08), 0.9, 16, 3.2)
 	steam.position = STOVE + Vector3(0, 0.95, 0)
 	steam.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
 	steam.emission_sphere_radius = 0.3
