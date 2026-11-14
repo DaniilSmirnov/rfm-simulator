@@ -1,16 +1,11 @@
 extends Node3D
-# Existing cars and walkers are kinematic; expose their measured poses to props.
+# Existing cars are kinematic; expose their measured poses to props.
 const Hitbox = preload("res://scripts/cars/car_hitbox.gd")
 var game
 var bodies: Dictionary = {}
 var frame = -1
-# People who stand or sit still get no collider: a crew sitting on its camp
-# chairs, or standing at its table, overlapped them for good and kept them
-# (and everything they touch) awake. A walker pushes props for STILL_TICKS after
-# it stops, so a shove still lands.
-const STILL_TICKS = 30
-var _last: Dictionary = {}
-var _still: Dictionary = {}
+# Only cars move props: people get no collider here. Walkers and spectators
+# shoved camp gear (and squeezed it into the ground) just by walking into it.
 
 func _physics_process(_delta: float) -> void:
 	update(get_parent().tiles)
@@ -19,22 +14,6 @@ func update(tiles: Dictionary) -> void:
 	if frame == Engine.get_physics_frames(): return
 	frame = Engine.get_physics_frames()
 	var present: Dictionary = {}
-	for person in game.injuries.people():
-		if game.injuries.is_down(person.key): continue
-		var p: Vector3 = person.pos
-		if not tiles.has(Vector2i(floori(p.x / 16.0), floori(p.z / 16.0))): continue
-		var moved = not _last.has(person.key) or Vector3(_last[person.key]).distance_squared_to(p) > 0.000004
-		_last[person.key] = p
-		_still[person.key] = 0 if moved else int(_still.get(person.key, STILL_TICKS)) + 1
-		if _still[person.key] >= STILL_TICKS: continue
-		present[person.key] = true
-		var stance = Transform3D(Basis.IDENTITY, p + Vector3.UP * 0.85)
-		if not bodies.has(person.key):
-			var shape = CapsuleShape3D.new()
-			shape.radius = 0.28
-			shape.height = 1.7
-			_create(person.key, shape, stance)
-		_pose(bodies[person.key], stance)
 	var cars: Array = [game.car]
 	for peer in game.room.peers.values():
 		if peer.has("car"): cars.append(peer.car)
@@ -52,25 +31,21 @@ func update(tiles: Dictionary) -> void:
 			shape.size = box.size
 			_create(key, shape, pose)
 		_pose(bodies[key], pose)
-	for key in _last.keys():
-		if not present.has(key) and not _still.has(key):
-			_last.erase(key)
 	for key in bodies.keys():
 		if not present.has(key):
 			bodies[key].queue_free()
 			bodies.erase(key)
 
 # Moving a body, even onto the same spot, makes the physics server recheck its
-# contacts and wake every prop it touches. Spectators stand still beside the camp
-# chairs and tables, so rewriting their poses every tick kept a hundred props
-# awake for good and the physics step took most of the frame.
+# contacts and wake every prop it touches: rewriting the poses of parked cars
+# every tick kept the props around them awake for good.
 func _pose(body: Node3D, pose: Transform3D) -> void:
 	if not body.global_transform.is_equal_approx(pose):
 		body.global_transform = pose
 
 # A body is born where it stands. Created at the origin and then posed, it
 # moved there in one step: the physics took that for a kinematic velocity of
-# thousands of m/s, and a camp chair beside a spectator who set off flew 10 m.
+# thousands of m/s, and camp gear beside it flew 10 m.
 func _create(key: String, shape: Shape3D, pose: Transform3D) -> void:
 	var body = AnimatableBody3D.new()
 	body.transform = global_transform.affine_inverse() * pose
