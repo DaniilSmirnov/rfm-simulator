@@ -60,7 +60,7 @@ func run() -> void:
 		check(smooth, "the track runs without steps along the road")
 		# --- a puddle: a level basin with water in it
 		var puddle = relief.site(28.0)
-		check(not puddle.is_empty() and absf(float(puddle.s) - 28.0) <= 8.0, "the first puddle lies near station 28 (%s)" % str(puddle.get("s", -1)))
+		check(not puddle.is_empty() and absf(float(puddle.s) - 28.0) <= relief.SITE_REACH, "the first puddle lies near station 28 (%s)" % str(puddle.get("s", -1)))
 		var centre = Vector3(stage.at(puddle.s).x + puddle.lat, 0, -puddle.s)
 		var bottom = stage.ground(centre)
 		check(puddle.level - bottom > 0.09 and puddle.level - bottom < 0.21, "the basin is %.3f m deep" % (puddle.level - bottom))
@@ -90,6 +90,38 @@ func run() -> void:
 		check(water != null and absf(water.position.y - (puddle.level - relief.WATER_DROP)) < 0.001, "the first puddle holds a disc of water at its level")
 		check(water != null and water.position.y > bottom + 0.05 and water.position.y < stage.ground(rim) + 0.001, "the water is above the basin floor and under its rim")
 		check(stage.get_children().filter(func(node): return node is MeshInstance3D and node.mesh is BoxMesh).is_empty(), "no loose boxes lie on the road")
+		# --- every puddle lies in a dip and its water stays inside the basin
+		var proud = 0.0
+		var proud_at = ""
+		var hump = 0.0
+		var hump_at = ""
+		var index = 0
+		while relief.PUDDLE_FIRST + index * relief.PUDDLE_SPACING <= stage.length:
+			var site = relief.site(relief.PUDDLE_FIRST + index * relief.PUDDLE_SPACING)
+			index += 1
+			if site.is_empty():
+				continue
+			var sheet = stage.get_node_or_null("RoadPuddle_%d" % (index - 1))
+			var around = 0.0
+			for a in range(0, 360, 15):
+				var dir = Vector2(cos(deg_to_rad(a)), sin(deg_to_rad(a)))
+				var far_s = site.s + dir.y * relief.PUDDLE_RZ * 2.0
+				around += plain(stage, far_s, site.lat + dir.x * relief.PUDDLE_RX * 2.0)
+				for q in [0.85, 0.95]:
+					var s = site.s + dir.y * relief.PUDDLE_RZ * q
+					var lat = site.lat + dir.x * relief.PUDDLE_RX * q
+					if absf(absf(lat) - relief.RUT_OFFSET) < 0.45:
+						continue
+					var edge = stage.ground(Vector3(stage.at(s).x + lat, 0, -s))
+					if sheet != null and sheet.position.y - edge > proud:
+						proud = sheet.position.y - edge
+						proud_at = "#%d s=%.0f" % [index - 1, site.s]
+			var rise = plain(stage, site.s, site.lat) - around / 24.0
+			if rise > hump:
+				hump = rise
+				hump_at = "#%d s=%.0f" % [index - 1, site.s]
+		check(proud < 0.005, "no puddle's water stands above the ground at its edge (%.3f m %s)" % [proud, proud_at])
+		check(hump < 0.25, "no puddle sits on a crest or a hump (%.2f m above the land around %s)" % [hump, hump_at])
 		if variant == 4:
 			var ff = stage.finnish_forest
 			var fade = true
