@@ -3,17 +3,16 @@ const StageRegistry = preload("res://scripts/stages/stage_registry.gd")
 const WATER_COLOR = Color("4f7f9c")
 const WATER_DOT_RADIUS = 2.6
 const OUTLINE = Color("17251b")
-# Each course car kind has its own shape and colour, so a player can tell what
-# is coming: a red dot is a competing crew, a light ring is a zero car, a blue
-# square is police and a white square with a red cross is the ambulance.
+# Services have their own shape and colour, so a player can tell what is
+# coming: a red dot is a rally car (crews and zero cars alike), a blue square
+# is police and a white square with a red cross is the ambulance.
 const MARKERS = {
 	"racer": {"shape": "dot", "color": Color("d76646")},
-	"zero": {"shape": "ring", "color": Color("f2ead4")},
 	"police": {"shape": "square", "color": Color("3f7fe0")},
 	"ambulance": {"shape": "cross", "color": Color("e5413a")},
 }
 # Later kinds draw over earlier ones: services stay visible inside a crowd.
-const MARKER_ORDER = ["racer", "zero", "police", "ambulance"]
+const MARKER_ORDER = ["racer", "police", "ambulance"]
 var game: Node
 # Lakes are static: they are rasterised once per map size into one texture.
 # Drawing every lake cell as its own circle cost one draw call per cell
@@ -65,20 +64,20 @@ func _draw_course_cars() -> void:
 			if marker_kind(racer) == kind and is_instance_valid(racer.get("node")):
 				draw_marker(kind, project(racer.node.position))
 
+# Square markers snap to a pixel centre and use odd sizes, so every edge lands
+# on a whole pixel and the cross stays symmetric.
 func draw_marker(kind: String, at: Vector2) -> void:
 	var color: Color = MARKERS[kind].color
+	var c = at.floor() + Vector2(0.5, 0.5)
 	match MARKERS[kind].shape:
-		"ring":
-			draw_circle(at, 4.5, OUTLINE)
-			draw_arc(at, 3.2, 0, TAU, 16, color, 2.0, true)
 		"square":
-			draw_rect(Rect2(at - Vector2(4.5, 4.5), Vector2(9, 9)), OUTLINE)
-			draw_rect(Rect2(at - Vector2(3.5, 3.5), Vector2(7, 7)), color)
+			draw_rect(Rect2(c - Vector2(4.5, 4.5), Vector2(9, 9)), OUTLINE)
+			draw_rect(Rect2(c - Vector2(3.5, 3.5), Vector2(7, 7)), color)
 		"cross":
-			draw_rect(Rect2(at - Vector2(5.5, 5.5), Vector2(11, 11)), OUTLINE)
-			draw_rect(Rect2(at - Vector2(4.5, 4.5), Vector2(9, 9)), Color("f7f5ee"))
-			draw_rect(Rect2(at - Vector2(1.2, 3.5), Vector2(2.4, 7)), color)
-			draw_rect(Rect2(at - Vector2(3.5, 1.2), Vector2(7, 2.4)), color)
+			draw_rect(Rect2(c - Vector2(5.5, 5.5), Vector2(11, 11)), OUTLINE)
+			draw_rect(Rect2(c - Vector2(4.5, 4.5), Vector2(9, 9)), Color("f7f5ee"))
+			draw_rect(Rect2(c - Vector2(1.5, 3.5), Vector2(3, 7)), color)
+			draw_rect(Rect2(c - Vector2(3.5, 1.5), Vector2(7, 3)), color)
 		_:
 			draw_circle(at, 3, color)
 

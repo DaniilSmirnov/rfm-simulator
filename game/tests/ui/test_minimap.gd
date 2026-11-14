@@ -27,11 +27,12 @@ func run() -> void:
 		kinds[role] = map.marker_kind({"role": role})
 	check(kinds.opening_police == "police" and kinds.closing_police == "police", "both police cars share the police marker")
 	check(map.marker_kind({}) == "racer", "a crew without role is a competing crew")
+	check(kinds.zero == "racer", "zero cars share the rally crew marker")
 	var looks = {}
-	for kind in ["racer", "zero", "police", "ambulance"]:
+	for kind in ["racer", "police", "ambulance"]:
 		check(kinds.values().has(kind), "role maps to the %s marker" % kind)
 		looks[str(map.MARKERS[kind].shape) + str(map.MARKERS[kind].color)] = true
-	check(looks.size() == 4, "crews, zeros, police and ambulance look different on the map")
+	check(looks.size() == 3, "rally cars, police and ambulance look different on the map")
 	game._update_hud()
 	check(game.quest_label.text.begins_with("[ ] Выбрать место для лагеря"), "driving or walking alone does not select camp location")
 	game.walker = game.stage.clearings[0]
