@@ -76,7 +76,7 @@ func run() -> void:
 		world.add_child(car)
 		if night:
 			load("res://scripts/cars/car_lamps.gd").set_lit(car, true)
-			car.add_child(load("res://scripts/core/sky_weather.gd").headlights())
+			car.add_child(load("res://scripts/core/sky_weather.gd").headlights(car))
 		if spin:
 			props.animate_wheels(car)
 			car.position.z -= 0.3
@@ -104,6 +104,8 @@ static func _bounds(node: Node3D) -> AABB:
 	var result = AABB()
 	var first = true
 	for mesh in node.find_children("*", "MeshInstance3D", true, false):
+		if mesh.name == "LampBeams": # light, not bodywork: frame the car itself
+			continue
 		var box: AABB = mesh.global_transform * mesh.get_aabb()
 		result = box if first else result.merge(box)
 		first = false

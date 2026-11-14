@@ -37,9 +37,7 @@ const FALL = {
 	"snow": {"amount": 4000, "cheap": 1500, "box": Vector3(26, 1, 26), "height": 11.0, "speed": 1.6, "life": 7.5, "size": Vector2(0.13, 0.13), "color": Color(1, 1, 1, 0.95)},
 }
 const HEADLIGHT_RANGE = 60.0
-# Rally and course cars nearest the camera that also get a beam, and how far.
-const BEAM_BUDGET = 2
-const BEAM_RANGE = 80.0
+# How often new cars on the stage are switched to the time of day (s).
 const LAMP_PICK = 0.3
 const CarLamps = preload("res://scripts/cars/car_lamps.gd")
 # Grip the weather leaves on every surface (stage.weather_grip): a wet road,
@@ -61,7 +59,6 @@ var _drift = Vector3.ZERO
 # Campfires, grills and beacons that light their surroundings at night.
 var night_lights = preload("res://scripts/core/night_lights.gd").new()
 var _lamp_clock = 0.0
-var _beamed: Array = []
 
 static func night_or_day(value) -> String:
 	return str(value) if str(value) in DAYTIMES else "day"
@@ -263,8 +260,9 @@ func _process(delta: float) -> void:
 		night_lights.update(get_tree(), daytime == "night", camera.global_position, delta)
 
 # Cars on the stage switch their lights on at night. Every car's lamps glow
-# (CarLamps); real beams go to the player's car, the other room members' and
-# the BEAM_BUDGET nearest rally and course cars, re-picked every LAMP_PICK s.
+# and throw a cone of light ahead (CarLamps), the same near the player or far
+# away; real beams that light the road go only to the player's car and the
+# other room members', which never change hands as cars drive past.
 func _update_headlights(delta: float = 0.0) -> void:
 	var night = daytime == "night"
 	var cars: Array = []
@@ -277,40 +275,27 @@ func _update_headlights(delta: float = 0.0) -> void:
 	_lamp_clock -= delta
 	if _lamp_clock <= 0.0 or delta == 0.0:
 		_lamp_clock = LAMP_PICK
-		var picked = _pick_lamps(night, cars)
-		for car in _beamed:
-			if is_instance_valid(car) and not car in picked and not car in cars:
-				_beam(car, false)
-		_beamed = picked
-	for car in cars + _beamed:
-		if is_instance_valid(car):
-			_beam(car, night and car.is_inside_tree())
-
-func _pick_lamps(night: bool, own: Array) -> Array:
-	var camera: Camera3D = game.camera
-	var at: Vector3 = camera.global_position if camera != null and camera.is_inside_tree() else Vector3.INF
-	var others: Array = []
-	for car in get_tree().get_nodes_in_group(CarLamps.GROUP):
-		CarLamps.set_lit(car, night)
-		if car in own or not car.is_inside_tree():
-			continue
-		var distance = car.global_position.distance_squared_to(at)
-		if night and distance < BEAM_RANGE * BEAM_RANGE:
-			others.append([distance, car])
-	others.sort_custom(func(a, b): return a[0] < b[0])
-	return others.slice(0, BEAM_BUDGET).map(func(entry): return entry[1])
+		for car in get_tree().get_nodes_in_group(CarLamps.GROUP):
+			CarLamps.set_lit(car, night)
+	for car in cars:
+		_beam(car, night and car.is_inside_tree())
 
 static func _beam(car: Node3D, on: bool) -> void:
 	var lights = car.get_node_or_null("Headlights")
 	if on and lights == null:
-		car.add_child(headlights())
+		car.add_child(headlights(car))
 	elif not on and lights != null:
 		lights.free()
 
-static func headlights() -> SpotLight3D:
+# A beam from the car's own headlamps (CarLamps "head_lamp"), a little ahead
+# of the lenses so the bonnet stays dark; the old fixed spot sat inside long
+# cars and lit them from within.
+static func headlights(car: Node3D = null) -> SpotLight3D:
 	var light = SpotLight3D.new()
 	light.name = "Headlights"
 	light.position = Vector3(0, 0.75, -2.3)
+	if car != null and car.has_meta("head_lamp"):
+		light.position = car.get_meta("head_lamp") + Vector3(0, 0, -0.25)
 	light.rotation_degrees = Vector3(-7, 0, 0)
 	light.light_color = Color("fff2d6")
 	light.light_energy = 9.0

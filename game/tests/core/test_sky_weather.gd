@@ -46,9 +46,13 @@ func run() -> void:
 	game.add_child(rally)
 	var parked = game.Props.player_car(1)
 	game.add_child(parked)
+	# Far from the player or next to them, every car shows the same lights.
+	rally.position = Vector3(0, 0, 600)
 	sky._update_headlights()
 	check(parked.get_node("LampGlow").visible and rally.get_node("LampGlow").visible, "every car's head and tail lamps glow at night")
-	check(game.Props.course_car("police").get_node_or_null("LampGlow") != null and game.Props.course_car("ambulance").get_node_or_null("LampGlow") != null, "police and ambulance lamps can glow too")
+	check(rally.get_node_or_null("LampGlow/LampBeams") is MeshInstance3D and parked.get_node_or_null("LampGlow/LampBeams") is MeshInstance3D, "every car throws its beams ahead at night, near the player or far away")
+	check(rally.get_node_or_null("Headlights") == null and parked.get_node_or_null("Headlights") == null, "no real light hops between the cars around the player")
+	check_lamp_positions(game)
 	tiles.sun.pressed.emit()
 	check(sky.weather == "sun" and game.get_node_or_null("Weather") == null, "the sky clears")
 	# Rain picked, then a snowy stage: the weather turns to sun, snow becomes possible.
@@ -78,6 +82,30 @@ func run() -> void:
 	game.queue_free()
 	await process_frame
 	finish()
+
+# Every kind of car has headlamps at its nose, and its beams and its own
+# SpotLight3D start there, not inside or on top of the body.
+func check_lamp_positions(game) -> void:
+	var cars = [game.Props.rally_car(0), game.Props.course_car("police"), game.Props.course_car("ambulance"), game.Props.course_car("zero", 1)]
+	for variant in range(game.Props.PLAYER_MODELS.size()):
+		# The helicopter has no headlamps to light.
+		if str(game.Props.PLAYER_MODELS[variant].model) != "helicopter":
+			cars.append(game.Props.player_car(variant))
+	for car in cars:
+		var bounds: AABB = load("res://scripts/cars/car_hitbox.gd").bounds(car)
+		var lamp: Vector3 = car.get_meta("head_lamp", Vector3.INF)
+		var beams = car.get_node_or_null("LampGlow/LampBeams")
+		check(lamp != Vector3.INF and beams != null, "%s has headlamps that throw beams" % car.name)
+		if lamp == Vector3.INF or beams == null:
+			car.free()
+			continue
+		check(lamp.z < bounds.position.z + 0.6 and lamp.y < bounds.end.y * 0.75, "%s headlamps sit at the nose, low on the front (%s in %s)" % [car.name, lamp, bounds])
+		var beam_box: AABB = beams.mesh.get_aabb()
+		check(beam_box.position.z < bounds.position.z - 5.0 and beam_box.end.z <= lamp.z + 0.05, "%s beams shine ahead of the car" % car.name)
+		var light = SkyWeather.headlights(car)
+		check(light.position.z < bounds.position.z and absf(light.position.y - lamp.y) < 0.01, "%s headlight sits ahead of its own lamps" % car.name)
+		light.free()
+		car.free()
 
 func check_rules() -> void:
 	check(SkyWeather.fits("rain", false) == "rain" and SkyWeather.fits("rain", true) == "sun", "rain only without snow")
