@@ -8,9 +8,9 @@ extends RefCounted
 #   length, width, height, color, suv, bonnet_rise, deck_rise
 #   shape: windscreen base, roof front, roof rear and rear-glass base stations,
 #          then the front and rear wheel offsets from the bumpers
-#   pillar (B-pillar z), doors (2 or 4), wheel (CarParts look), wheel_radius
+#   pillar (B-pillar z), c_pillar (its width), waist (moulding colour), rub_strip, doors (2 or 4), wheel (CarParts look), wheel_radius
 #   lights: round | twin | square | slim | wide; lamp_tilt; tail: block | band | pillar
-#   grille, grille_style (slats | chrome_lines | chrome_pair | mesh), lower_grille
+#   grille, grille_height, grille_style (slats | chrome_lines | chrome_pair | mesh), lower_grille
 #   trim (bumpers), plate (number plate colour), roof_color, stripe, spare_wheel, roof_rails,
 #   spoiler (lip | wing | duck), flares, scoop, mudflaps, sunroof, aux_lamps
 const P = preload("res://scripts/core/props.gd")
@@ -97,6 +97,17 @@ static func _side(root: Node3D, p: Dictionary, f: Dictionary, side: float) -> vo
 	var top: float = f.height
 	P.car_beam(root, Vector3(x, f.floor + 0.04, shape[0]), Vector3(x * 0.94, top - 0.04, shape[1]), 0.065, paint)
 	P.car_beam(root, Vector3(x * 0.93, top - 0.04, shape[2]), Vector3(x, f.deck + 0.06, shape[3]), 0.08, paint)
+	var c_pillar = float(p.get("c_pillar", 0.0))
+	if c_pillar > 0.0:
+		# Broad painted C-pillar over the back of the side glass (hatchbacks).
+		var out = 1.0 + 0.012 / f.glass_half
+		var corners = PackedVector3Array([
+			Vector3(x * 0.93 * out, top - 0.05, shape[2] - c_pillar), Vector3(x * 0.93 * out, top - 0.05, shape[2]),
+			Vector3(x * out, f.deck + 0.06, shape[3]), Vector3(x * out, f.floor + 0.02, shape[3] - c_pillar * 1.2),
+		])
+		if side < 0:
+			corners.reverse() # the face normal points out of the car
+		P.quad_panel(root, corners, paint)
 	var pillar = float(p.get("pillar", 0.1))
 	# Blacked-out B-pillar and a bright waist moulding under the side glass.
 	P.car_beam(root, Vector3(x, f.floor, pillar), Vector3(x * 0.94, top - 0.05, pillar), 0.07, DARK)
@@ -180,7 +191,8 @@ static func _front(root: Node3D, p: Dictionary, f: Dictionary) -> void:
 				var lamp = P.box(root, Vector3(x, lamp_y + (0.02 if style == "slim" else 0.0), lens + 0.02), size, LAMP)
 				lamp.rotation.z = side * float(p.get("lamp_tilt", 0.0))
 		P.box(root, Vector3(side * f.half * 0.86, f.base - 0.09, nose - 0.01), Vector3(0.12, 0.05, 0.03), Color("e8be6c"))
-	P.box(root, Vector3(0, lamp_y, nose - 0.01), Vector3(float(p.get("grille", 0.8)), 0.14, 0.03), Color("1f2e33")).name = "Grille"
+	var grille_h = float(p.get("grille_height", 0.14))
+	P.box(root, Vector3(0, lamp_y, nose - 0.01), Vector3(float(p.get("grille", 0.8)), grille_h, 0.03), Color("1f2e33")).name = "Grille"
 	match str(p.get("grille_style", "")):
 		"slats":
 			for x in [-0.22, -0.11, 0, 0.11, 0.22]:
@@ -192,7 +204,8 @@ static func _front(root: Node3D, p: Dictionary, f: Dictionary) -> void:
 			for x in [-0.15, 0.15]:
 				P.box(root, Vector3(x, lamp_y, nose - 0.03), Vector3(0.24, 0.10, 0.02), Color("b8c5c7"))
 		"mesh":
-			for y in [-0.04, 0.0, 0.04]:
+			for row in range(int(grille_h / 0.04)):
+				var y = (row - (int(grille_h / 0.04) - 1) * 0.5) * 0.04
 				P.box(root, Vector3(0, lamp_y + y, nose - 0.03), Vector3(float(p.get("grille", 0.8)) * 0.94, 0.012, 0.015), Color("3c474b"))
 	if float(p.get("lower_grille", 0.0)) > 0.0:
 		P.box(root, Vector3(0, f.base - 0.10, nose - 0.06), Vector3(float(p.lower_grille), 0.12, 0.02), Color("1d2b31"))
