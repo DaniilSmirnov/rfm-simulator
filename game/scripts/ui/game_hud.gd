@@ -458,7 +458,7 @@ func update_hud() -> void:
 		if game.injuries.down:
 			hint_text = Loc.t("Лежи и жди скорую · мышь — осмотреться")
 	elif near_prop:
-		hint_text += Loc.t("   ·   Удерживай T и иди — тащить предмет")
+		hint_text += Loc.t("   ·   Удерживай T и иди — оттащить дерево")
 	elif near_tow:
 		hint_text += Loc.t("   ·   T — тянуть тросом в любую сторону · иди на машину — толкать")
 	if not game.in_car:
