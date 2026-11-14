@@ -81,8 +81,9 @@ var choices: Array[HBoxContainer] = []
 var buy_buttons: Array[Button] = []
 var character_choice: HBoxContainer
 # Time of day and weather, under the stage on its card (sky_weather.gd).
-var daytime_choice: HBoxContainer
-var weather_choice: HBoxContainer
+var conditions: HBoxContainer
+const BACKDROP_DIM = Color(0.72, 0.72, 0.72, 1)
+const BACKDROP_TINT = {"rain": Color(0.78, 0.8, 0.84), "fog": Color(0.9, 0.92, 0.92), "snow": Color(0.9, 0.93, 0.97), "night": Color(0.34, 0.4, 0.58)}
 
 func build_selection(parent: Control) -> void:
 	var cards = UiKit.hbox(parent, 14)
@@ -92,13 +93,13 @@ func build_selection(parent: Control) -> void:
 		var column = UiKit.vbox(card, 8)
 		UiKit.label(column, spec.title, "caption")
 		add_preview(column, spec.preview)
+		if spec.kind == "stage":
+			_build_conditions(images[-1])
 		var choice = preload("res://scripts/ui/menu_choice.gd").new()
 		choice.custom_minimum_size.y = 42
 		choice.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		column.add_child(choice)
 		choices.append(choice)
-		if spec.kind == "stage":
-			_build_conditions(column)
 		var state = UiKit.label(column, "", "muted")
 		states.append(state)
 		var buy = UiKit.button(column, "", "secondary", 40)
@@ -135,48 +136,27 @@ func build_selection(parent: Control) -> void:
 	check_purchase.pressed.connect(func(): game.platform_service.refresh_store())
 	purchase_actions.hide()
 
-# Two small pickers side by side: «День / Ночь» and the weather. Snowy stages
-# skip rain, the others skip snow. In a room the creator's choice is everyone's.
-func _build_conditions(parent: Control) -> void:
-	var row = UiKit.hbox(parent, 8)
-	row.name = "Conditions"
-	var sky = game.sky_weather
-	daytime_choice = _small_choice(row, sky.DAYTIME_LABELS)
-	daytime_choice.name = "DaytimeChoice"
-	weather_choice = _small_choice(row, sky.WEATHER_LABELS)
-	weather_choice.name = "WeatherChoice"
-	daytime_choice.item_selected.connect(func(index: int):
-		sky.set_conditions(sky.DAYTIMES[index], sky.weather)
-		refresh()
-	)
-	weather_choice.item_selected.connect(func(index: int):
-		sky.set_conditions(sky.daytime, sky.WEATHERS[index])
+# Day or night and the weather: picture tiles in the stage preview's corner.
+func _build_conditions(image: Control) -> void:
+	conditions = preload("res://scripts/ui/conditions_picker.gd").new()
+	image.add_child(conditions)
+	conditions.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT, Control.PRESET_MODE_MINSIZE, 6)
+	conditions.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	conditions.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	conditions.changed.connect(func(time: String, weather: String):
+		game.sky_weather.set_conditions(time, weather)
 		refresh()
 	)
 
-func _small_choice(parent: Control, labels: Array) -> HBoxContainer:
-	var choice = preload("res://scripts/ui/menu_choice.gd").new()
-	choice.custom_minimum_size.y = 36
-	choice.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	choice.add_theme_constant_override("separation", 4)
-	choice.tooltip_text = "В комнате время суток и погоду выбирает создатель."
-	for child in choice.get_children():
-		if child is Button:
-			child.custom_minimum_size = Vector2(30, 34)
-			child.add_theme_font_size_override("font_size", 20)
-	for label in labels:
-		choice.add_item(label)
-	parent.add_child(choice)
-	return choice
-
-# The pickers show the conditions in force: a stage switch may have turned
-# the weather to sun, and a guest sees the room's.
+# The tiles and the stage preview show the conditions in force: a stage switch
+# may have turned the weather to sun, and a guest sees the room's.
 func _show_conditions() -> void:
 	var sky = game.sky_weather
-	daytime_choice.select(sky.DAYTIMES.find(sky.daytime))
-	for i in range(sky.WEATHERS.size()):
-		weather_choice.set_skipped(i, not sky.allowed(sky.WEATHERS[i], sky.snowy()))
-	weather_choice.select(sky.WEATHERS.find(sky.weather))
+	conditions.show_conditions(sky.daytime, sky.weather, sky.snowy())
+	images[1].texture = load(sky.preview_path(game.selected_stage, sky.daytime, sky.weather))
+	# The menu backdrop is one picture per stage: tinted to the conditions.
+	var tint = BACKDROP_DIM * BACKDROP_TINT.get(sky.weather, Color.WHITE)
+	background.modulate = tint * BACKDROP_TINT.night if sky.daytime == "night" else tint
 
 func add_preview(parent: Control, tooltip: String) -> void:
 	var image = TextureRect.new()
@@ -291,7 +271,7 @@ func finish(parent: Control) -> void:
 	background.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	background.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	background.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	background.modulate = Color(0.72, 0.72, 0.72, 1)
+	background.modulate = BACKDROP_DIM
 	var canvas = game.mobile_ui.get_parent()
 	var backdrop_root = Control.new()
 	backdrop_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -371,7 +351,6 @@ func refresh() -> void:
 	background.visible = not game.playing
 	background.texture = null if game.playing else load("res://textures/previews/backdrop_%d.webp" % game.selected_stage)
 	images[0].texture = load("res://textures/previews/car_%d.webp" % game.selected_car)
-	images[1].texture = load("res://textures/previews/stage_%d.webp" % game.selected_stage)
 	images[2].texture = load(CharacterProfiles.preview_path(game.avatar_variant, game.stage.outfit if game.stage != null else ""))
 	if game.room != null:
 		game.room.ui.create_button.disabled = game.room.busy or game.room.join_check.active or not car_ok or not stage_ok or not character_ok
@@ -386,6 +365,7 @@ func _process(_delta: float) -> void:
 		var compact = game.mobile_mode or size.y < 650
 		for image in images:
 			image.custom_minimum_size.y = (72 if game.mobile_mode else 100) if compact else 140
+		conditions.set_compact(compact)
 		refresh()
 	game.hud.layout_menu()
 	var result = game.dead or game.finished

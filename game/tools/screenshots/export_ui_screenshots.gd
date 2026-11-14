@@ -5,7 +5,8 @@ extends SceneTree
 #     --script res://tools/screenshots/export_ui_screenshots.gd -- --state=pause --vk --mobile-controls --out=/tmp/pause.png
 # States: menu, hud, drawer, car, pause, guest_pause, result, safety, help,
 # about, guide (first VK entry, --page=N), guide_pause, loading,
-# warning (beer/mushroom notice, --kind=beer|mushroom).
+# warning (beer/mushroom notice, --kind=beer|mushroom). The menu takes
+# --stage=N --time=day|night --weather=sun|rain|fog|snow.
 
 func _initialize() -> void:
 	call_deferred("run")
@@ -32,6 +33,8 @@ func run() -> void:
 	if state == "menu":
 		game.select_stage(stage)
 		game.stage_choice.select(stage)
+		game.sky_weather.set_conditions(arg("time", "day"), arg("weather", "sun"))
+		game.lobby_ui.refresh()
 	if state in ["hud", "drawer", "car", "pause", "guest_pause", "result", "safety", "guide", "guide_pause", "warning"]:
 		await game.start_game()
 		game._prepare_capture()

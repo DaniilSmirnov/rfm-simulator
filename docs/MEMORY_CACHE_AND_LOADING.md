@@ -80,3 +80,18 @@ godot --path game --script res://tools/screenshots/export_menu_previews.gd
 
 The generator renders offscreen from the game geometry and overwrites
 `game/textures/previews/*.webp`; it is excluded from Web exports.
+
+The stage card also shows the stage under the picked time of day and weather:
+`game/textures/previews/conditions/stage_<N>_<time>_<weather>.webp` (480×240
+lossy WebP, about 8 KB each, every combination but day and sun, which is `stage_<N>.webp`). Rain is
+captured for stages without snow and snow for snowy ones, so each stage has
+five. They reuse the card's camera from each stage's preview tool:
+
+```sh
+node scripts/export-condition-previews.mjs            # all stages
+node scripts/export-condition-previews.mjs winter     # one stage, by its id
+```
+
+`test_sky_weather.gd` fails when a combination has no picture. Keep them
+lossy: the Web `index.pck` must stay under Cloudflare's 25 MiB asset limit,
+and 40 lossless pictures (2.4 MB) pushed it over.

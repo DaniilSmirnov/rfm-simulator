@@ -1,10 +1,15 @@
 extends SceneTree
 const CharacterProfiles = preload("res://scripts/people/character_profiles.gd")
 const CharacterRig = preload("res://scripts/people/character_rig.gd")
+const ConditionPreviews = preload("res://tools/screenshots/condition_previews.gd")
+const StageRegistry = preload("res://scripts/stages/stage_registry.gd")
 var previews: Array[SubViewport] = []
 var cameras: Array[Camera3D] = []
 # Regenerate menu images from game geometry, outside the runtime menu.
 # --cars-only, --stages-only and --characters-only limit what is written.
+# --conditions --stage-ids=forest,provence captures those stage cards under
+# every time of day and weather instead (condition_previews.gd); the stages
+# with their own export_*_screenshots.gd take theirs from those tools.
 func _initialize() -> void:
 	call_deferred("run")
 func run() -> void:
@@ -27,6 +32,14 @@ func run() -> void:
 	game.set_process(false)
 	game.room.set_process(false)
 	var args = OS.get_cmdline_user_args()
+	if ConditionPreviews.requested():
+		for i in range(game.Stage.STAGES.size()):
+			if StageRegistry.entry(i).id in _arg("--stage-ids=").split(","):
+				game.select_stage(i)
+				await capture(game, 1, "stage_%d" % i)
+		await game._shutdown_audio()
+		quit()
+		return
 	var only = Array(args).filter(func(arg): return arg.ends_with("-only"))
 	for i in range(game.Props.PLAYER_MODELS.size() if only.is_empty() or "--cars-only" in only else 0):
 		game.select_player_car(i)
@@ -71,6 +84,9 @@ func capture(game: Node, index: int, name: String) -> void:
 		hidden = hide_blockers(game, game.car, cameras[index].global_position)
 	else:
 		cameras[index].look_at(target)
+	if ConditionPreviews.requested():
+		await ConditionPreviews.capture_all(self, game, previews[index], game.selected_stage)
+		return
 	previews[index].render_target_update_mode = SubViewport.UPDATE_ONCE
 	await process_frame
 	await process_frame
@@ -79,6 +95,12 @@ func capture(game: Node, index: int, name: String) -> void:
 	image.save_webp("res://textures/previews/%s.webp" % name, false, 0.85)
 	for node in hidden:
 		node.show()
+
+func _arg(prefix: String) -> String:
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with(prefix):
+			return arg.trim_prefix(prefix)
+	return ""
 
 # A look in the stage's clothes, waist up and facing the camera: the face sits
 # in the middle, so the low phone card still shows it.
