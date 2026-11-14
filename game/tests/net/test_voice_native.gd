@@ -123,7 +123,7 @@ func mesh_rules() -> void:
 	check(nodes.a.ice_servers == PackedStringArray(["stun:example.org:3478"]), "ICE servers come from the room options")
 	# Push-to-talk sends only while the key is held and only to linked members.
 	nodes.a.tick([{"id": "b", "distance": 320.0, "talking": true}])
-	check(nodes.a.peers.b.distance == 320.0 and nodes.a.peers.b.talking, "levels reach the peer")
+	check(nodes.a.peers.b.talking and not nodes.a.peers.b.has("distance"), "the talking flag reaches the peer; the radio keeps no distance")
 	nodes.a.audio_enabled = true
 	nodes.a._pump_speakers()
 	nodes.a.audio_enabled = false

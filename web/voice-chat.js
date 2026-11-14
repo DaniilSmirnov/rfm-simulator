@@ -7,10 +7,11 @@
  *   onSignal(from, data)   relayed offer/answer/candidate/bye
  *   setPtt(pressed)        first press asks for the microphone
  *   setVolume(gain)        the game's Radio and Master faders, linear
- *   tick(json)             [{id, distance, talking}] -> JSON {signals, mic, events}
+ *   tick(json)             [{id, talking}] -> JSON {signals, mic, events}
  */
 (() => {
-  // Every radio sounds the same at any distance: a clean voice band, no hiss.
+  // The radio has no range and no interference: every voice is the same clean
+  // band at full volume anywhere on the map, with no hiss mixed in.
   const CUTOFF = 3400;
   // The first redial is quick (a reload), later ones back off like the direct link.
   const FIRST_RETRY_MS = 1000;
@@ -114,7 +115,7 @@
     if (peer) return peer;
     const pc = new RTCPeerConnection({ iceServers: state.iceServers });
     peer = { id, pc, polite: state.localId > id, makingOffer: false, ignoreOffer: false,
-      candidates: [], remoteSession: '', audio: null, distance: 9999, talking: false, connected: false };
+      candidates: [], remoteSession: '', audio: null, talking: false, connected: false };
     state.peers.set(id, peer);
     pc.onicecandidate = event => { if (event.candidate) send(id, { kind: 'candidate', candidate: event.candidate.toJSON() }); };
     pc.onnegotiationneeded = async () => {
@@ -318,7 +319,6 @@
     for (const entry of Array.isArray(list) ? list : []) {
       const peer = state.peers.get(String(entry.id));
       if (!peer) continue;
-      peer.distance = Number(entry.distance) || 0;
       peer.talking = entry.talking === true;
       applyLevels(peer);
     }

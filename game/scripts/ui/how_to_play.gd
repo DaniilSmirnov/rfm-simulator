@@ -212,7 +212,7 @@ func _controls(page_box: Control) -> void:
 	# The demo has no rooms, so no radio.
 	if Demo.active():
 		return
-	_row(page_box, "icon:radio" if touch() else "X", "Рация в комнате: держи и говори. Друзей слышно чисто на любом расстоянии.")
+	_row(page_box, "icon:radio" if touch() else "X", "Рация в комнате: держи и говори. Друзей слышно на всю карту, без помех.")
 
 func _camp(page_box: Control) -> void:
 	_row(page_box, "icon:bag", "Подойди к багажнику своей машины — он откроется сам.")
