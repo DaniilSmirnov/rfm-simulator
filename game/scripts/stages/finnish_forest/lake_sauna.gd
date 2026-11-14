@@ -14,6 +14,7 @@ const HALF = Vector2(2.0, 1.7)
 const WALL = 0.22
 const FLOOR = 0.6
 const LOG = 0.32
+const LOG_PROUD = 0.006
 const ROWS = 9
 const TOP = 0.3 + ROWS * LOG
 const DOOR_HALF = 0.5
@@ -104,15 +105,22 @@ func build(stage: Node3D, hut: Node3D) -> void:
 func _walls(stage: Node3D) -> void:
 	for row in range(ROWS):
 		var y = 0.45 + row * LOG
-		var tint = LOGS.lightened((row % 2) * 0.05)
+		var odd = row % 2
+		var tint = LOGS.lightened(odd * 0.05)
 		# Log ends cross at the corners: every other course reaches past them.
-		var reach = 0.05 if row % 2 == 0 else 0.0
+		var reach = 0.05 if odd == 0 else LOG_PROUD
 		var along = HALF.x * 2.0 + reach * 2.0
 		var across = HALF.y * 2.0 - WALL * 2.0 + reach * 2.0
+		# Courses overlap a little in height so no seam shows between them.
+		# The odd ones stand proud of the wall (and of the door and window
+		# jambs) so the overlapping strips of two tints never share a plane:
+		# coplanar faces flicker as the camera moves.
+		var thick = WALL + LOG_PROUD * 2.0 * odd
+		var jamb = LOG_PROUD * odd
 		for side in [-1.0, 1.0]:
-			Props.box(root, Vector3(side * (HALF.x - WALL * 0.5), y, 0), Vector3(WALL, LOG + 0.01, across), tint)
-		_course(Vector3(0, y, HALF.y - WALL * 0.5), along, [-DOOR_HALF, DOOR_HALF] if _within(row, DOOR_ROWS) else [], tint)
-		_course(Vector3(0, y, -HALF.y + WALL * 0.5), along, WINDOW_X if _within(row, WINDOW_ROWS) else [], tint)
+			Props.box(root, Vector3(side * (HALF.x - WALL * 0.5), y, 0), Vector3(thick, LOG + 0.01, across), tint)
+		_course(Vector3(0, y, HALF.y - WALL * 0.5), along, thick, [-DOOR_HALF - jamb, DOOR_HALF + jamb] if _within(row, DOOR_ROWS) else [], tint)
+		_course(Vector3(0, y, -HALF.y + WALL * 0.5), along, thick, [WINDOW_X[0] - jamb, WINDOW_X[1] + jamb] if _within(row, WINDOW_ROWS) else [], tint)
 	# Walls stop cars and walkers; the doorway and the room stay free.
 	var height = TOP + 0.4
 	var middle = (TOP - 0.4) * 0.5
@@ -137,14 +145,14 @@ static func _within(row: int, rows: Array) -> bool:
 	return row >= rows[0] and row <= rows[1]
 
 # One course of a long wall, split around an opening [x0, x1] if there is one.
-func _course(center: Vector3, length: float, gap: Array, tint: Color) -> void:
+func _course(center: Vector3, length: float, thick: float, gap: Array, tint: Color) -> void:
 	if gap.is_empty():
-		Props.box(root, center, Vector3(length, LOG + 0.01, WALL), tint)
+		Props.box(root, center, Vector3(length, LOG + 0.01, thick), tint)
 		return
 	var left = -length * 0.5
 	var right = length * 0.5
-	Props.box(root, center + Vector3((left + gap[0]) * 0.5, 0, 0), Vector3(gap[0] - left, LOG + 0.01, WALL), tint)
-	Props.box(root, center + Vector3((gap[1] + right) * 0.5, 0, 0), Vector3(right - gap[1], LOG + 0.01, WALL), tint)
+	Props.box(root, center + Vector3((left + gap[0]) * 0.5, 0, 0), Vector3(gap[0] - left, LOG + 0.01, thick), tint)
+	Props.box(root, center + Vector3((gap[1] + right) * 0.5, 0, 0), Vector3(right - gap[1], LOG + 0.01, thick), tint)
 
 func _roof() -> void:
 	for sign in [-1.0, 1.0]:
@@ -155,7 +163,7 @@ func _roof() -> void:
 		for i in range(4):
 			var width = 3.9 - i * 1.0
 			Props.box(root, Vector3(0, TOP + 0.1 + i * 0.22, z), Vector3(width, 0.22, 0.08), BOARDS.darkened(0.25))
-	Props.box(root, Vector3(0, TOP + 0.03, 0), Vector3(HALF.x * 2.0 - 0.1, 0.06, HALF.y * 2.0 - 0.1), BOARDS.darkened(0.1))
+	Props.box(root, Vector3(0, TOP + 0.03, 0), Vector3(HALF.x * 2.0 - 0.12, 0.06, HALF.y * 2.0 - 0.1), BOARDS.darkened(0.1))
 	Props.cylinder(root, Vector3(STOVE.x, TOP + 0.5, STOVE.z), 0.12, 0.12, 1.6, Color("2f2f2f"), 6)
 
 func _inside() -> void:
@@ -170,7 +178,9 @@ func _inside() -> void:
 	# Bucket of water with a ladle, by the stove.
 	var bucket = STOVE + Vector3(0.65, 0, -0.1)
 	Props.cylinder(root, bucket + Vector3(0, 0.15, 0), 0.15, 0.17, 0.3, Color("9b7448"), 10)
-	Props.cylinder(root, bucket + Vector3(0, 0.29, 0), 0.135, 0.135, 0.02, Color("6f8fa6"), 10)
+	# The water stands a little above the rim: level with it, the two tops
+	# would share a plane and flicker.
+	Props.cylinder(root, bucket + Vector3(0, 0.2975, 0), 0.135, 0.135, 0.015, Color("6f8fa6"), 10)
 	var ladle = Props.box(root, bucket + Vector3(0.1, 0.36, 0), Vector3(0.36, 0.03, 0.04), DARK_WOOD)
 	ladle.rotation.z = 0.5
 	# Window frame (the opening itself is cut in the courses).
@@ -203,7 +213,10 @@ func _porch(stage: Node3D) -> void:
 	if rise < 0.12:
 		return
 	for i in range(count):
-		var top = ground + rise * float(i + 1) / count
+		# The boards stand 2 cm proud of the walk surface: the top step,
+		# level with the plinth under the door, would share its plane and
+		# the threshold would flicker. Now it is level with the hut floor.
+		var top = ground + rise * float(i + 1) / count + 0.02
 		var z = HALF.y + length - 0.3 * (i + 0.5)
 		Props.box(root, Vector3(0, (top + ground - 0.3) * 0.5, z), Vector3(1.2, top - ground + 0.3, 0.3), BOARDS.darkened(0.15))
 	var steps = Transform3D(Basis(Vector3.UP, PI), Vector3(0, ground, HALF.y + length * 0.5))

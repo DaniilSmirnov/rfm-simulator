@@ -11,7 +11,9 @@ extends RefCounted
 # every client shows them on the bench and lights the steam and the chimney
 # smoke from the same rule.
 const Loc = preload("res://scripts/ui/loc.gd")
-const STOVE_REACH = 2.8
+# The stove stands at the door end of one bench: from the window end of the
+# bench opposite it is 3.3 m away, and every seat must reach it.
+const STOVE_REACH = 3.6
 const FULL_SESSION = 20.0
 # Heat rises to 1.0 in about 75 s on the bench, faster with every ladle.
 const HEAT_RATE = 1.0 / 75.0

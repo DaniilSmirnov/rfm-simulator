@@ -51,7 +51,7 @@ static func _duckboards(sauna, root: Node3D) -> void:
 		var z = z0 + (i + 0.5) * (z1 - z0) / count
 		Props.box(root, Vector3(0, sauna.FLOOR + 0.035, z), Vector3(width, 0.025, 0.1), sauna.BOARDS.darkened(0.08 + (i % 2) * 0.05))
 	for x in [-width * 0.4, 0.0, width * 0.4]:
-		Props.box(root, Vector3(x, sauna.FLOOR + 0.012, (z0 + z1) * 0.5), Vector3(0.05, 0.022, z1 - z0), sauna.DARK_WOOD)
+		Props.box(root, Vector3(x, sauna.FLOOR + 0.031, (z0 + z1) * 0.5), Vector3(0.05, 0.022, z1 - z0), sauna.DARK_WOOD)
 
 # Pegs on the lake wall right of the door: two whisks and two felt hats.
 static func _pegs(sauna, root: Node3D) -> void:
@@ -88,5 +88,5 @@ static func whisk(parent: Node3D, pos: Vector3, swing: float) -> Node3D:
 	Props.box(node, Vector3(0, 0.12, 0), Vector3(0.07, 0.03, 0.07), Color("b9a27a"))
 	var leaves = Props.cylinder(node, Vector3(0, -0.08, 0), 0.15, 0.05, 0.38, BIRCH, 7)
 	leaves.scale = Vector3(1.0, 1.0, 0.45)
-	Props.cylinder(node, Vector3(0, -0.12, 0.02), 0.12, 0.04, 0.3, BIRCH.lightened(0.12), 6).scale = Vector3(1.0, 1.0, 0.4)
+	Props.cylinder(node, Vector3(0, -0.11, 0.02), 0.12, 0.04, 0.3, BIRCH.lightened(0.12), 6).scale = Vector3(1.0, 1.0, 0.4)
 	return node

@@ -23,6 +23,45 @@ func walk_to(game, target: Vector3, seconds: float) -> void:
 		game.player.walk(1.0 / 30.0)
 	Input.action_release("forward")
 
+# Faces of different colours lying in one plane and overlapping flicker as
+# the camera moves (z-fighting). [axis, sign, plane, min, max, colour] per
+# axis-aligned triangle of the baked hut mesh, in the hut frame.
+func coplanar_faces(mesh: Mesh, floor_y: float) -> Array:
+	var faces: Array = []
+	for surface in range(mesh.get_surface_count()):
+		var arrays = mesh.surface_get_arrays(surface)
+		var v: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		var c: PackedColorArray = arrays[Mesh.ARRAY_COLOR]
+		var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+		for i in range(0, v.size(), 3):
+			var n = normals[i]
+			var axis = n.abs().max_axis_index()
+			if absf(n[axis]) < 0.999:
+				continue
+			var box = AABB(v[i], Vector3.ZERO).expand(v[i + 1]).expand(v[i + 2])
+			# Undersides resting on the plinth or the floor boards are never seen.
+			if axis == 1 and n.y < 0.0 and v[i].y < floor_y + 0.03:
+				continue
+			faces.append([axis, signf(n[axis]), v[i][axis], box, c[i]])
+	var found: Array = []
+	for i in range(faces.size()):
+		for j in range(i + 1, faces.size()):
+			var a = faces[i]
+			var b = faces[j]
+			if a[0] != b[0] or a[1] != b[1] or absf(a[2] - b[2]) > 0.004 or a[4].is_equal_approx(b[4]):
+				continue
+			var overlap = 1.0
+			for k in range(3):
+				if k != a[0]:
+					overlap *= maxf(0.0, minf(a[3].end[k], b[3].end[k]) - maxf(a[3].position[k], b[3].position[k]))
+			var line = "%s=%.3f %s / %s" % ["xyz"[a[0]], a[2], _rounded(a[3]), _rounded(b[3])]
+			if overlap > 0.0004 and not found.has(line):
+				found.append(line)
+	return found
+
+static func _rounded(box: AABB) -> String:
+	return "%s..%s" % [box.position.snapped(Vector3.ONE * 0.01), box.end.snapped(Vector3.ONE * 0.01)]
+
 func run() -> void:
 	var game = load("res://main.tscn").instantiate()
 	root.add_child(game)
@@ -36,6 +75,9 @@ func run() -> void:
 	var steam = game.player.sauna
 	var sauna = steam.room()
 	check(sauna != null and stage.get_node_or_null("LakeSaunaInterior") != null, "the Finnish forest sauna is a room with an interior")
+	var baked = stage.get_node_or_null("LakeSauna/Baked")
+	var fighting = coplanar_faces(baked.mesh, sauna.FLOOR) if baked != null else ["no baked mesh"]
+	check(fighting.is_empty(), "no two differently coloured faces share a plane, so nothing flickers (%d: %s)" % [fighting.size(), "; ".join(fighting.slice(0, 400))])
 
 	# --- The window faces the road and nothing blocks the view.
 	var window = sauna.window_center()
@@ -133,6 +175,17 @@ func run() -> void:
 	check(target.get("action", "") == "sauna" and float(target.get("value", 0.0)) == 1.0, "the opposite bench offers to steam too")
 	game.interaction.activate()
 	check(game.seated and game.walker.distance_to(sauna.seat(2)) < 0.01, "the fan sits on the opposite bench")
+	# The stove stands by the other bench: from every seat F still reaches it.
+	for index in range(sauna.SEATS.size()):
+		game.walker = sauna.seat(index)
+		face(game, sauna.stones())
+		target = game.interaction.current()
+		check(target.get("action", "") == "sauna_ladle", "seat %d reaches the stove with F (%.2f m, got %s)" % [index, game.walker.distance_to(sauna.stones()), target.get("action", "none")])
+	steam.ladle_clock = 0.0
+	heat = steam.heat
+	game.interaction.activate()
+	check(steam.heat > heat, "water thrown from the far bench lands on the stones")
+	game.walker = sauna.seat(2)
 	game.stand_up()
 	var friend_seat = sauna.seat(2)
 	game.room.peers["friend"] = {"id": "friend", "state": {"seated": true, "in_car": false, "pos": [friend_seat.x, friend_seat.y, friend_seat.z]}}
