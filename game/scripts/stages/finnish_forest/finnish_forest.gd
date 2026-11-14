@@ -56,10 +56,13 @@ const BODIES = [
 
 const Props = preload("res://scripts/core/props.gd")
 const Records = preload("res://scripts/stages/stage_records.gd")
+const LakeSauna = preload("res://scripts/stages/finnish_forest/lake_sauna.gd")
 # Buildings and the lakeside jetty; trees, boulders and undergrowth keep clear.
 var reserved_spots: Array[Dictionary] = []
 var yellow_house = Vector3.ZERO
 var sauna = Vector3.ZERO
+# The walk-in sauna (lake_sauna.gd): benches, stove, steam and the road window.
+var lake_sauna = LakeSauna.new()
 var jetty: Dictionary = {}
 var boat: Node3D
 
@@ -141,6 +144,10 @@ func _configure_sauna() -> void:
 	var end = origin + Vector3(side * (best_u + 10.0), 0, 0)
 	jetty = {"start": start, "end": end, "half_width": 0.9, "deck": float(lake.level) + 0.45, "station": best_s, "side": side}
 	reserved_spots.append({"pos": sauna, "radius": 6.5})
+	# No trees between the sauna window and the road.
+	var road = stage.at(best_s)
+	for t in [0.45, 0.7, 0.95]:
+		reserved_spots.append({"pos": sauna.lerp(Vector3(road.x, sauna.y, road.z), t), "radius": 3.0})
 	reserved_spots.append({"pos": (start + end) * 0.5, "radius": 7.5})
 
 func reserved(pos: Vector3, padding: float = 0.0) -> bool:
@@ -451,17 +458,8 @@ func _build_sauna() -> void:
 	hut.position = sauna
 	var toward_lake = Vector3(float(jetty.side), 0, 0)
 	hut.rotation.y = atan2(toward_lake.x, toward_lake.z)
-	_level(hut, Vector2(2.1, 1.8), Color("5d564c"))
-	for row in range(7):
-		Props.box(hut, Vector3(0, 0.45 + row * 0.32, 0), Vector3(4.0 - (row % 2) * 0.1, 0.3, 3.4 + (row % 2) * 0.1), Color("7a5634").lightened((row % 2) * 0.05))
-	for sign in [-1.0, 1.0]:
-		var slab = Props.box(hut, Vector3(sign * 1.1, 2.95, 0), Vector3(2.5, 0.14, 4.0), Color("3f3a36"))
-		slab.rotation.z = -sign * 0.42
-	# The door sits proud of the log ends (they reach 1.75 m), so the two
-	# faces never share a plane and flicker.
-	Props.box(hut, Vector3(0, 1.2, 1.80), Vector3(0.8, 1.7, 0.06), Color("4a3524"))
-	Props.cylinder(hut, Vector3(1.0, 3.5, -0.8), 0.14, 0.14, 1.3, Color("2f2f2f"), 6)
-	_footprint(hut, Vector2(2.1, 1.8), 3.2)
+	_level(hut, LakeSauna.HALF + Vector2(0.1, 0.1), Color("5d564c"))
+	lake_sauna.build(stage, hut)
 	# Jetty: deck planks on posts standing in the lake.
 	var start: Vector3 = jetty.start
 	var end: Vector3 = jetty.end
