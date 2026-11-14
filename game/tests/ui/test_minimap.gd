@@ -22,6 +22,16 @@ func run() -> void:
 	check(map.player_direction().is_equal_approx((map.project(forward) - map.project(Vector3.ZERO)).normalized()), "indicator uses actual nonuniform map projection")
 	game.walker = Vector3(10000, 0, -10000)
 	check(Rect2(Vector2.ONE * 12, map.size - Vector2.ONE * 24).has_point(map.player_marker_position() - Vector2(0.001, -0.001)), "off-map marker stays inside map")
+	var kinds = {}
+	for role in ["racer", "zero", "opening_police", "closing_police", "ambulance"]:
+		kinds[role] = map.marker_kind({"role": role})
+	check(kinds.opening_police == "police" and kinds.closing_police == "police", "both police cars share the police marker")
+	check(map.marker_kind({}) == "racer", "a crew without role is a competing crew")
+	var looks = {}
+	for kind in ["racer", "zero", "police", "ambulance"]:
+		check(kinds.values().has(kind), "role maps to the %s marker" % kind)
+		looks[str(map.MARKERS[kind].shape) + str(map.MARKERS[kind].color)] = true
+	check(looks.size() == 4, "crews, zeros, police and ambulance look different on the map")
 	game._update_hud()
 	check(game.quest_label.text.begins_with("[ ] Выбрать место для лагеря"), "driving or walking alone does not select camp location")
 	game.walker = game.stage.clearings[0]
