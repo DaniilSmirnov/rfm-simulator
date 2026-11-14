@@ -1,0 +1,86 @@
+extends "res://tests/harness.gd"
+# Time of day and weather (scripts/core/sky_weather.gd): the stage card pickers,
+# which weather each stage allows (rain without snow, snow on snowy stages),
+# the sky they draw, headlights at night, grip, the weather sound and the room
+# snapshot guests apply.
+const SkyWeather = preload("res://scripts/core/sky_weather.gd")
+const StageRegistry = preload("res://scripts/stages/stage_registry.gd")
+
+func _initialize() -> void:
+	call_deferred("run")
+
+func run() -> void:
+	check_rules()
+	check_looks()
+	var game = load("res://main.tscn").instantiate()
+	game.defer_world = true
+	root.add_child(game)
+	await process_frame
+	await process_frame
+	game.set_process(false)
+	game.room.set_process(false)
+	var sky = game.sky_weather
+	var ui = game.lobby_ui
+	check(sky.daytime == "day" and sky.weather == "sun", "a stage starts in daylight and sun")
+	check(ui.daytime_choice != null and ui.weather_choice != null and ui.daytime_choice.get_parent().get_parent().get_parent().name == "StageCard", "the pickers sit on the stage card")
+	check(ui.weather_choice.skipped.has(3) and not ui.weather_choice.skipped.has(1), "a summer stage offers rain and skips snow")
+	# Arrows: sun → rain → fog → (snow skipped) → sun.
+	ui.weather_choice.cycle(1)
+	check(sky.weather == "rain" and game.get_node_or_null("Weather") != null, "rain picked on the card falls")
+	var forest_point = game.stage.at(100)
+	check(is_equal_approx(game.stage.grip(forest_point), game.stage.biome.grip(forest_point) * SkyWeather.GRIP.rain) and SkyWeather.GRIP.rain < 1.0, "rain makes the road slippery")
+	game.playing = true
+	game.soundscape._update_weather()
+	check(game.soundscape.weather_audio.stream == load("res://audio/rain.wav"), "rain is heard while playing")
+	game.playing = false
+	game.soundscape._update_weather()
+	check(game.soundscape.weather_audio.stream == null, "the menu stays quiet")
+	ui.daytime_choice.cycle(1)
+	check(sky.daytime == "night", "night picked on the card")
+	check(game.world_environment.environment.ambient_light_energy < 0.35 and game.sunlight.light_energy < 0.3, "night dims the ambient light and the sun becomes a moon")
+	check(game.car.get_node_or_null("Headlights") is SpotLight3D, "the car has its headlights on at night")
+	ui.weather_choice.cycle(1)
+	ui.weather_choice.cycle(1)
+	check(sky.weather == "sun" and game.get_node_or_null("Weather") == null, "snow is skipped on a summer stage and the sky clears")
+	# Rain picked, then a snowy stage: the weather turns to sun, snow becomes possible.
+	ui.weather_choice.cycle(1)
+	var winter = StageRegistry.index_of("winter")
+	game.select_stage(winter)
+	check(sky.weather == "sun" and ui.weather_choice.selected == 0, "rain turns to sun on a snowy stage")
+	check(ui.weather_choice.skipped.has(1) and not ui.weather_choice.skipped.has(3), "a snowy stage skips rain and offers snow")
+	ui.weather_choice.cycle(-1)
+	check(sky.weather == "snow" and game.get_node_or_null("Weather") is GPUParticles3D, "snow falls on a snowy stage")
+	check(game.world_environment.environment.fog_density >= SkyWeather.FOG_DENSITY.snow, "snowfall thickens the fog")
+	check(is_equal_approx(game.stage.weather_grip, SkyWeather.GRIP.snow) and SkyWeather.GRIP.snow < 1.0, "fresh snow takes some grip")
+	# The room: the host's conditions reach a guest's sky.
+	var shared = sky.snapshot()
+	check(shared == {"time": "night", "weather": "snow"}, "the snapshot carries time and weather")
+	sky.apply_snapshot({"time": "day", "weather": "fog"})
+	check(sky.daytime == "day" and sky.weather == "fog" and game.car.get_node_or_null("Headlights") == null, "a guest takes the host's conditions; headlights go off in the day")
+	check(game.stage.weather_grip == 1.0, "fog leaves the grip alone")
+	ui.refresh()
+	check(ui.daytime_choice.selected == 0 and ui.weather_choice.selected == 2, "the pickers show the room's conditions")
+	sky.apply_snapshot({"time": "noon", "weather": "rain"})
+	check(sky.daytime == "day" and sky.weather == "sun", "unknown or unfitting values fall back to day and sun")
+	var validation = load("res://scripts/net/world_validation.gd")
+	check(validation.valid({"sky": shared}) and not validation.valid({"sky": {"time": 1}}), "the world schema checks the sky section")
+	game.queue_free()
+	await process_frame
+	finish()
+
+func check_rules() -> void:
+	check(SkyWeather.fits("rain", false) == "rain" and SkyWeather.fits("rain", true) == "sun", "rain only without snow")
+	check(SkyWeather.fits("snow", true) == "snow" and SkyWeather.fits("snow", false) == "sun", "snow only on snowy stages")
+	for kind in ["sun", "fog"]:
+		check(SkyWeather.fits(kind, true) == kind and SkyWeather.fits(kind, false) == kind, "%s fits every stage" % kind)
+
+func check_looks() -> void:
+	for i in range(StageRegistry.count()):
+		var day = SkyWeather.look(i, "day", "sun")
+		check(day.environment == StageRegistry.section(i, "environment") and day.sun == StageRegistry.section(i, "sun"), "day and sun keep the stage's own sky (%d)" % i)
+		var night = SkyWeather.look(i, "night", "sun")
+		check(Color(night.environment.sky_top).get_luminance() < 0.1 and float(night.sun.energy) < float(day.sun.energy), "night is dark (%d)" % i)
+		var fog = SkyWeather.look(i, "day", "fog")
+		check(float(fog.environment.fog_density) > 0.015, "fog closes in (%d)" % i)
+		var rain = SkyWeather.look(i, "day", "rain")
+		check(float(rain.sun.energy) < float(day.sun.energy) and float(rain.environment.fog_density) > float(day.environment.fog_density), "rain is overcast (%d)" % i)

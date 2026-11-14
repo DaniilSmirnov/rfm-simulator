@@ -69,6 +69,8 @@ func rebuild() -> void:
 	if game.stage != null and game.stage.has_method("sync_providers"):
 		for p in game.stage.sync_providers(game):
 			providers.append(p)
+	# The room's time of day and weather: the host picked them in the menu.
+	providers.append(_subsystem("sky", func(): return game.sky_weather, "snapshot", "apply_snapshot", "sky"))
 	providers.append(provider("camp", "camp", ["camp", "table_yaw", "chairs", "chair_poses", "flag_poses", "cooking", "grill_pose", "grill_fire", "grill_servings", "npc_servings", "eaten"], _camp_snapshot, _camp_apply))
 	providers.append(provider("drive", "", ["drive_protocol", "driving"], _drive_snapshot, func(_f, _t): pass))
 	providers.append(provider("stones", "", ["stones", "stone_ids", "impacts"], _stones_snapshot, _stones_apply))

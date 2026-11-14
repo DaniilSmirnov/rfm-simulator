@@ -64,6 +64,8 @@ var stage_choice: HBoxContainer
 var fps_label: Label
 var fps_clock = 0.0
 var stage_caption: Label
+# Sky, sun, time of day and weather (sky_weather.gd) and the nodes it built.
+var sky_weather = preload("res://scripts/core/sky_weather.gd").new()
 var world_environment: WorldEnvironment
 var sunlight: DirectionalLight3D
 var car: Node3D
@@ -293,7 +295,7 @@ func _ready() -> void:
 		draw_distance.apply(stage)
 		world_ready = true
 	print("[RFM] Лёгкое меню: карта будет подготовлена при входе" if defer_world else "[RFM] Рельеф и объекты карты готовы")
-	_build_environment()
+	sky_weather.setup(self); add_child(sky_weather); sky_weather.rebuild()
 	spectators = Spectators.new()
 	spectators.game = self
 	add_child(spectators)
@@ -369,44 +371,6 @@ func _setup_input() -> void:
 			var e = InputEventKey.new()
 			e.physical_keycode = key
 			InputMap.action_add_event(action, e)
-
-# Sky, fog, ambient light and sun of the selected stage (res://data/stages.json).
-func _build_environment() -> void:
-	var world = WorldEnvironment.new()
-	world_environment = world
-	var look = StageRegistry.section(stage.variant, "environment")
-	var env = Environment.new()
-	env.background_mode = Environment.BG_SKY
-	var sky = Sky.new()
-	var sky_mat = ProceduralSkyMaterial.new()
-	sky_mat.sky_top_color = Color(look.sky_top)
-	sky_mat.sky_horizon_color = Color(look.sky_horizon)
-	sky_mat.ground_bottom_color = Color(look.ground_bottom)
-	sky_mat.ground_horizon_color = Color(look.ground_horizon)
-	if look.has("sky_curve"):
-		sky_mat.sky_curve = float(look.sky_curve)
-	sky.sky_material = sky_mat
-	env.sky = sky
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(look.ambient)
-	env.ambient_light_energy = float(look.ambient_energy)
-	env.tonemap_mode = Environment.TONE_MAPPER_LINEAR
-	env.fog_enabled = true
-	env.fog_light_color = Color(look.fog)
-	env.fog_density = float(look.fog_density)
-	if look.has("fog_sky_affect"):
-		env.fog_sky_affect = float(look.fog_sky_affect)
-	world.environment = env
-	add_child(world)
-	var light = StageRegistry.section(stage.variant, "sun")
-	var sun = DirectionalLight3D.new()
-	sunlight = sun
-	sun.rotation_degrees = Vector3(light.rotation[0], light.rotation[1], light.rotation[2])
-	sun.light_color = Color(light.color)
-	sun.light_energy = float(light.energy)
-	sun.shadow_enabled = true
-	draw_distance.apply_shadows(sun)
-	add_child(sun)
 
 func _panel(color: Color) -> StyleBoxFlat:
 	return hud.panel(color)
@@ -825,9 +789,7 @@ func select_stage(variant: int, hosted_guest: bool = false) -> void:
 		spectators.rebuild()
 	else:
 		world_ready = false
-	world_environment.free()
-	sunlight.free()
-	_build_environment()
+	sky_weather.rebuild()
 	heading = stage.parks.park_visitor(car, 0)
 	vehicle_motion = Motion.new()
 	speed = 0

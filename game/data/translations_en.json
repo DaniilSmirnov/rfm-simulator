@@ -666,5 +666,12 @@
 "ВЕРТОЛЁТ · %02d КМ/Ч · %d%%": "HELICOPTER · %02d KM/H · %d%%",
 "WASD — полёт и поворот · Space — вверх · Shift — вниз · F — выйти после посадки": "WASD — fly and turn · Space — ascend · Shift — descend · F — exit after landing",
 "Дождись посадки вертолёта.": "Wait for the helicopter to land.",
-  "Плохая связь, голосовой чат не работает": "Poor connection, voice chat is not working"
+  "Плохая связь, голосовой чат не работает": "Poor connection, voice chat is not working",
+"День": "Day",
+"Ночь": "Night",
+"Солнце": "Sun",
+"Дождь": "Rain",
+"Туман": "Fog",
+"Снег": "Snow",
+"В комнате время суток и погоду выбирает создатель.": "In a room the creator picks the time of day and weather."
 }

@@ -1,6 +1,7 @@
 extends RefCounted
-# The player's menu picks (car, stage, character and nickname) kept between
-# launches and over a return to the main menu, which reloads the scene.
+# The player's menu picks (car, stage, time of day, weather, character and
+# nickname) kept between launches and over a return to the main menu, which
+# reloads the scene.
 # Written on every pick made in the menu; a guest borrowing the host's stage
 # is not a pick. Read back once the menu is built. A saved pick that no longer
 # fits falls back the same way a menu pick does: the helicopter only flies on
@@ -17,6 +18,8 @@ func setup(owner) -> void:
 	game.car_choice.item_selected.connect(func(_index): save())
 	game.stage_choice.item_selected.connect(func(_index): save())
 	game.lobby_ui.character_choice.item_selected.connect(func(_index): save())
+	game.lobby_ui.daytime_choice.item_selected.connect(func(_index): save())
+	game.lobby_ui.weather_choice.item_selected.connect(func(_index): save())
 	game.room.ui.name_input.text_changed.connect(func(_text): save())
 
 func save() -> void:
@@ -25,6 +28,8 @@ func save() -> void:
 	var config = ConfigFile.new()
 	config.set_value("menu", "car", game.selected_car)
 	config.set_value("menu", "stage", game.selected_stage)
+	config.set_value("menu", "time", game.sky_weather.daytime)
+	config.set_value("menu", "weather", game.sky_weather.weather)
 	config.set_value("menu", "character", game.avatar_variant)
 	# The untouched default name stays out, so it keeps following the language.
 	var name: String = game.room.ui.name_input.text.strip_edges()
@@ -38,6 +43,8 @@ func restore() -> void:
 		return
 	# Stage first: it decides which cars are offered.
 	game.select_stage(int(config.get_value("menu", "stage", 0)))
+	# After the stage: a weather that does not fit it (rain on snow) turns to sun.
+	game.sky_weather.set_conditions(config.get_value("menu", "time", "day"), config.get_value("menu", "weather", "sun"))
 	game.select_player_car(int(config.get_value("menu", "car", 0)))
 	game.lobby_ui.select_character(int(config.get_value("menu", "character", game.avatar_variant)))
 	# A platform profile (VK) fixes the nickname; it is not overwritten.

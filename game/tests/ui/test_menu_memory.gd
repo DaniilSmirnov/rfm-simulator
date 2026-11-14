@@ -1,6 +1,6 @@
 extends "res://tests/harness.gd"
 # Menu picks survive a restart and a return to the main menu (a scene reload):
-# car, stage, character and the typed nickname; a saved car that the stage does
+# car, stage, time of day, weather, character and the typed nickname; a saved car that the stage does
 # not offer (the helicopter outside Charyn) falls back to the first car.
 const SETTINGS = "user://test_menu_memory.cfg"
 const CharacterProfiles = preload("res://scripts/people/character_profiles.gd")
@@ -42,6 +42,8 @@ func run() -> void:
 	game.car_choice.select(helicopter)
 	game.car_choice.item_selected.emit(helicopter)
 	game.lobby_ui.character_choice.item_selected.emit(looks.size() - 1)
+	game.lobby_ui.daytime_choice.cycle(1)
+	game.lobby_ui.weather_choice.cycle(1)
 	game.room.ui.name_input.text = "Штурман"
 	game.room.ui.name_input.text_changed.emit("Штурман")
 	check(game.selected_stage == charyn and game.selected_car == helicopter and game.avatar_variant == looks[-1], "the picks apply in the menu")
@@ -51,6 +53,7 @@ func run() -> void:
 	check(game.selected_car == helicopter and game.car_choice.selected == helicopter, "the car comes back after a restart")
 	check(game.avatar_variant == looks[-1] and game.lobby_ui.character_choice.selected == looks.size() - 1, "the character comes back after a restart")
 	check(game.room.ui.name_input.text == "Штурман", "the nickname comes back after a restart")
+	check(game.sky_weather.daytime == "night" and game.sky_weather.weather == "rain" and game.lobby_ui.weather_choice.selected == 1, "time of day and weather come back after a restart")
 	check(game.stage_caption.text == game.StageRegistry.caption(charyn).to_upper(), "the stage caption follows the restored stage")
 	# A hand-edited or outdated file: the helicopter saved with another stage.
 	var config = ConfigFile.new()
