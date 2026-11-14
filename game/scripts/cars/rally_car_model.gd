@@ -33,6 +33,7 @@ static func build(variant: int, number_override: int = -1, sponsor_override: Str
 	variant = posmod(variant, models.size())
 	var p: Dictionary = models[variant].duplicate(true)
 	p.color = p.body
+	p.rub_strip = false # the door number panels sit there
 	p.number = int(p.number)
 	if number_override >= 0:
 		p.number = number_override

@@ -231,12 +231,13 @@ static func car_shell_arched(parent: Node3D, sections: Array, color: Color, arch
 		if cut[0] < sections[0].x or cut[0] > sections[-1].x:
 			continue
 		var s: Vector4 = _shell_section(sections, cut[0])
-		rows.append(_shell_ring(s.x, s.y, clampf(maxf(s.z, cut[2]), s.z, s.w - 0.06), s.w))
+		rows.append(_body_ring(s.x, s.y, s.z, s.w, minf(cut[2], s.w - 0.06)))
 	var vertices = PackedVector3Array()
 	var normals = PackedVector3Array()
+	var count: int = rows[0].size()
 	for i in range(rows.size() - 1):
-		for j in range(8):
-			var k = (j + 1) % 8
+		for j in range(count):
+			var k = (j + 1) % count
 			var a: Vector3 = rows[i][j]
 			var normal = (rows[i + 1][j] - a).cross(rows[i][k] - a).normalized()
 			if normal == Vector3.ZERO:
@@ -245,7 +246,7 @@ static func car_shell_arched(parent: Node3D, sections: Array, color: Color, arch
 			for n in range(6):
 				normals.append(normal)
 	for end in [0, rows.size() - 1]:
-		for j in range(1, 7):
+		for j in range(1, count - 1):
 			vertices.append_array(PackedVector3Array([rows[end][0], rows[end][j], rows[end][j + 1]]))
 			for n in range(3):
 				normals.append(Vector3(0, 0, -1.0 if end == 0 else 1.0))
@@ -261,6 +262,22 @@ static func _shell_section(sections: Array, z: float) -> Vector4:
 static func _shell_ring(z: float, w: float, bottom: float, top: float) -> Array:
 	var bevel = Vector2(minf(0.08, (top - bottom) * 0.55), minf(0.06, (top - bottom) * 0.4)) # never fold a thin roof skin over itself
 	return [Vector3(-w * 0.88, bottom, z), Vector3(-w, bottom + bevel.x, z), Vector3(-w, top - bevel.y, z), Vector3(-w * 0.88, top, z), Vector3(w * 0.88, top, z), Vector3(w, top - bevel.y, z), Vector3(w, bottom + bevel.x, z), Vector3(w * 0.88, bottom, z)]
+
+# Car-body cross-section: tucked-in sill, sides bulging out below the waist,
+# a shoulder crease and a crowned top, so the flat-shaded facets catch the
+# light like pressed panels. Points below `floor_y` (a wheel arch) are lifted.
+static func _body_ring(z: float, w: float, bottom: float, top: float, floor_y: float) -> Array:
+	var h = top - bottom
+	var side = [
+		Vector2(0.84, bottom), Vector2(0.96, bottom + minf(0.07, h * 0.2)), Vector2(1.0, bottom + h * 0.5),
+		Vector2(0.985, top - minf(0.08, h * 0.25)), Vector2(0.9, top - minf(0.02, h * 0.08)), Vector2(0.45, top),
+	]
+	var ring = []
+	for i in range(side.size()):
+		ring.append(Vector3(-w * side[i].x, maxf(side[i].y, floor_y), z))
+	for i in range(side.size() - 1, -1, -1):
+		ring.append(Vector3(w * side[i].x, maxf(side[i].y, floor_y), z))
+	return ring
 
 static func _shell_node(parent: Node3D, vertices: PackedVector3Array, normals: PackedVector3Array, color: Color) -> MeshInstance3D:
 	var arrays = []

@@ -71,18 +71,23 @@ static func _shell(root: Node3D, p: Dictionary, f: Dictionary) -> void:
 		arches.append(Vector3(z, f.radius, f.arch))
 	var body = P.car_shell_arched(root, sections, paint, arches)
 	body.name = "BodyShell"
+	body.material_override.roughness = 0.5 # paint catches the sun
 	var gh: float = f.glass_half
 	var top: float = f.height
-	P.car_shell(root, [
+	var glass = P.car_shell(root, [
 		Vector4(shape[0], gh, f.floor - 0.06, f.floor + 0.13),
 		Vector4(shape[1], gh * 0.94, f.floor, top - 0.06),
 		Vector4(shape[2], gh * 0.93, f.floor, top - 0.06),
 		Vector4(shape[3], gh, f.deck - 0.08, f.deck + 0.11),
-	], GLASS).name = "GlassCabin"
-	P.car_shell(root, [
+	], GLASS)
+	glass.name = "GlassCabin"
+	glass.material_override.roughness = 0.2
+	var roof = P.car_shell(root, [
 		Vector4(shape[1] - 0.03, gh * 0.95, top - 0.07, top + 0.02),
 		Vector4(shape[2] + 0.03, gh * 0.94, top - 0.07, top + 0.02),
-	], Color(p.get("roof_color", p.color))).name = "Roof"
+	], Color(p.get("roof_color", p.color)))
+	roof.name = "Roof"
+	roof.material_override.roughness = 0.5
 
 static func _side(root: Node3D, p: Dictionary, f: Dictionary, side: float) -> void:
 	var paint = Color(p.color)
@@ -93,7 +98,13 @@ static func _side(root: Node3D, p: Dictionary, f: Dictionary, side: float) -> vo
 	P.car_beam(root, Vector3(x, f.floor + 0.04, shape[0]), Vector3(x * 0.94, top - 0.04, shape[1]), 0.065, paint)
 	P.car_beam(root, Vector3(x * 0.93, top - 0.04, shape[2]), Vector3(x, f.deck + 0.06, shape[3]), 0.08, paint)
 	var pillar = float(p.get("pillar", 0.1))
-	P.car_beam(root, Vector3(x, f.floor, pillar), Vector3(x * 0.94, top - 0.05, pillar), 0.07, paint)
+	# Blacked-out B-pillar and a bright waist moulding under the side glass.
+	P.car_beam(root, Vector3(x, f.floor, pillar), Vector3(x * 0.94, top - 0.05, pillar), 0.07, DARK)
+	var waist = Color(p.get("waist", "aab3b2"))
+	var belt: Array = [float(shape[0]) + 0.04, float(shape[3]) - 0.04]
+	P.box(root, Vector3(x * 1.01, f.floor + 0.005, (belt[0] + belt[1]) * 0.5), Vector3(0.03, 0.03, belt[1] - belt[0]), waist)
+	if p.get("rub_strip", true):
+		side_band(root, f, side * (half + 0.012), (f.sill + f.bonnet) * 0.5 + 0.05, 0.045, f.front + 0.3, f.rear - 0.3, DARK.lightened(0.06))
 	# Mirror on the door shoulder, just behind the windscreen base.
 	var mirror_z = float(shape[0]) + 0.16
 	P.car_beam(root, Vector3(side * half * 0.9, f.bonnet + 0.02, mirror_z), Vector3(side * (half + 0.04), f.bonnet + 0.09, mirror_z), 0.04, DARK)
@@ -154,6 +165,10 @@ static func _front(root: Node3D, p: Dictionary, f: Dictionary) -> void:
 	var style = str(p.get("lights", "square"))
 	for side in [-1.0, 1.0]:
 		var x: float = side * f.half * 0.66
+		# Dark bezel round the lamps, so the face reads from a distance.
+		var bezel = Vector3(f.half * 0.56, 0.21, 0.02) if style in ["round", "twin"] else Vector3(0.54 if style == "wide" else 0.44, 0.13 if style == "slim" else 0.20, 0.02)
+		var bezel_x: float = side * f.half * (0.665 if style == "twin" else 0.66)
+		P.box(root, Vector3(bezel_x, lamp_y + (0.02 if style == "slim" else 0.0), lens + 0.03), bezel, DARK).rotation.z = 0.0 if style in ["round", "twin"] else side * float(p.get("lamp_tilt", 0.0))
 		match style:
 			"round":
 				_disc(root, Vector3(x, lamp_y, lens + 0.025), 0.10, LAMP)
@@ -200,8 +215,14 @@ static func _rear(root: Node3D, p: Dictionary, f: Dictionary) -> void:
 			for side in [-1.0, 1.0]:
 				P.box(root, Vector3(side * f.half * 0.84, f.deck, tail), Vector3(0.16, 0.48, 0.045), TAIL)
 		_:
+			# Framed cluster: red outboard, amber indicator, white reverse lamp.
+			var tall = 0.24 if p.get("suv", false) else 0.15
 			for side in [-1.0, 1.0]:
-				P.box(root, Vector3(side * f.half * 0.68, y, tail), Vector3(0.33, 0.24 if p.get("suv", false) else 0.15, 0.045), TAIL)
+				var x: float = side * f.half * 0.68
+				P.box(root, Vector3(x, y, tail - 0.005), Vector3(0.37, tall + 0.04, 0.04), DARK)
+				P.box(root, Vector3(x + side * 0.06, y, tail + 0.01), Vector3(0.2, tall, 0.03), TAIL)
+				P.box(root, Vector3(x - side * 0.075, y, tail + 0.01), Vector3(0.07, tall, 0.03), Color("e39a3b"))
+				P.box(root, Vector3(x - side * 0.14, y, tail + 0.01), Vector3(0.05, tall, 0.03), Color("e9ecea"))
 	_bumper(root, p, f, tail + 0.025)
 	if p.get("spare_wheel", false):
 		var spare = CarParts.wheel(root, Vector3(0, f.base + 0.22, f.rear + 0.17), 0.36, 0.2, 1.0, p.get("wheel", {}))

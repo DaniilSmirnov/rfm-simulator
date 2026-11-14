@@ -27,7 +27,7 @@ static func build() -> Node3D:
 	root.set_meta("model_source", "granta_detailed")
 	# Faceted waistline, short high tail and sloping bonnet; the sides run
 	# down to the sill with a round arch over each wheel.
-	P.car_shell_arched(root, [
+	var shell = P.car_shell_arched(root, [
 		Vector4(-2.13, 0.69, 0.40, 0.72),
 		Vector4(-2.03, 0.77, 0.34, 0.83),
 		Vector4(-1.94, 0.81, 0.31, 0.87),
@@ -37,7 +37,9 @@ static func build() -> Node3D:
 		Vector4(1.42, 0.85, 0.30, 1.00),
 		Vector4(2.03, 0.79, 0.35, 0.93),
 		Vector4(2.13, 0.70, 0.42, 0.89),
-	], PAINT, [Vector3(WHEEL_Z[0], 0.37, 0.44), Vector3(WHEEL_Z[1], 0.37, 0.44)]).name = "BodyShellGranta"
+	], PAINT, [Vector3(WHEEL_Z[0], 0.37, 0.44), Vector3(WHEEL_Z[1], 0.37, 0.44)])
+	shell.name = "BodyShellGranta"
+	shell.material_override.roughness = 0.45
 	P.car_shell(root, [
 		Vector4(-0.88, 0.74, 0.94, 1.01),
 		Vector4(-0.48, 0.68, 0.96, 1.44),
