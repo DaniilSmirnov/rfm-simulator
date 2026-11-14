@@ -1,11 +1,10 @@
 extends "res://tests/harness.gd"
 # A loaded stage at rest costs little physics: the NPC camps' chairs, tables,
-# grills and cars settle, people standing or sitting still get no pushing
-# collider, and standing trunks are not re-posed every tick. Before this the
+# grills and cars settle, people get no pushing collider (only cars move
+# props), and standing trunks are not re-posed every tick. Before this the
 # camps never slept and the physics step alone took 50-95 ms (2-5 fps).
 # Locked, 19 camp props were still awake here after four seconds.
 const CAMP_AWAKE_LIMIT = 12
-const PropActors = preload("res://scripts/core/prop_actors.gd")
 class ExhaustiveSolids:
 	extends "res://scripts/stages/stage_solids.gd"
 	func candidates(_start: Vector3, _end: Vector3, _radius: float) -> Array:
@@ -28,12 +27,11 @@ func run() -> void:
 	var physics_ms = Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0
 	check(physics_ms < 30.0, "a stage at rest steps its physics in %.1f ms" % physics_ms)
 	var actors = game.stage.solids.prop_ground.get_node_or_null("Actors") if game.stage.solids.prop_ground != null else null
-	var still = 0
+	var people = 0
 	if actors != null:
-		for key in actors._still:
-			if int(actors._still[key]) >= PropActors.STILL_TICKS and not actors.bodies.has(key):
-				still += 1
-	check(actors == null or still > 0, "people who stand still near props carry no collider (%d)" % still)
+		for key in actors.bodies:
+			if not str(key).begins_with("car:"): people += 1
+	check(people == 0, "people carry no prop collider, only cars do (%d)" % people)
 	# Starting play unfroze every prop, which woke it; the service parks' tyre
 	# stacks and benches then crept or sank through the terrain and never slept.
 	var awake_parks = 0

@@ -13,7 +13,14 @@ const HIT_FACING = 0.4
 const HEAT = 0.1
 const SWING_RATE = 12.0
 
-var steam
+# The owning sauna_steam.gd holds this whisk, so the link back is weak:
+# a strong one would be a reference cycle that leaks both at exit.
+var _steam: WeakRef
+var steam:
+	get:
+		return _steam.get_ref() if _steam else null
+	set(value):
+		_steam = weakref(value) if value else null
 var time_left = 0.0
 var held: Node3D
 var felt: Dictionary = {}
