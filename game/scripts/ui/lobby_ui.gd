@@ -82,7 +82,6 @@ var buy_buttons: Array[Button] = []
 var character_choice: HBoxContainer
 # Time of day and weather, under the stage on its card (sky_weather.gd).
 var conditions: HBoxContainer
-var conditions_badge: PanelContainer
 const BACKDROP_DIM = Color(0.72, 0.72, 0.72, 1)
 const BACKDROP_TINT = {"rain": Color(0.78, 0.8, 0.84), "fog": Color(0.9, 0.92, 0.92), "snow": Color(0.9, 0.93, 0.97), "night": Color(0.34, 0.4, 0.58)}
 
@@ -94,14 +93,13 @@ func build_selection(parent: Control) -> void:
 		var column = UiKit.vbox(card, 8)
 		UiKit.label(column, spec.title, "caption")
 		add_preview(column, spec.preview)
+		if spec.kind == "stage":
+			_build_conditions(images[-1])
 		var choice = preload("res://scripts/ui/menu_choice.gd").new()
 		choice.custom_minimum_size.y = 42
 		choice.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		column.add_child(choice)
 		choices.append(choice)
-		if spec.kind == "stage":
-			_build_badge(images[-1])
-			_build_conditions(column)
 		var state = UiKit.label(column, "", "muted")
 		states.append(state)
 		var buy = UiKit.button(column, "", "secondary", 40)
@@ -138,10 +136,13 @@ func build_selection(parent: Control) -> void:
 	check_purchase.pressed.connect(func(): game.platform_service.refresh_store())
 	purchase_actions.hide()
 
-# Day or night and the weather, as picture tiles under the stage name.
-func _build_conditions(parent: Control) -> void:
+# Day or night and the weather: picture tiles in the stage preview's corner.
+func _build_conditions(image: Control) -> void:
 	conditions = preload("res://scripts/ui/conditions_picker.gd").new()
-	parent.add_child(conditions)
+	image.add_child(conditions)
+	conditions.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT, Control.PRESET_MODE_MINSIZE, 6)
+	conditions.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	conditions.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	conditions.changed.connect(func(time: String, weather: String):
 		game.sky_weather.set_conditions(time, weather)
 		refresh()
@@ -153,22 +154,9 @@ func _show_conditions() -> void:
 	var sky = game.sky_weather
 	conditions.show_conditions(sky.daytime, sky.weather, sky.snowy())
 	images[1].texture = load(sky.preview_path(game.selected_stage, sky.daytime, sky.weather))
-	conditions_badge.get_child(0).text = conditions.caption()
 	# The menu backdrop is one picture per stage: tinted to the conditions.
 	var tint = BACKDROP_DIM * BACKDROP_TINT.get(sky.weather, Color.WHITE)
 	background.modulate = tint * BACKDROP_TINT.night if sky.daytime == "night" else tint
-
-# «Ночь · Дождь» in the stage preview's corner.
-func _build_badge(image: Control) -> void:
-	conditions_badge = PanelContainer.new()
-	conditions_badge.name = "ConditionsBadge"
-	conditions_badge.add_theme_stylebox_override("panel", UiKit.box(Color(UiKit.SHADOW, 0.78), Color.TRANSPARENT, 6, Vector2(8, 2)))
-	conditions_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	image.add_child(conditions_badge)
-	conditions_badge.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT, Control.PRESET_MODE_MINSIZE, 6)
-	conditions_badge.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	var text = UiKit.label(conditions_badge, "", "caption")
-	text.add_theme_color_override("font_color", UiKit.TEXT)
 
 func add_preview(parent: Control, tooltip: String) -> void:
 	var image = TextureRect.new()
@@ -377,6 +365,7 @@ func _process(_delta: float) -> void:
 		var compact = game.mobile_mode or size.y < 650
 		for image in images:
 			image.custom_minimum_size.y = (72 if game.mobile_mode else 100) if compact else 140
+		conditions.set_compact(compact)
 		refresh()
 	game.hud.layout_menu()
 	var result = game.dead or game.finished

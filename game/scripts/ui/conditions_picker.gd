@@ -3,18 +3,22 @@ extends HBoxContainer
 # tiles, «День / Ночь» and «Солнце / Дождь or Снег / Туман». The middle
 # weather tile is rain on summer stages and snow on snowy ones (sky_weather.gd),
 # so the weather always offers three. The picked tile is filled with the
-# accent colour; the card's preview shows the stage under the pick and names it
-# (lobby_ui.gd). In a room the creator's choice is everyone's.
+# accent colour. The strip sits in a corner of the stage preview, which shows
+# the stage under the pick (lobby_ui.gd), so the card keeps the same rows as
+# the others. In a room the creator's choice is everyone's.
 signal changed(time: String, weather: String)
 
 const UiKit = preload("res://scripts/ui/ui_kit.gd")
-const Loc = preload("res://scripts/ui/loc.gd")
 const SkyWeather = preload("res://scripts/core/sky_weather.gd")
 const ICON_DIR = "res://textures/ui/menu/"
 const LABELS = {"day": "День", "night": "Ночь", "sun": "Солнце", "rain": "Дождь", "snow": "Снег", "fog": "Туман"}
 const ICONS = {"day": "day", "night": "night", "sun": "weather_sun", "rain": "weather_rain", "snow": "weather_snow", "fog": "weather_fog"}
-const TILE_HEIGHT = 38
-const HOVER = Color("ffffff14")
+# Tile size on a desktop card and on a phone, where the preview is low.
+const TILE = Vector2(36, 30)
+const TILE_COMPACT = Vector2(30, 26)
+const HOVER = Color("ffffff24")
+# Dark glass over the picture: the tiles read on snow and on a night sky alike.
+const GLASS = Color(0.063, 0.102, 0.078, 0.74)
 
 var time = "day"
 var weather = "sun"
@@ -24,28 +28,26 @@ var tiles: Dictionary = {}
 
 func _init() -> void:
 	name = "Conditions"
-	add_theme_constant_override("separation", 8)
+	add_theme_constant_override("separation", 4)
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	tooltip_text = "В комнате время суток и погоду выбирает создатель."
-	_group(["day", "night"], 2)
-	_group(["sun", "rain", "fog"], 3)
+	_group(["day", "night"])
+	_group(["sun", "rain", "fog"])
 	tiles.snow = tiles.rain
 
 # A sunken rounded strip holding the tiles of one choice side by side.
-func _group(values: Array, weight: int) -> void:
+func _group(values: Array) -> void:
 	var strip = PanelContainer.new()
-	strip.add_theme_stylebox_override("panel", UiKit.box(UiKit.SURFACE_SUNKEN, UiKit.LINE, UiKit.RADIUS, Vector2(3, 3)))
-	strip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	strip.size_flags_stretch_ratio = weight
+	strip.add_theme_stylebox_override("panel", UiKit.box(GLASS, Color(UiKit.LINE, 0.9), 8, Vector2(2, 2)))
 	add_child(strip)
-	var row = UiKit.hbox(strip, 3)
+	var row = UiKit.hbox(strip, 2)
 	for value in values:
 		var tile = Button.new()
 		tile.name = value.capitalize() + "Tile"
 		tile.focus_mode = Control.FOCUS_NONE
 		tile.expand_icon = true
 		tile.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		tile.custom_minimum_size = Vector2(34, TILE_HEIGHT)
-		tile.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		tile.custom_minimum_size = TILE
 		row.add_child(tile)
 		tiles[value] = tile
 		tile.pressed.connect(func(): _pick(value))
@@ -56,10 +58,10 @@ func _style(tile: Button, on: bool) -> void:
 	var fill = UiKit.ACCENT if on else Color.TRANSPARENT
 	for state in ["normal", "hover", "pressed", "disabled"]:
 		var color = UiKit.ACCENT_HOVER if on and state == "hover" else (HOVER if state == "hover" else fill)
-		var style = UiKit.box(color, Color.TRANSPARENT, UiKit.RADIUS - 3, Vector2(0, 8))
+		var style = UiKit.box(color, Color.TRANSPARENT, 6, Vector2(7, 5))
 		tile.add_theme_stylebox_override(state, style)
 	tile.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-	var ink = UiKit.ON_ACCENT if on else UiKit.MUTED
+	var ink = UiKit.ON_ACCENT if on else UiKit.TEXT
 	for state in ["icon_normal_color", "icon_pressed_color", "icon_focus_color"]:
 		tile.add_theme_color_override(state, ink)
 	tile.add_theme_color_override("icon_hover_color", UiKit.ON_ACCENT if on else UiKit.HIGHLIGHT)
@@ -97,6 +99,6 @@ func _show() -> void:
 		var picked = value == time or value == weather or (value == "rain" and weather == "snow")
 		_style(tiles[value], picked)
 
-# «Ночь · Дождь»: the badge over the stage preview.
-func caption() -> String:
-	return "%s · %s" % [Loc.t(LABELS[time]), Loc.t(LABELS[weather])]
+func set_compact(compact: bool) -> void:
+	for value in ["day", "night", "sun", "rain", "fog"]:
+		tiles[value].custom_minimum_size = TILE_COMPACT if compact else TILE

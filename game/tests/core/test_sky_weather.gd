@@ -24,10 +24,9 @@ func run() -> void:
 	var ui = game.lobby_ui
 	check(sky.daytime == "day" and sky.weather == "sun", "a stage starts in daylight and sun")
 	var tiles: Dictionary = ui.conditions.tiles
-	check(ui.conditions.get_parent().get_parent().name == "StageCard", "the tiles sit on the stage card")
+	check(ui.conditions.get_parent() == ui.images[1], "the tiles sit on the stage preview")
 	check(tiles.rain.icon.resource_path.ends_with("weather_rain.svg"), "a summer stage offers rain")
 	check(ui.images[1].texture.resource_path == "res://textures/previews/stage_%d.webp" % game.selected_stage, "day and sun show the stage's usual preview")
-	check(ui.conditions_badge.get_child(0).text == "День · Солнце", "the preview names the conditions")
 	tiles.rain.pressed.emit()
 	check(ui.images[1].texture.resource_path == SkyWeather.preview_path(game.selected_stage, "day", "rain"), "the preview shows the stage in the rain")
 	check(sky.weather == "rain" and game.get_node_or_null("Weather") != null, "rain picked on the card falls")
@@ -40,7 +39,7 @@ func run() -> void:
 	game.soundscape._update_weather()
 	check(game.soundscape.weather_audio.stream == null, "the menu stays quiet")
 	tiles.night.pressed.emit()
-	check(sky.daytime == "night" and ui.conditions_badge.get_child(0).text == "Ночь · Дождь", "night picked on the card")
+	check(sky.daytime == "night" and ui.images[1].texture.resource_path == SkyWeather.preview_path(game.selected_stage, "night", "rain"), "night picked on the card")
 	check(game.world_environment.environment.ambient_light_energy < 0.35 and game.sunlight.light_energy < 0.3, "night dims the ambient light and the sun becomes a moon")
 	check(game.car.get_node_or_null("Headlights") is SpotLight3D, "the car has its headlights on at night")
 	tiles.sun.pressed.emit()
