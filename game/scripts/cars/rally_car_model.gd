@@ -33,6 +33,7 @@ static func build(variant: int, number_override: int = -1, sponsor_override: Str
 	variant = posmod(variant, models.size())
 	var p: Dictionary = models[variant].duplicate(true)
 	p.color = p.body
+	p.rub_strip = false # the door number panels sit there
 	p.number = int(p.number)
 	if number_override >= 0:
 		p.number = number_override
@@ -73,7 +74,7 @@ static func ambulance() -> Node3D:
 	for side in [-1.0, 1.0]:
 		var x: float = side * (f.glass_half + 0.03)
 		var yaw = side * PI / 2
-		P.box(root, Vector3(side * (f.half + 0.01), f.bonnet - 0.12, 0.2), Vector3(0.012, 0.16, f.rear - f.front - 0.5), red)
+		CarBody.side_band(root, f, side * (f.half + 0.01), f.bonnet - 0.12, 0.16, 0.2 - (f.rear - f.front - 0.5) * 0.5, 0.2 + (f.rear - f.front - 0.5) * 0.5, red)
 		_cross(root, Vector3(x, mid_y + 0.25, (box_from + box_to) * 0.5 + 0.35), 0.55, red, true)
 		P.label_3d(root, Vector3(x + side * 0.004, mid_y - 0.3, (box_from + box_to) * 0.5), "СКОРАЯ", 64, 0.0032, red, yaw)
 	_cross(root, Vector3(0, f.height + 0.03, (box_from + box_to) * 0.5), 0.8, red, false)
@@ -102,7 +103,7 @@ static func police() -> Node3D:
 	var stripe_y: float = (f.base + f.bonnet) * 0.5
 	for side in [-1.0, 1.0]:
 		var x: float = side * (f.half + 0.012)
-		P.box(root, Vector3(x, stripe_y, 0), Vector3(0.012, 0.2, float(p.length) - 0.7), Color("2458aa"))
+		CarBody.side_band(root, f, x, stripe_y, 0.2, -(float(p.length) - 0.7) * 0.5, (float(p.length) - 0.7) * 0.5, Color("2458aa"))
 		P.label_3d(root, Vector3(side * (f.half + 0.03), stripe_y, 0.1), "ПОЛИЦИЯ", 64, 0.0020, Color.WHITE, side * PI / 2)
 	var roof_z: float = (float(f.shape[1]) + float(f.shape[2])) * 0.5
 	P.box(root, Vector3(0, f.height + 0.06, roof_z), Vector3(1.1, 0.08, 0.27), Color("27323c"))
@@ -119,20 +120,20 @@ static func _doors(root: Node3D, p: Dictionary, f: Dictionary, side: float) -> v
 	var yaw: float = side * PI / 2
 	var mid_y: float = (f.base + f.bonnet) * 0.5
 	var door_z: float = (float(f.shape[0]) + float(p.pillar)) * 0.5 + 0.06
-	var rear_z: float = (float(p.pillar) + float(f.axles[1]) - f.radius) * 0.5
+	var rear_z: float = (float(p.pillar) + float(f.axles[1]) - f.arch) * 0.5
 	var length: float = f.rear - f.front - 0.5
 	match str(p.livery):
 		"band":
-			P.box(root, Vector3(skin, f.bonnet - 0.09, 0), Vector3(0.012, 0.09, length), accent)
+			CarBody.side_band(root, f, skin, f.bonnet - 0.09, 0.09, -length * 0.5, length * 0.5, accent)
 		"split":
-			P.box(root, Vector3(skin, f.base - 0.08, 0), Vector3(0.012, 0.22, length + 0.3), accent)
+			CarBody.side_band(root, f, skin, f.base - 0.08, 0.22, -(length + 0.3) * 0.5, (length + 0.3) * 0.5, accent)
 		"sash":
-			_strip(root, Vector3(skin, f.base - 0.12, f.axles[0] + 0.25), Vector3(skin, f.bonnet - 0.06, f.axles[1] - 0.2), 0.10, accent, true)
+			_strip(root, Vector3(skin, f.base - 0.12, f.axles[0] + f.arch + 0.08), Vector3(skin, f.bonnet - 0.06, f.axles[1] - f.arch + 0.05), 0.10, accent, true)
 		"hoops":
 			P.box(root, Vector3(skin, f.bonnet - 0.07, door_z), Vector3(0.012, 0.11, 0.9), accent)
-			P.box(root, Vector3(skin, f.base - 0.13, 0), Vector3(0.012, 0.12, length), accent.darkened(0.35))
+			CarBody.side_band(root, f, skin, f.base - 0.13, 0.12, -length * 0.5, length * 0.5, accent.darkened(0.35))
 		_:
-			P.box(root, Vector3(skin, f.base - 0.12, 0), Vector3(0.012, 0.07, length), accent)
+			CarBody.side_band(root, f, skin, f.base - 0.12, 0.07, -length * 0.5, length * 0.5, accent)
 	P.box(root, Vector3(skin + side * 0.012, mid_y, door_z), Vector3(0.012, 0.36, 0.62), PANEL)
 	# Captions float 1 cm off their panels, clear of the depth buffer's step.
 	P.label_3d(root, Vector3(skin + side * 0.03, mid_y + 0.01, door_z), str(p.number), 96, 0.0029, Color(p.number_color), yaw)

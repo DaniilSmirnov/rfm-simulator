@@ -4,6 +4,7 @@ extends RefCounted
 # Independent model source; gameplay, cargo and hatch physics stay in RallyProps.
 const P = preload("res://scripts/core/props.gd")
 const CarParts = preload("res://scripts/cars/car_parts.gd")
+const CarBody = preload("res://scripts/cars/car_body.gd")
 const PAINT = Color("111a2b") # near-black with a restrained blue tint
 const PAINT_LIT = Color("1c2a40")
 const PAINT_SHADE = Color("0a101c")
@@ -11,6 +12,7 @@ const GLASS = Color("223541")
 const TRIM = Color("121820")
 const CHROME = Color("737f89")
 const RUBBER = Color("131719")
+const WHEEL_Z = [-1.35, 1.40]
 
 static func _box(root: Node3D, pos: Vector3, scale_value: Vector3, color: Color, part: String) -> MeshInstance3D:
 	var node = P.box(root, pos, scale_value, color)
@@ -23,16 +25,21 @@ static func build() -> Node3D:
 	root.set_meta("model", "Компактный седан")
 	root.set_meta("variant", 0)
 	root.set_meta("model_source", "granta_detailed")
-	# Faceted waistline, short high tail and sloping bonnet.
-	P.car_shell(root, [
-		Vector4(-2.13, 0.69, 0.39, 0.72),
-		Vector4(-1.94, 0.79, 0.38, 0.87),
-		Vector4(-1.41, 0.85, 0.37, 0.94),
-		Vector4(-0.84, 0.85, 0.37, 0.95),
-		Vector4(0.58, 0.84, 0.37, 0.97),
-		Vector4(1.42, 0.85, 0.39, 1.00),
-		Vector4(2.13, 0.70, 0.41, 0.89),
-	], PAINT).name = "BodyShellGranta"
+	# Faceted waistline, short high tail and sloping bonnet; the sides run
+	# down to the sill with a round arch over each wheel.
+	var shell = P.car_shell_arched(root, [
+		Vector4(-2.13, 0.69, 0.40, 0.72),
+		Vector4(-2.03, 0.77, 0.34, 0.83),
+		Vector4(-1.94, 0.81, 0.31, 0.87),
+		Vector4(-1.41, 0.85, 0.30, 0.94),
+		Vector4(-0.84, 0.85, 0.30, 0.95),
+		Vector4(0.58, 0.84, 0.30, 0.97),
+		Vector4(1.42, 0.85, 0.30, 1.00),
+		Vector4(2.03, 0.79, 0.35, 0.93),
+		Vector4(2.13, 0.70, 0.42, 0.89),
+	], PAINT, [Vector3(WHEEL_Z[0], 0.37, 0.44), Vector3(WHEEL_Z[1], 0.37, 0.44)])
+	shell.name = "BodyShellGranta"
+	shell.material_override.roughness = 0.45
 	P.car_shell(root, [
 		Vector4(-0.88, 0.74, 0.94, 1.01),
 		Vector4(-0.48, 0.68, 0.96, 1.44),
@@ -62,9 +69,11 @@ static func build() -> Node3D:
 		# Door cut lines and handles.
 		for z in [-0.28, 0.78]:
 			_box(root, Vector3(side * 0.853, 0.91, z), Vector3(0.018, 0.035, 0.15), CHROME, "DoorHandle")
-		for z in [-0.83, 0.07, 1.06]:
+		for z in [-0.83, 0.07, 0.92]:
 			_box(root, Vector3(side * 0.854, 0.62, z), Vector3(0.012, 0.49, 0.018), PAINT_SHADE, "DoorJoint")
-		_box(root, Vector3(side * 0.852, 0.43, 0.03), Vector3(0.04, 0.10, 2.10), PAINT_SHADE, "SideSill")
+		_box(root, Vector3(side * 0.856, 0.34, 0.025), Vector3(0.03, 0.08, 1.85), PAINT_SHADE, "SideSill")
+		for z in WHEEL_Z:
+			CarBody.wheel_well(root, side * 0.82, {"radius": 0.37, "arch": 0.44}, z)
 		# Mirrors stand on the door shoulder behind the windscreen base.
 		_box(root, Vector3(side * 0.82, 0.985, -0.74), Vector3(0.12, 0.05, 0.14), TRIM, "MirrorArm")
 		_box(root, Vector3(side * 0.93, 1.05, -0.74), Vector3(0.12, 0.12, 0.17), PAINT_LIT, "MirrorCap")
@@ -72,7 +81,7 @@ static func build() -> Node3D:
 		# One pivot per wheel: tyre, rim and spokes turn together.
 		for index in range(2):
 			var wheel_name = "RollingWheel_%s_%s" % ["L" if side < 0 else "R", "Front" if index == 0 else "Rear"]
-			CarParts.wheel(root, Vector3(side * 0.89, 0.37, -1.35 if index == 0 else 1.40), 0.37, 0.27, side,
+			CarParts.wheel(root, Vector3(side * 0.77, 0.37, WHEEL_Z[index]), 0.37, 0.27, side,
 				{"name": wheel_name, "style": "spokes", "count": 6, "color": "8e99a2", "detail": "0e141d", "rim": 0.7})
 		# Swept headlamps: a strip on the front face and the larger part on the
 		# bonnet slope above it, so the lamp follows the nose instead of a spike.

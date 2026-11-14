@@ -191,11 +191,7 @@ static var PLAYER_MODELS: Array = CarRegistry.cars
 static func car_shell(parent: Node3D, sections: Array, color: Color) -> MeshInstance3D:
 	var rows = []
 	for section in sections:
-		var w: float = section.y
-		var bottom: float = section.z
-		var top: float = section.w
-		var bevel = Vector2(minf(0.08, (top - bottom) * 0.55), minf(0.06, (top - bottom) * 0.4)) # never fold a thin roof skin over itself
-		rows.append([Vector3(-w * 0.88, bottom, section.x), Vector3(-w, bottom + bevel.x, section.x), Vector3(-w, top - bevel.y, section.x), Vector3(-w * 0.88, top, section.x), Vector3(w * 0.88, top, section.x), Vector3(w, top - bevel.y, section.x), Vector3(w, bottom + bevel.x, section.x), Vector3(w * 0.88, bottom, section.x)])
+		rows.append(_shell_ring(section.x, section.y, section.z, section.w))
 	var vertices = PackedVector3Array()
 	for i in range(rows.size() - 1):
 		for j in range(8):
@@ -212,6 +208,78 @@ static func car_shell(parent: Node3D, sections: Array, color: Color) -> MeshInst
 			normal = -normal
 		for j in range(3):
 			normals.append(normal)
+	return _shell_node(parent, vertices, normals, color)
+
+# Body shell whose sides run down to a sill (each section's bottom) with a
+# round wheel arch cut in over every wheel: arches are Vector3(axle z, axle
+# height, arch radius). The sections are resampled across each arch so its
+# edge stays round; normals follow the winding, so the wheel-well roof faces
+# down into the arch.
+static func car_shell_arched(parent: Node3D, sections: Array, color: Color, arches: Array) -> MeshInstance3D:
+	var cuts: Array = [] # [z, order at equal z, arch bottom or -INF]
+	for s in sections:
+		if arches.all(func(a): return absf(s.x - a.x) >= a.z):
+			cuts.append([s.x, 1, -INF])
+	for a in arches:
+		cuts.append_array([[a.x - a.z, 0, -INF], [a.x + a.z, 1, -INF]])
+		for i in range(9):
+			var dz = -a.z * cos(i * PI / 8.0)
+			cuts.append([a.x + dz, 1 if i == 0 else 0, a.y + sqrt(maxf(0.0, a.z * a.z - dz * dz))])
+	cuts.sort_custom(func(a, b): return a[0] < b[0] or (a[0] == b[0] and a[1] < b[1]))
+	var rows = []
+	for cut in cuts:
+		if cut[0] < sections[0].x or cut[0] > sections[-1].x:
+			continue
+		var s: Vector4 = _shell_section(sections, cut[0])
+		rows.append(_body_ring(s.x, s.y, s.z, s.w, minf(cut[2], s.w - 0.06)))
+	var vertices = PackedVector3Array()
+	var normals = PackedVector3Array()
+	var count: int = rows[0].size()
+	for i in range(rows.size() - 1):
+		for j in range(count):
+			var k = (j + 1) % count
+			var a: Vector3 = rows[i][j]
+			var normal = (rows[i + 1][j] - a).cross(rows[i][k] - a).normalized()
+			if normal == Vector3.ZERO:
+				normal = (rows[i + 1][k] - rows[i][k]).cross(rows[i][k] - rows[i + 1][j]).normalized()
+			vertices.append_array(PackedVector3Array([a, rows[i][k], rows[i + 1][j], rows[i][k], rows[i + 1][k], rows[i + 1][j]]))
+			for n in range(6):
+				normals.append(normal)
+	for end in [0, rows.size() - 1]:
+		for j in range(1, count - 1):
+			vertices.append_array(PackedVector3Array([rows[end][0], rows[end][j], rows[end][j + 1]]))
+			for n in range(3):
+				normals.append(Vector3(0, 0, -1.0 if end == 0 else 1.0))
+	return _shell_node(parent, vertices, normals, color)
+
+static func _shell_section(sections: Array, z: float) -> Vector4:
+	for i in range(sections.size() - 1):
+		if z <= sections[i + 1].x:
+			var span = sections[i + 1].x - sections[i].x
+			return sections[i].lerp(sections[i + 1], 0.0 if span <= 0.0 else (z - sections[i].x) / span)
+	return sections[-1]
+
+static func _shell_ring(z: float, w: float, bottom: float, top: float) -> Array:
+	var bevel = Vector2(minf(0.08, (top - bottom) * 0.55), minf(0.06, (top - bottom) * 0.4)) # never fold a thin roof skin over itself
+	return [Vector3(-w * 0.88, bottom, z), Vector3(-w, bottom + bevel.x, z), Vector3(-w, top - bevel.y, z), Vector3(-w * 0.88, top, z), Vector3(w * 0.88, top, z), Vector3(w, top - bevel.y, z), Vector3(w, bottom + bevel.x, z), Vector3(w * 0.88, bottom, z)]
+
+# Car-body cross-section: tucked-in sill, sides bulging out below the waist,
+# a shoulder crease and a crowned top, so the flat-shaded facets catch the
+# light like pressed panels. Points below `floor_y` (a wheel arch) are lifted.
+static func _body_ring(z: float, w: float, bottom: float, top: float, floor_y: float) -> Array:
+	var h = top - bottom
+	var side = [
+		Vector2(0.84, bottom), Vector2(0.96, bottom + minf(0.07, h * 0.2)), Vector2(1.0, bottom + h * 0.5),
+		Vector2(0.985, top - minf(0.08, h * 0.25)), Vector2(0.9, top - minf(0.02, h * 0.08)), Vector2(0.45, top),
+	]
+	var ring = []
+	for i in range(side.size()):
+		ring.append(Vector3(-w * side[i].x, maxf(side[i].y, floor_y), z))
+	for i in range(side.size() - 1, -1, -1):
+		ring.append(Vector3(w * side[i].x, maxf(side[i].y, floor_y), z))
+	return ring
+
+static func _shell_node(parent: Node3D, vertices: PackedVector3Array, normals: PackedVector3Array, color: Color) -> MeshInstance3D:
 	var arrays = []
 	arrays.resize(Mesh.ARRAY_MAX)
 	arrays[Mesh.ARRAY_VERTEX] = vertices
