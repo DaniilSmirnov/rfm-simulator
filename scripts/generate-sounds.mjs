@@ -646,6 +646,30 @@ function bell() {
   return fadeEdges(out, 0.001, 0.3);
 }
 
+// Weather loops (sky_weather.gd). Rain: a steady hiss of far drops plus
+// near drops ticking on leaves and the ground, swelling slowly.
+function rain() {
+  const rnd = random(seedOf('rain'));
+  const seconds = 4.0, n = loopSamples(seconds);
+  const out = filtered(noise(n, rnd), biquad('hp', 600), biquad('lp', 7000), biquad('peak', 2500, 0.8, 4));
+  const swell = drift(n, rnd, 0.6);
+  for (let i = 0; i < n; i++) out[i] *= 0.35 + 0.15 * swell[i];
+  mix(out, grains(n, rnd, { rate: 260, band: [1800, 4200], q: 1.2, decay: 0.002, sizeSpread: 1.2 }), 0.9);
+  mix(out, grains(n, rnd, { rate: 40, band: [700, 1500], q: 2, decay: 0.004 }), 0.6);
+  return closeLoop(out, seconds);
+}
+
+// Snowfall: a low gusting wind that rises and falls, with a faint whistle.
+function snowWind() {
+  const rnd = random(seedOf('snow-wind'));
+  const seconds = 6.0, n = loopSamples(seconds);
+  const out = filtered(noise(n, rnd), biquad('lp', 900), biquad('hp', 80));
+  const gust = drift(n, rnd, 0.35);
+  const whistle = filtered(noise(n, rnd), biquad('bp', 1300, 12));
+  for (let i = 0; i < n; i++) out[i] = out[i] * (0.3 + 0.7 * gust[i]) + whistle[i] * gust[i] * gust[i] * 0.8;
+  return closeLoop(out, seconds);
+}
+
 // ---------------------------------------------------------------- catalogue
 
 const LOOP = { loudness: 0.16 };
@@ -677,8 +701,10 @@ sounds['eat'] = () => level(eat(seedOf('eat')));
 for (let k = 1; k <= 3; k++) sounds[`bird-${k}`] = () => level(bird(k - 1));
 sounds['cicadas'] = () => level(cicadas());
 sounds['church-bell'] = () => level(bell());
+sounds['rain'] = () => level(rain(), LOOP);
+sounds['snow-wind'] = () => level(snowWind(), LOOP);
 
-export const LOOPS = Object.keys(sounds).filter(name => /^(engine-.*-(low|on|off)|siren-(police|ambulance))/.test(name));
+export const LOOPS = Object.keys(sounds).filter(name => /^(engine-.*-(low|on|off)|siren-(police|ambulance)|rain$|snow-wind$)/.test(name));
 
 const SIDECAR = name => `[remap]
 

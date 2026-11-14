@@ -80,6 +80,9 @@ const CARDS = [
 var choices: Array[HBoxContainer] = []
 var buy_buttons: Array[Button] = []
 var character_choice: HBoxContainer
+# Time of day and weather, under the stage on its card (sky_weather.gd).
+var daytime_choice: HBoxContainer
+var weather_choice: HBoxContainer
 
 func build_selection(parent: Control) -> void:
 	var cards = UiKit.hbox(parent, 14)
@@ -94,6 +97,8 @@ func build_selection(parent: Control) -> void:
 		choice.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		column.add_child(choice)
 		choices.append(choice)
+		if spec.kind == "stage":
+			_build_conditions(column)
 		var state = UiKit.label(column, "", "muted")
 		states.append(state)
 		var buy = UiKit.button(column, "", "secondary", 40)
@@ -129,6 +134,49 @@ func build_selection(parent: Control) -> void:
 	check_purchase.add_theme_font_size_override("font_size", 15)
 	check_purchase.pressed.connect(func(): game.platform_service.refresh_store())
 	purchase_actions.hide()
+
+# Two small pickers side by side: «День / Ночь» and the weather. Snowy stages
+# skip rain, the others skip snow. In a room the creator's choice is everyone's.
+func _build_conditions(parent: Control) -> void:
+	var row = UiKit.hbox(parent, 8)
+	row.name = "Conditions"
+	var sky = game.sky_weather
+	daytime_choice = _small_choice(row, sky.DAYTIME_LABELS)
+	daytime_choice.name = "DaytimeChoice"
+	weather_choice = _small_choice(row, sky.WEATHER_LABELS)
+	weather_choice.name = "WeatherChoice"
+	daytime_choice.item_selected.connect(func(index: int):
+		sky.set_conditions(sky.DAYTIMES[index], sky.weather)
+		refresh()
+	)
+	weather_choice.item_selected.connect(func(index: int):
+		sky.set_conditions(sky.daytime, sky.WEATHERS[index])
+		refresh()
+	)
+
+func _small_choice(parent: Control, labels: Array) -> HBoxContainer:
+	var choice = preload("res://scripts/ui/menu_choice.gd").new()
+	choice.custom_minimum_size.y = 36
+	choice.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	choice.add_theme_constant_override("separation", 4)
+	choice.tooltip_text = "В комнате время суток и погоду выбирает создатель."
+	for child in choice.get_children():
+		if child is Button:
+			child.custom_minimum_size = Vector2(30, 34)
+			child.add_theme_font_size_override("font_size", 20)
+	for label in labels:
+		choice.add_item(label)
+	parent.add_child(choice)
+	return choice
+
+# The pickers show the conditions in force: a stage switch may have turned
+# the weather to sun, and a guest sees the room's.
+func _show_conditions() -> void:
+	var sky = game.sky_weather
+	daytime_choice.select(sky.DAYTIMES.find(sky.daytime))
+	for i in range(sky.WEATHERS.size()):
+		weather_choice.set_skipped(i, not sky.allowed(sky.WEATHERS[i], sky.snowy()))
+	weather_choice.select(sky.WEATHERS.find(sky.weather))
 
 func add_preview(parent: Control, tooltip: String) -> void:
 	var image = TextureRect.new()
@@ -290,6 +338,7 @@ func refresh() -> void:
 	var any_purchase = false
 	for variant in range(game.car_choice.item_count):
 		game.car_choice.set_skipped(variant, not game.Props.CarRegistry.offered(variant, game.selected_stage))
+	_show_conditions()
 	for i in range(CARDS.size()):
 		var kind: String = CARDS[i].kind
 		var index = selected(kind)

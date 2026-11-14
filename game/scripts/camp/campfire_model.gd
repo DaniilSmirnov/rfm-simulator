@@ -1,6 +1,7 @@
 extends RefCounted
 # Campfire geometry; flames are visual only and do not support a walker.
 const Props = preload("res://scripts/core/props.gd")
+const NightLights = preload("res://scripts/core/night_lights.gd")
 
 static func build(parent: Node3D) -> Node3D:
 	var root = Node3D.new()
@@ -15,6 +16,7 @@ static func build(parent: Node3D) -> Node3D:
 	var flames = Node3D.new()
 	flames.name = "Flames"
 	root.add_child(flames)
+	NightLights.mark(root, "fire")
 	for i in range(5):
 		var flame = Props.faceted(flames, Vector3(sin(i * 2.4) * 0.23, 0.35, cos(i * 2.4) * 0.23), Vector3(0.19, 0.55, 0.19), Color("ff751e") if i % 2 else Color("ffc53f"), 5, 3)
 		flame.set_meta("perch_ignore", true)

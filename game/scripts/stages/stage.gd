@@ -39,6 +39,8 @@ var biome
 var relief = RoadRelief.new()
 # Shared features a biome switches on.
 var has_snow = false
+# Share of the surface grip the weather leaves (sky_weather.gd: wet or fresh snow).
+var weather_grip = 1.0
 # Clothes everyone wears on this stage (biome.outfit()).
 var outfit = ""
 var water: RefCounted # lakes (water.gd), null on dry stages
@@ -182,7 +184,7 @@ func road_distance(pos: Vector3, limit: float = INF) -> float:
 	return Vector2(pos.x - p.x, pos.z - p.z).length()
 
 func grip(pos: Vector3) -> float:
-	return biome.grip(pos)
+	return biome.grip(pos) * weather_grip
 
 func walk_floor(pos: Vector3, ground_height: float) -> float:
 	return biome.walk_floor(pos, ground_height)

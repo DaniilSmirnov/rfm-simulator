@@ -112,6 +112,8 @@ static func _fire(root: Node3D) -> void:
 	fire.name = "GrillFire"
 	fire.set_meta("unbatched", true)
 	root.add_child(fire)
+	# Lit at night while the coals glow (a cold grill hides GrillFire).
+	preload("res://scripts/core/night_lights.gd").mark(fire, "grill")
 	var coals = Node3D.new()
 	coals.name = "Coals"
 	fire.add_child(coals)
