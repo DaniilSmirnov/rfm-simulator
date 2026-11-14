@@ -12,7 +12,7 @@ permissions:
 env:
   # Bump to rebuild every radio library without a source change, for example
   # after a toolchain change in .github/actions/native-voice.
-  VOICE_BUILD_EPOCH: "1"
+  VOICE_BUILD_EPOCH: "2"
 
 # A newer push to the same pull request replaces the older run. Runs on main
 # are never cancelled: every merged commit gets a complete result.
@@ -414,8 +414,8 @@ jobs:
         include:
           - {target: windows-x86_64, os: ubuntu-24.04}
           - {target: windows-x86_32, os: ubuntu-24.04}
-          - {target: macos-universal, os: macos-14}
-          - {target: ios-arm64, os: macos-14}
+          - {target: macos-universal, os: macos-15}
+          - {target: ios-arm64, os: macos-15}
           - {target: android-arm64, os: ubuntu-24.04}
           - {target: android-arm32, os: ubuntu-24.04}
     steps:
