@@ -163,7 +163,7 @@ test('the engine bridge runs a batch of calls in order and returns every tick', 
   assert.deepEqual(first.results[0].events, [{ type: 'mic', value: 'pending' }]);
   await flush();
   assert.equal(tracks.length, 1, 'push-to-talk through the bridge opens the microphone');
-  const second = voice.bridge([['tick', [{ id: 'b', distance: 12 }]], ['unknown'], 'junk', ['tick']]);
+  const second = voice.bridge([['tick', [{ id: 'b', talking: false }]], ['unknown'], 'junk', ['tick']]);
   assert.equal(second.results.length, 2);
   assert.equal(second.results[0].signals[0].data.kind, 'offer');
   assert.equal(JSON.stringify(voice.bridge([['leave']])), '{"results":[],"joined":false}');
@@ -209,13 +209,13 @@ test('early candidates wait for the remote description; a new session restarts t
   assert.equal(first.pc.connectionState, 'closed');
 });
 
-test('distance and talking flags drive the receive levels', async () => {
+test('the talking flag reaches the peer, and no distance is kept', async () => {
   const clients = room(['a', 'b']);
   await relay(clients);
   const peer = clients.a.voice.state.peers.get('b');
   tick(clients.a.voice, [{ id: 'b', distance: 320, talking: true }]);
-  assert.equal(peer.distance, 320);
   assert.equal(peer.talking, true);
+  assert.ok(!('distance' in peer), 'the radio has no range to track');
 });
 
 test('the room server relays voice signaling between any two members', () => {

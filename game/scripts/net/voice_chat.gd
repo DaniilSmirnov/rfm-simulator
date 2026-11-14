@@ -2,7 +2,7 @@ extends Node
 # Push-to-talk radio between the members of a room. The audio is WebRTC in a
 # backend: web/voice-chat.js in the browser (voice_web.gd), the native/voice
 # GDExtension on desktop and Android (voice_native.gd). This node feeds the
-# backend the roster, distances and the key, and relays its signaling over the
+# backend the roster, who is on air and the key, and relays its signaling over the
 # room socket (`space: "voice"`). Without either backend the radio is hidden.
 const NetProtocol = preload("res://scripts/net/net_protocol.gd")
 const VoiceWeb = preload("res://scripts/net/voice_web.gd")
@@ -11,7 +11,7 @@ const UiKit = preload("res://scripts/ui/ui_kit.gd")
 const Loc = preload("res://scripts/ui/loc.gd")
 const Dedicated = preload("res://scripts/net/dedicated.gd")
 
-# Distances, the talking flags and signaling are exchanged ten times a second.
+# The talking flags and signaling are exchanged ten times a second.
 const TICK = 0.1
 # Signals waiting for the socket; offers older than this are useless anyway.
 const PENDING_TTL_MSEC = 10000
@@ -132,14 +132,14 @@ func _tick() -> void:
 	_flush()
 	_update_label()
 
-# What each other member sounds like here: distance and whether they transmit.
+# Who of the other members is on air. The radio has no range: where anyone is
+# on the map never reaches the backend, so every voice is heard everywhere.
 func _levels() -> Array:
 	var list: Array = []
-	var here: Vector3 = room.game.player_position()
 	for peer in room.peers.values():
-		if peer.state == null or peer.avatar == null:
+		if peer.state == null:
 			continue
-		list.append({"id": str(peer.id), "distance": snappedf(here.distance_to(peer.avatar.position), 0.1), "talking": bool(peer.state.get("radio", false))})
+		list.append({"id": str(peer.id), "talking": bool(peer.state.get("radio", false))})
 	return list
 
 func _flush() -> void:

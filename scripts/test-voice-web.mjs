@@ -86,7 +86,7 @@ try {
  await relay(5);
  assert.ok(await heard(pages.b, 'a') < 1e-3, 'releasing the key silences a');
  const gain = distance => pages.b.evaluate(async distance => {
-  RallyVoice.update([{id: 'a', distance, talking: true}]);
+  RallyVoice.update([{id: 'a', distance, talking: true}]); // an old caller's distance is ignored
   await new Promise(resolve => setTimeout(resolve, 400));
   return RallyVoice.state.peers.get('a').audio.gain.gain.value;
  }, distance);

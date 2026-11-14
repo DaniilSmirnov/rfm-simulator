@@ -9,6 +9,10 @@ const CharacterRig = preload("res://scripts/people/character_rig.gd")
 const PeerView = preload("res://scripts/net/peer_view.gd")
 const RadioModel = preload("res://scripts/people/radio_model.gd")
 
+# Just the roster part of a room: other members with their state and avatar.
+class FakeRoom extends Node:
+	var peers: Dictionary = {}
+
 func _initialize() -> void:
 	call_deferred("run")
 
@@ -31,6 +35,7 @@ func run() -> void:
 	await process_frame
 	check(voice.supported == VoiceNative.supported(), "native builds offer the radio exactly when the native library ships")
 	check(not voice.available(), "the radio is hidden until the room joins it")
+	no_range(voice)
 	if not voice.supported:
 		voice.join()
 		voice.sync_members(["a", "b"])
@@ -67,3 +72,23 @@ func radio_animation() -> void:
 	hands = PeerView._animate_radio(peer, talking, 0.3, false, {"arms": "", "lift": 0.0})
 	check(not peer.radio.visible and hands.arms == "", "full hands keep the radio away")
 	avatar.queue_free()
+
+# The radio has no range: a member across the map is on air exactly like one
+# next to us, even before their avatar loads, and no distance reaches the backend.
+func no_range(voice) -> void:
+	var fake = FakeRoom.new()
+	var far = Node3D.new()
+	far.position = Vector3(5000, 0, -5000)
+	fake.peers = {"near": {"id": "near", "state": {"radio": true}, "avatar": Node3D.new()},
+		"far": {"id": "far", "state": {"radio": true}, "avatar": far},
+		"loading": {"id": "loading", "state": {"radio": true}, "avatar": null},
+		"joining": {"id": "joining", "state": null, "avatar": null}}
+	voice.room = fake
+	var levels: Array = voice._levels()
+	check(levels.map(func(e): return e.id) == ["near", "far", "loading"], "every member with a state is listed, wherever they are")
+	check(levels.all(func(e): return e.talking == true and not e.has("distance")), "everyone on air is heard the same; no distance is sent")
+	voice.room = null
+	for peer in fake.peers.values():
+		if peer.avatar != null:
+			peer.avatar.free()
+	fake.free()

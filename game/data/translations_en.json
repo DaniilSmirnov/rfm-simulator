@@ -661,7 +661,7 @@
   "Ты в машине зрителей. F — выйти, когда машина остановится.": "You're in the spectators' car. F to get out once the car stops.",
   "Рация": "Radio",
   "Некорректное голосовое сообщение.": "Invalid voice message.",
-  "Рация в комнате: держи и говори. Друзей слышно чисто на любом расстоянии.": "Room radio: hold and talk. Friends sound clear at any distance.",
+  "Рация в комнате: держи и говори. Друзей слышно на всю карту, без помех.": "Room radio: hold and talk. Friends are heard across the whole map, with no interference.",
   "Нет доступа к микрофону: рация работает только на приём.": "No microphone access: the radio can only receive.",
   "Микрофон не найден: рация работает только на приём.": "No microphone found: the radio can only receive.",
   "РАЦИЯ · В ЭФИРЕ": "RADIO · ON AIR",
