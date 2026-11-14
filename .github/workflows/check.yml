@@ -179,6 +179,8 @@ jobs:
   native-multiplayer:
     name: Native multiplayer
     needs: native-voice
+    # The skipped change filter on main would otherwise skip this job too.
+    if: ${{ !cancelled() && needs.native-voice.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -217,6 +219,8 @@ jobs:
   dedicated-server:
     name: Dedicated server
     needs: native-voice
+    # The skipped change filter on main would otherwise skip this job too.
+    if: ${{ !cancelled() && needs.native-voice.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -626,6 +630,8 @@ jobs:
   windows-startup:
     name: Windows standalone startup (${{ matrix.build.artifact }}, x86 + x64)
     needs: desktop
+    # The skipped change filter on main would otherwise skip this job too.
+    if: ${{ !cancelled() && needs.desktop.result == 'success' }}
     runs-on: windows-2022
     timeout-minutes: 10
     strategy:
