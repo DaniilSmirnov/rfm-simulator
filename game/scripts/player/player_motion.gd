@@ -17,9 +17,11 @@ var game:
 		game = value
 		relief.game = value
 		perches.game = value
+		sauna.game = value
 var flight_solver = preload("res://scripts/net/drive_prediction.gd").new()
 var relief = preload("res://scripts/player/tree_relief.gd").new()
 var perches = preload("res://scripts/player/perches.gd").new()
+var sauna = preload("res://scripts/player/sauna_steam.gd").new()
 
 func drive(delta: float) -> void:
 	if Dedicated.active(): return # a dedicated server has no player of its own
@@ -376,8 +378,13 @@ func sit_down() -> void:
 
 func stand_up() -> void:
 	game.seated = false
+	sauna.leave()
 	game.walker = game.seat_exit
-	game.walker.y = game.stage.ground(game.walker)
+	# Authored floors (the sauna) hold the feet up; otherwise the ground.
+	game.walker.y = game.stage.walk_floor(game.walker, game.stage.solids.walking_floor(game.walker, game.walker.y)) if inside_floor() else game.stage.ground(game.walker)
+
+func inside_floor() -> bool:
+	return sauna.inside(game.seat_exit)
 
 func update_sobriety(delta: float) -> void:
 	if not game.playing or game.paused or game.dead or game.finished or (game.room.is_guest() and game.room.world_paused):
@@ -398,6 +405,7 @@ func update_sobriety(delta: float) -> void:
 		game.toast("Ты протрезвел. Можно встать, собрать вещи и вернуться в машину.")
 
 func update_intoxication(delta: float) -> void:
+	sauna.update(delta)
 	game.drunk_strength = maxf(0.0, game.drunk_strength - delta / game.DRUNK_FADE_SECONDS)
 	if game.drunk_strength > 0:
 		game.drunk_phase = fposmod(game.drunk_phase + delta * 1.25, TAU)

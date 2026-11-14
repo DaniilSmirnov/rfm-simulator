@@ -324,6 +324,16 @@ test('relief pose survives sync only for a pedestrian on foot', () => {
   assert.equal(reply.players[0].state.relief, false);
 });
 
+test('sauna whisking survives sync only on foot', () => {
+  const { r, h } = setup();
+  let reply = r.sync({ token: h.token, state: { ...state(), venik: true } }, 1100);
+  assert.equal(reply.players[0].state.venik, true);
+  reply = r.sync({ token: h.token, state: { ...state(), venik: true, in_car: true } }, 1200);
+  assert.equal(reply.players[0].state.venik, false);
+  reply = r.sync({ token: h.token, state: { ...state(), venik: 1 } }, 1300);
+  assert.equal(reply.players[0].state.venik, false);
+});
+
 test('a ride in a friend\'s car and a tow rope name a room member and need a seat in a car', () => {
   const { r, h, g } = setup();
   const own = p => reply => reply.players.find(x => x.id === p.player).state;

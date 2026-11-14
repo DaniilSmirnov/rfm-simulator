@@ -53,7 +53,7 @@ func normal_target() -> Dictionary:
 	if game.beers >= 30 or game.injuries.down:
 		return {}
 	if game.seated:
-		return {"action": "stand", "label": Loc.t("Встать со стула")}
+		return game.player.sauna.seated_target(self) if game.player.sauna.steaming else {"action": "stand", "label": Loc.t("Встать со стула")}
 	if game.player.relief.active:
 		return {"action": "relief_stop", "label": Loc.t("Закончить")}
 	var items: Array = []
@@ -107,6 +107,7 @@ func normal_target() -> Dictionary:
 		if table != null:
 			offer(items, table.position + Vector3(0, 0.75, 0), 0.85, 3, "beer" if game.beer_timer <= 0 else "", "Выпить пиво" if game.beer_timer <= 0 else "")
 	game.player.relief.offers(items, self)
+	game.player.sauna.offers(items, self)
 	return select_target(items)
 
 # A grill offers what the fan is looking at: the skewer rails carry the food
@@ -210,4 +211,7 @@ func activate() -> void:
 		"beer": game.drink_beer()
 		"relief": game.player.relief.start()
 		"relief_stop": game.player.relief.stop()
+		"sauna": game.player.sauna.start(float(target.value))
+		"venik": game.player.sauna.whisk.start()
+		"sauna_ladle": game.player.sauna.ladle()
 
