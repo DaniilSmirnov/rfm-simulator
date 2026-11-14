@@ -7,6 +7,8 @@ extends RefCounted
 # them all: node scripts/export-condition-previews.mjs
 const SkyWeather = preload("res://scripts/core/sky_weather.gd")
 const QUALITY = 0.8
+# Lossy: 40 lossless pictures would weigh 2.4 MB in a Web pack that has to
+# stay under the 25 MB Cloudflare asset limit; lossy they are ~0.3 MB.
 const SETTLE_FRAMES = 8
 # Rain lives a second: at the few frames a second of software rendering it
 # would fall through the picture between two frames.
@@ -40,7 +42,7 @@ static func capture_all(tree: SceneTree, game: Node, viewport: SubViewport, stag
 				await tree.process_frame
 			await RenderingServer.frame_post_draw
 			var path = SkyWeather.preview_path(stage_index, time, weather)
-			var error = viewport.get_texture().get_image().save_webp(path, false, QUALITY)
+			var error = viewport.get_texture().get_image().save_webp(path, true, QUALITY)
 			print("CONDITION_PREVIEW ", path, " ", "ok" if error == OK else "error %d" % error)
 	viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	Engine.time_scale = 1.0
