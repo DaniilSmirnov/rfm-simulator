@@ -3,7 +3,8 @@ extends RefCounted
 const Specials = preload("res://scripts/core/prop_specials.gd")
 const Registry = preload("res://scripts/core/prop_registry.gd")
 const REACH = 2.5
-# Only a car tips furniture over; a walker, running or jumping, just slides it.
+# Only a car moves camp gear and scenery props (and tips furniture over). On
+# foot a player drags nothing but a felled trunk off the road (T).
 const TIP_SECONDS = 1.0
 # The campfire is fixed in place; the cauldron stand straddles it.
 const FIXED_KINDS = ["firewood"]
@@ -87,7 +88,7 @@ func nearest(pos: Vector3) -> String:
 	var best = REACH
 	var key = ""
 	for r in records.values():
-		if not is_instance_valid(r.node) or r.anchored:
+		if not is_instance_valid(r.node) or r.anchored or not r.has("tree"):
 			continue
 		var distance = _distance(r, pos)
 		if distance < best and game.stage.solids.hit(pos + Vector3.UP * 0.8, center(r), 0.04, true, Vector3.ZERO, r.node).is_empty():
@@ -159,30 +160,14 @@ func update(players: Dictionary, occupied: Dictionary, delta: float) -> Dictiona
 			r.body.righting = true
 			r.velocity = Vector3.ZERO
 		r.changed = true
-	_push_walkers(players, occupied, delta)
 	_return_to_hearth()
 	for r in records.values():
 		if r.changed and not r.anchored:
 			_move(r, delta)
 	return occupied
 
-# Walkers use swept collision rather than native bodies; transmit the same
-# contact. Walking only leans on a prop: it moves when a player runs into it.
-func _push_walkers(players: Dictionary, occupied: Dictionary, delta: float) -> void:
-	for id in players:
-		var p: Dictionary = players[id]
-		if occupied.has(str(id)) or not p.get("running", false) or p.get("in_car", true) or p.get("seated", false) or p.get("airborne", false) or int(p.get("beers", 0)) >= 30: continue
-		var intent: Vector3 = game.room.v(p.get("push", [0, 0, 0]))
-		if intent.length_squared() < 0.01 or game.injuries.is_down("player:" + str(id)): continue
-		var pos: Vector3 = game.room.v(p.pos)
-		var hit: Dictionary = game.stage.solids.hit(pos, pos + intent * game.RUN_SPEED * minf(delta, 0.05), 0.3)
-		var r: Dictionary = records.get(hit.get("prop", ""), {})
-		if r.is_empty() or r.anchored or not r.has("body"): continue
-		r.body.wake()
-		r.body.apply_central_impulse(intent.limit_length(1.0) * minf(350.0, r.mass * 8.0) * delta)
-
 # A cauldron knocked off its campfire glides back over the fire once it comes
-# to rest. One a player drags or sets down elsewhere stays where it is.
+# to rest. One a player sets down elsewhere stays where it is.
 func _return_to_hearth() -> void:
 	var fire: Dictionary = {}
 	for r in records.values():

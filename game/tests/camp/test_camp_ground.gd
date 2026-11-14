@@ -68,17 +68,18 @@ func run() -> void:
 	for i in range(nodes.size()):
 		var clearance = gap(nodes[i], world.stage.ground)
 		check(absf(clearance) < 0.025, "gear %d remains on the ground after physics settles (%.4f)" % [i, clearance])
-	# A spectator who sets off beside camp gear gets a collider there. Born at
-	# the origin and then posed, it moved there in one physics step: a
-	# kinematic velocity of thousands of m/s, and tables and chairs it touched
-	# flew 5-13 m across the Forest pass and Mineshaft camps.
+	# Only cars move camp gear. A walker's collider pressed tables and chairs
+	# beside it into the ground (a table's legs 0.47 m deep on Финский лес).
 	var seat: Node3D = nodes[1]
-	var spot: Vector3 = seat.global_position + Vector3(0.55, 0, 0)
-	world.injuries.entries.append({"key": "walker", "pos": spot})
+	var seat_pose: Transform3D = seat.global_transform
+	world.injuries.entries.append({"key": "walker", "pos": seat.global_position + Vector3(0.2, 0, 0)})
 	var actors = world.stage.solids.prop_ground.get_node("Actors")
 	actors.frame = -1
 	actors.update(world.stage.solids.prop_ground.tiles)
-	var born: Transform3D = PhysicsServer3D.body_get_state(actors.bodies["walker"].get_rid(), PhysicsServer3D.BODY_STATE_TRANSFORM)
-	check(born.origin.distance_to(spot + Vector3.UP * 0.85) < 0.01, "a walker's collider is born where the walker stands (%s)" % born.origin)
+	check(not actors.bodies.has("walker"), "a walker gets no collider that pushes camp gear")
+	for i in range(60):
+		props.update({}, {}, 1.0 / 60.0)
+		await physics_frame
+	check(seat.global_transform.origin.distance_to(seat_pose.origin) < 0.01 and absf(gap(seat, world.stage.ground)) < 0.025, "a walker standing in a chair neither moves it nor sinks it")
 	world.free()
 	finish()

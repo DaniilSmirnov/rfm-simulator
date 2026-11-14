@@ -87,7 +87,7 @@ func advance(frames: int) -> void:
 		await physics_frame
 	await process_frame
 
-# A walker slides furniture, even running or jumping into it; only cars tip it.
+# Only a car moves furniture: walking, running or jumping into it does not.
 func walk_into(node: Node3D, step: float, players_state: Dictionary) -> void:
 	var start: Vector3 = node.global_position - Vector3.RIGHT * 1.5
 	world.injuries.entries = [{"key": "player:walker", "pos": start}]
@@ -109,31 +109,29 @@ func tipping() -> void:
 		await advance(60)
 		var start = stroll.global_position
 		await walk_into(stroll, 0.04, {"walker": {"in_car": false}})
-		check(stroll.global_position.distance_to(start) > 0.1, "walking into an upright chair pushes it (yaw %.2f)" % yaw)
-		check(stroll.global_basis.y.dot(Vector3.UP) > 0.95, "walking into an upright chair cannot tip it over (yaw %.2f)" % yaw)
+		check(stroll.global_position.distance_to(start) < 0.01 and stroll.global_basis.y.dot(Vector3.UP) > 0.95, "walking into an upright chair leaves it where it stands (yaw %.2f)" % yaw)
 	var run = chair(Vector3(100, 0, 4), "run")
 	await advance(60)
-	await walk_into(run, 0.12, {"walker": {"in_car": false, "running": true}})
-	check(run.global_basis.y.dot(Vector3.UP) > 0.95, "running into a chair cannot knock it over")
+	var run_start = run.global_position
+	await walk_into(run, 0.12, {"walker": {"in_car": false, "running": true, "push": [1, 0, 0]}})
+	check(run.global_position.distance_to(run_start) < 0.01 and run.global_basis.y.dot(Vector3.UP) > 0.95, "running into a chair leaves it where it stands")
 	var jump = chair(Vector3(120, 0, 4), "jump")
 	await advance(60)
+	var jump_start = jump.global_position
 	await walk_into(jump, 0.08, {"walker": {"in_car": false, "airborne": true}})
-	check(jump.global_basis.y.dot(Vector3.UP) > 0.95, "jumping into a chair cannot knock it over")
+	check(jump.global_position.distance_to(jump_start) < 0.01 and jump.global_basis.y.dot(Vector3.UP) > 0.95, "jumping into a chair leaves it where it stands")
 	var tipped = chair(Vector3(140, 0.4, 4), "tipped", Vector3(0, 0, PI / 2))
 	props.knock("tipped", Vector3.DOWN)
 	await advance(180)
 	check(tipped.global_basis.y.dot(Vector3.UP) < 0.5, "a sideways chair lies on the ground before it is dragged")
 	var puller = {"pos": world.room.a(props.center(props.records["tipped"]) + Vector3.RIGHT * 2), "tow": true, "in_car": false}
-	var lowest = 1.0
 	for i in range(60):
 		props.update({"helper": puller}, {}, 1.0 / 60.0)
 		await physics_frame
-		if i == 10: lowest = tipped.global_basis.y.dot(Vector3.UP)
 	await advance(60)
-	check(lowest < 0.95, "a dragged tipped chair turns upright gradually, not in one frame")
-	check(tipped.global_basis.y.dot(Vector3.UP) > 0.97, "dragging a tipped chair turns it back upright")
+	check(props.grips.is_empty() and tipped.global_basis.y.dot(Vector3.UP) < 0.5, "holding T beside a tipped chair does not drag it")
 
-# A cauldron knocked off its campfire glides back onto it; dragged away, it stays.
+# A cauldron knocked off its campfire glides back onto it; nobody drags it off on foot.
 func hearth() -> void:
 	# Only the horizontal offset to the fire counts: keep its collider clear.
 	chair(Vector3(200, -3, 4), "camp:firewood:a")
@@ -157,7 +155,7 @@ func hearth() -> void:
 		props.update({"helper": puller}, {}, 1.0 / 60.0)
 		await physics_frame
 	await advance(240)
-	check(pot.global_position.distance_to(home.origin) > 0.6, "a cauldron a player drags off the fire stays where it was left")
+	check(pot.global_position.distance_to(home.origin) < 0.1, "holding T beside a cauldron leaves it on its campfire")
 
 func run() -> void:
 	world = World.new()
@@ -199,18 +197,9 @@ func run() -> void:
 	for i in range(100):
 		world.injuries.entries[0].pos += Vector3.RIGHT * 0.04
 		await advance(1)
-	check(bump.global_position.distance_to(bump_start) > 0.1, "a moving NPC wakes sleeping props after all props have settled")
+	check(bump.global_position.distance_to(bump_start) < 0.01, "a moving NPC walking through a prop never moves it")
 	await tipping()
 	await hearth()
-	var heavy = chair(Vector3(60, 0, 4), "heavy")
-	props.records["heavy"].mass = 3500.0
-	props.records["heavy"].body.mass = 3500.0
-	var puller = {"pos": world.room.a(props.center(props.records["heavy"]) + Vector3.RIGHT * 2), "tow": true, "in_car": false}
-	for i in range(90):
-		props.update({"helper": puller}, {}, 1.0 / 60.0)
-		await physics_frame
-	await process_frame
-	check(heavy.global_position.x > 60.1, "heavy registered props retain their existing slow dragging interaction")
 	props.update({}, {}, 1.0 / 60.0)
 	var snapshot = props.snapshot()
 	world.room.guest = true

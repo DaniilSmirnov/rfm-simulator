@@ -670,6 +670,18 @@ function snowWind() {
   return closeLoop(out, seconds);
 }
 
+// Water thrown on hot sauna stones (lake_sauna.gd): a sharp sizzle with
+// crackling bursts that fades into a soft hiss of rising steam.
+function saunaHiss() {
+  const rnd = random(seedOf('sauna-hiss'));
+  const seconds = 2.2, n = samples(seconds);
+  const out = envelope(filtered(noise(n, rnd), biquad('hp', 1800), biquad('peak', 4200, 0.9, 6), biquad('lp', 9000)),
+    t => Math.min(t / 0.03, 1) * (0.55 * Math.exp(-t / 0.35) + 0.25 * Math.exp(-t / 1.1)));
+  const crackle = envelope(grains(n, rnd, { rate: 180, band: [2500, 6000], q: 2, decay: 0.0015 }), t => Math.exp(-t / 0.5));
+  mix(out, crackle, 0.8);
+  return fadeEdges(out, 0.002, 0.3);
+}
+
 // ---------------------------------------------------------------- catalogue
 
 const LOOP = { loudness: 0.16 };
@@ -703,6 +715,7 @@ sounds['cicadas'] = () => level(cicadas());
 sounds['church-bell'] = () => level(bell());
 sounds['rain'] = () => level(rain(), LOOP);
 sounds['snow-wind'] = () => level(snowWind(), LOOP);
+sounds['sauna-hiss'] = () => level(saunaHiss());
 
 export const LOOPS = Object.keys(sounds).filter(name => /^(engine-.*-(low|on|off)|siren-(police|ambulance)|rain$|snow-wind$)/.test(name));
 

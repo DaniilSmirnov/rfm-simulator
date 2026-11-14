@@ -1,6 +1,6 @@
 extends "res://tests/harness.gd"
-# A prop a walker drags over the land never ends up under it: a crate dragged
-# across a hillside and over the road verge, a felled trunk dragged up and
+# A prop never ends up under the land: a crate a car shoves across a hillside
+# and over the road verge (on foot nobody moves it), a felled trunk dragged up and
 # down the slope, and whatever the physics still squeezes through the terrain
 # tiles (or buries, for a trunk that cannot pitch) comes straight back up.
 const Registry = preload("res://scripts/core/prop_registry.gd")
@@ -66,6 +66,26 @@ func drag(game, r: Dictionary, seconds: float, legs: Array, sink_at := -1) -> fl
 		await physics_frame
 	return minf(worst, clearance(game, r))
 
+# A car shoving the prop along `legs` twice a second, each for the same share
+# of the time. At tick `sink_at` the prop is pushed under the land.
+func shove(game, r: Dictionary, seconds: float, legs: Array, sink_at := -1) -> float:
+	var props = game.movable_props
+	var worst = INF
+	var ticks = int(seconds * 60.0)
+	for i in range(ticks):
+		if i % 30 == 0:
+			props.knock(r.key, legs[i * legs.size() / ticks].normalized() * 3.0)
+		props.update({}, {}, 1.0 / 60.0)
+		if i == sink_at:
+			r.body.global_position.y -= 4.0
+		await physics_frame
+		if i > sink_at:
+			worst = minf(worst, clearance(game, r))
+	for i in range(60):
+		props.update({}, {}, 1.0 / 60.0)
+		await physics_frame
+	return minf(worst, clearance(game, r))
+
 func run() -> void:
 	var game = load("res://main.tscn").instantiate()
 	root.add_child(game)
@@ -90,12 +110,14 @@ func run() -> void:
 	Registry.register(stage.solids, node, 6, false, "test:crate")
 	props.refresh()
 	var crate: Dictionary = props.records["test:crate"]
-	var worst = await drag(game, crate, 8.0, [-down, across, down, -across])
-	check(node.position.distance_to(pos) > 2.0 and worst > 0.15, "a crate dragged up, down and across a hillside stays on it (moved %.1f m, lowest middle %.2f m)" % [node.position.distance_to(pos), worst])
-	worst = await drag(game, crate, 8.0, [spot.road])
-	check(worst > 0.15, "a crate dragged down the verge onto the road stays on the land (lowest middle %.2f m)" % worst)
-	worst = await drag(game, crate, 4.0, [-down, across], 60)
-	check(worst > 0.15, "a crate squeezed under the land while dragged is back on it at once (lowest middle %.2f m)" % worst)
+	var still: float = await drag(game, crate, 2.0, [-down])
+	check(node.position.distance_to(pos) < 0.05 and props.grips.is_empty(), "a walker holding T does not drag a crate (moved %.2f m)" % node.position.distance_to(pos))
+	var worst = await shove(game, crate, 8.0, [-down, across, down, -across])
+	check(node.position.distance_to(pos) > 2.0 and worst > 0.15 and still > 0.15, "a crate shoved up, down and across a hillside stays on it (moved %.1f m, lowest middle %.2f m)" % [node.position.distance_to(pos), worst])
+	worst = await shove(game, crate, 8.0, [spot.road])
+	check(worst > 0.15, "a crate shoved down the verge onto the road stays on the land (lowest middle %.2f m)" % worst)
+	worst = await shove(game, crate, 4.0, [-down, across], 60)
+	check(worst > 0.15, "a crate squeezed under the land while shoved is back on it at once (lowest middle %.2f m)" % worst)
 
 	stage.trees[0] = spot.pos
 	stage._rebuild_tree_index()
