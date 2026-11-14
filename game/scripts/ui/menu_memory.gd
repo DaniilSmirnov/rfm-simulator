@@ -18,8 +18,7 @@ func setup(owner) -> void:
 	game.car_choice.item_selected.connect(func(_index): save())
 	game.stage_choice.item_selected.connect(func(_index): save())
 	game.lobby_ui.character_choice.item_selected.connect(func(_index): save())
-	game.lobby_ui.daytime_choice.item_selected.connect(func(_index): save())
-	game.lobby_ui.weather_choice.item_selected.connect(func(_index): save())
+	game.lobby_ui.conditions.changed.connect(func(_time, _weather): save())
 	game.room.ui.name_input.text_changed.connect(func(_text): save())
 
 func save() -> void:

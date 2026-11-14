@@ -1,5 +1,6 @@
 extends "res://tests/harness.gd"
-# Time of day and weather (scripts/core/sky_weather.gd): the stage card pickers,
+# Time of day and weather (scripts/core/sky_weather.gd): the stage card tiles
+# and their previews,
 # which weather each stage allows (rain without snow, snow on snowy stages),
 # the sky they draw, headlights at night, grip, the weather sound and the room
 # snapshot guests apply.
@@ -22,10 +23,13 @@ func run() -> void:
 	var sky = game.sky_weather
 	var ui = game.lobby_ui
 	check(sky.daytime == "day" and sky.weather == "sun", "a stage starts in daylight and sun")
-	check(ui.daytime_choice != null and ui.weather_choice != null and ui.daytime_choice.get_parent().get_parent().get_parent().name == "StageCard", "the pickers sit on the stage card")
-	check(ui.weather_choice.skipped.has(3) and not ui.weather_choice.skipped.has(1), "a summer stage offers rain and skips snow")
-	# Arrows: sun → rain → fog → (snow skipped) → sun.
-	ui.weather_choice.cycle(1)
+	var tiles: Dictionary = ui.conditions.tiles
+	check(ui.conditions.get_parent().get_parent().name == "StageCard", "the tiles sit on the stage card")
+	check(tiles.rain.icon.resource_path.ends_with("weather_rain.svg"), "a summer stage offers rain")
+	check(ui.images[1].texture.resource_path == "res://textures/previews/stage_%d.webp" % game.selected_stage, "day and sun show the stage's usual preview")
+	check(ui.conditions_badge.get_child(0).text == "День · Солнце", "the preview names the conditions")
+	tiles.rain.pressed.emit()
+	check(ui.images[1].texture.resource_path == SkyWeather.preview_path(game.selected_stage, "day", "rain"), "the preview shows the stage in the rain")
 	check(sky.weather == "rain" and game.get_node_or_null("Weather") != null, "rain picked on the card falls")
 	var forest_point = game.stage.at(100)
 	check(is_equal_approx(game.stage.grip(forest_point), game.stage.biome.grip(forest_point) * SkyWeather.GRIP.rain) and SkyWeather.GRIP.rain < 1.0, "rain makes the road slippery")
@@ -35,20 +39,19 @@ func run() -> void:
 	game.playing = false
 	game.soundscape._update_weather()
 	check(game.soundscape.weather_audio.stream == null, "the menu stays quiet")
-	ui.daytime_choice.cycle(1)
-	check(sky.daytime == "night", "night picked on the card")
+	tiles.night.pressed.emit()
+	check(sky.daytime == "night" and ui.conditions_badge.get_child(0).text == "Ночь · Дождь", "night picked on the card")
 	check(game.world_environment.environment.ambient_light_energy < 0.35 and game.sunlight.light_energy < 0.3, "night dims the ambient light and the sun becomes a moon")
 	check(game.car.get_node_or_null("Headlights") is SpotLight3D, "the car has its headlights on at night")
-	ui.weather_choice.cycle(1)
-	ui.weather_choice.cycle(1)
-	check(sky.weather == "sun" and game.get_node_or_null("Weather") == null, "snow is skipped on a summer stage and the sky clears")
+	tiles.sun.pressed.emit()
+	check(sky.weather == "sun" and game.get_node_or_null("Weather") == null, "the sky clears")
 	# Rain picked, then a snowy stage: the weather turns to sun, snow becomes possible.
-	ui.weather_choice.cycle(1)
+	tiles.rain.pressed.emit()
 	var winter = StageRegistry.index_of("winter")
 	game.select_stage(winter)
-	check(sky.weather == "sun" and ui.weather_choice.selected == 0, "rain turns to sun on a snowy stage")
-	check(ui.weather_choice.skipped.has(1) and not ui.weather_choice.skipped.has(3), "a snowy stage skips rain and offers snow")
-	ui.weather_choice.cycle(-1)
+	check(sky.weather == "sun" and ui.conditions.weather == "sun", "rain turns to sun on a snowy stage")
+	check(tiles.rain.icon.resource_path.ends_with("weather_snow.svg"), "a snowy stage offers snow in place of rain")
+	tiles.rain.pressed.emit()
 	check(sky.weather == "snow" and game.get_node_or_null("Weather") is GPUParticles3D, "snow falls on a snowy stage")
 	check(game.world_environment.environment.fog_density >= SkyWeather.FOG_DENSITY.snow, "snowfall thickens the fog")
 	check(is_equal_approx(game.stage.weather_grip, SkyWeather.GRIP.snow) and SkyWeather.GRIP.snow < 1.0, "fresh snow takes some grip")
@@ -59,7 +62,7 @@ func run() -> void:
 	check(sky.daytime == "day" and sky.weather == "fog" and game.car.get_node_or_null("Headlights") == null, "a guest takes the host's conditions; headlights go off in the day")
 	check(game.stage.weather_grip == 1.0, "fog leaves the grip alone")
 	ui.refresh()
-	check(ui.daytime_choice.selected == 0 and ui.weather_choice.selected == 2, "the pickers show the room's conditions")
+	check(ui.conditions.time == "day" and ui.conditions.weather == "fog", "the tiles show the room's conditions")
 	sky.apply_snapshot({"time": "noon", "weather": "rain"})
 	check(sky.daytime == "day" and sky.weather == "sun", "unknown or unfitting values fall back to day and sun")
 	await check_night_lights(game)
@@ -85,6 +88,15 @@ func check_looks() -> void:
 		check(float(fog.environment.fog_density) > 0.015, "fog closes in (%d)" % i)
 		var rain = SkyWeather.look(i, "day", "rain")
 		check(float(rain.sun.energy) < float(day.sun.energy) and float(rain.environment.fog_density) > float(day.environment.fog_density), "rain is overcast (%d)" % i)
+		# The stage card has a picture of every combination: rain or snow, not both.
+		var missing = []
+		for time in SkyWeather.DAYTIMES:
+			for kind in ["sun", "fog"]:
+				if not ResourceLoader.exists(SkyWeather.preview_path(i, time, kind)):
+					missing.append(time + " " + kind)
+			if ResourceLoader.exists(SkyWeather.preview_path(i, time, "rain")) == ResourceLoader.exists(SkyWeather.preview_path(i, time, "snow")):
+				missing.append(time + " rain or snow")
+		check(missing.is_empty(), "the stage card has a preview of every condition (%d) %s" % [i, missing])
 
 # Campfires, lit grills and roof beacons light up at night, the nearest within
 # the budget; by day the lights go.

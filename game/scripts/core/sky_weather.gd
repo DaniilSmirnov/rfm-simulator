@@ -40,6 +40,10 @@ const HEADLIGHT_RANGE = 60.0
 # Grip the weather leaves on every surface (stage.weather_grip): a wet road,
 # fresh snow over the packed snow and ice. Fog and night change only the view.
 const GRIP = {"sun": 1.0, "rain": 0.8, "fog": 1.0, "snow": 0.85}
+# The stage card shows the stage under the picked conditions: day and sun is
+# its usual preview, every other combination a capture of the same view
+# (tools/screenshots/condition_previews.gd).
+const PREVIEW_DIR = "res://textures/previews/conditions"
 
 var game: Node3D
 var daytime = "day"
@@ -64,6 +68,11 @@ static func fits(value, snowy: bool) -> String:
 
 static func allowed(name: String, snowy: bool) -> bool:
 	return fits(name, snowy) == name
+
+static func preview_path(stage_index: int, time: String, kind: String) -> String:
+	if time == "day" and kind == "sun":
+		return "res://textures/previews/stage_%d.webp" % stage_index
+	return "%s/stage_%d_%s_%s.webp" % [PREVIEW_DIR, stage_index, time, kind]
 
 # Sky, fog, ambient and sun of stage `variant` under the given conditions:
 # {"environment": {...}, "sun": {...}} with the stages.json fields.
