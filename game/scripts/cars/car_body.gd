@@ -15,6 +15,7 @@ extends RefCounted
 #   spoiler (lip | wing | duck), flares, scoop, mudflaps, sunroof, aux_lamps
 const P = preload("res://scripts/core/props.gd")
 const CarParts = preload("res://scripts/cars/car_parts.gd")
+const CarLamps = preload("res://scripts/cars/car_lamps.gd")
 const GLASS = Color("304a55")
 const LAMP = Color("eee8b4")
 const TAIL = Color("ab3631")
@@ -182,13 +183,13 @@ static func _front(root: Node3D, p: Dictionary, f: Dictionary) -> void:
 		P.box(root, Vector3(bezel_x, lamp_y + (0.02 if style == "slim" else 0.0), lens + 0.03), bezel, DARK).rotation.z = 0.0 if style in ["round", "twin"] else side * float(p.get("lamp_tilt", 0.0))
 		match style:
 			"round":
-				_disc(root, Vector3(x, lamp_y, lens + 0.025), 0.10, LAMP)
+				CarLamps.mark(_disc(root, Vector3(x, lamp_y, lens + 0.025), 0.10, LAMP), "head")
 			"twin":
-				_disc(root, Vector3(side * f.half * 0.78, lamp_y, lens + 0.025), 0.08, LAMP)
-				_disc(root, Vector3(side * f.half * 0.55, lamp_y, lens + 0.025), 0.08, LAMP)
+				CarLamps.mark(_disc(root, Vector3(side * f.half * 0.78, lamp_y, lens + 0.025), 0.08, LAMP), "head")
+				CarLamps.mark(_disc(root, Vector3(side * f.half * 0.55, lamp_y, lens + 0.025), 0.08, LAMP), "head")
 			_:
 				var size = Vector3(0.48 if style == "wide" else 0.38, 0.09 if style == "slim" else 0.15, 0.04)
-				var lamp = P.box(root, Vector3(x, lamp_y + (0.02 if style == "slim" else 0.0), lens + 0.02), size, LAMP)
+				var lamp = CarLamps.mark(P.box(root, Vector3(x, lamp_y + (0.02 if style == "slim" else 0.0), lens + 0.02), size, LAMP), "head")
 				lamp.rotation.z = side * float(p.get("lamp_tilt", 0.0))
 		P.box(root, Vector3(side * f.half * 0.86, f.base - 0.09, nose - 0.01), Vector3(0.12, 0.05, 0.03), Color("e8be6c"))
 	var grille_h = float(p.get("grille_height", 0.14))
@@ -213,7 +214,7 @@ static func _front(root: Node3D, p: Dictionary, f: Dictionary) -> void:
 	for i in range(int(p.get("aux_lamps", 0))):
 		var count = int(p.aux_lamps)
 		var x = (i - (count - 1) * 0.5) * 0.36
-		_disc(root, Vector3(x, f.base - 0.02, nose - 0.08), 0.10, Color("f3dc8b"))
+		CarLamps.mark(_disc(root, Vector3(x, f.base - 0.02, nose - 0.08), 0.10, Color("f3dc8b")), "head")
 
 static func _rear(root: Node3D, p: Dictionary, f: Dictionary) -> void:
 	var tail: float = f.rear + 0.02
@@ -222,18 +223,18 @@ static func _rear(root: Node3D, p: Dictionary, f: Dictionary) -> void:
 		"band":
 			P.box(root, Vector3(0, y, tail), Vector3(f.half * 1.7, 0.12, 0.04), TAIL.darkened(0.1))
 			for side in [-1.0, 1.0]:
-				P.box(root, Vector3(side * f.half * 0.66, y, tail + 0.01), Vector3(0.36, 0.10, 0.03), TAIL)
+				CarLamps.mark(P.box(root, Vector3(side * f.half * 0.66, y, tail + 0.01), Vector3(0.36, 0.10, 0.03), TAIL), "tail")
 		"pillar":
 			# Tall lamps up the rear corners of a box-backed wagon.
 			for side in [-1.0, 1.0]:
-				P.box(root, Vector3(side * f.half * 0.84, f.deck, tail), Vector3(0.16, 0.48, 0.045), TAIL)
+				CarLamps.mark(P.box(root, Vector3(side * f.half * 0.84, f.deck, tail), Vector3(0.16, 0.48, 0.045), TAIL), "tail")
 		_:
 			# Framed cluster: red outboard, amber indicator, white reverse lamp.
 			var tall = 0.24 if p.get("suv", false) else 0.15
 			for side in [-1.0, 1.0]:
 				var x: float = side * f.half * 0.68
 				P.box(root, Vector3(x, y, tail - 0.005), Vector3(0.37, tall + 0.04, 0.04), DARK)
-				P.box(root, Vector3(x + side * 0.06, y, tail + 0.01), Vector3(0.2, tall, 0.03), TAIL)
+				CarLamps.mark(P.box(root, Vector3(x + side * 0.06, y, tail + 0.01), Vector3(0.2, tall, 0.03), TAIL), "tail")
 				P.box(root, Vector3(x - side * 0.075, y, tail + 0.01), Vector3(0.07, tall, 0.03), Color("e39a3b"))
 				P.box(root, Vector3(x - side * 0.14, y, tail + 0.01), Vector3(0.05, tall, 0.03), Color("e9ecea"))
 	_bumper(root, p, f, tail + 0.025)
@@ -277,9 +278,10 @@ static func _extras(root: Node3D, p: Dictionary, f: Dictionary) -> void:
 				P.box(root, Vector3(side, (f.deck + wing_y) * 0.5, wing_z), Vector3(0.05, wing_y - f.deck, 0.12), DARK)
 			P.box(root, Vector3(0, wing_y, wing_z), Vector3(f.half * 1.9, 0.05, 0.34), Color(p.get("wing_color", p.color)))
 
-static func _disc(root: Node3D, pos: Vector3, radius: float, color: Color) -> void:
+static func _disc(root: Node3D, pos: Vector3, radius: float, color: Color) -> MeshInstance3D:
 	var lamp = P.cylinder(root, pos, radius, radius, 0.05, color, 10)
 	lamp.rotation.x = PI / 2
+	return lamp
 
 # A flat band on a side panel from z0 to z1, broken where it would cross a
 # wheel arch (liveries and service stripes).

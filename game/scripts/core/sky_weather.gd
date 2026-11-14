@@ -37,6 +37,11 @@ const FALL = {
 	"snow": {"amount": 4000, "cheap": 1500, "box": Vector3(26, 1, 26), "height": 11.0, "speed": 1.6, "life": 7.5, "size": Vector2(0.13, 0.13), "color": Color(1, 1, 1, 0.95)},
 }
 const HEADLIGHT_RANGE = 60.0
+# Rally and course cars nearest the camera that also get a beam, and how far.
+const BEAM_BUDGET = 2
+const BEAM_RANGE = 80.0
+const LAMP_PICK = 0.3
+const CarLamps = preload("res://scripts/cars/car_lamps.gd")
 # Grip the weather leaves on every surface (stage.weather_grip): a wet road,
 # fresh snow over the packed snow and ice. Fog and night change only the view.
 const GRIP = {"sun": 1.0, "rain": 0.8, "fog": 1.0, "snow": 0.85}
@@ -51,6 +56,8 @@ var _last_camera = Vector3.INF
 var _drift = Vector3.ZERO
 # Campfires, grills and beacons that light their surroundings at night.
 var night_lights = preload("res://scripts/core/night_lights.gd").new()
+var _lamp_clock = 0.0
+var _beamed: Array = []
 
 static func night_or_day(value) -> String:
 	return str(value) if str(value) in DAYTIMES else "day"
@@ -241,14 +248,16 @@ func _process(delta: float) -> void:
 			_drift = _drift.lerp(lead.limit_length(30.0), minf(1.0, delta * 3.0))
 		_last_camera = at
 		fall.position = _fall_origin(FALL[weather])
-	_update_headlights()
+	_update_headlights(delta)
 	var camera: Camera3D = game.camera
 	if camera != null and camera.is_inside_tree():
 		night_lights.update(get_tree(), daytime == "night", camera.global_position, delta)
 
-# Cars on the stage switch their lights on at night: the player's and those
-# of the other room members.
-func _update_headlights() -> void:
+# Cars on the stage switch their lights on at night. Every car's lamps glow
+# (CarLamps); real beams go to the player's car, the other room members' and
+# the BEAM_BUDGET nearest rally and course cars, re-picked every LAMP_PICK s.
+func _update_headlights(delta: float = 0.0) -> void:
+	var night = daytime == "night"
 	var cars: Array = []
 	if game.car != null and is_instance_valid(game.car):
 		cars.append(game.car)
@@ -256,12 +265,38 @@ func _update_headlights() -> void:
 		for peer in game.room.peers.values():
 			if peer is Dictionary and peer.get("car") is Node3D and is_instance_valid(peer.car):
 				cars.append(peer.car)
-	for car in cars:
-		var lights = car.get_node_or_null("Headlights")
-		if daytime == "night" and lights == null and car.is_inside_tree():
-			car.add_child(headlights())
-		elif daytime != "night" and lights != null:
-			lights.free()
+	_lamp_clock -= delta
+	if _lamp_clock <= 0.0 or delta == 0.0:
+		_lamp_clock = LAMP_PICK
+		var picked = _pick_lamps(night, cars)
+		for car in _beamed:
+			if is_instance_valid(car) and not car in picked and not car in cars:
+				_beam(car, false)
+		_beamed = picked
+	for car in cars + _beamed:
+		if is_instance_valid(car):
+			_beam(car, night and car.is_inside_tree())
+
+func _pick_lamps(night: bool, own: Array) -> Array:
+	var camera: Camera3D = game.camera
+	var at: Vector3 = camera.global_position if camera != null and camera.is_inside_tree() else Vector3.INF
+	var others: Array = []
+	for car in get_tree().get_nodes_in_group(CarLamps.GROUP):
+		CarLamps.set_lit(car, night)
+		if car in own or not car.is_inside_tree():
+			continue
+		var distance = car.global_position.distance_squared_to(at)
+		if night and distance < BEAM_RANGE * BEAM_RANGE:
+			others.append([distance, car])
+	others.sort_custom(func(a, b): return a[0] < b[0])
+	return others.slice(0, BEAM_BUDGET).map(func(entry): return entry[1])
+
+static func _beam(car: Node3D, on: bool) -> void:
+	var lights = car.get_node_or_null("Headlights")
+	if on and lights == null:
+		car.add_child(headlights())
+	elif not on and lights != null:
+		lights.free()
 
 static func headlights() -> SpotLight3D:
 	var light = SpotLight3D.new()

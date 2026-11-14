@@ -5,6 +5,7 @@ extends RefCounted
 const P = preload("res://scripts/core/props.gd")
 const CarParts = preload("res://scripts/cars/car_parts.gd")
 const CarBody = preload("res://scripts/cars/car_body.gd")
+const CarLamps = preload("res://scripts/cars/car_lamps.gd")
 const PAINT = Color("111a2b") # near-black with a restrained blue tint
 const PAINT_LIT = Color("1c2a40")
 const PAINT_SHADE = Color("0a101c")
@@ -85,16 +86,16 @@ static func build() -> Node3D:
 				{"name": wheel_name, "style": "spokes", "count": 6, "color": "8e99a2", "detail": "0e141d", "rim": 0.7})
 		# Swept headlamps: a strip on the front face and the larger part on the
 		# bonnet slope above it, so the lamp follows the nose instead of a spike.
-		P.quad_panel(root, PackedVector3Array([
+		CarLamps.mark(P.quad_panel(root, PackedVector3Array([
 			Vector3(side * 0.25, 0.615, -2.142), Vector3(side * 0.60, 0.615, -2.142),
 			Vector3(side * 0.60, 0.705, -2.142), Vector3(side * 0.25, 0.705, -2.142),
-		]), Color("dce7ed")).name = "FrontHeadlight"
-		P.quad_panel(root, PackedVector3Array([
+		]), Color("dce7ed")), "head").name = "FrontHeadlight"
+		CarLamps.mark(P.quad_panel(root, PackedVector3Array([
 			Vector3(side * 0.25, 0.727, -2.128), Vector3(side * 0.61, 0.727, -2.128),
 			Vector3(side * 0.67, 0.792, -2.045), Vector3(side * 0.30, 0.792, -2.045),
-		]), Color("c9d6de")).name = "FrontHeadlightTop"
+		]), Color("c9d6de")), "head").name = "FrontHeadlightTop"
 		_box(root, Vector3(side * 0.55, 0.585, -2.15), Vector3(0.18, 0.03, 0.02), Color("e8be6c"), "FrontIndicator")
-		_box(root, Vector3(side * 0.60, 0.75, 2.137), Vector3(0.37, 0.21, 0.045), Color("9d303b"), "RearLamp")
+		CarLamps.mark(_box(root, Vector3(side * 0.60, 0.75, 2.137), Vector3(0.37, 0.21, 0.045), Color("9d303b"), "RearLamp"), "tail")
 		_box(root, Vector3(side * 0.68, 0.81, 2.16), Vector3(0.18, 0.045, 0.03), Color("d6c5b7"), "ReverseLamp")
 	# Front fascia, unbranded grille, bumper and tow detail.
 	_box(root, Vector3(0, 0.665, -2.142), Vector3(0.46, 0.09, 0.03), TRIM, "Grille")
