@@ -44,8 +44,8 @@ static func build(parent: Node3D) -> Node3D:
 		skewer_node.add_child(mushroom_group)
 		_skewer_stick(mushroom_group, x)
 		for z in [-0.12, 0.0, 0.12]:
-			P.cylinder(mushroom_group, Vector3(x, 0.96, z), 0.015, 0.012, 0.05, Color("d3c49b"), 5)
-			P.faceted(mushroom_group, Vector3(x, 1.0, z), Vector3(0.055, 0.035, 0.07), Color("956337"), 12, 6).name = "MushroomCap_%s" % str(z)
+			P.cylinder(mushroom_group, Vector3(x, 0.912, z), 0.015, 0.012, 0.05, Color("d3c49b"), 5)
+			P.faceted(mushroom_group, Vector3(x, 0.945, z), Vector3(0.055, 0.035, 0.07), Color("956337"), 12, 6).name = "MushroomCap_%s" % str(z)
 		mushroom_group.hide()
 	MeshMerge.bake(root, "grill")
 	return load("res://scripts/player/perches.gd").mark(root, false)
@@ -199,13 +199,17 @@ static func _wall_bands(root: Node3D, at: Vector3, size: Vector3) -> void:
 # what the glowing coals (GrillFire) burn on.
 static func _bed(root: Node3D) -> void:
 	P.box(root, Vector3(0, FLOOR + 0.012, 0), Vector3(HALF_LENGTH * 2 - 0.03, 0.014, HALF_WIDTH * 2 - 0.03), ASH_DARK)
-	for i in range(6):
-		var drift = P.faceted(root, Vector3(-0.38 + i * 0.15, FLOOR + 0.018, sin(i * 1.9) * 0.08), Vector3(0.13, 0.014, 0.09), ASH, 7, 3)
+	for i in range(4):
+		var drift = P.faceted(root, Vector3(-0.36 + i * 0.24, FLOOR + 0.02, sin(i * 1.9) * 0.08), Vector3(0.1, 0.012, 0.07), ASH, 7, 3)
 		drift.rotation.y = i * 0.9
-	for i in range(32):
-		var lump = P.faceted(root, Vector3(-0.44 + fmod(i * 0.371, 0.88), FLOOR + 0.03 + float(i % 3) * 0.006, -0.14 + fmod(i * 0.617, 0.28)), Vector3(0.05, 0.032, 0.042), CHARCOAL[i % CHARCOAL.size()], 4, 3)
+	# A heaped layer of charcoal over the whole floor, a few lumps grey with ash.
+	for i in range(84):
+		var col = i % 21
+		var row = i / 21
+		var jitter = Vector3(sin(i * 2.3) * 0.012, absf(sin(i * 1.1)) * 0.012 + float((col + row) % 2) * 0.008, cos(i * 1.7) * 0.012)
+		var lump = P.faceted(root, Vector3(-0.455 + col * 0.0455, FLOOR + 0.034, -0.135 + row * 0.09) + jitter, Vector3(0.06, 0.038, 0.05), CHARCOAL[(i * 7) % CHARCOAL.size()], 4, 3)
 		lump.rotation = Vector3(i * 0.7, i * 1.3, i * 0.4)
-		lump.scale = Vector3.ONE * (0.75 + fmod(i * 0.29, 0.6))
+		lump.scale = Vector3.ONE * (0.8 + fmod(i * 0.29, 0.45))
 
 # A rod shelf between the legs: the sack of charcoal, a few spilled lumps, a
 # hooked poker and the cardboard everyone fans the coals with.
@@ -248,8 +252,8 @@ static func _coal_mesh(variant: int) -> Mesh:
 	if _coal_clusters.is_empty():
 		for v in range(4):
 			var holder = Node3D.new()
-			for k in range(5):
-				var lump = P.faceted(holder, Vector3(sin(v * 2.0 + k * 1.7) * 0.04, float(k % 2) * 0.01, cos(v * 1.3 + k * 2.3) * 0.045), Vector3(0.05, 0.034, 0.044), Color.WHITE.darkened(float((k + v) % 3) * 0.22), 5, 3)
+			for k in range(12):
+				var lump = P.faceted(holder, Vector3(sin(v * 2.0 + k * 1.7) * 0.055, float(k % 3) * 0.012, cos(v * 1.3 + k * 2.3) * 0.06), Vector3(0.05, 0.034, 0.044), Color.WHITE.darkened(float((k + v) % 3) * 0.22), 5, 3)
 				lump.rotation = Vector3(k * 0.9 + v, k * 1.4, v * 0.5)
 				lump.scale = Vector3.ONE * (0.8 + float((k * 3 + v) % 4) * 0.12)
 			var baked = MeshMerge.bake(holder)
@@ -352,13 +356,13 @@ static func grill_meat_mesh(count: int) -> Mesh:
 				# Uneven browned chunks with onion rings between, charred on top.
 				for k in range(5):
 					var z = -0.13 + k * 0.065
-					var piece = P.faceted(holder, Vector3(x, 0.985, z), Vector3(0.056, 0.05, 0.058), MEAT[(i + k) % MEAT.size()], 6, 3)
+					var piece = P.faceted(holder, Vector3(x, 0.937, z), Vector3(0.056, 0.05, 0.058), MEAT[(i + k) % MEAT.size()], 6, 3)
 					piece.rotation = Vector3(float(k % 2) * 0.4, float(i + k) * 0.9, float((i + k) % 3 - 1) * 0.25)
 					piece.scale = Vector3(1.0 + float((i * 2 + k) % 3) * 0.1, 0.9 + float((i + k * 2) % 3) * 0.1, 1.0)
 					# The char sits half buried in the top of its chunk.
 					P.box(piece, Vector3(0.004, 0.02, 0), Vector3(0.034, 0.012, 0.038), Color("3a2116"))
 					if k < 4:
-						var onion = _tube(holder, Vector3(x, 0.982, z + 0.0325), 0.022, 0.022, 0.01, Color("e4dcc4"), 6)
+						var onion = _tube(holder, Vector3(x, 0.935, z + 0.0325), 0.022, 0.022, 0.01, Color("e4dcc4"), 6)
 						onion.rotation = Vector3(PI / 2, 0, float(k) * 0.3)
 			var baked = MeshMerge.bake(holder)
 			_grill_meat.append(baked.mesh if baked != null else null)
