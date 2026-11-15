@@ -49,6 +49,8 @@ static func build(car: Node3D, cache_key: String) -> void:
 		beams.material_override = beam_material()
 		beams.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		beams.visibility_range_end = BEAM_VISIBLE
+		# Light, not bodywork: nobody stands on or bumps into a beam (perches.gd).
+		beams.set_meta("perch_ignore", true)
 		glow.add_child(beams)
 	glow.hide()
 	car.add_to_group(GROUP)

@@ -4,6 +4,7 @@ extends "res://tests/harness.gd"
 # which weather each stage allows (rain without snow, snow on snowy stages),
 # the sky they draw, headlights at night, grip, the weather sound and the room
 # snapshot guests apply.
+const CarLamps = preload("res://scripts/cars/car_lamps.gd")
 const SkyWeather = preload("res://scripts/core/sky_weather.gd")
 const StageRegistry = preload("res://scripts/stages/stage_registry.gd")
 
@@ -105,6 +106,17 @@ func check_lamp_positions(game) -> void:
 		var light = SkyWeather.headlights(car)
 		check(light.position.z < bounds.position.z and absf(light.position.y - lamp.y) < 0.01, "%s headlight sits ahead of its own lamps" % car.name)
 		light.free()
+		# A walker meets the car's body only: the lit beams are no wall or floor.
+		var Perches = load("res://scripts/player/perches.gd")
+		root.add_child(car)
+		CarLamps.set_lit(car, false)
+		var dark: Dictionary = Perches.field(car, car.global_transform)
+		CarLamps.set_lit(car, true)
+		var lit: Dictionary = Perches.field(car, car.global_transform)
+		# The lit lenses stand a few millimetres proud of the body; a beam would
+		# reach metres ahead.
+		var grown = Vector2(lit.get("size", Vector2i.ZERO) - dark.get("size", Vector2i.ZERO)) * Perches.CELL
+		check(not dark.is_empty() and lit.origin.distance_to(dark.origin) < 0.25 and grown.length() < 0.25, "%s beams can be walked through (%s)" % [car.name, grown])
 		car.free()
 
 func check_rules() -> void:
