@@ -4,6 +4,8 @@ export { VkPayments } from './payments-vk.mjs';
 import { AuthError, authenticateLaunch, authenticateSession } from './auth-vk.mjs';
 import { validateRoomSelection } from './store.mjs';
 import { RoomState, RoomError, protocol } from './room-core.mjs';
+import { relayIce } from './relays.mjs';
+import { linkReport } from './link-report.mjs';
 const json = (data, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
 const PUSH_INTERVAL = 40;
 const HELLO_TIMEOUT = 10000;
@@ -314,6 +316,14 @@ export default {
       try { await request.body?.cancel(); } catch {}
       return json({ error: 'Слишком большое сообщение.' }, 413);
     }
+    if (url.pathname === '/api/telemetry/link') {
+      let raw = '';
+      try { raw = await readBody(request, 2048); } catch { return json({ error: 'Слишком большое сообщение.' }, 413); }
+      const report = linkReport(raw, request.cf);
+      if (!report) return json({ error: 'Некорректное сообщение.' }, 400);
+      console.log('[RFM link]', JSON.stringify(report));
+      return json({ ok: true });
+    }
     try {
       if (url.pathname === '/api/vk/session') {
         const raw = await readBody(request, 16384);
@@ -367,7 +377,7 @@ export default {
         const response = await room.fetch(new Request(`${url.origin}/create`, { method: 'POST', body: raw }));
         if (response.status === 409 && !fixed) continue;
         const data = await response.json();
-        return json(response.ok ? { ...data, room: id, socket: socketUrl(url, id) } : { ...data, room: id }, response.status);
+        return json(response.ok ? { ...data, room: id, socket: socketUrl(url, id), ice: await relayIce(env, data.player, request.cf?.country) } : { ...data, room: id }, response.status);
       }
       return json({ error: 'Не удалось создать комнату. Попробуй ещё раз.' }, 503);
     }
@@ -375,6 +385,7 @@ export default {
     if (!route) return json({ error: 'Неверный ID комнаты: нужны 6 символов.' }, 404);
     const response = await env.ROOMS.get(env.ROOMS.idFromName(route[1])).fetch(request);
     if (route[2] !== 'join' || !response.ok) return response;
-    return json({ ...await response.json(), socket: socketUrl(url, route[1]) });
+    const data = await response.json();
+    return json({ ...data, socket: socketUrl(url, route[1]), ice: await relayIce(env, data.player, request.cf?.country) });
   },
 };

@@ -296,6 +296,7 @@ func real_data_links() -> void:
 		host.poll()
 		await create_timer(0.02).timeout
 	check(channels.all(func(c): return c.get_ready_state() == 1) and guest.get_connection_state() == 2, "two native direct links open over loopback")
+	check(guest.get_selected_pair() in ["host/host", "host/prflx", "prflx/host"], "the link names the candidate pair it uses: %s" % guest.get_selected_pair())
 	var world = JSON.stringify({"t": "w", "time": 1, "world": {}, "players": []}).to_utf8_buffer()
 	check(channels[1].put_packet(world) == OK and channels[0].put_packet("{\"t\":\"s\"}".to_utf8_buffer()) == OK, "both sides send")
 	deadline = Time.get_ticks_msec() + 3000

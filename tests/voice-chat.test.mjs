@@ -79,7 +79,7 @@ function room(ids, options) {
   for (const id of ids) {
     clients[id] = load(options);
     clients[id].voice.syncMembers(ids);
-    assert.equal(clients[id].voice.join({ localId: id, session: `room-${id}-session`, iceServers: ['stun:example.org:3478'] }), true);
+    assert.equal(clients[id].voice.join({ localId: id, session: `room-${id}-session`, iceServers: ['stun:example.org:3478', { urls: 'turn:relay.example:3478', username: '1:' + id, credential: 'pw' }] }), true);
   }
   return clients;
 }
@@ -131,7 +131,7 @@ test('every pair of members negotiates one audio line, the smaller id calls', as
       assert.equal(peer.pc.signalingState, 'stable');
       assert.equal(peer.pc.transceivers.length, 1);
       assert.equal(peer.pc.transceivers[0].direction, 'sendrecv');
-      assert.equal(JSON.stringify(peer.pc.config.iceServers), JSON.stringify([{ urls: ['stun:example.org:3478'] }]));
+      assert.equal(JSON.stringify(peer.pc.config.iceServers), JSON.stringify([{ urls: ['stun:example.org:3478'] }, { urls: ['turn:relay.example:3478'], username: '1:' + id, credential: 'pw' }]));
     }
   }
 });

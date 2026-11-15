@@ -51,9 +51,7 @@ static func create():
 	return new() if VoiceNative.load_extension() and ClassDB.class_exists("RallyDataLink") else null
 
 func initialize(config: Dictionary) -> Error:
-	for server in config.get("iceServers", []):
-		for url in server.get("urls", []):
-			ice_servers.append(str(url))
+	ice_servers = VoiceNative.ice_urls(config.get("iceServers", []))
 	return OK
 
 func create_data_channel(_label: String, _options: Dictionary) -> Channel:
@@ -93,6 +91,11 @@ func poll() -> Error:
 	if channel != null:
 		channel.received.append_array(link.get_packets())
 	return OK
+
+# "local/remote" candidate types of the pair in use, "" before it is chosen
+# or with a library from before get_selected_pair.
+func get_selected_pair() -> String:
+	return str(link.get_selected_pair()) if link != null and link.has_method("get_selected_pair") else ""
 
 func get_connection_state() -> int:
 	if closed:

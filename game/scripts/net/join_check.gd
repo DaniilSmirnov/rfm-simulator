@@ -20,6 +20,7 @@ var waited = 0.0
 # A join or create reply. A host has nobody to check and enters at once.
 func start(owner_room, reply: Dictionary) -> void:
 	room = owner_room
+	room.direct.set_relays(reply.get("ice", []))
 	if reply.get("host", false) == true:
 		room._joined(reply)
 		return
@@ -52,26 +53,34 @@ func update(delta: float) -> bool:
 		return true
 	var reason = problem()
 	if reason != "":
-		fail(reason)
+		room.direct.report(room.host_id, "failed", reason, waited)
+		fail(REASONS[reason])
 	return true
 
 # The link to the host is open: the guest loads the stage.
 func linked() -> void:
 	active = false
 	print("ROOM_JOIN_CHECK linked ", room.host_id)
+	room.direct.report(room.host_id, "linked", "", waited)
 	room._joined(data)
 
-# Why the link cannot come, or "" while it still may.
+# What the entry panel says for each reason the link cannot come.
+const REASONS = {
+	"no_webrtc": "Эта версия игры не умеет соединяться с хозяином комнаты напрямую. Обнови игру.",
+	"no_socket": "Сеть не пропускает соединение с сервером комнаты. Попробуй другую сеть, например мобильный интернет.",
+	"host_silent": "Хозяин комнаты не отвечает. Попроси его вернуться в игру и попробуй снова.",
+	"blocked": "Не удалось соединиться с хозяином комнаты напрямую: сеть одного из вас не пропускает такое соединение. Попробуй другую сеть, например мобильный интернет.",
+}
+
+# Why the link cannot come (a REASONS key), or "" while it still may.
 func problem() -> String:
 	if not room.direct.enabled:
-		return "Эта версия игры не умеет соединяться с хозяином комнаты напрямую. Обнови игру."
+		return "no_webrtc"
 	if not room.transport.socket_enabled:
-		return "Сеть не пропускает соединение с сервером комнаты. Попробуй другую сеть, например мобильный интернет."
+		return "no_socket"
 	if waited <= room.LINK_GIVE_UP:
 		return ""
-	if room.host_id == "":
-		return "Хозяин комнаты не отвечает. Попроси его вернуться в игру и попробуй снова."
-	return "Не удалось соединиться с хозяином комнаты напрямую: сеть одного из вас не пропускает такое соединение. Попробуй другую сеть, например мобильный интернет."
+	return "host_silent" if room.host_id == "" else "blocked"
 
 # Leaves the room during the check and says why on the entry panel.
 # False when no check is running.

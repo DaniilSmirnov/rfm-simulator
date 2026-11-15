@@ -329,6 +329,7 @@ func _linked(delta: float) -> bool:
 	link_lost += delta
 	ui.room_label.text = "Соединяемся с хозяином комнаты…"
 	if link_lost > LINK_GIVE_UP or not direct.enabled:
+		direct.report(host_id, "lost", "gave_up" if direct.enabled else "no_webrtc", link_lost)
 		disconnect_room("Не удалось соединиться с хозяином комнаты. Проверь интернет или попробуй другую сеть.", "Не удалось соединиться")
 	return connected
 

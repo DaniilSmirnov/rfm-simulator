@@ -41,7 +41,7 @@ export const nodeSuites = Object.freeze({
    "tests/mobile-viewport.test.mjs", "tests/mobile-host-pause.test.mjs", "tests/pointer-capture.test.mjs",
    "tests/test-catalog.test.mjs", "tests/room-input.test.mjs",
    "tests/rate-limits.test.mjs", "tests/gdscript-lint.test.mjs", "tests/localization.test.mjs",
-   "tests/voice-chat.test.mjs"],
+   "tests/voice-chat.test.mjs", "tests/relays.test.mjs"],
   ["--test", "tests/branding.test.mjs", "tests/boot-diagnostics.test.mjs",
    "tests/audio-recovery.test.mjs"],
   ["scripts/test-device.mjs"],

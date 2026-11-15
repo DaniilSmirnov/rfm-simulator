@@ -3,6 +3,8 @@ extends "res://tests/harness.gd"
 # (join_check.gd): it waits in the menu, enters once the link opens, and stays
 # in the menu with a reason when the link cannot come.
 const DirectTest = preload("res://tests/net/test_direct_link.gd")
+const VoiceNative = preload("res://scripts/net/voice_native.gd")
+const LinkReport = preload("res://scripts/net/link_report.gd")
 
 func _initialize() -> void:
 	call_deferred("run")
@@ -24,10 +26,12 @@ func connect_links(host, guest) -> void:
 func reply(player: String) -> Dictionary:
 	return {"player": player, "token": "token-" + player, "host": false, "name": player, "slot": 1, "car_model": 0, "character": 0, "stage": 0, "socket": ""}
 
-func join(guest, player: String) -> void:
+const RELAY = {"urls": ["turn:relay.example:3478?transport=udp", "turns:relay.example:443?transport=tcp"], "username": "1700000000:guest", "credential": "a+b/c="}
+
+func join(guest, player: String, ice: Array = []) -> void:
 	guest.room.room_id = "ABC123"
 	guest.room.transport.request_kind = "join"
-	guest.room._on_reply("join", reply(player))
+	guest.room._on_reply("join", reply(player).merged({"ice": ice}))
 
 func run() -> void:
 	var host = load("res://main.tscn").instantiate()
@@ -51,8 +55,13 @@ func run() -> void:
 	host.room._update_peers(players)
 
 	# The join reply: the guest stays in the menu and checks the link.
-	join(guest, "guest")
+	join(guest, "guest", [RELAY])
 	guest.room.transport.socket_open = true  # the socket's hello
+	var servers: Array = guest.room.direct.ice_servers()
+	check(servers.size() == 3 and servers[0].urls[0].begins_with("stun:") and servers[2] == RELAY, "the join reply's relays come after the room's STUN servers")
+	var native = VoiceNative.ice_urls(servers)
+	check(native.size() == 3 and native[2] == "turn:1700000000%3Aguest:a%2Bb%2Fc%3D@relay.example:3478?transport=udp", "native builds get the UDP relay with its password in the URL: %s" % [native])
+	check(LinkReport.candidate_types("a=candidate:1 1 UDP 2122 192.168.1.2 5000 typ host\r\na=candidate:2 1 UDP 1686 203.0.113.9 6000 typ srflx raddr 0.0.0.0 rport 0\r\na=candidate:3 1 udp 41 198.51.100.4 7000 typ relay raddr 203.0.113.9 rport 6000") == ["host", "srflx", "relay"], "candidate types are read from SDP and trickled candidates")
 	var check_ = guest.room.join_check
 	check(check_.active and guest.room.connected and not guest.playing and not guest.loading_world, "after the join reply the guest waits in the menu")
 	check(guest.room.ui.status.text == "Проверяем связь с хозяином комнаты…", "the entry panel says the link is being checked")
@@ -73,6 +82,8 @@ func run() -> void:
 	host.room.direct._send(1.0)
 	check(guest.room.join_check.update(0.1), "the room skips its frame while the check runs")
 	check(not check_.active and (guest.loading_world or guest.playing), "an open link starts the stage load")
+	var report: Dictionary = guest.room.direct.last_report
+	check(report.get("result") == "linked" and report.room == "ABC123" and report.role == "guest" and report.relays == 1, "the opened link is reported to the room server: %s" % [report])
 	check(guest.racers.is_empty() and guest.room.last_world_time < 0, "the world that came before the stage is dropped")
 	var waited = 0
 	while check_.active == false and not guest.playing and waited < 3000:
@@ -117,6 +128,8 @@ func run() -> void:
 	other.room.join_check.update(other.room.LINK_GIVE_UP + 1.0)
 	check(not other.room.connected and other.room.direct.links.is_empty() and not other.dead, "no link within the time limit: the guest leaves the room")
 	check(other.room.ui.status.text.begins_with("Не удалось соединиться с хозяином комнаты напрямую"), "the reason: the networks block the direct link")
+	report = other.room.direct.last_report
+	check(report.get("result") == "failed" and report.reason == "blocked" and report.attempts >= 1 and report.relays == 0, "the failure is reported with its reason: %s" % [report])
 
 	other.room.transport.socket_enabled = false
 	join(other, "other")

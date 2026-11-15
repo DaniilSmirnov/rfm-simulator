@@ -1,0 +1,13 @@
+# One relay server: copy this folder to the VPS, put the values into .env
+# next to this file (TURN_SECRET=…, TURN_EXTERNAL_IP=…, TURN_CERT=…, TURN_KEY=…)
+# and run  docker compose up -d --build. Details: docs/TURN_SERVERS.md.
+services:
+  turn:
+    build: .
+    image: rally-turn
+    restart: always
+    # The relay range (49160-49999) is too wide to map port by port.
+    network_mode: host
+    env_file: .env
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt:ro

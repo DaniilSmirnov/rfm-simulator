@@ -128,12 +128,16 @@ func request(kind: String, room_id: String, body: Dictionary) -> void:
 # It goes on its own request and its answer is ignored: the room screen
 # already says the room is closed.
 func abandon(room_id: String, token: String) -> void:
-	var leave = HTTPRequest.new()
-	leave.timeout = 8
-	add_child(leave)
-	leave.request_completed.connect(func(_result, _code, _headers, _body): leave.queue_free())
-	if leave.request(endpoint("leave", room_id), ["Content-Type: application/json"], HTTPClient.METHOD_POST, JSON.stringify({"token": token})) != OK:
-		leave.queue_free()
+	post_once(endpoint("leave", room_id).trim_prefix(server), {"token": token})
+
+# One request on its own, whose answer nobody waits for.
+func post_once(path: String, body: Dictionary) -> void:
+	var once = HTTPRequest.new()
+	once.timeout = 8
+	add_child(once)
+	once.request_completed.connect(func(_result, _code, _headers, _body): once.queue_free())
+	if once.request(server + path, ["Content-Type: application/json"], HTTPClient.METHOD_POST, JSON.stringify(body)) != OK:
+		once.queue_free()
 
 func cancel() -> void:
 	if busy:

@@ -52,6 +52,9 @@ public:
 	String get_state() const;
 	// "connecting", "open" or "closed".
 	String get_channel_state() const;
+	// "local/remote" candidate types of the pair in use (host, srflx, prflx,
+	// relay), or "" before ICE has chosen one. Telemetry: link_report.gd.
+	String get_selected_pair();
 	// Packets received since the last call, oldest first.
 	Array get_packets();
 	// One packet; false while the channel is not open.
