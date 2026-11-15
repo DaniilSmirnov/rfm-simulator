@@ -1,5 +1,6 @@
 extends RefCounted
 const Props = preload("res://scripts/core/props.gd")
+const Plov = preload("res://scripts/camp/plov_food.gd")
 
 static func build(parent: Node3D, recipe: String = "plov") -> Node3D:
 	var root = Node3D.new()
@@ -58,7 +59,7 @@ static func build(parent: Node3D, recipe: String = "plov") -> Node3D:
 	var rice = Node3D.new()
 	rice.name = "Rice"
 	root.add_child(rice)
-	var surface = Props.cylinder(rice, Vector3.ZERO, 0.36, 0.465, 0.26, (Color("6b3b25") if recipe == "kuyrdak" else Color("e1ba64")), 16)
+	var surface = Plov.surface(rice) if recipe == "plov" else Props.cylinder(rice, Vector3.ZERO, 0.36, 0.465, 0.26, Color("6b3b25"), 16)
 	surface.name = "FoodSurface"
 	Props.unique_material(surface)
 	for i in range(Props.FOOD_PORTIONS):
@@ -79,11 +80,7 @@ static func build(parent: Node3D, recipe: String = "plov") -> Node3D:
 				var onion = Props.box(portion, Vector3(cos(onion_angle) * 0.07, 0.085, sin(onion_angle) * 0.07), Vector3(0.05, 0.018, 0.02), Color("e2c68c"))
 				onion.rotation.y = -onion_angle + PI * 0.5
 		else:
-			for j in range(4):
-				var grain = Props.box(portion, Vector3((j % 2) * 0.035, 0.008, (j / 2) * 0.035), Vector3(0.026, 0.020, 0.055), Color("f5d994"))
-				grain.rotation.y = j * 0.7
-			Props.box(portion, Vector3(-0.03, 0.015, 0), Vector3(0.045, 0.035, 0.06), Color("d87e2f"))
-			Props.box(portion, Vector3(0.03, 0.027, -0.025), Vector3(0.06, 0.05, 0.045), Color("895033"))
+			Plov.dress(portion, i)
 	var bubbles = Node3D.new()
 	bubbles.name = "Bubbles"
 	root.add_child(bubbles)
@@ -107,7 +104,8 @@ static func pose(root: Node3D, phase: String, progress: float, servings: int, ti
 	rice.scale = Vector3(lerpf(0.70, 1.0, fraction), maxf(0.05, fraction), lerpf(0.70, 1.0, fraction))
 	rice.position.y = 0.95 + 0.13 * fraction
 	var surface = rice.get_node("FoodSurface")
-	surface.material_override.albedo_color = Color("eee3b5").lerp(Color("e1ba64"), clampf(progress, 0, 1)) if phase == "cooking" else (Color("6b3b25") if root.get_meta("recipe", "plov") == "kuyrdak" else Color("e1ba64"))
+	if root.get_meta("recipe", "plov") == "plov":
+		surface.material_override.albedo_color = Plov.RAW.lerp(Plov.READY, clampf(progress, 0, 1)) if phase == "cooking" else Plov.READY
 	for i in range(Props.FOOD_PORTIONS):
 		rice.get_node("Portion_%02d" % i).visible = phase == "cooking" or i < servings
 	var bubbles = root.get_node("Bubbles")
