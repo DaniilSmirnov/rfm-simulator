@@ -7,6 +7,7 @@ const NetProtocol = preload("res://scripts/net/net_protocol.gd")
 const Props = preload("res://scripts/core/props.gd")
 const StageRecords = preload("res://scripts/stages/stage_records.gd")
 const PeerView = preload("res://scripts/net/peer_view.gd")
+const Hitbox = preload("res://scripts/cars/car_hitbox.gd")
 
 var game
 
@@ -173,6 +174,30 @@ func run() -> void:
 	approach(rock_spot, 0.7, true)
 	idle(0.4)
 	check(game.jump_height == 0 and absf(game.walker.y - rock_spot.y - 0.6) < 0.05, "a jump lands on top of a boulder")
+
+	# ---- edge stones (quarry windrow, canyon markers, alpine parapets): a
+	# jump clears them on foot, a car still stops at them
+	var wall_spot: Vector3 = spot + forward * 44.0
+	wall_spot.y = game.stage.ground(wall_spot)
+	game.stage.rocks.append(StageRecords.rock(wall_spot, 0.7, 1.25))
+	stand_beside(wall_spot, side * -1.6)
+	approach(wall_spot + side * 2.5, 0.4, false)
+	approach(wall_spot + side * 2.5, 1.2, true)
+	check(game.walker.distance_to(wall_spot) > 0.9 and (game.walker - wall_spot).dot(side) < 0.0, "a plain 1.25 m rock is a wall even in a jump")
+	var edge_spot: Vector3 = spot + forward * 50.0
+	edge_spot.y = game.stage.ground(edge_spot)
+	game.stage.rocks.append(StageRecords.edge_stone(edge_spot, 0.7, 1.25))
+	stand_beside(edge_spot, side * -1.6)
+	approach(edge_spot + side * 2.5, 0.6, false)
+	check((game.walker - edge_spot).dot(side) < -0.9, "an edge stone stops a walker who does not jump")
+	approach(edge_spot + side * 2.5, 1.2, true)
+	idle(0.4)
+	check((game.walker - edge_spot).dot(side) > 0.9 and game.jump_height == 0, "a jump carries the walker over an edge stone")
+	var car_shape = Hitbox.shape(Hitbox.bounds(game.car), atan2(-side.x, -side.z))
+	var car_from: Vector3 = edge_spot - side * 4.0
+	car_from.y = game.stage.ground(car_from)
+	check(not Hitbox.rocks(game.stage, car_from, car_from + side * 4.0, car_shape).is_empty(), "a car still stops at an edge stone")
+	check(not game.stage.rock_hit(car_from, car_from + side * 4.0, 1.0).is_empty(), "traffic routes still meet edge stones")
 
 	# ---- the room: another member standing on someone's car
 	var peer = PeerView.create(game, {"id": "friend", "name": "Друг", "slot": 1, "state": null})

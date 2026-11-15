@@ -701,15 +701,20 @@ func rocks_in_bounds(low: Vector2, high: Vector2) -> Array:
 
 # Earliest swept horizontal circle contact. Height allows cars to jump over rocks.
 # Escape handling prevents an overlapping spawn or a low-speed bump from trapping a car.
-func rock_hit(start: Vector3, end: Vector3, radius: float, allow_escape: bool = true) -> Dictionary:
+# `vault_tuck` >= 0 marks a walker: over a stone marked vault
+# (stage_records.edge_stone) a jump draws the legs up by this much, and a
+# walker who came down against one steps off it either way. Cars and
+# everything else leave it negative and meet the whole stone.
+func rock_hit(start: Vector3, end: Vector3, radius: float, allow_escape: bool = true, vault_tuck: float = -1.0) -> Dictionary:
 	var a = flat(start)
 	var b = flat(end)
 	var travel = b - a
 	var best: Dictionary = {}
 	var earliest = INF
 	for rock in rocks_in_bounds(a.min(b) - Vector2.ONE * radius, a.max(b) + Vector2.ONE * radius):
-		var tyre_offset = 0.0
-		if minf(start.y, end.y) - tyre_offset > rock.pos.y + rock.height:
+		var vault: bool = vault_tuck >= 0.0 and rock.get("vault", false)
+		var top: float = rock.pos.y + rock.height - (vault_tuck if vault else 0.0)
+		if minf(start.y, end.y) > top:
 			continue
 		var center = flat(rock.pos)
 		var padding: float = rock.radius + radius
@@ -717,6 +722,8 @@ func rock_hit(start: Vector3, end: Vector3, radius: float, allow_escape: bool = 
 		var distance = offset.length()
 		var t = 0.0
 		if distance < padding:
+			if vault:
+				continue
 			if allow_escape and (b - center).length() > distance + 0.0000001 and offset.dot(travel) >= 0:
 				continue
 		else:
@@ -730,7 +737,7 @@ func rock_hit(start: Vector3, end: Vector3, radius: float, allow_escape: bool = 
 			t = (-projection - sqrt(discriminant)) / length_squared
 			if t < 0 or t > 1:
 				continue
-		if lerpf(start.y, end.y, t) - tyre_offset > rock.pos.y + rock.height:
+		if lerpf(start.y, end.y, t) > top:
 			continue
 		if t >= earliest:
 			continue

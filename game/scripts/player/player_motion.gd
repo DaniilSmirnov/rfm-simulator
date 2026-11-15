@@ -28,6 +28,9 @@ var drunk = preload("res://scripts/player/drunk_camera.gd").new()
 # Seated on a chair or a sauna bench the view turns only as far as a head and
 # shoulders do, not round the chair's back (SEAT_LOOK either way).
 const SEAT_LOOK = 1.75
+# How far a jump draws the feet up over an edge stone: from the ground (peak
+# ≈ 0.84 m) a walker clears stones up to ≈ 1.3 m, the quarry windrow included.
+const VAULT_TUCK = 0.5
 var seat_yaw = NAN
 
 func drive(delta: float) -> void:
@@ -233,7 +236,9 @@ func walk_step(delta: float) -> void:
 	# Landing on a top: the way there is tested at its height, not below it.
 	var from = Vector3(game.walker.x, maxf(game.walker.y, lift), game.walker.z)
 	var to = Vector3(next.x, maxf(next.y, lift), next.z)
-	var hit = game.stage.biome.walk_blocked(to, from.y) or not game.stage.solids.hit(from, to, 0.3).is_empty() or not game.stage.rock_hit(from, to, 0.3).is_empty() or game.stage.obstacle_hit(from, to, 0.3, true) >= 0 or contact_blocked(from, to, false, maxf(limit, perch + perches.STEP_UP))
+	# In a jump the legs tuck up over edge stones (cars still meet them whole).
+	var tuck = VAULT_TUCK if game.jump_height > 0.01 or game.jump_velocity > 0.0 else 0.0 # >= 0: a walker
+	var hit = game.stage.biome.walk_blocked(to, from.y) or not game.stage.solids.hit(from, to, 0.3).is_empty() or not game.stage.rock_hit(from, to, 0.3, true, tuck).is_empty() or game.stage.obstacle_hit(from, to, 0.3, true) >= 0 or contact_blocked(from, to, false, maxf(limit, perch + perches.STEP_UP))
 	if not hit:
 		game.walker = next
 	else:
