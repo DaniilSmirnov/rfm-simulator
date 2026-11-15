@@ -1,35 +1,50 @@
 extends RefCounted
 # People seated in a car_body.gd cabin, seen through the glass: the pilot and
-# navigator of rally crews and zero cars (overalls and helmets), the police
-# officer driving a course police car (uniform and cap), and the two doctors
-# of the ambulance. Figures are sized to the cabin (car_interior.gd cabin()),
-# whose floor is at the belt line, so a seated person fits under the roof.
-# The driver is plain boxes and bakes into the car body. A passenger who gets
-# out (the ambulance doctor who treats casualties, ambulance_medics.gd) is its
-# own merged node, PASSENGER, hidden while they are outside.
+# navigator of rally crews and zero cars, the police officer driving a course
+# police car, and the two doctors of the ambulance. They are the same
+# character models as the players and NPCs (Props.player_avatar(), the medic
+# of medic_model.gd), seated by CharacterRig with their hands on the wheel or
+# in the lap, dressed per role: overalls and a helmet, a uniform and a cap,
+# the doctor's white coat. The cabin floor is at the belt line
+# (car_interior.gd cabin()), so a person is scaled to put the head under the
+# roof and the shoulders at the belt, the way you see a driver from outside.
+# The driver bakes into the car body with the cabin; a passenger who gets out
+# (the ambulance doctor who treats casualties, ambulance_medics.gd) is its own
+# merged node, PASSENGER, hidden while they are outside.
 #
-#   CarOccupants.seat(root, p, f, "pilot", "navigator")
+#   CarOccupants.seat(root, p, f, "pilot", "navigator", false, "", seed)
 const P = preload("res://scripts/core/props.gd")
 const CarInterior = preload("res://scripts/cars/car_interior.gd")
 const MeshMerge = preload("res://scripts/core/mesh_merge.gd")
+const CharacterRig = preload("res://scripts/people/character_rig.gd")
+const MedicModel = preload("res://scripts/people/medic_model.gd")
 const PASSENGER = "CabinPassenger"
-const SKIN = Color("d9a98a")
-const HAIR = Color("4a3426")
-# Outfit per role: body colour, head ("helmet", "cap", "hair") and what the
-# hands hold when not driving.
+# Characters without a hat or cap (a helmet or a uniform cap goes on instead).
+const BARE_HEADS = [0, 2, 4, 5, 7, 9, 10]
+# Seat height above the feet (m, unscaled) and the body above the shoulders:
+# shoulder joints stand at 1.29 m, the top of the head at about 2.2 m.
+const SEAT = 0.3
+const SHOULDER_Y = 1.29
+const HEAD_TOP = 2.2
+# The cartoon characters stand 2.2 m tall; in a cab with room (the ambulance)
+# they still sit smaller, so the heads do not fill the windscreen.
+const MAX_SCALE = 0.75
+# Clothes per role over the character's own: torso colour ("" = livery accent),
+# head gear, what the hands hold.
 const ROLES = {
 	"pilot": {"suit": "", "head": "helmet"},
 	"navigator": {"suit": "", "head": "helmet", "holds": "notes"},
 	"police": {"suit": "3e5168", "head": "cap", "cap": "26324a"},
-	"medic": {"suit": "e4efee", "head": "hair", "cross": true},
+	"medic": {"medic": true},
 }
 
 # Seats a driver and, if `passenger` is not "", a front passenger. A passenger
-# that `leaves` goes into its own node (PASSENGER) so it can be hidden.
-static func seat(root: Node3D, p: Dictionary, f: Dictionary, driver: String, passenger: String = "", leaves: bool = false, cache_key: String = "") -> void:
+# that `leaves` goes into its own node (PASSENGER) so it can be hidden. `seed`
+# picks the characters (the same car always carries the same people).
+static func seat(root: Node3D, p: Dictionary, f: Dictionary, driver: String, passenger: String = "", leaves: bool = false, cache_key: String = "", seed: int = 0) -> void:
 	var c = CarInterior.cabin(p, f)
 	var wheel = CarInterior.wheel_centre(p, c)
-	_person(root, p, c, wheel.x, driver, wheel)
+	_person(root, p, c, wheel.x, driver, wheel, seed * 2)
 	if passenger == "":
 		return
 	var holder: Node3D = root
@@ -39,7 +54,7 @@ static func seat(root: Node3D, p: Dictionary, f: Dictionary, driver: String, pas
 		# Kept out of the car body bake: it hides while the doctor is outside.
 		holder.set_meta("unbatched", true)
 		root.add_child(holder)
-	_person(holder, p, c, -wheel.x, passenger, null)
+	_person(holder, p, c, -wheel.x, passenger, null, seed * 2 + 1)
 	if leaves:
 		MeshMerge.bake(holder, cache_key + ":" + PASSENGER if cache_key != "" else "")
 
@@ -49,71 +64,80 @@ static func passenger_aboard(car: Node3D, aboard: bool) -> void:
 	if holder != null:
 		holder.visible = aboard
 
-static func _person(root: Node3D, p: Dictionary, c: Dictionary, x: float, role: String, wheel) -> void:
-	var spec: Dictionary = ROLES[role]
-	var a: float = c.avail
-	var suit = Color(spec.suit) if spec.suit != "" else Color(p.get("suit", p.get("accent", "2f4a7a")))
-	# Life size: the head just under the roof, the body down past the belt
-	# line into the shell (the cabin floor is at the belt), as seen from outside.
-	var head = 0.21
-	var chest = 0.5
-	var top: float = c.floor + a - 0.035
-	var chest_top = top - head * 1.12 - 0.05
-	# A tall cab (the ambulance) has room to sit on the cushion, legs and all.
-	var seated = chest_top - chest >= c.floor + a * 0.12
-	var hip = Vector3(x, minf(chest_top - chest, c.floor + a * 0.12), c.front_seat - 0.16)
-	if seated:
-		P.box(root, hip + Vector3(0, 0.06, -0.22), Vector3(0.36, 0.12, 0.44), suit.darkened(0.12))
-		for dx in [-0.09, 0.09]:
-			P.box(root, Vector3(x + dx, (c.floor + hip.y) * 0.5, hip.z - 0.42), Vector3(0.12, hip.y - c.floor, 0.12), suit.darkened(0.12))
-	var torso = Node3D.new()
-	root.add_child(torso)
-	torso.position = hip
-	torso.rotation.x = 0.12 # leaning back like the seat
-	P.box(torso, Vector3(0, chest * 0.5, 0), Vector3(0.4, chest, 0.22), suit)
-	if role in ["pilot", "navigator"]:
-		# Harness straps over the overalls.
-		for dx in [-0.08, 0.08]:
-			P.box(torso, Vector3(dx, chest * 0.6, -0.113), Vector3(0.045, chest * 0.8, 0.006), Color("1d2125"))
-	if spec.get("cross", false):
-		P.box(torso, Vector3(0.1, chest * 0.8, -0.113), Vector3(0.07, 0.02, 0.006), Color("d93742"))
-		P.box(torso, Vector3(0.1, chest * 0.8, -0.113), Vector3(0.02, 0.07, 0.006), Color("d93742"))
-	if role == "police":
-		P.box(torso, Vector3(-0.1, chest * 0.82, -0.113), Vector3(0.06, 0.05, 0.006), Color("c9a95b")) # badge
-	var neck = Vector3(0, chest + 0.025, 0)
-	P.box(torso, neck, Vector3(0.1, 0.06, 0.1), SKIN)
-	var centre = neck + Vector3(0, 0.03 + head * 0.5, 0)
-	_head(torso, p, spec, centre, head, suit)
-	# Arms from the shoulders: to the steering wheel rim, or to the lap.
-	var shoulder_y = chest * 0.92
-	for side in [-1.0, 1.0]:
-		var shoulder = hip + Basis(Vector3.RIGHT, 0.12) * Vector3(side * 0.2, shoulder_y, 0)
-		var hand: Vector3
-		if wheel != null:
-			hand = wheel + Vector3(side * minf(0.15, a * 0.32), 0.04, 0.03)
-		else:
-			hand = Vector3(x + side * 0.12, c.floor + 0.06, hip.z - 0.3)
-		var elbow = (shoulder + hand) * 0.5 + Vector3(side * 0.04, -0.05, 0.02)
-		P.car_beam(root, shoulder, elbow, 0.085, suit)
-		P.car_beam(root, elbow, hand, 0.075, suit)
-		P.box(root, hand, Vector3(0.06, 0.06, 0.06), Color("1d2125") if spec.head == "helmet" else SKIN)
-	if spec.get("holds", "") == "notes":
-		# Pace-note book open on the navigator's lap.
-		var notes = P.box(root, Vector3(x, c.floor + 0.09, hip.z - 0.32), Vector3(0.24, 0.015, 0.17), Color("f3efe2"))
-		notes.rotation.x = 0.5
+# Scale and feet height of a seated person in this cabin: head just under the
+# roof, shoulders near the belt; in a tall cab (the ambulance) they sit on the
+# cushion at full size instead.
+static func fit(c: Dictionary) -> Vector2:
+	var roof: float = c.floor + c.avail - 0.03
+	var drop = SEAT - CharacterRig.PELVIS_BOTTOM
+	var cushion: float = c.floor + c.avail * 0.12
+	var scale = clampf((roof - c.floor + 0.04) / (HEAD_TOP - SHOULDER_Y), 0.4, MAX_SCALE)
+	var feet = roof - (HEAD_TOP + drop) * scale
+	if feet + SEAT * scale <= cushion:
+		return Vector2(scale, feet)
+	# A tall cab: on the cushion, with the whole body under the roof.
+	scale = minf(MAX_SCALE, (roof - cushion) / (HEAD_TOP + drop - SEAT))
+	return Vector2(scale, cushion - SEAT * scale)
 
-static func _head(torso: Node3D, p: Dictionary, spec: Dictionary, centre: Vector3, head: float, suit: Color) -> void:
-	match str(spec.head):
-		"helmet":
-			var helmet = Color(p.get("helmet", "f1f0ea"))
-			P.faceted(torso, centre, Vector3(head * 1.15, head * 1.1, head * 1.2), helmet, 10, 5)
-			P.box(torso, centre + Vector3(0, 0.0, -head * 0.55), Vector3(head * 0.85, head * 0.32, 0.02), Color("1b2228"))
-			P.box(torso, centre + Vector3(0, head * 0.42, 0), Vector3(head * 0.24, 0.012, head * 1.1), suit)
-		"cap":
-			P.faceted(torso, centre, Vector3(head * 0.92, head, head), SKIN, 8, 4)
-			P.box(torso, centre + Vector3(0, head * 0.45, 0.01), Vector3(head * 1.05, head * 0.28, head * 1.05), Color(spec.cap))
-			P.box(torso, centre + Vector3(0, head * 0.34, 0.01), Vector3(head * 1.07, head * 0.08, head * 1.07), Color("b8312f"))
-			P.box(torso, centre + Vector3(0, head * 0.33, -head * 0.6), Vector3(head * 0.8, 0.012, head * 0.3), Color("151a22"))
-		_:
-			P.faceted(torso, centre, Vector3(head * 0.92, head, head), SKIN, 8, 4)
-			P.box(torso, centre + Vector3(0, head * 0.38, 0.02), Vector3(head * 0.98, head * 0.3, head), HAIR)
+static func _person(root: Node3D, p: Dictionary, c: Dictionary, x: float, role: String, wheel, seed: int) -> void:
+	var spec: Dictionary = ROLES[role]
+	var avatar: Node3D
+	if spec.get("medic", false):
+		avatar = MedicModel.create("")
+	else:
+		avatar = P.player_avatar(BARE_HEADS[posmod(seed, BARE_HEADS.size())])
+	avatar.name = "Occupant_" + role.capitalize()
+	root.add_child(avatar)
+	var place = fit(c)
+	avatar.scale = Vector3.ONE * place.x
+	avatar.position = Vector3(x, place.y, c.front_seat - 0.2 * place.x)
+	if not spec.get("medic", false):
+		_dress(avatar, p, spec)
+	var pose = {"seat": SEAT, "arms": "lap"}
+	if wheel != null:
+		# Both hands on the rim: the target is the right hand's, mirrored left.
+		var hub: Vector3 = avatar.transform.affine_inverse() * wheel
+		pose.arms = "steer"
+		pose.steer = Vector3(0.17, hub.y + 0.04, hub.z + 0.03)
+	CharacterRig.pose(avatar, pose)
+	_strip_hidden(avatar)
+	if spec.get("holds", "") == "notes":
+		# Pace-note book in the navigator's right hand.
+		P.box(CharacterRig.hand(avatar), CharacterRig.grip() + Vector3(-0.08, 0, -0.06), Vector3(0.22, 0.02, 0.16), Color("f3efe2"))
+
+# Overalls or a uniform jacket over the character's clothes, and the head gear.
+static func _dress(avatar: Node3D, p: Dictionary, spec: Dictionary) -> void:
+	var suit = Color(spec.suit) if spec.suit != "" else Color(p.get("suit", p.get("accent", "2f4a7a")))
+	P.box(avatar, Vector3(0, 1.1, 0), Vector3(0.68, 0.6, 0.55), suit)
+	for side in ["LeftArm", "RightArm"]:
+		P.box(avatar.get_node(side), Vector3(0, -0.10, 0), Vector3(0.23, 0.27, 0.24), suit)
+	if spec.head == "helmet":
+		# Harness straps over the overalls.
+		for dx in [-0.1, 0.1]:
+			P.box(avatar, Vector3(dx, 1.12, -0.28), Vector3(0.07, 0.56, 0.02), Color("1d2125"))
+	else:
+		P.box(avatar, Vector3(-0.15, 1.25, -0.28), Vector3(0.08, 0.07, 0.02), Color("c9a95b")) # badge
+	var head: Node3D = avatar.get_node("Head")
+	var box = AABB()
+	for mesh in head.find_children("*", "MeshInstance3D", true, false):
+		var part: AABB = mesh.transform * mesh.mesh.get_aabb()
+		box = part if box.size == Vector3.ZERO else box.merge(part)
+	var centre = Vector3(0, box.end.y - 0.24, box.get_center().z)
+	if spec.head == "helmet":
+		P.faceted(head, centre, Vector3(0.62, 0.56, 0.64), Color(p.get("helmet", "f1f0ea")), 12, 6)
+		P.box(head, centre + Vector3(0, -0.04, -0.31), Vector3(0.46, 0.17, 0.03), Color("1b2228"))
+		P.box(head, centre + Vector3(0, 0.25, 0), Vector3(0.12, 0.03, 0.62), suit)
+	else:
+		P.faceted(head, centre + Vector3(0, 0.12, 0), Vector3(0.6, 0.24, 0.6), Color(spec.cap), 12, 4)
+		P.box(head, centre + Vector3(0, 0.05, 0), Vector3(0.6, 0.06, 0.6), Color("b8312f"))
+		P.box(head, centre + Vector3(0, 0.03, -0.34), Vector3(0.4, 0.025, 0.16), Color("151a22"))
+
+# Hand props kept hidden on the character (a beer can, a skewer) have no use
+# in a car: drop them so they do not ride along outside the baked body.
+static func _strip_hidden(node: Node) -> void:
+	for child in node.get_children():
+		if child is Node3D and not child.visible:
+			node.remove_child(child)
+			child.free()
+		else:
+			_strip_hidden(child)

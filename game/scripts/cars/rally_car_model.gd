@@ -48,7 +48,7 @@ static func build(variant: int, number_override: int = -1, sponsor_override: Str
 	root.set_meta("zero_to_100", float(p.zero_to_100))
 	root.set_meta("engine", str(p.engine))
 	var f = CarBody.build(root, p)
-	CarOccupants.seat(root, p, f, "pilot", "navigator")
+	CarOccupants.seat(root, p, f, "pilot", "navigator", false, "", variant)
 	for side in [-1.0, 1.0]:
 		_doors(root, p, f, side)
 	_bonnet_and_roof(root, p, f)
@@ -104,7 +104,7 @@ static func police() -> Node3D:
 	root.set_meta("zero_to_100", float(p.get("zero_to_100", 6.0)))
 	root.set_meta("engine", str(p.get("engine", "sedan")))
 	var f = CarBody.build(root, p)
-	CarOccupants.seat(root, p, f, "police")
+	CarOccupants.seat(root, p, f, "police", "", false, "", 3)
 	var stripe_y: float = (f.base + f.bonnet) * 0.5
 	for side in [-1.0, 1.0]:
 		var x: float = side * (f.half + 0.012)
