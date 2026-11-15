@@ -96,6 +96,11 @@ func run() -> void:
 	game._walk(1)
 	Input.action_release("forward")
 	check(game.walker == seat and game.room.local_state().seated, "seat remains stationary and synchronizes")
+	var facing: float = game.view_yaw
+	for i in range(8):
+		game.view_yaw += 0.8
+		game.player.update_camera(1.0 / 60.0)
+	check(absf(wrapf(game.view_yaw - facing, -PI, PI)) <= game.player.SEAT_LOOK + 0.001, "a seated player cannot turn the view round the back of the chair")
 	press(game)
 	check(not game.seated and game.walker != seat, "F stands and restores approach position")
 	game.personal_chairs[game.chair_owner()].position = center + Vector3(-12, 0, 0)
