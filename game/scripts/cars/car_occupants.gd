@@ -93,6 +93,21 @@ static func _person(root: Node3D, p: Dictionary, c: Dictionary, x: float, role: 
 	avatar.position = Vector3(x, place.y, c.front_seat - 0.2 * place.x)
 	if not spec.get("medic", false):
 		_dress(avatar, p, spec)
+	_strip_hidden(avatar)
+	_pose(avatar, wheel)
+	# The formula guesses the seated height; hats and big heads can still
+	# reach above it, so measure the posed figure and shrink it under the roof.
+	var roof: float = c.floor + c.avail - 0.03
+	var top = _top(avatar, root)
+	if top > roof:
+		var k = (roof - place.y) / maxf(0.1, top - place.y)
+		avatar.scale *= k
+		_pose(avatar, wheel)
+	if spec.get("holds", "") == "notes":
+		# Pace-note book in the navigator's right hand.
+		P.box(CharacterRig.hand(avatar), CharacterRig.grip() + Vector3(-0.08, 0, -0.06), Vector3(0.22, 0.02, 0.16), Color("f3efe2"))
+
+static func _pose(avatar: Node3D, wheel) -> void:
 	var pose = {"seat": SEAT, "arms": "lap"}
 	if wheel != null:
 		# Both hands on the rim: the target is the right hand's, mirrored left.
@@ -100,10 +115,26 @@ static func _person(root: Node3D, p: Dictionary, c: Dictionary, x: float, role: 
 		pose.arms = "steer"
 		pose.steer = Vector3(0.17, hub.y + 0.04, hub.z + 0.03)
 	CharacterRig.pose(avatar, pose)
-	_strip_hidden(avatar)
-	if spec.get("holds", "") == "notes":
-		# Pace-note book in the navigator's right hand.
-		P.box(CharacterRig.hand(avatar), CharacterRig.grip() + Vector3(-0.08, 0, -0.06), Vector3(0.22, 0.02, 0.16), Color("f3efe2"))
+
+# Highest point of the person's meshes in the car's space.
+static func _top(avatar: Node3D, root: Node3D) -> float:
+	var top = -INF
+	for mesh in avatar.find_children("*", "MeshInstance3D", true, false):
+		if mesh.mesh == null:
+			continue
+		var at: Transform3D = _local(mesh, root)
+		top = maxf(top, (at * mesh.mesh.get_aabb()).end.y)
+	return top
+
+# Transform of `node` relative to its ancestor `root`, without the scene tree.
+static func _local(node: Node3D, root: Node3D) -> Transform3D:
+	var t = Transform3D.IDENTITY
+	var n: Node = node
+	while n != null and n != root:
+		if n is Node3D:
+			t = n.transform * t
+		n = n.get_parent()
+	return t
 
 # Overalls or a uniform jacket over the character's clothes, and the head gear.
 static func _dress(avatar: Node3D, p: Dictionary, spec: Dictionary) -> void:
