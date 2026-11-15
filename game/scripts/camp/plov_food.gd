@@ -38,10 +38,7 @@ static func dress(portion: Node3D, i: int) -> void:
 	var tilt = -Vector3(cos(angle), 0, sin(angle)) * radius * 0.6
 	portion.rotation = Vector3(tilt.z, 0, -tilt.x)
 	if i in [0, 4, 7]:
-		var bulb = Props.faceted(portion, Vector3(0, 0.035, 0), Vector3(0.105, 0.085, 0.105), Color("d8bf92"), 8, 4)
-		bulb.rotation.y = i
-		Props.faceted(portion, Vector3(0, 0.07, 0), Vector3(0.07, 0.03, 0.07), Color("c9a46c"), 8, 3)
-		Props.box(portion, Vector3(0, 0.085, 0), Vector3(0.012, 0.03, 0.012), Color("8d6a3f"))
+		_garlic(portion, i)
 		if i == 0:
 			return
 	var meat = Props.faceted(portion, Vector3(0.03, 0.018, -0.02), Vector3(0.095, 0.065, 0.08), Color("6c381f") if i % 2 == 0 else Color("7d4527"), 6, 3)
@@ -52,6 +49,21 @@ static func dress(portion: Node3D, i: int) -> void:
 		strip.rotation = Vector3(0, i * 0.9 + j * 1.1, 0.12)
 	for j in range(2):
 		Props.faceted(portion, Vector3(-0.05 + j * 0.09, 0.01, -0.045 + j * 0.02), Vector3.ONE * 0.03, Color("d9b067"), 6, 3)
+
+static func _garlic(portion: Node3D, seed: int) -> void:
+	# A whole head steamed in the rice: plump cloves leaning into a stub stem,
+	# their papery skin turned ivory and amber by the oil.
+	var head = Node3D.new()
+	head.rotation.y = seed
+	portion.add_child(head)
+	for k in range(7):
+		var a = k * TAU / 7
+		var radial = Vector3(cos(a), 0, sin(a))
+		var clove = Props.faceted(head, radial * 0.03 + Vector3(0, 0.038, 0), Vector3(0.036, 0.078, 0.046), [Color("d6bd92"), Color("c4a06b"), Color("cfab86")][k % 3], 6, 4)
+		clove.basis = Basis(radial.cross(Vector3.UP), 0.38) * Basis(Vector3.UP, -a)
+	Props.faceted(head, Vector3(0, 0.03, 0), Vector3(0.05, 0.06, 0.05), Color("b9935e"), 6, 3)
+	var stem = Props.cylinder(head, Vector3(0, 0.08, 0), 0.011, 0.007, 0.022, Color("94723f"), 5)
+	stem.rotation.z = 0.15
 
 static func _dome() -> ArrayMesh:
 	if _mesh != null:
