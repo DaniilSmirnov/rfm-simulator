@@ -1,6 +1,6 @@
 extends SceneTree
 # Contact sheet of every vehicle model, for reviewing car geometry by eye:
-#   xvfb-run godot --path game --script res://tools/screenshots/export_car_sheet.gd -- [out.png] [player|rally|all] [spin] [night] [hood] [only=0,2] [cell=360x220] [views=fq,side,rq,front,rear,top,low]
+#   xvfb-run godot --path game --script res://tools/screenshots/export_car_sheet.gd -- [out.png] [player|rally|all] [spin] [night] [hood] [only=0,2] [cell=360x220] [views=fq,side,rq,front,rear,top,low,cabin]
 # "night" darkens the scene and switches every car's lamps and beams on.
 # Each car is shown from front-three-quarter, side and rear-three-quarter.
 # "spin" drives every car 0.3 m before capturing, so frozen wheels stand out.
@@ -8,7 +8,7 @@ var CELL = Vector2i(360, 220)
 const NAMED_VIEWS = {
 	"fq": Vector3(4.4, 1.7, -4.6), "side": Vector3(6.2, 1.1, 0.0), "rq": Vector3(-4.4, 2.0, 4.8),
 	"front": Vector3(0.0, 1.2, -6.4), "rear": Vector3(0.0, 1.4, 6.4), "top": Vector3(0.6, 6.4, 0.2),
-	"low": Vector3(3.2, 0.25, -2.2),
+	"low": Vector3(3.2, 0.25, -2.2), "cabin": Vector3(2.4, 1.0, -1.2),
 }
 var VIEWS: Array = [NAMED_VIEWS.fq, NAMED_VIEWS.side, NAMED_VIEWS.rq]
 

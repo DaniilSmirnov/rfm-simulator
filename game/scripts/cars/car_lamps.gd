@@ -11,7 +11,7 @@ extends RefCounted
 const MeshMerge = preload("res://scripts/core/mesh_merge.gd")
 const GROUP = &"car_lamps"
 const NODE = "LampGlow"
-const COLORS = {"head": Color("fff4d8"), "tail": Color("ff2f22")}
+const COLORS = {"head": Color("fff4d8"), "tail": Color("ff2f22"), "dash": Color("9fe0ff")}
 const PROUD = 0.006 # towards the viewer, so the copy never shares a depth with the lens
 const BEAMS = "LampBeams"
 # Beam cone: length (m), radius at the far end (m), downward pitch (rad), the
@@ -146,7 +146,8 @@ static func _copy(node: Node, car: Node3D, xform: Transform3D, glow: Node3D) -> 
 			copy.mesh = child.mesh
 			copy.transform = local
 			# Panels built in car space sit at the origin: judge by the mesh itself.
-			copy.position.z += -PROUD if (local * child.mesh.get_aabb()).get_center().z < 0.0 else PROUD
+			# Dials face the driver (+Z) whichever half of the car they sit in.
+			copy.position.z += PROUD if kind == "dash" or (local * child.mesh.get_aabb()).get_center().z >= 0.0 else -PROUD
 			var paint = StandardMaterial3D.new()
 			paint.albedo_color = COLORS.get(kind, COLORS.head)
 			copy.material_override = paint
