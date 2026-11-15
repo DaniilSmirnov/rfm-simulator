@@ -18,7 +18,11 @@ const CarInterior = preload("res://scripts/cars/car_interior.gd")
 const MeshMerge = preload("res://scripts/core/mesh_merge.gd")
 const CharacterRig = preload("res://scripts/people/character_rig.gd")
 const MedicModel = preload("res://scripts/people/medic_model.gd")
+const Glass = preload("res://scripts/core/glass.gd")
 const PASSENGER = "CabinPassenger"
+const DOOR = "CabinDoor"
+# How far the passenger's door swings out (rad).
+const DOOR_SWING = 1.15
 # Characters without a hat or cap (a helmet or a uniform cap goes on instead).
 const BARE_HEADS = [0, 2, 4, 5, 7, 9, 10]
 # Seat height above the feet (m, unscaled) and the body above the shoulders:
@@ -56,13 +60,67 @@ static func seat(root: Node3D, p: Dictionary, f: Dictionary, driver: String, pas
 		root.add_child(holder)
 	_person(holder, p, c, -wheel.x, passenger, null, seed * 2 + 1)
 	if leaves:
+		# Where the doctor sits, for the climb out and back in.
+		var person: Node3D = holder.get_child(0)
+		holder.set_meta("seat_feet", person.position)
+		holder.set_meta("seat_scale", person.scale.x)
 		MeshMerge.bake(holder, cache_key + ":" + PASSENGER if cache_key != "" else "")
+		_door(root, p, f, c, signf(-wheel.x))
 
 # Shows or hides the passenger who gets out (no-op for cars without one).
 static func passenger_aboard(car: Node3D, aboard: bool) -> void:
 	var holder = car.get_node_or_null(PASSENGER) if car != null else null
 	if holder != null:
 		holder.visible = aboard
+
+# Feet position (car space) and scale of the passenger who gets out, or {}.
+static func passenger_seat(car: Node3D) -> Dictionary:
+	var holder = car.get_node_or_null(PASSENGER) if car != null else null
+	if holder == null or not holder.has_meta("seat_feet"):
+		return {}
+	return {"feet": holder.get_meta("seat_feet"), "scale": float(holder.get_meta("seat_scale")), "side": float(car.get_node(DOOR).get_meta("side")) if car.has_node(DOOR) else 1.0}
+
+# Swings the passenger's door: 0 shut (the body's own door shows), 1 wide open.
+static func door_open(car: Node3D, amount: float) -> void:
+	var door = car.get_node_or_null(DOOR) if car != null else null
+	if door == null:
+		return
+	var open = clampf(amount, 0.0, 1.0)
+	door.visible = open > 0.01
+	door.get_node("Leaf").rotation.y = float(door.get_meta("side")) * DOOR_SWING * open
+
+# The passenger's door as its own leaf on a hinge at the front edge, shown only
+# while open, and the dark doorway it leaves in the side of the body.
+static func _door(root: Node3D, p: Dictionary, f: Dictionary, c: Dictionary, side: float) -> void:
+	var holder = Node3D.new()
+	holder.name = DOOR
+	holder.set_meta("unbatched", true)
+	holder.set_meta("side", side)
+	holder.visible = false
+	root.add_child(holder)
+	var hinge: float = float(f.shape[0]) + 0.12
+	var back: float = float(p.get("pillar", 0.1)) - 0.02
+	var length = maxf(0.4, back - hinge)
+	var x: float = side * (float(f.half) + 0.01)
+	var low: float = float(f.sill) + 0.1
+	var belt: float = float(f.floor)
+	var top: float = float(f.height) - 0.08
+	P.box(holder, Vector3(x - side * 0.02, (low + belt) * 0.5, hinge + length * 0.5), Vector3(0.02, belt - low, length - 0.04), Color("23272b"))
+	var leaf = Node3D.new()
+	leaf.name = "Leaf"
+	holder.add_child(leaf)
+	leaf.position = Vector3(x, 0, hinge)
+	var paint = Color(p.color)
+	var frame = Color(p.get("trim", "30383b"))
+	P.box(leaf, Vector3(0, (low + belt) * 0.5, length * 0.5), Vector3(0.05, belt - low, length), paint)
+	P.box(leaf, Vector3(-side * 0.03, (low + belt) * 0.5, length * 0.5), Vector3(0.01, belt - low - 0.08, length - 0.1), Color(p.get("interior", "2a2e33")))
+	P.box(leaf, Vector3(0, belt + 0.02, length * 0.5), Vector3(0.05, 0.04, length), frame)
+	P.box(leaf, Vector3(0, top, length * 0.5), Vector3(0.05, 0.04, length), frame)
+	for z in [0.02, length - 0.02]:
+		P.box(leaf, Vector3(0, (belt + top) * 0.5, z), Vector3(0.05, top - belt, 0.04), frame)
+	var pane = P.box(leaf, Vector3(0, (belt + top) * 0.5 + 0.01, length * 0.5), Vector3(0.012, top - belt - 0.04, length - 0.06), Color.WHITE)
+	Glass.glaze(pane)
+	P.box(leaf, Vector3(side * 0.035, belt - 0.12, length - 0.14), Vector3(0.02, 0.03, 0.12), frame.darkened(0.3))
 
 # Scale and feet height of a seated person in this cabin: head just under the
 # roof, shoulders near the belt; in a tall cab (the ambulance) they sit on the

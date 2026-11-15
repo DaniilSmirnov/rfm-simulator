@@ -59,7 +59,7 @@ func run() -> void:
 	check(not game.injuries.records.has("npc:7002") and far.treat == 0 and medic.state == "returning", "doctor finishes the second patient and returns instead of treating a distant one")
 	check(wait_state(game, van, "entering"), "doctor walks back to the ambulance door")
 	check(van.state == "parked", "ambulance cannot leave before the doctor boards")
-	advance(game, 0.7)
+	advance(game, 1.9)
 	check(not game.injuries.medics.active.has(int(van.id)) and van.state == "racing" and van.target_key == "npc:7003", "after boarding the ambulance drives towards the distant casualty")
 
 	# A victim knocked far behind the car must receive a new dispatch.
