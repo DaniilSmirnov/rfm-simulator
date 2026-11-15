@@ -348,8 +348,12 @@ func trail_distance(pos: Vector3, cutoff: float = INF) -> float:
 	return distance
 
 func _notification(what: int) -> void:
-	if what == NOTIFICATION_PREDELETE and is_instance_valid(solids) and solids.get_parent() == null:
+	if what != NOTIFICATION_PREDELETE:
+		return
+	if is_instance_valid(solids) and solids.get_parent() == null:
 		solids.free()
+	if biome != null:
+		biome.release()
 
 func _attach_solids() -> void:
 	if solids.get_parent() == null:
