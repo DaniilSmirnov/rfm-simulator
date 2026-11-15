@@ -3,6 +3,7 @@ extends RefCounted
 const Props = preload("res://scripts/core/props.gd")
 const Records = preload("res://scripts/stages/stage_records.gd")
 const Furnishings = preload("res://scripts/stages/canyon/yurt_camp_props.gd")
+const Interior = preload("res://scripts/stages/canyon/yurt_interior.gd")
 const FELT = Color("c6bead")
 const FELT_SHADE = Color("bbb39f")
 const TIMBER = Color("785031")
@@ -11,24 +12,33 @@ const ROPE = Color("8e795b")
 const RADIUS = 3.1
 const WALL = 1.9
 const SIDES = 24
+const DOOR_TOP = 1.8
 
-static func yurt(parent: Node3D, at: Vector3, yaw: float, big: bool = false, stage = null) -> Node3D:
+# An `open` yurt has its door standing open and a furnished room inside
+# (yurt_interior.gd).
+static func yurt(parent: Node3D, at: Vector3, yaw: float, big: bool = false, stage = null, open: bool = false) -> Node3D:
 	var node = Node3D.new()
-	node.name = "Yurt"
+	node.name = "GuestYurt" if open else "Yurt"
 	parent.add_child(node)
 	node.position = at
 	node.rotation.y = yaw
 	if big:
 		node.scale = Vector3.ONE * 1.18
-	_felt(node, stage)
+	_felt(node, stage, open)
 	# Three narrow woven tension bands sit on the felt, not thick wooden disks.
 	for height in [0.28, 0.95, 1.66]:
 		for i in range(SIDES):
 			var a = i * TAU / SIDES
 			var b = (i + 1) * TAU / SIDES
+			if open and Interior.in_doorway((a + b) * 0.5):
+				continue
 			Furnishings.pole(node, Vector3(sin(a), 0, cos(a)) * 3.125 + Vector3.UP * height, Vector3(sin(b), 0, cos(b)) * 3.125 + Vector3.UP * height, 0.018, ROPE)
-	_crown(node)
-	_door(node, stage)
+	_crown(node, open)
+	if open:
+		_open_door(node, stage)
+		Interior.build(stage, node)
+	else:
+		_door(node, stage)
 	# Stakes are beside/behind the yurt, leaving its entrance unobstructed.
 	for angle in [-1.35, 1.35, PI]:
 		var peg = Vector3(sin(angle), 0, cos(angle)) * 3.95
@@ -44,7 +54,7 @@ static func _ground_y(node: Node3D, point: Vector3, stage) -> float:
 	world.y = stage.terrain_surface_height(world)
 	return node.to_local(world).y
 
-static func _felt(node: Node3D, stage) -> void:
+static func _felt(node: Node3D, stage, open: bool) -> void:
 	var shell = SurfaceTool.new()
 	shell.begin(Mesh.PRIMITIVE_TRIANGLES)
 	# The lower skirt follows the ground; shallow curved roof panels cover the
@@ -61,15 +71,19 @@ static func _felt(node: Node3D, stage) -> void:
 		var shade = FELT.darkened((i % 4) * 0.009)
 		var skirt_a = low_a.lerp(top_a, 0.09)
 		var skirt_b = low_b.lerp(top_b, 0.09)
-		_quad(shell, skirt_a, top_a, top_b, skirt_b, shade)
-		_quad(shell, low_a, skirt_a, skirt_b, low_b, shade.darkened(0.12))
+		if open and Interior.in_doorway((a + b) * 0.5):
+			# Only a strip of felt over the open doorway.
+			_quad(shell, Vector3(low_a.x, DOOR_TOP, low_a.z), top_a, top_b, Vector3(low_b.x, DOOR_TOP, low_b.z), shade)
+		else:
+			_quad(shell, skirt_a, top_a, top_b, skirt_b, shade)
+			_quad(shell, low_a, skirt_a, skirt_b, low_b, shade.darkened(0.12))
 		var rings = [Vector2(3.20, WALL), Vector2(2.91, 2.21), Vector2(2.20, 2.76), Vector2(1.40, 3.18), Vector2(0.62, 3.44)]
 		for r in range(rings.size() - 1):
 			var lo = rings[r]
 			var hi = rings[r + 1]
 			_quad(shell, Vector3(sin(a) * lo.x, lo.y, cos(a) * lo.x), Vector3(sin(a) * hi.x, hi.y, cos(a) * hi.x), Vector3(sin(b) * hi.x, hi.y, cos(b) * hi.x), Vector3(sin(b) * lo.x, lo.y, cos(b) * lo.x), FELT_SHADE.lightened((i % 3) * 0.012))
 		# Narrow vertical seams, with a slight raised edge on each felt panel.
-		if i % 3 == 0:
+		if i % 3 == 0 and not (open and Interior.in_doorway(a)):
 			Furnishings.pole(node, low_a + Vector3.UP * 0.05, top_a, 0.012, FELT_SHADE)
 	shell.generate_normals()
 	var mesh = MeshInstance3D.new()
@@ -84,8 +98,11 @@ static func _quad(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: Vector
 	for v in [a, b, c, a, c, d]:
 		st.add_vertex(v)
 
-static func _crown(node: Node3D) -> void:
-	Props.cylinder(node, Vector3(0, 3.42, 0), 0.58, 0.58, 0.02, Color("302b25"), SIDES)
+static func _crown(node: Node3D, open: bool) -> void:
+	# A closed yurt shows a dark hole under its crown; an open one lets the
+	# sky in through it.
+	if not open:
+		Props.cylinder(node, Vector3(0, 3.42, 0), 0.58, 0.58, 0.02, Color("302b25"), SIDES)
 	var ring = MeshInstance3D.new()
 	ring.name = "Shanyrak"
 	ring.mesh = TorusMesh.new()
@@ -119,7 +136,51 @@ static func _door(node: Node3D, stage) -> void:
 	Props.box(node, Vector3(0.16, middle, front + 0.18), Vector3(0.07, 0.12, 0.04), Color("393631"))
 	Props.box(node, Vector3(0, floor_y + 0.04, front + 0.22), Vector3(1.35, 0.08, 0.45), TIMBER)
 
-static func camp(stage, at: Vector3, facing: Vector3, count: int, name: String) -> Node3D:
+# The door frame of an open yurt and its two painted leaves swung outward
+# against the felt.
+static func _open_door(node: Node3D, stage) -> void:
+	var front = RADIUS + 0.04
+	var floor_y = _ground_y(node, Vector3(0, 0, front), stage)
+	var top = DOOR_TOP
+	for side in [-1.0, 1.0]:
+		Props.box(node, Vector3(side * 0.71, (floor_y + top) * 0.5, front - 0.05), Vector3(0.2, top - floor_y + 0.1, 0.3), TIMBER.darkened(0.15))
+		var hinge = Node3D.new()
+		node.add_child(hinge)
+		hinge.position = Vector3(side * 0.6, (floor_y + top) * 0.5, front + 0.13)
+		hinge.rotation.y = side * (PI * 0.5 + 0.35)
+		var leaf_height = top - floor_y - 0.12
+		Props.box(hinge, Vector3(-side * 0.3, 0, 0), Vector3(0.58, leaf_height, 0.05), DOOR)
+		for y in [-leaf_height * 0.36, leaf_height * 0.36]:
+			Props.box(hinge, Vector3(-side * 0.3, y, 0.03), Vector3(0.5, 0.06, 0.02), TIMBER.lightened(0.12))
+		Props.box(hinge, Vector3(-side * 0.3, 0, 0.03), Vector3(0.3, 0.42, 0.012), Color("c9933a"))
+		Props.box(hinge, Vector3(-side * 0.3, 0, 0.038), Vector3(0.16, 0.24, 0.01), DOOR.darkened(0.25))
+	Props.box(node, Vector3(0, top + 0.06, front - 0.05), Vector3(1.62, 0.16, 0.3), TIMBER.darkened(0.15))
+	Props.box(node, Vector3(0, floor_y + 0.04, front - 0.05), Vector3(1.22, 0.08, 0.3), TIMBER)
+
+# Walls of an open yurt stop walkers and cars everywhere but the doorway:
+# one box per felt panel, put under `camp` so they are not scaled.
+static func _walls(stage, camp: Node3D, node: Node3D, scale: float) -> void:
+	for i in range(SIDES):
+		var a = i * TAU / SIDES
+		var b = (i + 1) * TAU / SIDES
+		var middle = (a + b) * 0.5
+		if Interior.in_doorway(middle):
+			continue
+		var center = (Vector3(sin(a), 0, cos(a)) + Vector3(sin(b), 0, cos(b))) * 0.5 * RADIUS + Vector3.UP * 1.1
+		var chord = 2.0 * RADIUS * sin(PI / SIDES) + 0.08
+		var body = stage.solids.solid(camp, node.transform * center, Vector3(chord, 2.6, 0.32) * scale, "building")
+		body.rotation.y = node.rotation.y + middle
+	for side in [-1.0, 1.0]:
+		var body = stage.solids.solid(camp, node.transform * Vector3(side * 0.77, 1.0, RADIUS), Vector3(0.18, 2.2, 0.34) * scale, "building")
+		body.rotation.y = node.rotation.y
+	for piece in Interior.solids():
+		var body = stage.solids.solid(camp, node.transform * piece[0], piece[1] * scale, "building")
+		body.rotation.y = node.rotation.y + piece[2]
+	stage.solids.interior_footprints.append({"inverse": (camp.transform * node.transform).affine_inverse(), "half": Vector2(RADIUS, RADIUS)})
+
+# A camp of `count` yurts round a shared yard. With `guest`, the big one
+# stands open and can be walked into.
+static func camp(stage, at: Vector3, facing: Vector3, count: int, name: String, guest: bool = false) -> Node3D:
 	var node = Node3D.new()
 	node.name = name
 	stage.add_child(node)
@@ -130,8 +191,13 @@ static func camp(stage, at: Vector3, facing: Vector3, count: int, name: String) 
 		var spot = Vector3(sin(angle + PI), 0, cos(angle + PI)) * 11.0
 		spot.y = stage.terrain_surface_height(node.to_global(spot)) - at.y
 		var big = i == 0
-		yurt(node, spot, angle, big, stage)
-		stage.rocks.append(Records.rock(node.to_global(spot), RADIUS * (1.18 if big else 1.0), 3.5 * (1.18 if big else 1.0), Records.BUILDING))
+		var open = guest and big
+		var home = yurt(node, spot, angle, big, stage, open)
+		var scale = 1.18 if big else 1.0
+		if open:
+			_walls(stage, node, home, scale)
+		else:
+			stage.rocks.append(Records.rock(node.to_global(spot), RADIUS * scale, 3.5 * scale, Records.BUILDING))
 	var food = load("res://scripts/camp/stage_meals.gd").build(node)
 	food.position.y = stage.terrain_surface_height(at) - at.y
 	Furnishings.build(stage, node)

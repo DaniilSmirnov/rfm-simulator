@@ -87,7 +87,7 @@ func _camps() -> void:
 	var grove = place(GROVE_CAMP)
 	reserved.append({"pos": steppe, "radius": 17.0})
 	reserved.append({"pos": grove, "radius": 16.0})
-	MeshMerge.bake(Yurt.camp(stage, steppe, stage.at(STEPPE_CAMP[0]) - steppe, 3, "SteppeYurtCamp"))
+	MeshMerge.bake(Yurt.camp(stage, steppe, stage.at(STEPPE_CAMP[0]) - steppe, 3, "SteppeYurtCamp", true))
 	MeshMerge.bake(Yurt.camp(stage, grove, stage.at(GROVE_CAMP[0]) - grove, 2, "GroveYurtCamp"))
 
 # ---------------------------------------------------------------- rock
