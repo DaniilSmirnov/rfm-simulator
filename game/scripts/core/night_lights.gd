@@ -17,6 +17,8 @@ const KINDS = {
 	# A room lamp behind window glass (village_rooms.gd): lights the room and
 	# spills out through the windows onto the street.
 	"lamp": {"color": Color("ffc879"), "energy": 1.8, "range": 8.0, "height": 0.0, "flicker": false, "budget": "home"},
+	# A service-park tent's work lamp (service_park_kit.gd): cold white.
+	"worklamp": {"color": Color("e6eeff"), "energy": 2.2, "range": 9.0, "height": 0.0, "flicker": false, "budget": "home"},
 }
 const BUDGET = {"fire": 6, "beacon": 4, "home": 3}
 # Meshes shown only at night (a lamp shade's glow), hidden by day.
