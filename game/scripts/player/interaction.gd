@@ -56,6 +56,8 @@ func normal_target() -> Dictionary:
 		return game.player.sauna.seated_target(self) if game.player.sauna.steaming else {"action": "stand", "label": Loc.t("Встать со стула")}
 	if game.player.relief.active:
 		return {"action": "relief_stop", "label": Loc.t("Закончить")}
+	if game.player.repair.active():
+		return game.player.repair.target()
 	var items: Array = []
 	game.cargo.offers(items, self)
 	if not game.cargo.held.has(game.chair_owner()):
@@ -108,6 +110,7 @@ func normal_target() -> Dictionary:
 			var beer = "" if game.beer_timer > 0 else ("Выпить пиво" if game.camp_actions.crates.count(source) > 0 else "Ящик пуст")
 			offer(items, table.position + Vector3(0, 0.75, 0), 0.85, 3, "beer" if beer != "" else "", beer)
 	game.player.relief.offers(items, self)
+	game.player.repair.offers(items, self)
 	game.player.sauna.offers(items, self)
 	return select_target(items)
 
@@ -212,6 +215,8 @@ func activate() -> void:
 		"beer": game.drink_beer()
 		"relief": game.player.relief.start()
 		"relief_stop": game.player.relief.stop()
+		"repair_car": game.player.repair.start(str(target.value))
+		"repair_stop": game.player.repair.stop()
 		"sauna": game.player.sauna.start(float(target.value))
 		"venik": game.player.sauna.whisk.start()
 		"sauna_ladle": game.player.sauna.ladle()

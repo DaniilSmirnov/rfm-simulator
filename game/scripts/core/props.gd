@@ -442,6 +442,7 @@ static func player_car(variant: int = 0, bake: bool = true) -> Node3D:
 			car = player_car_sport_sedan()
 	car = car if car != null else player_car_shell(variant)
 	car.set_meta("engine", str(p.engine))
+	load("res://scripts/cars/car_hood.gd").add(car, variant)
 	return bake_car(car, "player:%d" % variant) if bake else car
 
 # One mesh for the static body and one for the trunk lid; wheels, cargo and
@@ -453,6 +454,9 @@ static func bake_car(car: Node3D, cache_key: String) -> Node3D:
 	var hinge = car.get_node_or_null("TrunkHinge")
 	if hinge != null:
 		MeshMerge.bake(hinge, cache_key + ":lid", [], "BakedLid")
+	hinge = car.get_node_or_null("HoodHinge")
+	if hinge != null:
+		MeshMerge.bake(hinge, cache_key + ":hood", [], "BakedHood")
 	return load("res://scripts/player/perches.gd").mark(car)
 
 static func player_car_shell(variant: int) -> Node3D:
@@ -917,17 +921,13 @@ static func carried_gear(avatar: Node3D, kind: String) -> Node3D:
 static func carry_arms(kind: String) -> String:
 	return "shovel" if kind == "shovel" else "carry"
 
-static func add_player_trunk(root: Node3D, variant: int) -> Node3D:
-	var p = trunk_profile(variant)
-	var hinge = Node3D.new()
-	hinge.name = "TrunkHinge"
-	root.add_child(hinge)
-	# Only the imported hatch uses a tighter rear-door cut. The trunk profile
-	# still controls cargo placement, so seats and stored equipment do not move.
-	var lid_start: float = float(root.get_meta("trunk_lid_start_z", p.hinge))
-	hinge.position = Vector3(0, p.top, lid_start)
-	var planes = [Vector4(1, 0, 0, p.half), Vector4(-1, 0, 0, p.half), Vector4(0, 0, -1, -lid_start), Vector4(0, -1, 0, -p.floor - 0.10), Vector4(0, 1, 0, p.top + 0.07)]
-	var bodywork: Array = root.get_children().duplicate()
+# Moves the bodywork inside every plane (normal · v <= w) of `planes` onto
+# `hinge` as separate lid meshes, so a trunk lid or a bonnet can swing open;
+# the rest stays in place. `underside` makes the lid paint two-sided, for a
+# panel whose inside shows when it stands open. `source` holds the bodywork
+# when it is not directly under root (it must sit at root's origin).
+static func cut_panel(root: Node3D, hinge: Node3D, planes: Array, underside: bool = false, source_node: Node3D = null) -> void:
+	var bodywork: Array = (source_node if source_node != null else root).get_children().duplicate()
 	for child in bodywork:
 		if not child is MeshInstance3D:
 			continue
@@ -957,6 +957,9 @@ static func add_player_trunk(root: Node3D, variant: int) -> Node3D:
 		lid.position = -hinge.position
 		lid.mesh = panel_mesh(moving)
 		lid.material_override = child.material_override
+		if underside and child.material_override is BaseMaterial3D:
+			lid.material_override = child.material_override.duplicate()
+			lid.material_override.cull_mode = BaseMaterial3D.CULL_DISABLED
 		if child.has_meta("lamp"):
 			lid.set_meta("lamp", child.get_meta("lamp"))
 		# Preserve the existing named nodes for model details and tests.
@@ -965,6 +968,17 @@ static func add_player_trunk(root: Node3D, variant: int) -> Node3D:
 			child.hide()
 		else:
 			child.mesh = panel_mesh(fixed)
+
+static func add_player_trunk(root: Node3D, variant: int) -> Node3D:
+	var p = trunk_profile(variant)
+	var hinge = Node3D.new()
+	hinge.name = "TrunkHinge"
+	root.add_child(hinge)
+	# Only the imported hatch uses a tighter rear-door cut. The trunk profile
+	# still controls cargo placement, so seats and stored equipment do not move.
+	var lid_start: float = float(root.get_meta("trunk_lid_start_z", p.hinge))
+	hinge.position = Vector3(0, p.top, lid_start)
+	cut_panel(root, hinge, [Vector4(1, 0, 0, p.half), Vector4(-1, 0, 0, p.half), Vector4(0, 0, -1, -lid_start), Vector4(0, -1, 0, -p.floor - 0.10), Vector4(0, 1, 0, p.top + 0.07)])
 	box(root, Vector3(0, p.floor, (p.hinge + p.rear - 0.04) / 2), Vector3(p.half * 2, 0.06, p.rear - 0.04 - p.hinge), Color("172027")).name = "TrunkWell" # ends inside the tail, off its plane
 	var boxes = Node3D.new()
 	boxes.name = "TrunkBoxes"

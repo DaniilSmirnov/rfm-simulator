@@ -1,6 +1,6 @@
 extends SceneTree
 # Contact sheet of every vehicle model, for reviewing car geometry by eye:
-#   xvfb-run godot --path game --script res://tools/screenshots/export_car_sheet.gd -- [out.png] [player|rally|all] [spin] [night] [only=0,2] [cell=360x220] [views=fq,side,rq,front,rear,top,low,cabin]
+#   xvfb-run godot --path game --script res://tools/screenshots/export_car_sheet.gd -- [out.png] [player|rally|all] [spin] [night] [hood] [only=0,2] [cell=360x220] [views=fq,side,rq,front,rear,top,low,cabin]
 # "night" darkens the scene and switches every car's lamps and beams on.
 # Each car is shown from front-three-quarter, side and rear-three-quarter.
 # "spin" drives every car 0.3 m before capturing, so frozen wheels stand out.
@@ -21,6 +21,7 @@ func run() -> void:
 	var which = args[1] if args.size() > 1 else "all"
 	var spin = "spin" in args
 	var night = "night" in args
+	var hood = "hood" in args # bonnets open on the engine bay, a wrench raised
 	var only: Array = []
 	for arg in args:
 		if arg.begins_with("only="):
@@ -77,6 +78,10 @@ func run() -> void:
 		if night:
 			load("res://scripts/cars/car_lamps.gd").set_lit(car, true)
 			car.add_child(load("res://scripts/core/sky_weather.gd").headlights(car))
+		if hood:
+			load("res://scripts/cars/car_hood.gd").animate(car, true, 10.0)
+			if car.has_node("EngineBay/Wrench"):
+				car.get_node("EngineBay/Wrench").show()
 		if spin:
 			props.animate_wheels(car)
 			car.position.z -= 0.3

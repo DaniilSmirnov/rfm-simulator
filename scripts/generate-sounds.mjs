@@ -544,6 +544,17 @@ function place(material, seed) {
   return fadeEdges(out);
 }
 
+// A spanner struck on engine iron: a sharp tick, then a short bright ring
+// of the tool over a dull knock of the cast block.
+function wrenchClank(seed) {
+  const rnd = random(seed);
+  const out = new Float32Array(samples(0.45));
+  mix(out, thump(samples(0.12), 180, 0.018, rnd), 0.55);
+  mix(out, modes(samples(0.45), [[1180, 0.09, 0.32], [2870, 0.06, 0.26], [4630, 0.035, 0.18], [6150, 0.02, 0.1]], rnd), 0.75);
+  mix(out, modes(samples(0.2), [[410, 0.03, 0.3], [960, 0.02, 0.18]], rnd), 0.5);
+  return fadeEdges(out);
+}
+
 function eat(seed) {
   const rnd = random(seed);
   const out = new Float32Array(samples(0.7));
@@ -709,6 +720,7 @@ for (const surface of ['gravel', 'grass', 'snow', 'asphalt']) {
 }
 sounds['place-wood'] = () => level(place('wood', seedOf('place-wood')));
 sounds['place-metal'] = () => level(place('metal', seedOf('place-metal')));
+sounds['wrench-clank'] = () => level(wrenchClank(seedOf('wrench-clank')));
 sounds['eat'] = () => level(eat(seedOf('eat')));
 for (let k = 1; k <= 3; k++) sounds[`bird-${k}`] = () => level(bird(k - 1));
 sounds['cicadas'] = () => level(cicadas());

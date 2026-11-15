@@ -17,7 +17,7 @@ extends RefCounted
 const BlockText = preload("res://scripts/core/block_text.gd")
 const Loc = preload("res://scripts/ui/loc.gd")
 const CACHE_LIMIT = 192
-const KEEP = ["TrunkHinge", "TrunkBoxes"]
+const KEEP = ["TrunkHinge", "TrunkBoxes", "HoodHinge", "EngineBay"]
 static var _cache: Dictionary = {}
 static var _flat: Dictionary = {}
 static var _materials: Dictionary = {}

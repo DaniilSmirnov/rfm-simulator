@@ -26,6 +26,8 @@ static func run(game: Node, context, action: String, placement: Dictionary) -> v
 				game.cargo.toggle(spot)
 		"dig_snow":
 			if spot != Vector3.INF: game.dig_snow(spot)
+		"repair_car":
+			if spot != Vector3.INF and not context.in_car: game.player.repair.fix_at(spot, context.pos)
 		"take_gear":
 			var index = int(placement.get("resource_id", -1))
 			if index >= 0 and index < game.cargo.KINDS.size():
