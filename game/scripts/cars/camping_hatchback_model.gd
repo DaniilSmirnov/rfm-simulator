@@ -7,6 +7,8 @@ extends RefCounted
 # RallyProps.add_player_trunk() can cut the rear hatch out of each of them.
 const CarParts = preload("res://scripts/cars/car_parts.gd")
 const CarLamps = preload("res://scripts/cars/car_lamps.gd")
+const CarInterior = preload("res://scripts/cars/car_interior.gd")
+const Glass = preload("res://scripts/core/glass.gd")
 const COLORS = {
 	"body": Color("283f87"),
 	"glass": Color("253d49"),
@@ -73,12 +75,22 @@ static func build() -> Node3D:
 	var roof = Node3D.new()
 	roof.name = "RoofHatchback"
 	root.add_child(roof)
+	# Cabin behind the glass, on top of the body at the belt line: windscreen
+	# base, roof front and back, foot of the hatch glass. In its own holder,
+	# so the hatch and bonnet cuts leave it whole.
+	var cabin = Node3D.new()
+	cabin.name = "CabinInterior"
+	root.add_child(cabin)
+	CarInterior.build(cabin, {"pillar": 0.1, "seat": "3a4048", "seat_insert": "56606b"}, {"shape": [-0.97, -0.32, 0.62, 1.95], "bonnet": 0.955, "deck": 0.975, "floor": 0.935, "height": 1.42, "glass_half": 0.68})
+	root.set_meta(CarInterior.SEAT_META, cabin.get_meta(CarInterior.SEAT_META))
 	# Hatch-cut parts first, then static details that must not swing with the lid.
 	for part in ["body", "glass", "trim", "lights"]:
 		var node = _commit(parts, part)
 		node.name = "BodyShellHatchback" if part == "body" else "Camping_" + part
 		if part == "lights":
 			CarLamps.mark(node, "tail")
+		if part == "glass":
+			Glass.glaze(node)
 		root.add_child(node)
 	for part in ["headlights", "indicators", "plates", "rack", "boat", "boat_floor"]:
 		var node = _commit(parts, part)

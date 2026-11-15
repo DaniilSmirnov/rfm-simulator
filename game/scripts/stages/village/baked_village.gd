@@ -2,7 +2,7 @@ extends RefCounted
 # Packed geometry stays spatially partitioned. Only mutable MultiMeshes are
 # uploaded once per scene; immutable meshes and materials retain shared resources.
 const SCHEMA = 4
-const SOURCES = ["stages/stage", "traffic/service_parks", "stages/stage_solids", "stages/stage_forest", "core/prop_registry", "traffic/service_park_model", "core/primitive_batcher", "stages/village/village_stage", "stages/village/village_layout", "stages/village/village_architecture", "stages/village/village_landscape", "stages/village/village_farmland", "core/props", "stages/village/village_interiors", "stages/village/village_rooms", "core/glass", "core/night_lights", "stages/village/church_bell"]
+const SOURCES = ["stages/stage", "traffic/service_parks", "stages/stage_solids", "stages/stage_forest", "core/prop_registry", "traffic/service_park_model", "core/primitive_batcher", "stages/village/village_stage", "stages/village/village_layout", "stages/village/village_architecture", "stages/village/village_landscape", "stages/village/village_farmland", "core/props", "stages/village/village_interiors", "stages/village/village_rooms", "core/glass", "core/window_rooms", "core/night_lights", "stages/village/church_bell"]
 const STAGE_FIELDS = ["woodland_details", "collectibles", "collectible_parts", "rocks", "trees", "forest_data", "detail_tree_groups", "detail_tree_visuals", "forest_layers", "forest_chunk_slots", "forest_chunk_centers"]
 
 static func fingerprint() -> String:

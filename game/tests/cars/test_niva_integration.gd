@@ -17,7 +17,8 @@ func run() -> void:
 	var door: MeshInstance3D = car.get_node_or_null("TrunkHinge/BakedLid") as MeshInstance3D
 	check(body != null and body.mesh != null and body.mesh.get_surface_count() > 0 and car.get_meta("baked_parts", {}).has("NivaBody"), "static body preserves its geometry in the baked mesh")
 	check(door != null and door.mesh != null and door.mesh.get_surface_count() > 0 and hinge.get_meta("baked_parts", {}).has("NivaTailgate_Lid"), "rear hatch is a separate mesh with rear glass")
-	check(hinge != null and hinge.get_child_count() == 1, "no rear passenger panels or wheels are parented to trunk hinge")
+	# The baked tailgate and its see-through rear window (glass is not baked).
+	check(hinge != null and hinge.get_child_count() == 2 and hinge.get_node_or_null("NivaRearWindow") != null, "no rear passenger panels or wheels are parented to trunk hinge")
 	var wheels: Array[Node3D] = []
 	for part in car.get_node("NivaStaticParts").get_children():
 		if part.has_meta("rolling_wheel_radius"):

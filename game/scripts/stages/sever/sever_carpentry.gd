@@ -6,6 +6,7 @@ extends RefCounted
 # Everything is built in the parent's local space from plain-coloured
 # primitives, so MeshMerge.bake() folds a whole building into one mesh.
 const Props = preload("res://scripts/core/props.gd")
+const WindowRooms = preload("res://scripts/core/window_rooms.gd")
 const SNOW = Color("eef2f2")
 const LOG_RADIUS = 0.13
 # How far the log ends stick out past each corner.
@@ -114,14 +115,11 @@ static func ridge_log(parent: Node3D, ridge: float, z0: float, z1: float, color:
 
 # A window in a wall facing local +Z, glass centred at `at`: carved white
 # surround with a peaked pediment (кокошник), a sill and painted shutters.
-static func window(parent: Node3D, at: Vector3, size: Vector2, surround: Color, shutters: Color, lit: bool) -> void:
+# The glass shows the room behind it (window_rooms.gd `kind`, an izba by
+# default, its floor `drop` below the centre); a `lit` room has its lamp on.
+static func window(parent: Node3D, at: Vector3, size: Vector2, surround: Color, shutters: Color, lit: bool, kind: String = "izba", drop: float = 1.35) -> void:
 	Props.box(parent, at + Vector3(0, 0, 0.02), Vector3(size.x + 0.28, size.y + 0.28, 0.06), surround)
-	var glass = Props.box(parent, at + Vector3(0, 0, 0.05), Vector3(size.x, size.y, 0.03), Color("fcd98f") if lit else Color("26323a"))
-	if lit:
-		Props.unique_material(glass)
-		glass.material_override.emission_enabled = true
-		glass.material_override.emission = Color("ffb35a")
-		glass.material_override.emission_energy_multiplier = 0.6
+	WindowRooms.pane(parent, at + Vector3(0, 0, 0.066), size, Vector3.BACK, kind, {"drop": drop, "lit": 1.0 if lit else 0.35, "accent": Color("b8382e")})
 	Props.box(parent, at + Vector3(0, 0, 0.065), Vector3(0.05, size.y, 0.02), surround)
 	Props.box(parent, at + Vector3(0, size.y * 0.12, 0.065), Vector3(size.x, 0.05, 0.02), surround)
 	Props.box(parent, at + Vector3(0, -size.y * 0.5 - 0.18, 0.08), Vector3(size.x + 0.46, 0.08, 0.16), surround)
@@ -131,9 +129,9 @@ static func window(parent: Node3D, at: Vector3, size: Vector2, surround: Color, 
 		Props.box(parent, at + Vector3(sx * (size.x * 0.75 + 0.16), 0, 0.03), Vector3(size.x * 0.5, size.y + 0.1, 0.04), shutters)
 
 # The same window on a wall facing local +X (wall plane at x = at.x).
-static func side_window(parent: Node3D, at: Vector3, size: Vector2, surround: Color, shutters: Color, lit: bool, facing: float = 1.0) -> void:
+static func side_window(parent: Node3D, at: Vector3, size: Vector2, surround: Color, shutters: Color, lit: bool, facing: float = 1.0, kind: String = "izba", drop: float = 1.35) -> void:
 	var holder = Node3D.new()
 	parent.add_child(holder)
 	holder.position = at
 	holder.rotation.y = facing * PI * 0.5
-	window(holder, Vector3.ZERO, size, surround, shutters, lit)
+	window(holder, Vector3.ZERO, size, surround, shutters, lit, kind, drop)

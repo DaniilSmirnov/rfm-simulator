@@ -7,13 +7,13 @@ extends RefCounted
 # so quarry_life.gd can work them; everything else is baked by the caller.
 const Props = preload("res://scripts/core/props.gd")
 const MeshMerge = preload("res://scripts/core/mesh_merge.gd")
+const WindowRooms = preload("res://scripts/core/window_rooms.gd")
 
 const BELAZ_YELLOW = Color("d9a521")
 const BELAZ_BODY = Color("b98d2a")
 const TYRE = Color("2e2d2a")
 const STEEL = Color("6f726e")
 const DARK = Color("2b2e30")
-const GLASS = Color("34434c")
 const SHOVEL_ORANGE = Color("d6862a")
 const SHOVEL_GREY = Color("8b8f88")
 const ORE = Color("7d877b")
@@ -33,6 +33,11 @@ const BOOM_ANGLE = 0.82
 # the machines are seen from across the pit, where thinner offsets fall
 # within one step of the depth buffer and flicker.
 const PROUD = 0.1
+
+# A cab window with the operator's seat behind it (window_rooms.gd), where
+# the glass panel stood: centred in the PROUD slab off the cab's face.
+static func _cab_glass(parent: Node3D, at: Vector3, size: Vector2, outward: Vector3) -> void:
+	WindowRooms.pane(parent, at, size, outward, "cab", {"drop": 1.0, "lit": 0.0})
 
 # Everything in the pit wears a coat of white dust.
 static func dusted(color: Color, amount: float = DUSTED) -> Color:
@@ -75,8 +80,8 @@ static func belaz(load: bool = false) -> Node3D:
 		Props.box(truck, Vector3(x, 4.0, -5.8 - PROUD * 0.5), Vector3(0.4, 0.26, PROUD), Color("efe8c8"))
 	# Cab on the left of the deck.
 	Props.box(truck, Vector3(-2.1, 5.1, -4.3), Vector3(2.4, 2.0, 2.2), yellow)
-	Props.box(truck, Vector3(-2.1, 5.35, -5.4 - PROUD * 0.5), Vector3(2.1, 1.1, PROUD), GLASS)
-	Props.box(truck, Vector3(-3.3 - PROUD * 0.5, 5.35, -4.3), Vector3(PROUD, 1.1, 1.7), GLASS)
+	_cab_glass(truck, Vector3(-2.1, 5.35, -5.4 - PROUD * 0.5), Vector2(2.1, 1.1), Vector3.FORWARD)
+	_cab_glass(truck, Vector3(-3.3 - PROUD * 0.5, 5.35, -4.3), Vector2(1.7, 1.1), Vector3.LEFT)
 	# Dump body: floor, sides with their ribs, front wall, canopy over the cab,
 	# and the floor turned up at the tail.
 	var body = dusted(BELAZ_BODY, 0.28)
@@ -121,8 +126,8 @@ static func shovel() -> Node3D:
 		Props.box(house, Vector3(3.2 + PROUD * 0.5, 3.2, z), Vector3(PROUD, 0.8, 1.4), DARK)
 	# Operator's cab at the front left, with a window on the boom.
 	Props.box(house, Vector3(-2.4, 3.2, -3.6), Vector3(2.0, 2.4, 2.2), orange)
-	Props.box(house, Vector3(-2.4, 3.5, -4.7 - PROUD * 0.5), Vector3(1.7, 1.2, PROUD), GLASS)
-	Props.box(house, Vector3(-3.4 - PROUD * 0.5, 3.5, -3.6), Vector3(PROUD, 1.2, 1.6), GLASS)
+	_cab_glass(house, Vector3(-2.4, 3.5, -4.7 - PROUD * 0.5), Vector2(1.7, 1.2), Vector3.FORWARD)
+	_cab_glass(house, Vector3(-3.4 - PROUD * 0.5, 3.5, -3.6), Vector2(1.6, 1.2), Vector3.LEFT)
 	# A-frame (gantry) with the boom suspension ropes to the boom point.
 	var gantry_top = Vector3(0, 9.0, 1.0)
 	for x in [-2.2, 2.2]:
@@ -167,7 +172,7 @@ static func drill() -> Node3D:
 	var body = dusted(Color("c9a43a"))
 	Props.box(rig, Vector3(0, 2.4, 0.8), Vector3(4.2, 2.4, 5.4), body)
 	Props.box(rig, Vector3(-1.2, 2.9, -3.0), Vector3(1.8, 2.2, 2.0), body)
-	Props.box(rig, Vector3(-1.2, 3.2, -4.0 - PROUD * 0.5), Vector3(1.5, 1.0, PROUD), GLASS)
+	_cab_glass(rig, Vector3(-1.2, 3.2, -4.0 - PROUD * 0.5), Vector2(1.5, 1.0), Vector3.FORWARD)
 	var height = 17.0
 	for x in [-0.6, 0.6]:
 		for z in [-4.6, -3.6]:

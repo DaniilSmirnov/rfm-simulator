@@ -298,8 +298,7 @@ func _shopfront(root: Node3D, width: float, shop: Dictionary) -> void:
 	shop_count += 1
 	var frame = Color("4a5b55") if shop.text != "BOULANGERIE" else Color("6b3e2e")
 	Props.box(root, Vector3(0, 1.45, -0.04), Vector3(width - 0.8, 2.7, 0.08), frame)
-	Props.box(root, Vector3(-0.6, 1.25, -0.07), Vector3(width * 0.5 - 0.4, 1.9, 0.04), Color("6f8e94"))
-	Props.box(root, Vector3(width * 0.25 + 0.15, 1.15, -0.07), Vector3(1.0, 2.1, 0.04), Color("324441"))
+	Rooms.shop_glass(root, width, shop)
 	var sign = Props.label_3d(root, Vector3(0, 2.62, -0.11), shop.text, 64, 0.0042, Color("f1e7cf"), PI)
 	sign.name = "ShopSign"
 	sign.double_sided = false
@@ -516,7 +515,7 @@ func _small_car(root: Node3D, van: bool, paint: Color) -> void:
 		# Rounded cabin with a rolled-back canvas roof.
 		Props.box(body, Vector3(0, 1.12, 0.15), Vector3(1.3, 0.5, 2.0), paint.lightened(0.04))
 		Props.box(body, Vector3(0, 1.39, 0.3), Vector3(1.0, 0.05, 1.3), Color("3d3a35"))
-		Props.box(body, Vector3(0, 1.18, -0.86), Vector3(1.18, 0.38, 0.06), Color("4b5e66"))
+		Rooms.WindowRooms.pane(body, Vector3(0, 1.18, -0.892), Vector2(1.18, 0.38), Vector3.FORWARD, "cab", {"drop": 0.5, "lit": 0.0})
 		var bonnet = Props.box(body, Vector3(0, 0.95, -1.35), Vector3(1.2, 0.2, 1.0), paint)
 		bonnet.rotation.x = 0.22
 		for x in [-0.66, 0.66]:
@@ -940,7 +939,7 @@ func _cooperative() -> void:
 	Props.box(root, Vector3(0, 0.3, -0.04), Vector3(width + 0.04, 0.6, 0.08), Color("c9b393"))
 	for i in range(4):
 		var x = -8.25 + i * 5.5
-		Props.box(root, Vector3(x, 4.1, -0.05), Vector3(1.1, 1.0, 0.08), Color("3e4a46"))
+		Rooms.hall_window(root, Vector3(x, 4.1, -0.05))
 		Props.cylinder(root, Vector3(x, 4.6, -0.05), 0.55, 0.55, 0.08, Color("3e4a46"), 10).rotation.x = PI / 2
 		Props.box(root, Vector3(x, 3.55, -0.1), Vector3(1.3, 0.1, 0.16), TRIM)
 	for i in range(3):

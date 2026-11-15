@@ -8,7 +8,8 @@ extends RefCounted
 #
 # Left alone (they move, toggle or glow on their own): rolling wheels, nodes
 # marked set_meta("unbatched", true), names in `keep` with their subtrees,
-# hidden subtrees, emissive or textured materials, billboards. The original
+# hidden subtrees, emissive or textured materials, billboards. Window
+# rooms (window_rooms.gd) are folded into one mesh of their own first. The original
 # baked nodes are freed; their names and bounds stay in the root's
 # "baked_parts" meta (name -> AABB in root space) and the captions in
 # "baked_text", for tests and tools.
@@ -16,6 +17,7 @@ extends RefCounted
 # sharing the result between all instances of that mesh.
 const BlockText = preload("res://scripts/core/block_text.gd")
 const Loc = preload("res://scripts/ui/loc.gd")
+const WindowRooms = preload("res://scripts/core/window_rooms.gd")
 const CACHE_LIMIT = 192
 const KEEP = ["TrunkHinge", "TrunkBoxes", "HoodHinge", "EngineBay"]
 static var _cache: Dictionary = {}
@@ -36,6 +38,8 @@ static func material(double_sided: bool, roughness: float, metallic: float) -> S
 	return _materials[key]
 
 static func bake(root: Node3D, cache_key: String = "", keep: Array = KEEP, name: String = "Baked") -> MeshInstance3D:
+	# Window rooms draw with their own shader: one mesh of their own.
+	WindowRooms.merge(root)
 	var parts: Array = []
 	_collect(root, root, Transform3D.IDENTITY, keep, parts)
 	if parts.is_empty():

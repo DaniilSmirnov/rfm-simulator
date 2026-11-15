@@ -43,6 +43,13 @@ default_bus_layout="res://default_bus_layout.tres"
 
 locale/fallback="ru"
 
+[shader_globals]
+
+window_night={
+"type": "float",
+"value": 0.0
+}
+
 [physics]
 2d/physics_engine="Dummy"
 3d/physics_engine="GodotPhysics3D"

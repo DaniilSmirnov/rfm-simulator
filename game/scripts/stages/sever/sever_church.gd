@@ -82,11 +82,11 @@ static func _quadrangle(node: Node3D) -> void:
 	dome(node, 20.65, 1.0)
 	for side in [-1.0, 1.0]:
 		for z in [-1.8, 1.8]:
-			Carpentry.side_window(node, Vector3(side * 4.12, 3.6, z), Vector2(0.5, 0.8), LOGS.lightened(0.25), LOGS, false, side)
+			Carpentry.side_window(node, Vector3(side * 4.12, 3.6, z), Vector2(0.5, 0.8), LOGS.lightened(0.25), LOGS, false, side, "church", 2.5)
 		var octa = Node3D.new()
 		node.add_child(octa)
 		octa.rotation.y = side * PI * 0.5
-		Carpentry.window(octa, Vector3(0, 8.6, 3.28), Vector2(0.45, 0.7), LOGS.lightened(0.25), LOGS, false)
+		Carpentry.window(octa, Vector3(0, 8.6, 3.28), Vector2(0.45, 0.7), LOGS.lightened(0.25), LOGS, false, "church", 2.5)
 
 static func _apse(node: Node3D) -> void:
 	Carpentry.log_frame(node, Vector3(0, 0, -5.9), 5.0, 3.6, 4.8, LOGS)
@@ -101,14 +101,14 @@ static func _apse(node: Node3D) -> void:
 	node.add_child(back)
 	back.position = Vector3(0, 0, -7.85)
 	back.rotation.y = PI
-	Carpentry.window(back, Vector3(0, 2.8, 0), Vector2(0.45, 0.7), LOGS.lightened(0.25), LOGS, false)
+	Carpentry.window(back, Vector3(0, 2.8, 0), Vector2(0.45, 0.7), LOGS.lightened(0.25), LOGS, false, "church", 2.5)
 
 static func _refectory(node: Node3D) -> void:
 	Carpentry.log_frame(node, Vector3(0, 0, 7.25), 7.0, 6.5, 4.4, LOGS)
 	Carpentry.gable_roof(node, 4.4, 7.0, 4.0, 10.6, 0.62, PLANK, 0.5)
 	for side in [-1.0, 1.0]:
 		for z in [5.6, 8.9]:
-			Carpentry.side_window(node, Vector3(side * 3.62, 2.5, z), Vector2(0.6, 0.85), LOGS.lightened(0.25), LOGS, false, side)
+			Carpentry.side_window(node, Vector3(side * 3.62, 2.5, z), Vector2(0.6, 0.85), LOGS.lightened(0.25), LOGS, false, side, "church", 2.5)
 
 static func _bell_tower(stage, node: Node3D) -> void:
 	var base = Vector3(0, 0, 12.6)

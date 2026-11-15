@@ -145,12 +145,24 @@ static func _person(root: Node3D, p: Dictionary, c: Dictionary, x: float, role: 
 	else:
 		avatar = P.player_avatar(BARE_HEADS[posmod(seed, BARE_HEADS.size())])
 	avatar.name = "Occupant_" + role.capitalize()
+	var dress = func() -> void:
+		if not spec.get("medic", false):
+			_dress(avatar, p, spec)
+	place(root, c, x, avatar, wheel, dress)
+	if spec.get("holds", "") == "notes":
+		# Pace-note book in the navigator's right hand.
+		P.box(CharacterRig.hand(avatar), CharacterRig.grip() + Vector3(-0.08, 0, -0.06), Vector3(0.22, 0.02, 0.16), Color("f3efe2"))
+
+# Seats `avatar` (a character model) in the cabin `c` at lateral `x`: scaled to
+# the cabin, hands on the wheel when `wheel` is a hub position, otherwise in
+# the lap. `dress` runs before the figure is measured against the roof.
+static func place(root: Node3D, c: Dictionary, x: float, avatar: Node3D, wheel, dress: Callable = Callable()) -> void:
 	root.add_child(avatar)
-	var place = fit(c)
-	avatar.scale = Vector3.ONE * place.x
-	avatar.position = Vector3(x, place.y, c.front_seat - 0.2 * place.x)
-	if not spec.get("medic", false):
-		_dress(avatar, p, spec)
+	var seat = fit(c)
+	avatar.scale = Vector3.ONE * seat.x
+	avatar.position = Vector3(x, seat.y, c.front_seat - 0.2 * seat.x)
+	if dress.is_valid():
+		dress.call()
 	_strip_hidden(avatar)
 	_pose(avatar, wheel)
 	# The formula guesses the seated height; hats and big heads can still
@@ -158,12 +170,9 @@ static func _person(root: Node3D, p: Dictionary, c: Dictionary, x: float, role: 
 	var roof: float = c.floor + c.avail - 0.03
 	var top = _top(avatar, root)
 	if top > roof:
-		var k = (roof - place.y) / maxf(0.1, top - place.y)
+		var k = (roof - seat.y) / maxf(0.1, top - seat.y)
 		avatar.scale *= k
 		_pose(avatar, wheel)
-	if spec.get("holds", "") == "notes":
-		# Pace-note book in the navigator's right hand.
-		P.box(CharacterRig.hand(avatar), CharacterRig.grip() + Vector3(-0.08, 0, -0.06), Vector3(0.22, 0.02, 0.16), Color("f3efe2"))
 
 static func _pose(avatar: Node3D, wheel) -> void:
 	var pose = {"seat": SEAT, "arms": "lap"}

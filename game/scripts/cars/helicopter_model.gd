@@ -2,9 +2,14 @@ extends RefCounted
 # Compact civil twin ducted-fan craft. The closed envelope is deliberately
 # box-shaped, with no exposed blades or long tail outside the collision box.
 const P = preload("res://scripts/core/props.gd")
+const CarInterior = preload("res://scripts/cars/car_interior.gd")
+const Glass = preload("res://scripts/core/glass.gd")
 const PAINT = Color("e4e8dc")
 const TRIM = Color("e88736")
 const DARK = Color("303d43")
+# The cockpit glass starts at this height, back to the bulkhead at z.
+const COCKPIT_SILL = 1.12
+const BULKHEAD = -0.8
 
 static func build(variant: int) -> Node3D:
 	var root = Node3D.new()
@@ -15,7 +20,8 @@ static func build(variant: int) -> Node3D:
 	var cabin = P.car_shell(root, [Vector4(-2.65, 0.45, 0.65, 1.3), Vector4(-1.65, 1.0, 0.55, 2.05), Vector4(-0.8, 1.0, 0.55, 2.25), Vector4(1.25, 1.0, 0.55, 2.15), Vector4(2.1, 0.55, 0.8, 1.6)], PAINT)
 	cabin.name = "Cabin"
 	_cut_bay(cabin)
-	P.car_shell(root, [Vector4(-2.67, 0.46, 1.12, 1.32), Vector4(-1.66, 1.018, 1.12, 2.08), Vector4(-0.79, 1.018, 1.12, 2.28)], Color("335d70")).name = "CockpitGlass"
+	Glass.glaze(P.car_shell(root, [Vector4(-2.67, 0.46, 1.12, 1.32), Vector4(-1.66, 1.018, 1.12, 2.08), Vector4(-0.79, 1.018, 1.12, 2.28)], Color("335d70"))).name = "CockpitGlass"
+	_cockpit(root)
 	P.car_beam(root, Vector3(0, 1.28, -2.5), Vector3(0, 2.14, -0.85), 0.075, PAINT)
 	P.box(root, Vector3(0, 1.8, 2.15), Vector3(2.0, 0.09, 0.65), TRIM)
 	P.box(root, Vector3(0, 2.05, 2.15), Vector3(0.10, 0.8, 0.6), PAINT)
@@ -60,15 +66,38 @@ static func _cut_bay(cabin: MeshInstance3D) -> void:
 	var arrays = cabin.mesh.surface_get_arrays(0)
 	var source: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 	var fixed = PackedVector3Array()
-	var planes = [Vector4(-1, 0, 0, -0.7), Vector4(0, -1, 0, -0.7), Vector4(0, 1, 0, 1.8), Vector4(0, 0, 1, 0.8), Vector4(0, 0, -1, 0.8)]
+	# The cargo bay in the starboard side, and the cockpit under the glass
+	# (everything above the glass sill in front of the bulkhead).
+	var cuts = [
+		[Vector4(-1, 0, 0, -0.7), Vector4(0, -1, 0, -0.7), Vector4(0, 1, 0, 1.8), Vector4(0, 0, 1, 0.8), Vector4(0, 0, -1, 0.8)],
+		[Vector4(0, -1, 0, -COCKPIT_SILL), Vector4(0, 0, 1, BULKHEAD)],
+	]
 	for i in range(0, source.size(), 3):
-		var poly: Array = [source[i], source[i + 1], source[i + 2]]
-		for plane in planes:
-			var normal = Vector3(plane.x, plane.y, plane.z)
-			fixed = P.panel_triangles(fixed, P.clip_panel(poly, normal, plane.w, false))
-			poly = P.clip_panel(poly, normal, plane.w, true)
-			if poly.is_empty(): break
+		var pieces: Array = [[source[i], source[i + 1], source[i + 2]]]
+		for planes in cuts:
+			var kept: Array = []
+			for piece in pieces:
+				var poly: Array = piece
+				for plane in planes:
+					var normal = Vector3(plane.x, plane.y, plane.z)
+					var outside = P.clip_panel(poly, normal, plane.w, false)
+					if not outside.is_empty():
+						kept.append(outside)
+					poly = P.clip_panel(poly, normal, plane.w, true)
+					if poly.is_empty(): break
+			pieces = kept
+		for piece in pieces:
+			fixed = P.panel_triangles(fixed, piece)
 	cabin.mesh = P.panel_mesh(fixed)
+
+# Cockpit seen through the bubble: a floor over the cut hull, the bulkhead
+# behind the seats, and a car_interior.gd cabin (two seats, panel, yoke).
+static func _cockpit(root: Node3D) -> void:
+	var floor_y = COCKPIT_SILL + 0.005
+	P.quad_panel(root, PackedVector3Array([Vector3(-0.44, floor_y, -2.64), Vector3(0.44, floor_y, -2.64), Vector3(0.99, floor_y, -1.66), Vector3(-0.99, floor_y, -1.66)]), DARK)
+	P.quad_panel(root, PackedVector3Array([Vector3(-0.99, floor_y, -1.66), Vector3(0.99, floor_y, -1.66), Vector3(0.99, floor_y, BULKHEAD), Vector3(-0.99, floor_y, BULKHEAD)]), DARK)
+	P.box(root, Vector3(0, (COCKPIT_SILL + 2.24) * 0.5, BULKHEAD + 0.02), Vector3(1.98, 2.24 - COCKPIT_SILL, 0.04), Color("c9cdc4"))
+	CarInterior.build(root, {"pillar": -1.02, "interior": "2a3034", "seat": "47505a", "seat_insert": "6a7682"}, {"shape": [-1.9, -1.66, -0.85, BULKHEAD], "bonnet": COCKPIT_SILL, "deck": COCKPIT_SILL, "floor": COCKPIT_SILL, "height": 2.12, "glass_half": 0.9})
 
 static func _fan(root: Node3D, ducts: Node3D, side: int) -> void:
 	var center = Vector3(side * 2.1, 2.35, 0.2)

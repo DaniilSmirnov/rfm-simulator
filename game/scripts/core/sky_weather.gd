@@ -58,6 +58,8 @@ var _last_camera = Vector3.INF
 var _drift = Vector3.ZERO
 # Campfires, grills and beacons that light their surroundings at night.
 var night_lights = preload("res://scripts/core/night_lights.gd").new()
+# Rooms behind building windows: lit or dark at night.
+const WindowRooms = preload("res://scripts/core/window_rooms.gd")
 var _lamp_clock = 0.0
 
 static func night_or_day(value) -> String:
@@ -143,6 +145,7 @@ func rebuild() -> void:
 		game.add_child(fall)
 	_last_camera = Vector3.INF
 	_update_headlights()
+	WindowRooms.set_night(1.0 if daytime == "night" else 0.0)
 
 func _environment(look_env: Dictionary) -> WorldEnvironment:
 	var world = WorldEnvironment.new()

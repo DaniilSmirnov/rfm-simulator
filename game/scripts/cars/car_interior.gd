@@ -17,9 +17,15 @@ const INSERT = "5d646c"
 const TRIM = "2a2e33"
 const HEADLINER = Color("c8c4b8")
 const GAUGES = Color("d9e2e4")
+const SEAT_META = "cabin_seats"
 
 static func build(root: Node3D, p: Dictionary, f: Dictionary) -> void:
 	var c = cabin(p, f)
+	# Where people sit (car_drivers.gd seats the players who drive or ride).
+	var seats = c.duplicate()
+	seats.erase("rear_glass_at")
+	seats.wheel = wheel_centre(p, c)
+	root.set_meta(SEAT_META, seats)
 	var trim = Color(p.get("interior", TRIM))
 	# Floor carpet over the top of the body shell and the door tops at the belt.
 	P.box(root, Vector3(0, c.floor - 0.005, (c.front + c.back) * 0.5), Vector3(c.half * 2.0, 0.012, c.back - c.front), trim.darkened(0.2))

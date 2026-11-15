@@ -8,6 +8,7 @@ extends RefCounted
 # Local frame: +Z faces the road; the living part is centred on the origin.
 const Props = preload("res://scripts/core/props.gd")
 const Carpentry = preload("res://scripts/stages/sever/sever_carpentry.gd")
+const WindowRooms = preload("res://scripts/core/window_rooms.gd")
 const SNOW = Color("eef2f2")
 const PODKLET = 1.6
 const STOREY = 2.7
@@ -54,7 +55,7 @@ static func build(stage, biome, root: Node3D, item: Array, rng: RandomNumberGene
 		face_z = d * 0.5 + 0.2
 	Carpentry.gable(node, d * 0.5 + 0.16, w, walls, ridge - 0.1, 0.2, logs.lightened(0.12))
 	Carpentry.gable(node, -d * 0.5 - yard + 0.1, w, walls, ridge - 0.1, 0.2, BOARDS)
-	Carpentry.window(node, Vector3(0, walls + (ridge - walls) * 0.36, d * 0.5 + 0.18), Vector2(0.62, 0.78), surround, shutters, false)
+	Carpentry.window(node, Vector3(0, walls + (ridge - walls) * 0.36, d * 0.5 + 0.18), Vector2(0.62, 0.78), surround, shutters, false, "izba", 0.9)
 	Carpentry.barge_boards(node, front, walls, w, PITCH, surround)
 	Carpentry.ridge_log(node, ridge, -d * 0.5 - yard - 0.5, front, logs.darkened(0.15))
 	_windows(node, w, d, floors, face_z, surround, shutters, int(s))
@@ -113,7 +114,7 @@ static func _windows(node: Node3D, w: float, d: float, floors: int, face_z: floa
 	# Small basement windows.
 	for x in [-w * 0.25, w * 0.25]:
 		Props.box(node, Vector3(x, 0.85, face_z + 0.03), Vector3(0.62, 0.48, 0.05), surround)
-		Props.box(node, Vector3(x, 0.85, face_z + 0.06), Vector3(0.48, 0.34, 0.03), Color("26323a"))
+		WindowRooms.pane(node, Vector3(x, 0.85, face_z + 0.076), Vector2(0.48, 0.34), Vector3.BACK, "izba", {"drop": 0.7, "lit": 0.0})
 
 # Covered porch (крыльцо) on the +X wall at z: a log-boxed landing at the
 # height of the living floor, a flight of steps down towards the street and
