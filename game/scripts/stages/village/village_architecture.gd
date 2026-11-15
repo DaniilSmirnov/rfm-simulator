@@ -8,7 +8,7 @@ const Movable = preload("res://scripts/core/prop_registry.gd")
 const Props = preload("res://scripts/core/props.gd")
 const Layout = preload("res://scripts/stages/village/village_layout.gd")
 const Interiors = preload("res://scripts/stages/village/village_interiors.gd")
-
+const Rooms = preload("res://scripts/stages/village/village_rooms.gd")
 const FLOOR = 3.0
 const WALLS = ["e8d5b0", "e2c18f", "dcb48a", "efe2c8", "d9a982", "cfb79a", "e6cfa6", "d8c3a0", "c9a27d", "e9dcc3", "e3bf9a", "d4b58e"]
 const STONE_WALLS = ["c9b393", "bfa682", "d0bc9c"]
@@ -173,7 +173,7 @@ func window(parent: Node3D, p: Vector3, yaw: float, shutters: Color, extra: Stri
 	parent.add_child(w)
 	w.position = p
 	w.rotation.y = yaw
-	Props.box(w, Vector3(0, 0, 0.02), Vector3(0.82, 1.38, 0.06), Color("3e4a4c"))
+	Rooms.pane(w, parent, p)
 	Props.box(w, Vector3(0, 0, -0.005), Vector3(0.05, 1.32, 0.04), Color("d8d2c2"))
 	Props.box(w, Vector3(0, 0.22, -0.005), Vector3(0.76, 0.04, 0.04), Color("d8d2c2"))
 	for x in [-0.47, 0.47]:
@@ -238,7 +238,7 @@ func house(p: Vector3, yaw: float, width: float, depth: float, floors: int, seed
 	for corner in [Vector3(-width * 0.5, 0, 0), Vector3(width * 0.5, 0, 0), Vector3(-width * 0.5, 0, depth), Vector3(width * 0.5, 0, depth)]:
 		lowest = minf(lowest, stage.ground(root.transform * corner) - p.y)
 	var bottom = lowest - 0.3
-	Props.box(root, Vector3(0, (height + bottom) * 0.5, depth * 0.5), Vector3(width, height - bottom, depth), wall)
+	Rooms.mass(root, width, depth, height, bottom, FLOOR, wall, seed_value, shop)
 	Props.box(root, Vector3(0, (0.45 + bottom) * 0.5, -0.03), Vector3(width + 0.02, 0.45 - bottom, 0.06), wall.darkened(0.18))
 	if stone:
 		# Dressed corner quoins on exposed stone houses.

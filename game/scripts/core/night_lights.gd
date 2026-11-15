@@ -14,22 +14,47 @@ const KINDS = {
 	"beacon_blue": {"color": Color("3f7dff"), "energy": 3.0, "range": 13.0, "height": 0.25, "flicker": false, "budget": "beacon"},
 	"beacon_red": {"color": Color("ff3b30"), "energy": 3.0, "range": 13.0, "height": 0.25, "flicker": false, "budget": "beacon"},
 	"beacon_amber": {"color": Color("ffae35"), "energy": 1.6, "range": 9.0, "height": 0.25, "flicker": false, "budget": "beacon"},
+	# A room lamp behind window glass (village_rooms.gd): lights the room and
+	# spills out through the windows onto the street.
+	"lamp": {"color": Color("ffc879"), "energy": 1.8, "range": 8.0, "height": 0.0, "flicker": false, "budget": "home"},
 }
-const BUDGET = {"fire": 6, "beacon": 4}
+const BUDGET = {"fire": 6, "beacon": 4, "home": 3}
+# Meshes shown only at night (a lamp shade's glow), hidden by day.
+const GLOW = &"night_glow"
 const PICK_SECONDS = 0.3
 const LIGHT_NAME = "NightLight"
 
 var _clock = 0.0
 var _time = 0.0
 var _lit: Array[OmniLight3D] = []
+var _glow_state = ""
+static var _glow_material: StandardMaterial3D
 
 static func mark(node: Node, kind: String) -> void:
-	node.add_to_group(GROUP)
+	# Persistent groups survive baked scenes (the village is a PackedScene).
+	node.add_to_group(GROUP, true)
 	node.set_meta("night_light", kind)
+
+# A mesh that glows by night only (hidden until update() sees the night).
+static func glow(node: Node3D) -> void:
+	node.add_to_group(GLOW, true)
+	node.hide()
+
+static func glow_material() -> StandardMaterial3D:
+	if _glow_material == null:
+		_glow_material = StandardMaterial3D.new()
+		_glow_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_glow_material.albedo_color = Color("ffdf9e")
+	return _glow_material
 
 # Called every frame by sky_weather.gd; `at` is the camera position.
 func update(tree: SceneTree, night: bool, at: Vector3, delta: float) -> void:
 	_time += delta
+	var glow_state = "%s:%d" % [night, tree.get_node_count_in_group(GLOW)]
+	if glow_state != _glow_state:
+		_glow_state = glow_state
+		for node in tree.get_nodes_in_group(GLOW):
+			node.visible = night
 	if not night:
 		if not _lit.is_empty():
 			clear()

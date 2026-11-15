@@ -349,6 +349,9 @@ static func player_car_sport_sedan() -> Node3D:
 		Vector4(1.20, 0.77, 0.98, 1.06)
 	], glass)
 	cabin.name = "GlassCabinSportSedan"
+	load("res://scripts/core/glass.gd").glaze(cabin)
+	# Black sports seats with red centres; the frame follows the glasshouse above.
+	load("res://scripts/cars/car_interior.gd").build(root, {"pillar": 0.14, "seat": "1c2025", "seat_insert": "8a1f28"}, {"shape": [-0.99, -0.43, 0.57, 1.20], "bonnet": 1.0, "deck": 1.0, "floor": 0.91, "height": 1.45, "glass_half": 0.78})
 	var roof = car_shell(root, [
 		Vector4(-0.45, 0.72, 1.39, 1.44),
 		Vector4(-0.15, 0.73, 1.41, 1.46),
