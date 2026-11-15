@@ -22,6 +22,7 @@ var flight_solver = preload("res://scripts/net/drive_prediction.gd").new()
 var relief = preload("res://scripts/player/tree_relief.gd").new()
 var perches = preload("res://scripts/player/perches.gd").new()
 var sauna = preload("res://scripts/player/sauna_steam.gd").new()
+var drunk = preload("res://scripts/player/drunk_camera.gd").new()
 
 func drive(delta: float) -> void:
 	if Dedicated.active(): return # a dedicated server has no player of its own
@@ -199,7 +200,7 @@ func walk(delta: float) -> void:
 
 func walk_step(delta: float) -> void:
 	var previous_feet: Vector3 = game.walker
-	if game.beers >= 30 or game.seated or game.injuries.down:
+	if game.beers >= game.COLLAPSE_BEERS or game.seated or game.injuries.down:
 		return
 	var motion = Vector2(Input.get_axis("left", "right"), Input.get_axis("forward", "back"))
 	if motion.length() > 1:
@@ -268,7 +269,7 @@ func snow_hint(delta: float) -> void:
 	game.snow_stuck = deep
 
 func running() -> bool:
-	return not game.in_car and not game.seated and game.beers < 30 and game.injuries.limp <= 0.0 and not game.injuries.down and not game.paused and not game.dead and not game.finished and game.drink_time < 0 and game.eat_time < 0 and Input.is_action_pressed("sprint") and (absf(Input.get_axis("left", "right")) + absf(Input.get_axis("forward", "back"))) > 0.01
+	return not game.in_car and not game.seated and game.beers < game.COLLAPSE_BEERS and game.injuries.limp <= 0.0 and not game.injuries.down and not game.paused and not game.dead and not game.finished and game.drink_time < 0 and game.eat_time < 0 and Input.is_action_pressed("sprint") and (absf(Input.get_axis("left", "right")) + absf(Input.get_axis("forward", "back"))) > 0.01
 
 func jump() -> bool:
 	if game.injuries.down and not game.paused and not game.dead and not game.finished:
@@ -276,7 +277,7 @@ func jump() -> bool:
 			return true
 		game.injuries.play.injuries = game.injuries
 		return game.injuries.play.stand(game.injuries.local_key())
-	if not game.playing or relief.active or game.in_car or game.seated or game.beers >= 30 or game.injuries.down or game.injuries.limp > 0.0 or game.paused or game.dead or game.finished or game.drink_time >= 0 or game.eat_time >= 0 or game.jump_height > 0.01 or game.jump_velocity > 0:
+	if not game.playing or relief.active or game.in_car or game.seated or game.beers >= game.COLLAPSE_BEERS or game.injuries.down or game.injuries.limp > 0.0 or game.paused or game.dead or game.finished or game.drink_time >= 0 or game.eat_time >= 0 or game.jump_height > 0.01 or game.jump_velocity > 0:
 		return false
 	if game.stage.water != null and game.stage.water.depth(game.walker) > 0.6:
 		return false # No push-off while wading deep or swimming.
@@ -290,7 +291,7 @@ func update_camera(delta: float, snap: bool = false) -> void:
 		game.injuries.update_camera(delta)
 		return
 	game.impact_shake = maxf(0, game.impact_shake - delta)
-	game.collapse_time = minf(0.8, game.collapse_time + delta) if game.beers >= 30 else 0.0
+	game.collapse_time = minf(0.8, game.collapse_time + delta) if game.beers >= game.COLLAPSE_BEERS else 0.0
 	var collapse = smoothstep(0, 0.8, game.collapse_time)
 	if game.in_car:
 		var body: Node3D = game.rides.vehicle()
@@ -309,9 +310,8 @@ func update_camera(delta: float, snap: bool = false) -> void:
 		game.camera.rotation = Vector3(game.view_pitch + sip * 0.035, game.view_yaw, 0.0)
 		game.camera.fov = 68 - sip * 2.0
 
-	# Bounded gentle sway, with an envelope that fades between sips.
-	game.camera.rotation.z += sin(game.drunk_phase) * deg_to_rad(3.0) * game.drunk_strength + PI / 2 * collapse
-	game.camera.rotation.x += sin(game.drunk_phase * 2.0) * deg_to_rad(0.6) * game.drunk_strength
+	# The drunk reel (drunk_camera.gd) and the fall to the ground.
+	drunk.apply(game, collapse)
 	game.camera.position += Vector3(sin(game.elapsed * 91), cos(game.elapsed * 73), 0) * game.impact_shake * 0.12
 
 # Puts the view straight where it settles: behind the car along its heading,
@@ -349,8 +349,8 @@ func can_change_seat() -> bool:
 		return false
 	if game.jump_height > 0.01 or game.jump_velocity > 0:
 		return false
-	if game.beers >= 30 or game.injuries.down:
-		game.toast("Ты лежишь. Дождись восстановления — три минуты." if game.beers >= 30 else "Ты лежишь. Дождись скорую.")
+	if game.beers >= game.COLLAPSE_BEERS or game.injuries.down:
+		game.toast("Ты лежишь. Дождись восстановления — три минуты." if game.beers >= game.COLLAPSE_BEERS else "Ты лежишь. Дождись скорую.")
 		return false
 	if game.drink_time >= 0 or game.eat_time >= 0:
 		game.toast("Сначала закончи есть или пить и освободи руки.")
@@ -385,14 +385,14 @@ func toggle_car() -> void:
 		game.toast("Подойди к своей машине, чтобы сесть.")
 
 func walking_intent() -> Vector3:
-	if relief.active or game.in_car or game.seated or game.jump_height > 0.01 or game.paused or game.dead or game.finished or game.beers >= 30 or game.drink_time >= 0 or game.eat_time >= 0:
+	if relief.active or game.in_car or game.seated or game.jump_height > 0.01 or game.paused or game.dead or game.finished or game.beers >= game.COLLAPSE_BEERS or game.drink_time >= 0 or game.eat_time >= 0:
 		return Vector3.ZERO
 	var input = Vector2(Input.get_axis("left", "right"), Input.get_axis("forward", "back")).limit_length(1)
 	return Vector3(input.x, 0, input.y).rotated(Vector3.UP, game.view_yaw)
 
 func sit_down() -> void:
 	var owner = game.chair_owner()
-	if not game.personal_chairs.has(owner) or game.in_car or game.beers >= 30 or game.jump_height > 0.01 or game.jump_velocity > 0:
+	if not game.personal_chairs.has(owner) or game.in_car or game.beers >= game.COLLAPSE_BEERS or game.jump_height > 0.01 or game.jump_velocity > 0:
 		return
 	game.seat_exit = game.walker
 	var chair: Node3D = game.personal_chairs[owner]
@@ -414,7 +414,7 @@ func inside_floor() -> bool:
 func update_sobriety(delta: float) -> void:
 	if not game.playing or game.paused or game.dead or game.finished or (game.room.is_guest() and game.room.world_paused):
 		return
-	if game.beers < 30:
+	if game.beers < game.COLLAPSE_BEERS:
 		game.sober_remaining = 0.0
 		return
 	if game.sober_remaining <= 0:
@@ -436,3 +436,4 @@ func update_intoxication(delta: float) -> void:
 		game.drunk_phase = fposmod(game.drunk_phase + delta * 1.25, TAU)
 	else:
 		game.drunk_phase = 0.0
+	drunk.update(game)

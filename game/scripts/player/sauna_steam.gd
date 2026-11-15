@@ -43,7 +43,7 @@ func inside(pos: Vector3) -> bool:
 	return sauna != null and sauna.contains(pos)
 
 func can_start() -> bool:
-	return not steaming and not game.in_car and not game.seated and not game.injuries.down and game.beers < 30 \
+	return not steaming and not game.in_car and not game.seated and not game.injuries.down and game.beers < game.COLLAPSE_BEERS \
 		and game.drink_time < 0 and game.eat_time < 0 and game.placement_kind == "" and not game.cargo.held.has(game.chair_owner()) \
 		and game.jump_height <= 0.01 and not whisk.whipping() and inside(game.walker)
 

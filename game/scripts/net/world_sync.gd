@@ -72,6 +72,7 @@ func rebuild() -> void:
 	# The room's time of day and weather: the host picked them in the menu.
 	providers.append(_subsystem("sky", func(): return game.sky_weather, "snapshot", "apply_snapshot", "sky"))
 	providers.append(provider("camp", "camp", ["camp", "table_yaw", "chairs", "chair_poses", "flag_poses", "cooking", "grill_pose", "grill_fire", "grill_servings", "npc_servings", "eaten"], _camp_snapshot, _camp_apply))
+	providers.append(_subsystem("beer_crates", func(): return game.camp_actions.crates, "snapshot", "apply_snapshot", "camp"))
 	providers.append(provider("drive", "", ["drive_protocol", "driving"], _drive_snapshot, func(_f, _t): pass))
 	providers.append(provider("stones", "", ["stones", "stone_ids", "impacts"], _stones_snapshot, _stones_apply))
 	providers.append(provider("status", "", ["paused", "notice", "notice_for", "notice_time", "cook_time"], _status_snapshot, _status_apply))

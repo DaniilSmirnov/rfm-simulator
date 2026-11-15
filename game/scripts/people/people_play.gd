@@ -99,7 +99,7 @@ func update(players: Dictionary, delta: float) -> Dictionary:
 			if before.airborne and before.pos.distance_to(pos) < 5.0:
 				landing(actor, before.pos, pos)
 		previous[id] = {"pos": pos, "airborne": p.get("airborne", false)}
-		if not p.get("tow", false) or p.get("in_car", true) or p.get("seated", false) or p.get("airborne", false) or int(p.get("beers", 0)) >= 30 or injuries.is_down(actor) or game.cargo.held.has(id):
+		if not p.get("tow", false) or p.get("in_car", true) or p.get("seated", false) or p.get("airborne", false) or int(p.get("beers", 0)) >= game.COLLAPSE_BEERS or injuries.is_down(actor) or game.cargo.held.has(id):
 			grips.erase(id)
 			continue
 		if not grips.has(id):

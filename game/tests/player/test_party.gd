@@ -21,8 +21,11 @@ func run() -> void:
 	game.place_table()
 	game.place_chairs()
 	game.start_grill()
+	var cans = game.camp.get_node("BeerCrate/Cans")
+	check(game.camp_actions.crates.count(-1) == 24 and cans.multimesh.visible_instance_count == 24, "the camp table carries a crate of 24 cans")
 	game.beers = 1
 	game.drink_beer()
+	check(game.camp_actions.crates.count(-1) == 23 and cans.multimesh.visible_instance_count == 23, "a can leaves the crate when the fan starts drinking")
 	game._update_drinking(1.9)
 	game._cancel_drink()
 	check(game.drunk_strength == 0, "first two beers do not sway the camera")
@@ -31,20 +34,24 @@ func run() -> void:
 	game._update_drinking(1.9)
 	game._cancel_drink()
 	game._process(0.1)
-	check(game.drunk_strength > 0 and absf(game.camera.rotation.z) < deg_to_rad(3.0), "third sip starts bounded gentle sway")
+	check(game.drunk_strength > 0, "the third can starts the drunk view")
+	var overlay = game.player.drunk.overlay
+	check(overlay != null and overlay.visible, "the third can doubles the picture")
 	var mild = game.drunk_strength
 	game._update_intoxication(10)
 	check(game.drunk_strength < mild, "beer sway gradually fades without further sips")
 	game.drunk_strength = 1.0
 	var sway_bounded = true
+	var widest = 0.0
 	for frame in range(240):
 		game._update_intoxication(1.0 / 24.0)
 		game._update_camera(1.0 / 24.0)
-		sway_bounded = sway_bounded and absf(game.camera.rotation.z) <= deg_to_rad(3.01)
-	check(sway_bounded, "sway never rotates the screen fully")
+		widest = maxf(widest, absf(game.camera.rotation.z))
+		sway_bounded = sway_bounded and absf(game.camera.rotation.z) <= deg_to_rad(game.player.drunk.ROLL + 0.01)
+	check(sway_bounded and widest > deg_to_rad(6.0), "a full drunk reels the view hard (%.1f°) but never turns it over" % rad_to_deg(widest))
 	game._update_intoxication(60)
 	game._update_camera(0.1)
-	check(game.drunk_strength == 0 and is_zero_approx(game.camera.rotation.z), "beer sway ends completely after a minute")
+	check(game.drunk_strength == 0 and is_zero_approx(game.camera.rotation.z) and not overlay.visible, "beer sway and double vision end completely after a minute")
 	game.drunk_strength = 0.5
 	game.paused = true
 	var phase = game.drunk_phase
@@ -52,16 +59,16 @@ func run() -> void:
 	game._process(0.5)
 	check(game.drunk_phase == phase and game.drunk_strength == strength, "pause freezes intoxication")
 	game.paused = false
-	game.beers = 29
+	game.beers = game.COLLAPSE_BEERS - 1
 	game.beer_timer = 0
-	check(game.drink_beer(), "no hard limit on beer")
+	check(game.drink_beer(), "the crate still has beer for the 24th can")
 	game._update_drinking(1.9)
-	check(game.beers == 30, "thirtieth sip counted once")
+	check(game.beers == 24, "twenty-fourth sip counted once")
 	var position_before = game.walker
 	Input.action_press("forward")
 	game._walk(1)
 	Input.action_release("forward")
-	check(game.walker == position_before, "thirtieth beer disables walking")
+	check(game.walker == position_before, "twenty-fourth beer disables walking")
 	game._update_camera(1.0)
 	check(game.camera.position.y < game.walker.y + 0.5, "collapsed view lies near ground")
 	game._cancel_drink()
@@ -85,7 +92,7 @@ func run() -> void:
 	game.room.world_paused = false
 	game.room.connected = false
 	game._update_sobriety(119.9)
-	check(game.beers == 30 and game.sober_remaining > 0, "player stays down before three minutes")
+	check(game.beers == game.COLLAPSE_BEERS and game.sober_remaining > 0, "player stays down before three minutes")
 	game._update_sobriety(0.1)
 	game._update_camera(0.1)
 	game._update_hud()
@@ -97,6 +104,10 @@ func run() -> void:
 	check(game.walker.distance_to(position_before) > 0.05, "walking is available again after recovery")
 	check(game.drink_beer(), "beer becomes available again after recovery")
 	game._cancel_drink()
+	game.camp_actions.crates.left[-1] = 0
+	game.camp_actions.crates.refresh()
+	game.beer_timer = 0
+	check(game.camp_actions.drink_source() == -1 and not game.drink_beer() and cans.multimesh.visible_instance_count == 0, "an empty crate gives no more beer at the camp")
 	game.walker = game.car.position + Vector3(0, 0, 2.5)
 	game._toggle_car()
 	check(game.in_car, "recovered player can enter car for the end of the outing")
@@ -106,7 +117,7 @@ func run() -> void:
 	remote.pos = game.room.a(game.stage.clearings[0])
 	remote.car = game.room.a(game.stage.clearings[0] + Vector3(10, 0, 0))
 	remote.in_car = false
-	remote.beers = 30
+	remote.beers = game.COLLAPSE_BEERS
 	game.room.connected = true
 	game.room.is_host = true
 	game.room.busy = true

@@ -5,8 +5,13 @@ extends RefCounted
 const Props = preload("res://scripts/core/props.gd")
 const Loc = preload("res://scripts/ui/loc.gd")
 const Ground = preload("res://scripts/camp/camp_ground.gd")
+const BeerCrate = preload("res://scripts/camp/beer_crate.gd")
 
-var game
+var crates = BeerCrate.new()
+var game:
+	set(value):
+		game = value
+		crates.game = value
 
 # Use the same surface sampler for the ghost, deployed gear and room snapshots.
 func ground_item(node: Node3D, spot: Vector3, yaw: float) -> void:
@@ -77,7 +82,7 @@ func begin_placement(kind: String) -> void:
 		return
 	if game.seated:
 		game.stand_up()
-	if game.in_car or game.beers >= 30 or game.injuries.down:
+	if game.in_car or game.beers >= game.COLLAPSE_BEERS or game.injuries.down:
 		game.toast("Для размещения выйди из машины и встань на ноги.")
 		return
 	if kind in game.cargo.KINDS and not game.cargo.take(kind):
@@ -100,7 +105,7 @@ func begin_placement(kind: String) -> void:
 	# A ghost of the furniture, not yet something to stand on.
 	game.placement_preview.remove_from_group("perch")
 	game.placement_material = Props.material(Color("82c991"))
-	for child in game.placement_preview.find_children("*", "MeshInstance3D", true, false):
+	for child in game.placement_preview.find_children("*", "MeshInstance3D", true, false) + game.placement_preview.find_children("*", "MultiMeshInstance3D", true, false):
 		child.material_override = game.placement_material
 		child.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	update_placement()
@@ -145,8 +150,21 @@ func confirm_placement() -> void:
 func near_camp() -> bool:
 	return game.camp != null and game.actor_position().distance_to(game.camp.position) < 7
 
+# The table whose crate the fan drinks from: -1 the own camp, 0.. a
+# spectators' group, -2 none in reach. A table with cans left wins.
+func drink_source() -> int:
+	var group = game.spectators.nearby_table(game.player_position()) if game.spectators != null else -1
+	if near_camp() and (crates.count(-1) > 0 or group < 0):
+		return -1
+	return group if group >= 0 else -2
+
 func nearby_drink_source() -> bool:
-	return near_camp() or (game.spectators != null and game.spectators.nearby_table(game.player_position()) >= 0)
+	return drink_source() != -2
+
+# A guest's "beer" command: the can leaves the crate of a table in its reach.
+func take_beer(source: int, pos: Vector3) -> bool:
+	var table: Node3D = crates.table(source)
+	return table != null and pos.distance_to(table.position) < 7.0 and crates.take(source)
 
 func food_source_group() -> int:
 	if not game.actor_in_car() and game.grill != null and (near_camp() or game.camp_grill.near()):
@@ -173,6 +191,7 @@ func place_table(spot: Vector3 = Vector3.INF, yaw: float = 0.0) -> bool:
 		game.camp.set_meta("gear_owner", game.cargo.actor())
 		game.add_child(game.camp)
 		Props.table(game.camp)
+		crates.refresh()
 	ground_item(game.camp, spot, yaw)
 	game.stage.solids.indexed_obstacle_count = -1
 	game.toast("Стол установлен.")
@@ -271,18 +290,26 @@ func update_cooking(delta: float) -> void:
 	game.camp_grill.update(delta)
 
 func drink_beer() -> bool:
-	if game.beers >= 30 or game.injuries.down:
+	if game.beers >= game.COLLAPSE_BEERS or game.injuries.down:
 		return false
 	if game.cargo.held.has(game.chair_owner()):
 		return false
 	if not game.playing or game.paused or game.dead or game.finished:
 		return false
-	if game.in_car or not nearby_drink_source():
+	var source = drink_source()
+	if game.in_car or source == -2:
 		game.toast("Подойди к своему или соседскому столу пешком.")
 		return false
 	if game.eat_time >= 0 or game.drink_time >= 0 or game.beer_timer > 0:
 		game.toast("Пока хватит. Лучше посмотри ралли.")
 		return false
+	if crates.count(source) <= 0:
+		game.toast("Ящик пуст: пиво на этом столе кончилось.")
+		return false
+	# The can leaves the crate as the fan picks it up; the host keeps the count.
+	crates.take(source)
+	if not game.room.is_authority():
+		game.room.submit("beer", {"source": source})
 	game.drink_time = 0.0
 	game.drink_committed = false
 	game.can_opened = false
@@ -326,7 +353,7 @@ func update_drinking(delta: float) -> void:
 		if game.beers >= 3:
 			game.drunk_strength = minf(1.0, game.drunk_strength + 0.45)
 		game.beer_timer = 1.0
-		if game.beers >= 30:
+		if game.beers >= game.COLLAPSE_BEERS:
 			game.sober_remaining = game.SOBER_SECONDS
 			cancel_placement()
 			if game.seated:
@@ -345,7 +372,7 @@ func update_drinking(delta: float) -> void:
 		game._play_audio(game.beer_audio)
 	if game.drink_time >= game.DRINK_DURATION:
 		cancel_drink()
-		if game.beers < 30:
+		if game.beers < game.COLLAPSE_BEERS:
 			game.toast("Алкоголь ухудшает координацию и реакцию. Не садись за руль.")
 
 func cancel_drink() -> void:

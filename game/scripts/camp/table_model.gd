@@ -4,13 +4,15 @@ extends RefCounted
 # forks and napkins, the printed start list and a stage map, and a handful of
 # odd things (bottles, bread, chips, a thermos, a radio, sunglasses...). Which
 # of them and where comes from `variant`, so every camp along the stage looks
-# lived in and different, while host and guests see the same table.
+# lived in and different, while host and guests see the same table. A camp
+# table also carries the 24-can beer crate (beer_crate.gd), kept unbaked.
 #   TableModel.build(parent, variant)            # a spectators' camp table
 #   TableModel.build(parent, variant, "desk")    # the timing desk: papers only
 # Everything is baked into one mesh per (style, variant).
 const P = preload("res://scripts/core/props.gd")
 const MeshMerge = preload("res://scripts/core/mesh_merge.gd")
 const Perches = preload("res://scripts/player/perches.gd")
+const BeerCrate = preload("res://scripts/camp/beer_crate.gd")
 const VARIANTS = 6
 const TOP = 0.885
 const HALF_X = 1.05
@@ -35,6 +37,8 @@ static func build(parent: Node3D, variant: int = 0, style: String = "camp") -> v
 		for j in range(2):
 			cells.append(Vector3(-0.75 + i * 0.5, TOP, -0.24 + j * 0.48))
 	_shuffle(cells, rng)
+	# The camp table's beer crate takes a cell of its own (beer_crate.gd).
+	var crate_cell: Vector3 = cells.pop_back() if style != "desk" else Vector3.INF
 	var items: Array = ["start_list", "map"] if style == "desk" else ["start_list", "plates", "cups"]
 	var extras: Array = ["water", "ketchup", "bread", "chips", "thermos", "radio", "sunglasses", "cans", "napkins", "cap", "phone", "towels"]
 	if style == "desk":
@@ -51,6 +55,8 @@ static func build(parent: Node3D, variant: int = 0, style: String = "camp") -> v
 	# The baked mesh replaced their contents; the empty holders go too.
 	for holder in holders:
 		holder.free()
+	if crate_cell != Vector3.INF:
+		BeerCrate.build(parent, crate_cell, rng.randf_range(-0.25, 0.25))
 
 static func _shuffle(values: Array, rng: RandomNumberGenerator) -> void:
 	for i in range(values.size() - 1, 0, -1):

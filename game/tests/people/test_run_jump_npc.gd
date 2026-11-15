@@ -42,7 +42,7 @@ func run() -> void:
 	game.seated = true
 	check(not game.jump() and not game.running(), "seated player cannot jump or sprint")
 	game.seated = false
-	game.beers = 30
+	game.beers = game.COLLAPSE_BEERS
 	check(not game.jump(), "collapsed player cannot jump")
 	game.beers = 0
 	game.enable_mobile()
