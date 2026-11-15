@@ -161,7 +161,7 @@ func drink_source() -> int:
 func nearby_drink_source() -> bool:
 	return drink_source() != -2
 
-# A guest's "beer" command: the can leaves the crate of a table in its reach.
+# A guest's "take_beer" command: the can leaves the crate of a table in its reach.
 func take_beer(source: int, pos: Vector3) -> bool:
 	var table: Node3D = crates.table(source)
 	return table != null and pos.distance_to(table.position) < 7.0 and crates.take(source)
@@ -309,7 +309,7 @@ func drink_beer() -> bool:
 	# The can leaves the crate as the fan picks it up; the host keeps the count.
 	crates.take(source)
 	if not game.room.is_authority():
-		game.room.submit("beer", {"source": source})
+		game.room.submit("take_beer", {"source": source})
 	game.drink_time = 0.0
 	game.drink_committed = false
 	game.can_opened = false

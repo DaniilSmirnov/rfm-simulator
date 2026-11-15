@@ -87,13 +87,13 @@ func run() -> void:
 	guest.room.commands.clear()
 	check(guest.drink_beer(), "player can drink beer at an NPC table")
 	check(guest.camp_actions.crates.count(npc_group) == 23 and crate_cans.multimesh.visible_instance_count == 23, "the can leaves the guest's crate as the drink starts")
-	check(guest.room.commands.size() == 1 and guest.room.commands[0].action == "beer" and int(guest.room.commands[0].placement.source) == npc_group, "the guest asks the host for the can")
+	check(guest.room.commands.size() == 1 and guest.room.commands[0].action == "take_beer" and int(guest.room.commands[0].placement.source) == npc_group, "the guest asks the host for the can")
 	var beer_state = guest.room.local_state()
-	host.room._apply_command({"id": "guest:beer", "action": "beer", "placement": guest.room.commands[0].placement, "state": beer_state})
+	host.room._apply_command({"id": "guest:beer", "action": "take_beer", "placement": guest.room.commands[0].placement, "state": beer_state})
 	check(host.camp_actions.crates.count(npc_group) == 23, "the host takes the guest's can from the same crate")
 	var far_state = beer_state.duplicate()
 	far_state.pos = host.room.a(host.spectators.groups[npc_group].table.position + Vector3(40, 0, 0))
-	host.room._apply_command({"id": "guest:far", "action": "beer", "placement": {"source": npc_group}, "state": far_state})
+	host.room._apply_command({"id": "guest:far", "action": "take_beer", "placement": {"source": npc_group}, "state": far_state})
 	check(host.camp_actions.crates.count(npc_group) == 23, "a can cannot be taken from a table out of reach")
 	host.camp_actions.crates.left[npc_group] = 0
 	host.camp_actions.crates.left[-1] = 0

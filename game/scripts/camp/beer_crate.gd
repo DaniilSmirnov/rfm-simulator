@@ -4,7 +4,7 @@ extends RefCounted
 # moment a fan starts drinking it; an empty crate gives no more beer. The host
 # keeps the count of every crate (`left`, source -> cans; -1 is the player's
 # camp, 0.. the spectators' groups) and sends it with the camp snapshot; a
-# guest takes a can through the "beer" command and shows it gone at once.
+# guest takes a can through the "take_beer" command and shows it gone at once.
 #   BeerCrate.build(table, spot, yaw)  # the model, from TableModel.build
 #   crates.take(source)                # authority: one can out, false if empty
 const P = preload("res://scripts/core/props.gd")
