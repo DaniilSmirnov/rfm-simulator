@@ -1,11 +1,14 @@
 extends RefCounted
 # Explicit opt-in. Interiors and tabletop detail never register independently.
 const Merge = preload("res://scripts/core/mesh_merge.gd")
+const CarLamps = preload("res://scripts/cars/car_lamps.gd")
 
 static func bounds(node: Node3D) -> AABB:
 	var result = AABB()
 	for child in node.get_children():
-		if not child is Node3D or child.has_meta("prop_key"):
+		# Headlamp beams are light, not body: a 9 m cone would stretch the box
+		# (and move the centre of mass) far ahead of a parked car.
+		if not child is Node3D or child.has_meta("prop_key") or child.name == CarLamps.BEAMS:
 			continue
 		var box = AABB()
 		if child is MeshInstance3D and child.mesh != null:
