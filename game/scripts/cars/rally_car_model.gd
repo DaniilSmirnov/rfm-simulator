@@ -6,6 +6,7 @@ extends RefCounted
 const P = preload("res://scripts/core/props.gd")
 const CarBody = preload("res://scripts/cars/car_body.gd")
 const CarRegistry = preload("res://scripts/cars/car_registry.gd")
+const CarOccupants = preload("res://scripts/cars/car_occupants.gd")
 const PATH = "res://data/rally_cars.json"
 const PANEL = Color("f4efdc")
 static var spec: Dictionary = _load()
@@ -47,6 +48,7 @@ static func build(variant: int, number_override: int = -1, sponsor_override: Str
 	root.set_meta("zero_to_100", float(p.zero_to_100))
 	root.set_meta("engine", str(p.engine))
 	var f = CarBody.build(root, p)
+	CarOccupants.seat(root, p, f, "pilot", "navigator")
 	for side in [-1.0, 1.0]:
 		_doors(root, p, f, side)
 	_bonnet_and_roof(root, p, f)
@@ -63,6 +65,8 @@ static func ambulance() -> Node3D:
 	root.set_meta("zero_to_100", float(p.get("zero_to_100", 9.0)))
 	root.set_meta("engine", str(p.get("engine", "diesel")))
 	var f = CarBody.build(root, p)
+	# Doctor at the wheel; the one beside them gets out to treat casualties.
+	CarOccupants.seat(root, p, f, "medic", "medic", true, "ambulance")
 	var white = Color(p.color)
 	var red = Color("cf2a2a")
 	# The rear compartment is closed: panel over the glass behind the cab.
@@ -100,6 +104,7 @@ static func police() -> Node3D:
 	root.set_meta("zero_to_100", float(p.get("zero_to_100", 6.0)))
 	root.set_meta("engine", str(p.get("engine", "sedan")))
 	var f = CarBody.build(root, p)
+	CarOccupants.seat(root, p, f, "police")
 	var stripe_y: float = (f.base + f.bonnet) * 0.5
 	for side in [-1.0, 1.0]:
 		var x: float = side * (f.half + 0.012)

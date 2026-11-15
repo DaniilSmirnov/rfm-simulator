@@ -76,6 +76,11 @@ static func cabin(p: Dictionary, f: Dictionary) -> Dictionary:
 	c.rear_glass_at = func(z: float) -> float: return rear_glass(f, z)
 	return c
 
+# Hub of the steering wheel in car space (the driver's hands go to its rim).
+static func wheel_centre(p: Dictionary, c: Dictionary) -> Vector3:
+	var driver: float = -c.seat_x if p.get("lhd", true) else c.seat_x
+	return Vector3(driver, c.dash_top + 0.02, minf(c.dash_back + 0.16, c.front_seat - 0.42))
+
 # Height of the rear glass line at z (the roof's back edge down to the deck).
 static func rear_glass(f: Dictionary, z: float) -> float:
 	var shape: Array = f.shape
@@ -99,7 +104,7 @@ static func _dash(root: Node3D, p: Dictionary, f: Dictionary, c: Dictionary, tri
 	for dx in [-0.08, 0.08]:
 		CarLamps.mark(P.box(root, Vector3(driver + dx, c.dash_top - 0.005, c.dash_back + 0.002), Vector3(0.13, 0.08, 0.008), GAUGES), "dash")
 	# Steering wheel on its column, tilted towards the driver.
-	var centre = Vector3(driver, c.dash_top + 0.02, minf(c.dash_back + 0.16, c.front_seat - 0.42))
+	var centre = wheel_centre(p, c)
 	P.car_beam(root, Vector3(driver, c.dash_top - height * 0.3, c.dash_back - 0.02), centre, 0.04, Color("1c1f22"))
 	var wheel = Node3D.new()
 	wheel.name = "SteeringWheel"

@@ -4,6 +4,7 @@ extends RefCounted
 const Navigation = preload("res://scripts/people/crowd_navigation.gd")
 const Model = preload("res://scripts/people/medic_model.gd")
 const Budget = preload("res://scripts/people/navigation_budget.gd")
+const CarOccupants = preload("res://scripts/cars/car_occupants.gd")
 const WALK_RADIUS = 20.0
 # Road distance (m) within which a stopped van is level with a casualty.
 const STATION_TOLERANCE = 6.0
@@ -36,6 +37,7 @@ func _create(id: int, pos: Vector3) -> Dictionary:
 	var avatar = Model.create(injuries.game.stage.outfit)
 	injuries.game.add_child(avatar)
 	avatar.position = pos
+	_aboard(id, false) # the doctor in the passenger seat is the one who got out
 	var medic = {"id": id, "avatar": avatar, "helper": -1, "navigation_budget": budget, "key": "", "state": "exiting", "time": 0.0, "clock": 0.0, "moving": false}
 	active[id] = medic
 	return medic
@@ -199,6 +201,12 @@ func _remove(id: int) -> void:
 	if active.has(id):
 		active[id].avatar.queue_free()
 		active.erase(id)
+		_aboard(id, true)
+
+func _aboard(id: int, aboard: bool) -> void:
+	var van = injuries._ambulance(id) if injuries != null else {}
+	if van.get("node") is Node3D and is_instance_valid(van.node):
+		CarOccupants.passenger_aboard(van.node, aboard)
 
 func snapshot() -> Array:
 	var result: Array = []
