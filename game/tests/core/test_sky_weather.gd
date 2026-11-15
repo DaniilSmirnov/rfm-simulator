@@ -31,6 +31,7 @@ func run() -> void:
 	tiles.rain.pressed.emit()
 	check(ui.images[1].texture.resource_path == SkyWeather.preview_path(game.selected_stage, "day", "rain"), "the preview shows the stage in the rain")
 	check(sky.weather == "rain" and game.get_node_or_null("Weather") != null, "rain picked on the card falls")
+	check_shelter(game)
 	var forest_point = game.stage.at(100)
 	check(is_equal_approx(game.stage.grip(forest_point), game.stage.biome.grip(forest_point) * SkyWeather.GRIP.rain) and SkyWeather.GRIP.rain < 1.0, "rain makes the road slippery")
 	game.playing = true
@@ -185,3 +186,48 @@ func check_night_lights(game) -> void:
 	lights.update(self, false, at, 0.5)
 	await process_frame
 	check(fire.get_node_or_null(NightLights.LIGHT_NAME) == null and police.get_node("BeaconBlue").get_node_or_null(NightLights.LIGHT_NAME) == null, "the lights go out by day")
+
+# Rain stays out of cabins, houses and from under the crowns (rain_shelter.gd).
+func check_shelter(game) -> void:
+	var sky = game.sky_weather
+	var shelter = sky.shelter
+	var fall: GPUParticles3D = game.get_node("Weather")
+	check(fall.draw_pass_1.material == sky.drop_material and sky.drop_material.shader.resource_path.ends_with("weather_drop.gdshader"), "the drops are drawn by the sheltering material")
+	var stage = game.stage
+	if stage.trees.is_empty():
+		stage.build()
+	var tree_index = -1
+	for i in range(stage.trees.size()):
+		if not stage.fallen.has(i):
+			tree_index = i
+			break
+	check(tree_index >= 0, "the forest pass has trees")
+	var base: Vector3 = stage.trees[tree_index]
+	shelter.redraw(stage, Vector2(base.x, base.z))
+	check(shelter.roof_at(base + Vector3(0.3, 0, 0.3)) > base.y + 2.0, "no rain under a tree's crown (%.1f over %.1f)" % [shelter.roof_at(base + Vector3(0.3, 0, 0.3)), base.y])
+	var open = Vector3(base.x, base.y, base.z)
+	var clear = false
+	for step in range(1, 40):
+		open = base + Vector3(step * 0.5, 0, 0)
+		if shelter.roof_at(open) == shelter.OPEN:
+			clear = true
+			break
+	check(clear, "rain falls in the open next to it")
+	var near: Array = shelter.nearest_cars(sky.shelter_cars(), game.car.global_position)
+	check(near.has(game.car), "the player's own car keeps the rain out of its cabin")
+	var boxes: Array = sky.drop_material.get_shader_parameter("car_box")
+	shelter.update(sky.drop_material, stage, game.car.global_position, game.car.global_position, [game.car], 0.0)
+	boxes = sky.drop_material.get_shader_parameter("car_box")
+	check(boxes.size() == shelter.CARS and boxes[0].w == 1.0 and boxes[1].w == 0.0, "the car's box reaches the shader")
+	var provence = StageRegistry.index_of("provence")
+	if provence >= 0:
+		game.select_stage(provence)
+		game.stage.build()
+		var solids = game.stage.solids
+		check(not solids.interior_footprints.is_empty(), "the village has rooms to shelter in")
+		if not solids.interior_footprints.is_empty():
+			var area: Dictionary = solids.interior_footprints[0]
+			var inside: Vector3 = game.stage.global_transform * area.inverse.affine_inverse().origin
+			shelter.redraw(game.stage, Vector2(inside.x, inside.z))
+			check(shelter.roof_at(inside) > inside.y + 2.0, "no rain inside a village room (%.1f over %.1f)" % [shelter.roof_at(inside), inside.y])
+		game.select_stage(StageRegistry.index_of("forest"))
