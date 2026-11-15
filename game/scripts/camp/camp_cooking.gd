@@ -11,7 +11,7 @@ var cook_time = 0.0
 var servings = 0
 
 func can_act() -> bool:
-	return game.playing and not game.actor_in_car() and not game.paused and not game.dead and not game.finished and game.actor_beers() < 30
+	return game.playing and not game.actor_in_car() and not game.paused and not game.dead and not game.finished and game.actor_beers() < game.COLLAPSE_BEERS
 
 func deploy_fire(spot: Vector3, yaw: float) -> bool:
 	if pot != null and spot.distance_to(pot.position) < 1.5:

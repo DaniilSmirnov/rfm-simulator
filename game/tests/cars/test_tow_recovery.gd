@@ -171,7 +171,7 @@ func run() -> void:
 	game.Recovery.update(game, {"driver": invalid}, 1)
 	check(racer.node.position == start, "driver cannot pull or push from their car")
 	invalid.in_car = false
-	invalid.beers = 30
+	invalid.beers = game.COLLAPSE_BEERS
 	game.Recovery.update(game, {"collapsed": invalid}, 1)
 	check(racer.node.position == start, "collapsed spectator cannot contribute")
 	invalid.beers = 0

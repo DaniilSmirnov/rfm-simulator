@@ -130,6 +130,7 @@ var drunk_strength = 0.0
 const DRUNK_FADE_SECONDS = 60.0
 var collapse_time = 0.0
 const SOBER_SECONDS = 180.0
+const COLLAPSE_BEERS = 24 # the whole crate: the fan falls and lies for SOBER_SECONDS
 var sober_remaining = 0.0
 var sobriety_panel: PanelContainer
 var sobriety_label: Label
@@ -716,9 +717,6 @@ func _update_camera(delta: float) -> void:
 
 func _toggle_car() -> void:
 	player.toggle_car()
-
-func nearby_drink_source() -> bool:
-	return camp_actions.nearby_drink_source()
 
 func can_eat_meat() -> bool:
 	return camp_actions.can_eat_meat()

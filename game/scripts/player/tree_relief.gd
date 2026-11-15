@@ -33,7 +33,7 @@ func duration() -> float:
 	return clampf(6.0 + 2.0 * game.beers, 8.0, 20.0)
 
 func can_start() -> bool:
-	return not active and game.beers >= 1 and game.beers < 30 and not game.in_car and not game.seated and not game.injuries.down \
+	return not active and game.beers >= 1 and game.beers < game.COLLAPSE_BEERS and not game.in_car and not game.seated and not game.injuries.down \
 		and game.drink_time < 0 and game.eat_time < 0 and game.placement_kind == "" and not game.cargo.held.has(game.chair_owner())
 
 # Standing trees within reach, offered as a gaze target on the trunk.
@@ -71,7 +71,7 @@ func stop() -> void:
 func update(delta: float) -> bool:
 	if not active:
 		return false
-	if game.in_car or game.seated or game.injuries.down or game.beers >= 30 or game.drink_time >= 0 or game.eat_time >= 0 or game.placement_kind != "":
+	if game.in_car or game.seated or game.injuries.down or game.beers >= game.COLLAPSE_BEERS or game.drink_time >= 0 or game.eat_time >= 0 or game.placement_kind != "":
 		stop()
 		return false
 	time_left -= delta

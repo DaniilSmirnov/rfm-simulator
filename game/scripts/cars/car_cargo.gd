@@ -43,7 +43,7 @@ func actor() -> String:
 	return str(context.get("owner", game.chair_owner()))
 
 func available() -> bool:
-	return game.playing and not game.actor_in_car() and not game.paused and not game.dead and not game.finished and game.actor_beers() < 30 and (not context.is_empty() or (game.drink_time < 0 and game.eat_time < 0))
+	return game.playing and not game.actor_in_car() and not game.paused and not game.dead and not game.finished and game.actor_beers() < game.COLLAPSE_BEERS and (not context.is_empty() or (game.drink_time < 0 and game.eat_time < 0))
 
 func poses() -> Dictionary:
 	var result = {}
@@ -124,13 +124,13 @@ func refresh_opened() -> void:
 	var cars = poses()
 	var visitors: Array = []
 	if game.playing and not game.dead and not game.finished:
-		if not game.actor_in_car() and game.actor_beers() < 30:
+		if not game.actor_in_car() and game.actor_beers() < game.COLLAPSE_BEERS:
 			visitors.append(game.actor_pos())
 		for id in game.room.peers:
 			if not context.is_empty() and id == actor():
 				continue
 			var peer = game.room.peers[id]
-			if peer.state != null and peer.state.has("pos") and not peer.state.in_car and int(peer.state.get("beers", 0)) < 30:
+			if peer.state != null and peer.state.has("pos") and not peer.state.in_car and int(peer.state.get("beers", 0)) < game.COLLAPSE_BEERS:
 				visitors.append(game.room.v(peer.state.pos))
 	for owner in opened.keys():
 		if not cars.has(owner):

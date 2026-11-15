@@ -20,13 +20,13 @@ func stock(owner: String = "") -> Dictionary:
 	return inventories[key]
 
 func available() -> bool:
-	return game.playing and not game.paused and not game.dead and not game.finished and not game.actor_in_car() and game.actor_beers() < 30 and game.eat_time < 0 and game.drink_time < 0
+	return game.playing and not game.paused and not game.dead and not game.finished and not game.actor_in_car() and game.actor_beers() < game.COLLAPSE_BEERS and game.eat_time < 0 and game.drink_time < 0
 
 func nearest() -> int:
 	return game.stage.nearest_collectible(game.actor_pos()) if available() else -1
 
 func collect(id: int = -1, owner: String = "") -> bool:
-	if not game.playing or game.actor_in_car() or game.actor_beers() >= 30 or game.paused or game.dead or game.finished:
+	if not game.playing or game.actor_in_car() or game.actor_beers() >= game.COLLAPSE_BEERS or game.paused or game.dead or game.finished:
 		return false
 	if id < 0:
 		id = game.stage.nearest_collectible(game.actor_pos())
@@ -85,7 +85,7 @@ func can_mount() -> bool:
 	return available() and int(stock().mushrooms) > 0 and free_skewers(nearby_source()) > 0
 
 func mount(source: int = -2, owner: String = "") -> bool:
-	if not game.playing or game.actor_in_car() or game.actor_beers() >= 30 or game.paused or game.dead or game.finished:
+	if not game.playing or game.actor_in_car() or game.actor_beers() >= game.COLLAPSE_BEERS or game.paused or game.dead or game.finished:
 		return false
 	if source == -2:
 		source = nearby_source()
@@ -124,7 +124,7 @@ func ready_species(source: int) -> String:
 	return str(skewers[str(source)][index].get("species", "edible")) if index >= 0 else "edible"
 
 func consume(kind: String, owner: String = "", source: int = -2) -> bool:
-	if not game.playing or game.actor_in_car() or game.actor_beers() >= 30 or game.paused or game.dead or game.finished:
+	if not game.playing or game.actor_in_car() or game.actor_beers() >= game.COLLAPSE_BEERS or game.paused or game.dead or game.finished:
 		return false
 	if kind == "berries":
 		if int(stock(owner).berries) <= 0:

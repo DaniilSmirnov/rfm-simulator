@@ -77,12 +77,31 @@ func run() -> void:
 	guest.camp_grill.reset()
 	var npc_group = 0
 	guest.walker = guest.spectators.groups[npc_group].table.position
-	check(guest.nearby_drink_source() and guest.can_eat_meat(), "player can access an NPC table, beer and cooked skewers")
+	check(guest.camp_actions.nearby_drink_source() and guest.can_eat_meat(), "player can access an NPC table, beer and cooked skewers")
 	var npc_before = int(guest.spectators.groups[npc_group].servings)
 	check(guest.eat_meat() and guest.commit_meat(), "player eats a serving from an NPC grill")
 	check(int(guest.spectators.groups[npc_group].servings) == npc_before - 1, "NPC grill stock decreases for a visiting player")
 	guest._cancel_eat()
+	var crate_cans = guest.spectators.groups[npc_group].table.get_node("BeerCrate/Cans")
+	check(guest.camp_actions.crates.count(npc_group) == 24 and crate_cans.multimesh.visible_instance_count == 24, "an NPC table carries a full crate of 24 cans")
+	guest.room.commands.clear()
 	check(guest.drink_beer(), "player can drink beer at an NPC table")
+	check(guest.camp_actions.crates.count(npc_group) == 23 and crate_cans.multimesh.visible_instance_count == 23, "the can leaves the guest's crate as the drink starts")
+	check(guest.room.commands.size() == 1 and guest.room.commands[0].action == "take_beer" and int(guest.room.commands[0].placement.source) == npc_group, "the guest asks the host for the can")
+	var beer_state = guest.room.local_state()
+	host.room._apply_command({"id": "guest:beer", "action": "take_beer", "placement": guest.room.commands[0].placement, "state": beer_state})
+	check(host.camp_actions.crates.count(npc_group) == 23, "the host takes the guest's can from the same crate")
+	var far_state = beer_state.duplicate()
+	far_state.pos = host.room.a(host.spectators.groups[npc_group].table.position + Vector3(40, 0, 0))
+	host.room._apply_command({"id": "guest:far", "action": "take_beer", "placement": {"source": npc_group}, "state": far_state})
+	check(host.camp_actions.crates.count(npc_group) == 23, "a can cannot be taken from a table out of reach")
+	host.camp_actions.crates.left[npc_group] = 0
+	host.camp_actions.crates.left[-1] = 0
+	guest.room.apply_world(host.room.world_state())
+	check(guest.camp_actions.crates.count(npc_group) == 0 and crate_cans.multimesh.visible_instance_count == 0, "an emptied crate reaches the guest")
+	guest._cancel_drink()
+	guest.beer_timer = 0
+	check(not guest.drink_beer(), "empty crates give no beer")
 	guest._cancel_drink()
 	check(guest.meat_prop == null and guest.eat_time < 0, "hand clears when animation ends")
 	host.room._update_peers([{"id": "guest", "name": "Друг", "slot": 7, "state": guest.room.local_state()}])

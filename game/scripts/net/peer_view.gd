@@ -88,7 +88,7 @@ static func animate(game: Node, peer: Dictionary, delta: float, clock: float, fr
 		peer.held_kind = kind
 	peer.held_box.visible = kind != "" and not state.in_car
 	var sitting = bool(state.get("seated", false)) and not state.in_car
-	var collapsed = int(state.get("beers", 0)) >= 30
+	var collapsed = int(state.get("beers", 0)) >= game.COLLAPSE_BEERS
 	peer.avatar.rotation.z = lerp_angle(peer.avatar.rotation.z, PI / 2 if collapsed else 0.0, 1.0 - exp(-delta * 8))
 	if collapsed:
 		peer.avatar.position.y = avatar_pose.position.y + 0.25

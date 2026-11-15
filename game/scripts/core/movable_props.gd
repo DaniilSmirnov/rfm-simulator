@@ -198,7 +198,7 @@ func _share_hearth(nodes: Array) -> void:
 				a.add_collision_exception_with(b)
 
 func _eligible(id: String, p: Dictionary) -> bool:
-	return p.get("tow", false) and not p.get("in_car", true) and not p.get("seated", false) and not p.get("airborne", false) and int(p.get("beers", 0)) < 30 and not game.injuries.is_down("player:" + id) and not game.cargo.held.has(id)
+	return p.get("tow", false) and not p.get("in_car", true) and not p.get("seated", false) and not p.get("airborne", false) and int(p.get("beers", 0)) < game.COLLAPSE_BEERS and not game.injuries.is_down("player:" + id) and not game.cargo.held.has(id)
 
 func _distance(r: Dictionary, pos: Vector3) -> float:
 	var box: AABB = r.box
