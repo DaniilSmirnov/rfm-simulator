@@ -12,11 +12,14 @@ const MeshMerge = preload("res://scripts/core/mesh_merge.gd")
 const SIZE = 24
 const COLUMNS = 6
 const PITCH = 0.068
-const CAN_RADIUS = 0.033
-const CAN_HEIGHT = 0.122
+# The same can the fan drinks (Props.beer_hand) at half its size: gold body,
+# silver lids, the dark green label band.
+const CAN_SCALE = 0.5
+const CAN_RADIUS = 0.065 * CAN_SCALE
+const CAN_HEIGHT = 0.23 * CAN_SCALE
 const CARDBOARD = Color("b58a55")
 const PRINT = Color("2f6b3f")
-static var _can_mesh: CylinderMesh
+static var _can_mesh: Mesh
 
 var game
 var left: Dictionary = {}
@@ -37,13 +40,7 @@ static func build(table: Node3D, spot: Vector3, yaw: float) -> Node3D:
 		P.box(crate, Vector3(0, 0.038, side * (inner.y * 0.5 + 0.0065)), Vector3(inner.x * 0.6, 0.03, 0.001), PRINT)
 	MeshMerge.bake(crate, "beer_crate", ["Cans"])
 	if _can_mesh == null:
-		_can_mesh = CylinderMesh.new()
-		_can_mesh.top_radius = CAN_RADIUS
-		_can_mesh.bottom_radius = CAN_RADIUS
-		_can_mesh.height = CAN_HEIGHT
-		_can_mesh.radial_segments = 10
-		_can_mesh.rings = 1
-		_can_mesh.material = P.material(Color("3a7a46"))
+		_can_mesh = can_mesh()
 	var cans = MultiMeshInstance3D.new()
 	cans.name = "Cans"
 	var multimesh = MultiMesh.new()
@@ -58,6 +55,18 @@ static func build(table: Node3D, spot: Vector3, yaw: float) -> Node3D:
 	cans.multimesh = multimesh
 	crate.add_child(cans)
 	return crate
+
+static func can_mesh() -> Mesh:
+	var root = Node3D.new()
+	var k = CAN_SCALE
+	P.cylinder(root, Vector3.ZERO, 0.065 * k, 0.065 * k, 0.23 * k, Color("dbb54e"), 10)
+	for y in [0.12 * k, -0.12 * k]:
+		P.cylinder(root, Vector3(0, y, 0), 0.062 * k, 0.062 * k, 0.008 * k, Color("c4cac5"), 10)
+	P.box(root, Vector3(0, 0, 0.064 * k), Vector3(0.095 * k, 0.12 * k, 0.006 * k), Color("35482c"))
+	P.box(root, Vector3(0, 0.128 * k, 0.015 * k), Vector3(0.025 * k, 0.006 * k, 0.045 * k), Color("888f89"))
+	var mesh: Mesh = MeshMerge.bake(root, "crate_can").mesh
+	root.free()
+	return mesh
 
 static func show_cans(table: Node3D, count: int) -> void:
 	if table == null or not is_instance_valid(table):
