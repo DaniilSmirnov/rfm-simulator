@@ -8,11 +8,12 @@ static func build(parent: Node3D, recipe: String = "plov") -> Node3D:
 	root.set_meta("recipe", recipe)
 	parent.add_child(root)
 	var colliders: Array[MeshInstance3D] = []
-	# Three-legged stand and hollow tapered bowl; the inside stays visible when empty.
+	# Three-legged stand meeting the bowl from outside (no tips poking through the
+	# wall into the food) and a hollow tapered bowl; the inside stays visible when empty.
 	for i in range(3):
 		var angle = i * TAU / 3
 		var a = Vector3(cos(angle) * 0.68, 0.05, sin(angle) * 0.68)
-		var b = Vector3(cos(angle) * 0.50, 1.24, sin(angle) * 0.50)
+		var b = Vector3(cos(angle) * 0.525, 1.08, sin(angle) * 0.525)
 		var leg = Props.cylinder(root, (a + b) / 2, 0.025, 0.025, a.distance_to(b), Color("444c50"), 6)
 		leg.quaternion = Quaternion(Vector3.UP, (b - a).normalized())
 		colliders.append(leg)
