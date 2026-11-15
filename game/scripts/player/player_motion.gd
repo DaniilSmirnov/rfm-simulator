@@ -18,10 +18,12 @@ var game:
 		relief.game = value
 		perches.game = value
 		sauna.game = value
+		repair.game = value
 var flight_solver = preload("res://scripts/net/drive_prediction.gd").new()
 var relief = preload("res://scripts/player/tree_relief.gd").new()
 var perches = preload("res://scripts/player/perches.gd").new()
 var sauna = preload("res://scripts/player/sauna_steam.gd").new()
+var repair = preload("res://scripts/cars/car_repair.gd").new()
 var drunk = preload("res://scripts/player/drunk_camera.gd").new()
 
 func drive(delta: float) -> void:
@@ -111,12 +113,10 @@ func drive(delta: float) -> void:
 		game.condition = maxf(0, game.condition - delta * 6.0 * game.vehicle_motion.flood)
 		if game.vehicle_motion.flood > 0.3 and game.toast_time <= 0:
 			game.toast("Машина набирает воду! Выезжай на берег или выходи (F).")
-	# Alone nobody can tow the car or give a lift; in a room car_rides.gd decides.
-	if game.condition <= 0 and not game.room.connected:
-		if flooded:
-			game.die("Легковушка утонула в финском озере.\nДальше только пешком.")
-			return
-		game.die("Легковушка сдалась раньше тебя.\nРазбитый СУ победил подвеску.")
+	# A drowned car is lost; a broken one waits for a repair under the bonnet
+	# (car_repair.gd), a lift or a tow (car_rides.gd).
+	if game.condition <= 0 and flooded and not game.room.connected:
+		game.die("Легковушка утонула в финском озере.\nДальше только пешком.")
 
 func drive_helicopter(delta: float) -> void:
 	game.vehicle_motion.drive_clock += clampf(delta, 0, 1.0)
@@ -188,7 +188,7 @@ func walk(delta: float) -> void:
 	if Dedicated.active(): return
 	game.rides.update()
 	perches.carry()
-	if relief.update(delta):
+	if relief.update(delta) or repair.update(delta):
 		return
 	perches.gather(game.walker)
 	var remaining = maxf(delta, 0.0)

@@ -4,10 +4,9 @@ extends RefCounted
 # A passenger is `in_car` with `ride` set to the id of the car's owner: they
 # move with that car and count as arrived when it reaches a service park.
 # A car holds SEATS people, the driver included. A broken car (condition 0)
-# no longer drives, but the outing goes on while somebody still has a working
-# car: the owner rides with a friend or a friend tows the car behind theirs
-# (`hitch`, T at the wheel). Only when every car in the room is broken is the
-# outing over.
+# no longer drives, but the outing goes on: anyone can mend it under the
+# bonnet (car_repair.gd), the owner can ride with a friend, or a friend can
+# tow the car behind theirs (`hitch`, T at the wheel).
 #
 # Both choices travel in the player's state ("ride", "hitch", "broken"); the
 # host moves towed cars in Recovery.update, as it does for ropes held by hand.
@@ -73,14 +72,6 @@ func broken(owner: String) -> bool:
 		return game.room.host_drives[owner].condition <= 0
 	var state = state_of(owner)
 	return state != null and bool(state.get("broken", false))
-
-func any_working() -> bool:
-	if not broken(me()):
-		return true
-	for id in game.room.peers:
-		if not broken(str(id)):
-			return true
-	return false
 
 # Passengers of a car, sorted so every client agrees who sits where.
 func riders(owner: String) -> Array:
@@ -208,16 +199,14 @@ func update() -> void:
 	if not game.in_car:
 		ride = ""
 	var wrecked = game.condition <= 0
-	if wrecked and not wreck_noticed and game.room.connected:
-		game.toast("Машина сломана и не поедет. Садись к другу или пусть он возьмёт её на трос.")
+	if wrecked and not wreck_noticed:
+		game.toast("Машина сломана. Выйди, открой капот и почини её ключом." if not game.room.connected else "Машина сломана. Почини её под капотом, садись к другу или пусть он возьмёт её на трос.")
 	wreck_noticed = wrecked
 	if game.in_car and not riding() and Input.is_action_just_pressed("tow"):
 		toggle_hitch()
 	if hitch != "" and not (game.in_car and not riding() and towable(hitch) and car_node(hitch) != null and car_node(hitch).position.distance_to(game.car.position) < TOW_BREAK):
 		hitch = ""
 		game.toast("Трос отцеплен.")
-	if game.room.connected and game.room.is_authority() and not game.dead and not game.finished and not any_working():
-		game.die("Все машины разбиты: уехать с СУ не на чем.\nСовместный выезд окончен.")
 
 # ---------------------------------------------------------------- towing by car
 

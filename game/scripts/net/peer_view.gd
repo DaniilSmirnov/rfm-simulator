@@ -105,6 +105,9 @@ static func animate(game: Node, peer: Dictionary, delta: float, clock: float, fr
 	if game.player.sauna.whisk.draw_peer(peer, state) and not collapsed:
 		pose.arms = "throw"
 		pose.lift = 0.5 + 0.5 * sin(clock * 12.0)
+	if game.player.repair.draw_peer(peer, state) and not collapsed:
+		pose.arms = "pick"
+		pose.lift = 0.65 + 0.35 * sin(clock * TAU / game.player.repair.STRIKE)
 	if sitting:
 		pose.seat = Props.CHAIR_SEAT
 		pose.ground = avatar_pose.position.y

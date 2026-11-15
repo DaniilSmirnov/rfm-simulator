@@ -649,6 +649,7 @@ func _process(delta: float) -> void:
 	camp_actions.update_placement()
 	Props.animate_wheels(car)
 	cargo.update(delta)
+	player.repair.update_hoods(delta)
 	movable_props.refresh()
 	camp_cooking.update(delta, room.is_guest())
 	injuries.update(delta)

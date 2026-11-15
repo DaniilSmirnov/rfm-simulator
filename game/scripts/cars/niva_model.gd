@@ -240,6 +240,7 @@ static func build() -> Node3D:
 	# Inventory, approach and opening animation come from the shared trunk.
 	# Static parts sit under NivaStaticParts, so nothing is clipped off them.
 	P.add_player_trunk(root, VARIANT)
+	root.set_meta("bodywork", "NivaStaticParts") # car_hood.gd cuts the bonnet from here
 	var hinge: Node3D = root.get_node("TrunkHinge")
 	hinge.position = HINGE
 	_tailgate(hinge, paint)

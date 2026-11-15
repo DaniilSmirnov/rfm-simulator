@@ -1,8 +1,8 @@
 extends "res://tests/harness.gd"
 # Riding in a friend's car and towing a broken car with your own
 # (car_rides.gd): five seats with the driver, passengers arrive with the car,
-# a broken car stays in the game, and the outing ends only when every car is
-# broken.
+# a broken car stays in the game, even when every car is broken (they can be
+# mended under the bonnet, see test_car_repair.gd).
 const NetProtocol = preload("res://scripts/net/net_protocol.gd")
 const PeerView = preload("res://scripts/net/peer_view.gd")
 
@@ -156,21 +156,17 @@ func run() -> void:
 	game.room.peers.friend.state.in_car = true
 	check(rides.hitch_candidate() == "", "a working car with its driver inside is not towed")
 
-	# Only when every car is broken is the outing over.
+	# Every car broken, or a broken car alone: the outing goes on, to a repair.
 	game.condition = 0.0
 	game._drive(0.1)
 	check(not game.dead, "one broken car leaves the outing going")
 	game.room.peers.friend.state.broken = true
 	game._drive(0.1)
-	check(game.dead and game.menu_text.text.contains("Все машины разбиты"), "the outing ends when every car is broken")
-
-	# Alone nobody can help: a broken car still ends the outing.
-	game.dead = false
-	game.menu.hide()
+	check(not game.dead, "every car broken still leaves the outing going: they can be repaired")
 	game.room.peers.clear()
 	game.room.connected = false
 	game._drive(0.1)
-	check(game.dead, "a solo player's broken car ends the outing")
+	check(not game.dead, "a solo player's broken car waits for a repair")
 
 	await game._shutdown_audio()
 	game.queue_free()
