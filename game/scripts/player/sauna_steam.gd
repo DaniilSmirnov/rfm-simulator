@@ -88,6 +88,7 @@ func start(side: float = -1.0) -> void:
 	game.seat_exit = game.walker
 	game.walker = sauna.seat(index)
 	game.view_yaw = sauna.seat_yaw(index)
+	game.player.seat_yaw = game.view_yaw
 	game.view_pitch = -0.08
 	game.seated = true
 	steaming = true

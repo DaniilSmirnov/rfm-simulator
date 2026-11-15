@@ -6,6 +6,8 @@ const P = preload("res://scripts/core/props.gd")
 const CarParts = preload("res://scripts/cars/car_parts.gd")
 const CarBody = preload("res://scripts/cars/car_body.gd")
 const CarLamps = preload("res://scripts/cars/car_lamps.gd")
+const CarInterior = preload("res://scripts/cars/car_interior.gd")
+const Glass = preload("res://scripts/core/glass.gd")
 const PAINT = Color("111a2b") # near-black with a restrained blue tint
 const PAINT_LIT = Color("1c2a40")
 const PAINT_SHADE = Color("0a101c")
@@ -41,12 +43,14 @@ static func build() -> Node3D:
 	], PAINT, [Vector3(WHEEL_Z[0], 0.37, 0.44), Vector3(WHEEL_Z[1], 0.37, 0.44)])
 	shell.name = "BodyShellGranta"
 	shell.material_override.roughness = 0.45
-	P.car_shell(root, [
+	Glass.glaze(P.car_shell(root, [
 		Vector4(-0.88, 0.74, 0.94, 1.01),
 		Vector4(-0.48, 0.68, 0.96, 1.44),
 		Vector4(0.63, 0.66, 0.96, 1.43),
 		Vector4(1.09, 0.72, 0.97, 1.01),
-	], GLASS).name = "CabinGlazing"
+	], GLASS)).name = "CabinGlazing"
+	# Cabin frame from the glasshouse above: windscreen base, roof edges, rear glass base.
+	CarInterior.build(root, {"pillar": 0.04, "seat": "343a42", "seat_insert": "4c535c"}, {"shape": [-0.88, -0.48, 0.63, 1.09], "bonnet": 0.95, "deck": 0.97, "floor": 0.88, "height": 1.44, "glass_half": 0.68})
 	P.car_shell(root, [
 		Vector4(-0.48, 0.685, 1.40, 1.49),
 		Vector4(-0.30, 0.69, 1.44, 1.50),
@@ -54,14 +58,14 @@ static func build() -> Node3D:
 		Vector4(0.63, 0.655, 1.39, 1.45),
 	], PAINT).name = "RoofGranta"
 	# Windscreen, rear screen and side window outlines.
-	P.quad_panel(root, PackedVector3Array([
+	Glass.glaze(P.quad_panel(root, PackedVector3Array([
 		Vector3(-0.73, 1.01, -0.88), Vector3(0.73, 1.01, -0.88),
 		Vector3(0.65, 1.43, -0.49), Vector3(-0.65, 1.43, -0.49),
-	]), GLASS).name = "Windscreen"
-	P.quad_panel(root, PackedVector3Array([
+	]), GLASS)).name = "Windscreen"
+	Glass.glaze(P.quad_panel(root, PackedVector3Array([
 		Vector3(-0.65, 1.41, 0.62), Vector3(0.65, 1.41, 0.62),
 		Vector3(0.74, 0.99, 1.11), Vector3(-0.74, 0.99, 1.11),
-	]), GLASS).name = "RearScreen"
+	]), GLASS)).name = "RearScreen"
 	for side in [-1.0, 1.0]:
 		var x = side * 0.75
 		P.car_beam(root, Vector3(x, 1.00, -0.88), Vector3(side * 0.67, 1.45, -0.47), 0.07, PAINT)

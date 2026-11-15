@@ -4,10 +4,16 @@ extends RefCounted
 const Navigation = preload("res://scripts/people/crowd_navigation.gd")
 const Model = preload("res://scripts/people/medic_model.gd")
 const Budget = preload("res://scripts/people/navigation_budget.gd")
+const CarOccupants = preload("res://scripts/cars/car_occupants.gd")
 const WALK_RADIUS = 20.0
 # Road distance (m) within which a stopped van is level with a casualty.
 const STATION_TOLERANCE = 6.0
-const DOOR_SECONDS = 0.65
+# Getting out: the door opens, the doctor turns on the seat towards it, swings
+# the legs out and climbs down, and shuts the door. Getting in runs backwards.
+const OPEN_SECONDS = 0.4
+const CLIMB_SECONDS = 1.0
+const DOOR_SECONDS = 1.8
+const CharacterRig = preload("res://scripts/people/character_rig.gd")
 const REACH = 1.3
 # A doctor who cannot find the way back boards anyway: the van never leaves
 # with its doctor outside.
@@ -47,7 +53,9 @@ func start(van: Dictionary, key: String) -> void:
 		return
 	var patient: Vector3 = injuries.records[key].pos
 	var side: Vector3 = van.node.basis.x
-	var preferred = 1.0 if (patient - van.node.position).dot(side) >= 0 else -1.0
+	# The passenger's door first: that is where the doctor sits.
+	var seat = CarOccupants.passenger_seat(van.node)
+	var preferred: float = seat.get("side", 1.0)
 	for sign in [preferred, -preferred]:
 		var door = _ground(van.node.position + side * sign * 1.85 - van.node.basis.z * 0.65)
 		var exit_from = _ground(door - side * sign * 0.3)
@@ -107,6 +115,7 @@ func update(delta: float) -> void:
 			medic.moving = Navigation.flat(before).distance_to(Navigation.flat(medic.avatar.position)) > 0.001
 			medic.clock += delta
 			Model.pose(medic, delta)
+			_cabin(medic, van.node, true)
 
 func _step(medic: Dictionary, van: Dictionary, delta: float) -> void:
 	var record: Dictionary = injuries.records.get(medic.key, {})
@@ -115,7 +124,6 @@ func _step(medic: Dictionary, van: Dictionary, delta: float) -> void:
 	match str(medic.state):
 		"exiting":
 			medic.time += delta
-			medic.avatar.position = medic.exit_from.lerp(medic.door, clampf(medic.time / DOOR_SECONDS, 0.0, 1.0))
 			if medic.time >= DOOR_SECONDS:
 				medic.state = "walking"
 		"walking":
@@ -151,7 +159,6 @@ func _step(medic: Dictionary, van: Dictionary, delta: float) -> void:
 				medic.time = 0.0
 		"entering":
 			medic.time += delta
-			medic.avatar.position = medic.door.lerp(medic.exit_from, clampf(medic.time / DOOR_SECONDS, 0.0, 1.0))
 			if medic.time >= DOOR_SECONDS:
 				_remove(int(van.id))
 				van.treating = ""
@@ -199,6 +206,66 @@ func _remove(id: int) -> void:
 	if active.has(id):
 		active[id].avatar.queue_free()
 		active.erase(id)
+		var car = _van_node(id)
+		CarOccupants.passenger_aboard(car, true)
+		CarOccupants.door_open(car, 0.0)
+
+func _van_node(id: int) -> Node3D:
+	var van = injuries._ambulance(id) if injuries != null else {}
+	if van.get("node") is Node3D and is_instance_valid(van.node):
+		return van.node
+	return null
+
+# How far out of the seat the doctor is: 0 seated, 1 standing at the door.
+static func climb(medic: Dictionary) -> float:
+	var t = clampf((float(medic.time) - OPEN_SECONDS) / CLIMB_SECONDS, 0.0, 1.0)
+	match str(medic.state):
+		"exiting":
+			return t
+		"entering":
+			return 1.0 - t
+	return 1.0
+
+# The door, the seat and the doctor between them while getting out or in. The
+# host also places the doctor; a guest gets the position from the snapshot.
+func _cabin(medic: Dictionary, car: Node3D, place: bool) -> void:
+	var stepping = medic.state in ["exiting", "entering"]
+	var t = float(medic.time)
+	var door = 0.0
+	if stepping:
+		door = clampf(t / OPEN_SECONDS, 0.0, 1.0) * (1.0 - clampf((t - OPEN_SECONDS - CLIMB_SECONDS) / (DOOR_SECONDS - OPEN_SECONDS - CLIMB_SECONDS), 0.0, 1.0))
+	var u = climb(medic)
+	# In the seat (before the climb out, after the climb in) the cabin's own
+	# seated doctor shows; the walking one is hidden.
+	var seated = stepping and u <= 0.0
+	CarOccupants.passenger_aboard(car, seated)
+	CarOccupants.door_open(car, door)
+	var avatar: Node3D = medic.avatar
+	avatar.visible = not seated
+	var seat = CarOccupants.passenger_seat(car)
+	if not stepping or seat.is_empty():
+		avatar.scale = Vector3.ONE
+		return
+	var feet: Vector3 = car.global_transform * seat.feet
+	var out: Vector3 = medic.door if medic.has("door") else _ground(car.global_transform * (seat.feet + Vector3(float(seat.side) * 1.4, 0, 0)))
+	# Turn on the seat to face the door, slide to the sill with the legs out,
+	# then step down and grow from the cabin's scale to full size.
+	var turn = smoothstep(0.0, 0.3, u)
+	var slide = smoothstep(0.15, 0.7, u)
+	var drop = smoothstep(0.45, 1.0, u)
+	var outward = Vector3(out.x - feet.x, 0, out.z - feet.z)
+	var forward_yaw: float = car.global_rotation.y
+	var door_yaw = atan2(-outward.x, -outward.z)
+	avatar.scale = Vector3.ONE * lerpf(float(seat.scale), 1.0, smoothstep(0.3, 1.0, u))
+	if place:
+		var pos = feet.lerp(out, slide)
+		pos.y = lerpf(feet.y, out.y, drop)
+		avatar.position = pos
+		avatar.rotation.y = lerp_angle(forward_yaw, door_yaw, turn)
+	if u < 0.55:
+		CharacterRig.pose(avatar, {"seat": CarOccupants.SEAT, "arms": "lap"})
+	else:
+		CharacterRig.pose(avatar, {"gait": 1, "time": float(medic.clock)})
 
 func snapshot() -> Array:
 	var result: Array = []
@@ -230,3 +297,4 @@ func _update_guest(delta: float) -> void:
 		medic.clock = float(entry.get("clock", 0.0))
 		medic.time = float(entry.get("time", 0.0))
 		Model.pose(medic, delta)
+		_cabin(medic, _van_node(id), false)

@@ -23,6 +23,10 @@ var relief = preload("res://scripts/player/tree_relief.gd").new()
 var perches = preload("res://scripts/player/perches.gd").new()
 var sauna = preload("res://scripts/player/sauna_steam.gd").new()
 var drunk = preload("res://scripts/player/drunk_camera.gd").new()
+# Seated on a chair or a sauna bench the view turns only as far as a head and
+# shoulders do, not round the chair's back (SEAT_LOOK either way).
+const SEAT_LOOK = 1.75
+var seat_yaw = NAN
 
 func drive(delta: float) -> void:
 	if Dedicated.active(): return # a dedicated server has no player of its own
@@ -305,6 +309,7 @@ func update_camera(delta: float, snap: bool = false) -> void:
 		game.camera.position = chase_position(delta, body, desired, not snap)
 		game.camera.look_at(body.position + Vector3(0, 1.1, 0) - behind * 1.5)
 	else:
+		seated_look()
 		game.camera.position = game.walker + Vector3(0, lerpf(1.45 if game.seated else 1.72, 0.36, collapse) + sin(game.elapsed * 12) * 0.015, 0)
 		var sip = sin(clampf((game.drink_time - 1.3) / 1.2, 0, 1) * PI) if game.drink_time >= 0 else 0.0
 		game.camera.rotation = Vector3(game.view_pitch + sip * 0.035, game.view_yaw, 0.0)
@@ -399,6 +404,7 @@ func sit_down() -> void:
 	game.walker = chair.position
 	game.view_yaw = chair.rotation.y
 	game.seated = true
+	seat_yaw = game.view_yaw
 	game.toast("F — встать. Мышь — смотреть.")
 
 func stand_up() -> void:
@@ -407,6 +413,16 @@ func stand_up() -> void:
 	game.walker = game.seat_exit
 	# Authored floors (the sauna) hold the feet up; otherwise the ground.
 	game.walker.y = game.stage.walk_floor(game.walker, game.stage.solids.walking_floor(game.walker, game.walker.y)) if inside_floor() else game.stage.ground(game.walker)
+
+# Keeps a seated view within SEAT_LOOK of the way the seat faces (set when the
+# player sits down on a chair or a sauna bench).
+func seated_look() -> void:
+	if not game.seated:
+		seat_yaw = NAN
+		return
+	if is_nan(seat_yaw):
+		seat_yaw = game.view_yaw
+	game.view_yaw = seat_yaw + clampf(wrapf(game.view_yaw - seat_yaw, -PI, PI), -SEAT_LOOK, SEAT_LOOK)
 
 func inside_floor() -> bool:
 	return sauna.inside(game.seat_exit)

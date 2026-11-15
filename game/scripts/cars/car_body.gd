@@ -16,6 +16,8 @@ extends RefCounted
 const P = preload("res://scripts/core/props.gd")
 const CarParts = preload("res://scripts/cars/car_parts.gd")
 const CarLamps = preload("res://scripts/cars/car_lamps.gd")
+const CarInterior = preload("res://scripts/cars/car_interior.gd")
+const Glass = preload("res://scripts/core/glass.gd")
 const GLASS = Color("304a55")
 const LAMP = Color("eee8b4")
 const TAIL = Color("ab3631")
@@ -24,6 +26,7 @@ const DARK = Color("1f2a2e")
 static func build(root: Node3D, p: Dictionary) -> Dictionary:
 	var f = frame(p)
 	_shell(root, p, f)
+	CarInterior.build(root, p, f)
 	for side in [-1.0, 1.0]:
 		_side(root, p, f, side)
 	_front(root, p, f)
@@ -82,7 +85,7 @@ static func _shell(root: Node3D, p: Dictionary, f: Dictionary) -> void:
 		Vector4(shape[3], gh, f.deck - 0.08, f.deck + 0.11),
 	], GLASS)
 	glass.name = "GlassCabin"
-	glass.material_override.roughness = 0.2
+	Glass.glaze(glass)
 	var roof = P.car_shell(root, [
 		Vector4(shape[1] - 0.03, gh * 0.95, top - 0.07, top + 0.02),
 		Vector4(shape[2] + 0.03, gh * 0.94, top - 0.07, top + 0.02),
@@ -261,7 +264,7 @@ static func _extras(root: Node3D, p: Dictionary, f: Dictionary) -> void:
 		for side in [-1.0, 1.0]:
 			P.box(root, Vector3(side * f.glass_half * 0.82, f.height + 0.07, (shape[1] + shape[2]) * 0.5), Vector3(0.05, 0.06, shape[2] - shape[1] + 0.2), Color("38413a"))
 	if p.get("sunroof", false):
-		P.box(root, Vector3(0, f.height + 0.025, shape[1] + 0.35), Vector3(f.glass_half * 0.9, 0.012, 0.5), GLASS)
+		Glass.glaze(P.box(root, Vector3(0, f.height + 0.025, shape[1] + 0.35), Vector3(f.glass_half * 0.9, 0.012, 0.5), GLASS)).name = "Sunroof"
 	if p.get("scoop", false):
 		P.box(root, Vector3(0, f.bonnet + 0.04, (f.front + shape[0]) * 0.5 + 0.1), Vector3(0.5, 0.07, 0.45), paint.darkened(0.08))
 		P.box(root, Vector3(0, f.bonnet + 0.05, (f.front + shape[0]) * 0.5 - 0.13), Vector3(0.42, 0.05, 0.02), DARK)
