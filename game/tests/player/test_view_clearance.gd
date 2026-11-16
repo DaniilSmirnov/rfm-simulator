@@ -32,6 +32,30 @@ func run() -> void:
 		last = game.camera.position
 	check(step < 0.005, "the camera behind a parked car holds still (largest step %.3f m)" % step)
 
+	# Suspension bounce (≈2 Hz, ±8 cm) barely moves the view; a climb is still followed.
+	var rest = body.position
+	var low = INF
+	var high = -INF
+	var tilt_low = INF
+	var tilt_high = -INF
+	for i in range(240):
+		body.position.y = rest.y + sin(i / 60.0 * TAU * 2.0) * 0.08
+		game.player.update_camera(1.0 / 60.0)
+		if i >= 60:
+			low = minf(low, game.camera.position.y)
+			high = maxf(high, game.camera.position.y)
+			tilt_low = minf(tilt_low, game.camera.rotation.x)
+			tilt_high = maxf(tilt_high, game.camera.rotation.x)
+	check(high - low < 0.16 * 0.15, "a bouncing car hardly lifts the camera (%.3f m of 0.16 m)" % (high - low))
+	check(tilt_high - tilt_low < deg_to_rad(0.3), "a bouncing car hardly tilts the view (%.2f°)" % rad_to_deg(tilt_high - tilt_low))
+	for i in range(180):
+		body.position.y = rest.y + minf(3.0, i / 60.0 * 1.5)
+		game.player.update_camera(1.0 / 60.0)
+	var trail = body.position.y - game.player.chase_height
+	check(absf(trail) < 0.15 and game.camera.position.y > body.position.y + 2.0, "the camera follows a climb (trails %.2f m)" % trail)
+	body.position = rest
+	game.player.snap_camera()
+
 	# The first frames in the service park: nothing between the car and the camera.
 	game.camera.position = body.position + Vector3(0, 30, 0)
 	for i in range(90):

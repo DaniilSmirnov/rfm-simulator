@@ -36,6 +36,13 @@ const SEAT_LOOK = 1.75
 # ≈ 0.84 m) a walker clears stones up to ≈ 1.3 m, the quarry windrow included.
 const VAULT_TUCK = 0.5
 var seat_yaw = NAN
+# The chase camera follows the car's height through a slow critically damped
+# spring (CHASE_SETTLE rad/s, ≈0.55 Hz): the suspension bounces at ≈2 Hz and a
+# bump or rut barely moves the view, a climb or a drop is still followed.
+const CHASE_SETTLE = 3.5
+const CHASE_LAG = 1.2 # the most the followed height trails the car, in metres
+var chase_height = NAN
+var chase_climb = 0.0
 
 func drive(delta: float) -> void:
 	if Dedicated.active(): return # a dedicated server has no player of its own
@@ -314,11 +321,13 @@ func update_camera(delta: float, snap: bool = false) -> void:
 		var behind = Vector3(sin(game.view_yaw), 0, cos(game.view_yaw))
 		var elevation = clampf(atan2(4.4, 8.2) - (game.view_pitch + 0.12), 0.14, 1.25)
 		var distance = Vector2(8.2, 4.4).length()
-		var desired = body.position + behind * cos(elevation) * distance + Vector3.UP * sin(elevation) * distance
+		var anchor = chase_anchor(delta, body.position, snap)
+		var desired = anchor + behind * cos(elevation) * distance + Vector3.UP * sin(elevation) * distance
 		desired.y = maxf(desired.y, game.stage.ground(desired) + 1.1)
 		game.camera.position = chase_position(delta, body, desired, not snap)
-		game.camera.look_at(body.position + Vector3(0, 1.1, 0) - behind * 1.5)
+		game.camera.look_at(anchor + Vector3(0, 1.1, 0) - behind * 1.5)
 	else:
+		chase_height = NAN
 		seated_look()
 		game.camera.position = game.walker + Vector3(0, lerpf(1.45 if game.seated else 1.72, 0.36, collapse) + sin(game.elapsed * 12) * 0.015, 0) + stargaze.eye_offset()
 		var sip = sin(clampf((game.drink_time - 1.3) / 1.2, 0, 1) * PI) if game.drink_time >= 0 else 0.0
@@ -335,6 +344,23 @@ func update_camera(delta: float, snap: bool = false) -> void:
 func snap_camera() -> void:
 	if game.camera != null:
 		update_camera(0.0, true)
+
+# Where the chase camera follows the car: along the ground exactly, its height
+# smoothed (CHASE_SETTLE) so suspension jitter does not shake the view. A snap,
+# a teleport or a fresh ride starts it at the car.
+func chase_anchor(delta: float, car: Vector3, snap: bool = false) -> Vector3:
+	if snap or is_nan(chase_height) or absf(car.y - chase_height) > 6.0:
+		chase_height = car.y
+		chase_climb = 0.0
+	elif delta > 0.0:
+		# Exact critically damped step, stable at any frame time.
+		var x = CHASE_SETTLE * delta
+		var decay = 1.0 / (1.0 + x + 0.48 * x * x + 0.235 * x * x * x)
+		var offset = chase_height - car.y
+		var push = (chase_climb + CHASE_SETTLE * offset) * delta
+		chase_climb = (chase_climb - CHASE_SETTLE * push) * decay
+		chase_height = car.y + clampf((offset + push) * decay, -CHASE_LAG, CHASE_LAG)
+	return Vector3(car.x, chase_height, car.z)
 
 # The chase camera eases toward the clear spot behind the car (in front of a
 # tent roof or a crown that hides `desired`), never farther from the car than
