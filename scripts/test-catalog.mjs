@@ -11,7 +11,7 @@ export const groups = Object.freeze({
   "test_character_asset.gd", "test_character_rig.gd", "test_player_handling.gd", "test_prop_physics.gd", "test_prop_sleep.gd", "test_stage_start.gd", "test_rolling_wheels.gd",
   "test_helicopter.gd", "test_vehicle_contract.gd", "test_cargo_selection_order.gd", "test_trunk.gd",
   "test_niva_integration.gd", "test_packing.gd", "test_interaction_hold.gd", "test_demo.gd", "test_mobile.gd",
-  "test_stage_safety_gate.gd", "test_how_to_play.gd", "test_demo_build.gd", "test_tree_relief.gd", "test_lake_sauna.gd", "test_view_clearance.gd", "test_pointer_capture.gd", "test_party.gd", "test_selection.gd",
+  "test_stage_safety_gate.gd", "test_how_to_play.gd", "test_demo_build.gd", "test_tree_relief.gd", "test_lake_sauna.gd", "test_canyon_yurt.gd", "test_view_clearance.gd", "test_pointer_capture.gd", "test_party.gd", "test_selection.gd",
   "test_vk_access.gd", "test_vk_catalog_matrix.gd", "test_vk_invite_ui.gd",
   "test_lobby_ui.gd", "test_menu_memory.gd", "test_sky_weather.gd", "test_settings_screen.gd", "test_localization.gd", "test_room_origin.gd", "test_minimap.gd",
   "test_resource_cache.gd", "test_draw_distance.gd", "test_load_pacer.gd", "test_world_loading.gd",
@@ -58,7 +58,7 @@ export const slowTests = new Set([
  "test_village_terrain_performance.gd", "test_canyon.gd", "test_finnish_forest.gd", "test_mineshaft.gd", "test_sever.gd", "test_quarry.gd", "test_offroad_contact.gd", "test_offroad_contact_late.gd", "test_offroad_contact_last.gd",
  "test_course_schedule.gd", "test_course_schedule_late.gd", "test_course_officials.gd", "test_spectators.gd", "test_alpine_winter.gd",
  "test_selection.gd", "test_world_loading.gd", "test_baked_village.gd",
- "test_provence_village.gd", "test_stage_solids.gd", "test_service_parks.gd", "test_service_park_layout.gd",
+ "test_provence_village.gd", "test_stage_solids.gd", "test_canyon_yurt.gd", "test_service_parks.gd", "test_service_park_layout.gd",
 ]);
 // Tests that outgrow the slow-test limit (180 s), with their own, in ms.
 export const timeouts = Object.freeze({

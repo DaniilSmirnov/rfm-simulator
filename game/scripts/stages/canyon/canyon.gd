@@ -179,10 +179,9 @@ func terrain_color(v: Vector3) -> Color:
 	var gravel = Color("c2ab8c").lerp(Color("a79274"), (sin(v.x * 0.14) * sin(v.z * 0.09) + 1.0) * 0.5)
 	var meadow = Color("8d8a4e").lerp(Color("79813f"), Form.grove(v.z))
 	var steppe = meadow.lerp(Color("a79c62"), (sin(v.x * 0.03) * sin(v.z * 0.026) + 1.0) * 0.5)
+	# The meadow beyond the footbridge is the same dry turf as the rest of
+	# the table: only its feather grass and flowers set it apart.
 	var ground = rock_color(v).lerp(gravel, wash * 0.85)
-	# Greener, mown grass on the meadow at the far end of the footbridge.
-	var lawn = (1.0 - smoothstep(10.0, 19.0, Vector2(v.x - bridge.meadow.x, v.z - bridge.meadow.z).length())) * turf
-	steppe = steppe.lerp(Color("6f8a3e").lerp(Color("7e9446"), (sin(v.x * 0.4) * sin(v.z * 0.33) + 1.0) * 0.5), lawn)
 	return ground.lerp(steppe, maxf(turf, wash * Form.grove(v.z) * 0.7)).lightened(sin(v.x * 0.09 + v.z * 0.06) * 0.03)
 
 # ---------------------------------------------------------------- road
