@@ -89,6 +89,9 @@ func reset() -> void:
 	for index in range(2):
 		for key in parked[index].keys():
 			unpark(index, key)
+	# The ambulance has no bay: build it once now (its crew and body are
+	# cached), so the first casualty does not stall the race to build it.
+	Props.course_car("ambulance").free()
 	if parks() == null:
 		return
 	for key in Parks.KEYS:
