@@ -1,6 +1,7 @@
 extends SceneTree
 # Northern lights over «Поречье» (scripts/core/aurora.gd) at full display, a few
 # seconds apart to show them move.
+# Then a fan watching them and his view.
 # With `-- --frames=N` it saves N frames of the first view for an animation.
 # Run: xvfb-run godot --path game --rendering-method gl_compatibility --script res://tools/screenshots/export_aurora.gd -- --out=<dir>
 const ScreenshotRig = preload("res://tools/screenshots/screenshot_rig.gd")
@@ -47,5 +48,25 @@ func run() -> void:
 			await rig.capture("%s/aurora_%d_%d.png" % [out, v, shot], Vector2i(1280, 720))
 			for i in range(60):
 				await process_frame
+	# Watching them (player/stargaze.gd): a fan leaning back on the road, and
+	# the view he gets.
+	if frames == 0:
+		var spot = stage.at(240.0)
+		spot.y = stage.ground(spot)
+		var fan = game.Props.player_avatar(1)
+		game.add_child(fan)
+		fan.position = spot
+		fan.rotation.y = 0.0
+		preload("res://scripts/people/character_rig.gd").pose(fan, {"gaze": 1.0})
+		rig.aim(spot + Vector3(3.2, 0.5, 1.2), spot + Vector3(-0.4, 1.9, -3.0), 62.0)
+		game.camera.global_transform = rig.camera.global_transform
+		await rig.capture("%s/aurora_watcher.png" % out, Vector2i(1280, 720))
+		fan.queue_free()
+		var eye = spot + Vector3(0, 1.56, 0.3)
+		rig.camera.position = eye
+		rig.camera.rotation = Vector3(preload("res://scripts/player/stargaze.gd").GAZE_PITCH, 0.0, 0.0)
+		rig.camera.fov = 68.0
+		game.camera.global_transform = rig.camera.global_transform
+		await rig.capture("%s/aurora_gaze_view.png" % out, Vector2i(1280, 720))
 	await game._shutdown_audio()
 	quit()

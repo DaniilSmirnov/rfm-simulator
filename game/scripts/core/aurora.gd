@@ -13,7 +13,7 @@ const SHADER = preload("res://shaders/aurora.gdshader")
 # the line wanders north and south, lower edge and top above the camera. They
 # stay inside the play camera's far plane (draw_distance.gd, 1100 m).
 const CURTAINS = [
-	{"z": -260.0, "half": 600.0, "wander": 90.0, "low": 140.0, "high": 560.0, "seed": 1.3},
+	{"z": -260.0, "half": 600.0, "wander": 90.0, "low": 140.0, "high": 620.0, "seed": 1.3},
 	{"z": -430.0, "half": 640.0, "wander": 110.0, "low": 130.0, "high": 520.0, "seed": 2.9},
 	{"z": -570.0, "half": 560.0, "wander": 70.0, "low": 120.0, "high": 450.0, "seed": 4.7},
 ]

@@ -56,6 +56,8 @@ func normal_target() -> Dictionary:
 		return game.player.sauna.seated_target(self) if game.player.sauna.steaming else {"action": "stand", "label": Loc.t("Встать со стула")}
 	if game.player.relief.active:
 		return {"action": "relief_stop", "label": Loc.t("Закончить")}
+	if game.player.stargaze.active:
+		return game.player.stargaze.target()
 	if game.player.repair.active():
 		return game.player.repair.target()
 	var items: Array = []
@@ -112,7 +114,8 @@ func normal_target() -> Dictionary:
 	game.player.relief.offers(items, self)
 	game.player.repair.offers(items, self)
 	game.player.sauna.offers(items, self)
-	return select_target(items)
+	var chosen = select_target(items)
+	return chosen if not chosen.is_empty() else game.player.stargaze.offer()
 
 # A grill offers what the fan is looking at: the skewer rails carry the food
 # (eat a serving, or put a mushroom on a free slot), the firebox below carries
@@ -215,6 +218,8 @@ func activate() -> void:
 		"beer": game.drink_beer()
 		"relief": game.player.relief.start()
 		"relief_stop": game.player.relief.stop()
+		"stargaze": game.player.stargaze.start()
+		"stargaze_stop": game.player.stargaze.stop()
 		"repair_car": game.player.repair.start(str(target.value))
 		"repair_stop": game.player.repair.stop()
 		"sauna": game.player.sauna.start(float(target.value))

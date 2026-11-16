@@ -19,11 +19,13 @@ var game:
 		perches.game = value
 		sauna.game = value
 		repair.game = value
+		stargaze.game = value
 var flight_solver = preload("res://scripts/net/drive_prediction.gd").new()
 var relief = preload("res://scripts/player/tree_relief.gd").new()
 var perches = preload("res://scripts/player/perches.gd").new()
 var sauna = preload("res://scripts/player/sauna_steam.gd").new()
 var repair = preload("res://scripts/cars/car_repair.gd").new()
+var stargaze = preload("res://scripts/player/stargaze.gd").new()
 var drunk = preload("res://scripts/player/drunk_camera.gd").new()
 # Seated on a chair or a sauna bench the view turns only as far as a head and
 # shoulders do, not round the chair's back (SEAT_LOOK either way).
@@ -192,7 +194,8 @@ func walk(delta: float) -> void:
 	if Dedicated.active(): return
 	game.rides.update()
 	perches.carry()
-	if relief.update(delta) or repair.update(delta):
+	var gazing = stargaze.update(delta)
+	if relief.update(delta) or repair.update(delta) or gazing:
 		return
 	perches.gather(game.walker)
 	var remaining = maxf(delta, 0.0)
@@ -310,9 +313,9 @@ func update_camera(delta: float, snap: bool = false) -> void:
 		game.camera.look_at(body.position + Vector3(0, 1.1, 0) - behind * 1.5)
 	else:
 		seated_look()
-		game.camera.position = game.walker + Vector3(0, lerpf(1.45 if game.seated else 1.72, 0.36, collapse) + sin(game.elapsed * 12) * 0.015, 0)
+		game.camera.position = game.walker + Vector3(0, lerpf(1.45 if game.seated else 1.72, 0.36, collapse) + sin(game.elapsed * 12) * 0.015, 0) + stargaze.eye_offset()
 		var sip = sin(clampf((game.drink_time - 1.3) / 1.2, 0, 1) * PI) if game.drink_time >= 0 else 0.0
-		game.camera.rotation = Vector3(game.view_pitch + sip * 0.035, game.view_yaw, 0.0)
+		game.camera.rotation = Vector3(stargaze.pitch() + sip * 0.035, game.view_yaw, 0.0)
 		game.camera.fov = 68 - sip * 2.0
 
 	# The drunk reel (drunk_camera.gd) and the fall to the ground.

@@ -215,6 +215,7 @@ func check_aurora(game, validation) -> void:
 	for point in mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]:
 		reach = maxf(reach, point.length())
 	check(reach < 1050.0, "the curtains stay inside the camera's far plane (%d m)" % reach)
+	check_stargaze(game)
 	sky.apply_snapshot({"time": "night", "weather": "sun"})
 	check(not aurora.shown, "a guest's lights fade when the host's do")
 	for i in range(20):
@@ -222,3 +223,41 @@ func check_aurora(game, validation) -> void:
 	check(aurora.level == 0.0 and not aurora.visible, "faded out")
 	sky.set_conditions("night", "snow")
 	check(not aurora.possible and sky.snapshot() == {"time": "night", "weather": "snow"}, "snowfall hides the sky")
+
+# Watching the lights (stargaze.gd): offered looking up, the view rises and the
+# body leans back; friends get the pose from the pitch; it ends as they fade.
+func check_stargaze(game) -> void:
+	var gaze = game.player.stargaze
+	game.in_car = false
+	var Rig = load("res://scripts/people/character_rig.gd")
+	game.view_pitch = 0.1
+	check(gaze.offer().is_empty(), "looking ahead offers nothing")
+	game.view_pitch = 0.8
+	check(gaze.offer().get("action", "") == "stargaze", "looking up at the lights offers to watch them")
+	gaze.start()
+	for i in range(3):
+		gaze.update(1.0)
+	check(gaze.active and is_equal_approx(gaze.pitch(), gaze.GAZE_PITCH) and gaze.eye_offset().y < -0.1, "the view rises to the sky as the fan leans back")
+	check(gaze.gaze_of(gaze.pitch()) == 1.0 and gaze.gaze_of(gaze.FREE_PITCH) == 0.0 and gaze.gaze_of(0.5) == 0.0, "friends lean back only while watching")
+	var avatar = game.Props.player_avatar(0)
+	game.add_child(avatar)
+	avatar.position = Vector3(3, 0, 4)
+	avatar.rotation.y = 0.7
+	var feet = func() -> Vector3:
+		var j = Rig.joints(avatar)
+		return avatar.transform * (j.legs[0].transform * j.shins[0].transform * Vector3(0, -Rig.SHIN, 0))
+	Rig.pose(avatar, {"gaze": 0.0})
+	var standing: Vector3 = feet.call()
+	Rig.pose(avatar, {"gaze": 1.0})
+	Rig.pose(avatar, {"gaze": 1.0})
+	var head: Vector3 = avatar.transform * Rig.joints(avatar).head.position
+	check(avatar.rotation.x > 0.4 and feet.call().distance_to(standing) < 0.15, "the body arches back over feet that stay put (%s)" % feet.call().distance_to(standing))
+	check(head.y < 1.62 and Vector2(head.x - 3, head.z - 4).dot(Vector2(sin(0.7), cos(0.7))) > 0.3, "the head goes back and down")
+	Rig.pose(avatar, {"gaze": 0.0})
+	check(avatar.rotation.x == 0.0 and avatar.position.distance_to(Vector3(3, 0, 4)) < 0.001, "and comes back upright")
+	avatar.free()
+	game.sky_weather.aurora.level = 0.0
+	gaze.update(0.1)
+	check(not gaze.active and game.view_pitch <= gaze.FREE_PITCH, "watching ends when the lights fade")
+	game.sky_weather.aurora.level = 1.0
+	game.in_car = true
