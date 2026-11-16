@@ -188,7 +188,7 @@ func _meadow_flowers() -> void:
 		var angle = rng.randf() * TAU
 		var distance = sqrt(rng.randf_range(49.0, 256.0))
 		var p = meadow + Vector3(cos(angle), 0.0, sin(angle)) * distance
-		var flower = i % 3 == 0
+		var flower = i % 5 == 0
 		var size = rng.randf_range(0.25, 0.45) if flower else rng.randf_range(0.5, 0.9)
 		var tall = rng.randf_range(0.35, 0.6) if flower else rng.randf_range(0.5, 0.9)
 		var tint = rng.randf()
@@ -196,7 +196,8 @@ func _meadow_flowers() -> void:
 			continue
 		p.y = stage.terrain_surface_height(p)
 		poses.append(Transform3D(Basis(Vector3.UP, angle * 3.0).scaled(Vector3(size, tall, size)), p))
-		colors.append(blooms[i % blooms.size()].lerp(Color.WHITE, tint * 0.15) if flower else Color("6f8f3c").lerp(Color("93a24e"), tint))
+		# Blades in the straw and sage of the steppe feather grass, not lawn green.
+		colors.append(blooms[i % blooms.size()].lerp(Color.WHITE, tint * 0.15) if flower else Color("d7c891").lerp(Color("a79c62"), tint))
 	stage.detail_batch("CharynMeadow", stage.NATURE_GRASS, poses, colors)
 
 const STEEL = Color("b9aaa2")

@@ -224,12 +224,17 @@ static func _build_barriers(stage, root: Node3D) -> void:
 			if not stone:
 				posts.append(Transform3D(Basis.from_scale(Vector3(0.13, 1.15, 0.13)), p + Vector3.UP * 0.3))
 				post_colors.append(Color("7c8489"))
-			stage.rocks.append(Records.rock(p, 0.32 if stone else 0.2, 0.85, Records.BARRIER))
+			# A stone parapet is jumped over on foot; armco stays a fence.
+			stage.rocks.append(Records.edge_stone(p, 0.32, 0.85) if stone else Records.rock(p, 0.2, 0.85, Records.BARRIER))
 			if i + 1 >= points.size() or points[i + 1] == null:
 				continue
 			var q: Vector3 = points[i + 1]
 			# The rail or wall between two posts is as solid as the posts.
-			stage.rocks.append_array(Records.row(p, q, 0.25 if stone else 0.12, 0.85, Records.BARRIER, 0.4))
+			var between = Records.row(p, q, 0.25 if stone else 0.12, 0.85, Records.BARRIER, 0.4)
+			if stone:
+				for record in between:
+					record[Records.VAULT] = true
+			stage.rocks.append_array(between)
 			if stone:
 				walls.append(beam(p, q, 0.27, 0.62, 0.5))
 				wall_colors.append(STONE.lightened(sin(p.x * 3.1 + p.z) * 0.06))

@@ -33,18 +33,18 @@ static func build(stage, parent: Node3D) -> void:
 static func _rug(stage, parent: Node3D, at: Vector3) -> void:
 	var st = SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	_patch(st, stage, parent, at, Vector2(3.25, 2.45), RED.darkened(0.18), 0.018)
-	_patch(st, stage, parent, at, Vector2(2.98, 2.18), CREAM, 0.021)
-	_patch(st, stage, parent, at, Vector2(2.80, 2.00), RED, 0.024)
+	_patch(st, stage, parent, at, Vector2(3.25, 2.45), RED.darkened(0.18), 0.02)
+	_patch(st, stage, parent, at, Vector2(2.98, 2.18), CREAM, 0.028)
+	_patch(st, stage, parent, at, Vector2(2.80, 2.00), RED, 0.036)
 	# Simple woven diamonds and border stitches, without national insignia.
 	for x in [-1.1, 0, 1.1]:
 		for z in [-0.75, 0.75]:
 			st.set_color(CREAM)
 			for p in [Vector3(x, 0, z - 0.16), Vector3(x + 0.15, 0, z), Vector3(x, 0, z + 0.16), Vector3(x, 0, z - 0.16), Vector3(x, 0, z + 0.16), Vector3(x - 0.15, 0, z)]:
-				st.add_vertex(ground(stage, parent, at + p, 0.028))
+				st.add_vertex(ground(stage, parent, at + p, 0.044))
 	for x in range(-7, 8):
 		for side in [-1, 1]:
-			_patch(st, stage, parent, at + Vector3(x * 0.20, 0, side * 1.25), Vector2(0.025, 0.13), CREAM, 0.019)
+			_patch(st, stage, parent, at + Vector3(x * 0.20, 0, side * 1.25), Vector2(0.025, 0.13), CREAM, 0.027)
 	st.generate_normals()
 	var rug = MeshInstance3D.new()
 	rug.name = "WovenRug"
@@ -81,9 +81,9 @@ static func _table(stage, parent: Node3D, at: Vector3) -> void:
 		for z in [-0.23, 0.23]:
 			var bowl = center + Vector3(x, 0.07, z)
 			Props.cylinder(parent, bowl, 0.06, 0.105, 0.06, Color("d1c1a3"), 12)
-			# The tea stands 4 mm proud of the bowl's closed top: flush, the two
+			# The tea stands 7 mm proud of the bowl's closed top: flush, the two
 			# faces fought over the same depth and flickered.
-			Props.cylinder(parent, bowl + Vector3.UP * 0.029, 0.092, 0.092, 0.01, Color("583822"), 12)
+			Props.cylinder(parent, bowl + Vector3.UP * 0.032, 0.092, 0.092, 0.01, Color("583822"), 12)
 	Props.faceted(parent, center + Vector3(0.20, 0.10, 0), Vector3(0.34, 0.10, 0.27), Color("c99754"), 10, 4)
 	var kettle = center + Vector3(-0.24, 0.15, 0)
 	Props.faceted(parent, kettle, Vector3(0.26, 0.23, 0.24), Color("777e79"), 10, 5)
@@ -100,7 +100,8 @@ static func _storage(stage, parent: Node3D) -> void:
 	for x in [-0.36, 0.36]:
 		Props.box(parent, at + Vector3(x, 0.29, 0.29), Vector3(0.06, 0.56, 0.025), Color("3f3b32"))
 	for i in range(3):
-		var roll_at = ground(stage, parent, Vector3(-6.5 + (0.19 if i == 2 else i * 0.38), 0, -2.6), 0.15 + (0.26 if i == 2 else 0.0))
+		# Two rolls side by side across their length, the third on top of them.
+		var roll_at = ground(stage, parent, Vector3(-6.5, 0, -2.75 + (0.16 if i == 2 else i * 0.32)), 0.15 + (0.27 if i == 2 else 0.0))
 		var roll = Props.cylinder(parent, roll_at, 0.15, 0.15, 1.0, CREAM.darkened(i * 0.045), 12)
 		roll.rotation.z = PI * 0.5
 		for x in [-0.33, 0.33]:

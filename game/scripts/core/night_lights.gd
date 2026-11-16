@@ -17,8 +17,10 @@ const KINDS = {
 	# A room lamp behind window glass (village_rooms.gd): lights the room and
 	# spills out through the windows onto the street.
 	"lamp": {"color": Color("ffc879"), "energy": 1.8, "range": 8.0, "height": 0.0, "flicker": false, "budget": "home"},
+	# A fan's hand flare (fan_flares.gd), lit only while it burns.
+	"flare": {"color": Color("ff3424"), "energy": 3.2, "range": 12.0, "height": 0.0, "flicker": true, "budget": "flare", "shown_only": true},
 }
-const BUDGET = {"fire": 6, "beacon": 4, "home": 3}
+const BUDGET = {"fire": 6, "beacon": 4, "home": 3, "flare": 3}
 # Meshes shown only at night (a lamp shade's glow), hidden by day.
 const GLOW = &"night_glow"
 const PICK_SECONDS = 0.3
@@ -74,6 +76,8 @@ func _pick(tree: SceneTree, at: Vector3) -> void:
 		if not node is Node3D or not node.is_inside_tree() or not KINDS.has(str(node.get_meta("night_light", ""))):
 			continue
 		var spec: Dictionary = KINDS[node.get_meta("night_light")]
+		if spec.get("shown_only", false) and not node.is_visible_in_tree():
+			continue
 		var distance = node.global_position.distance_squared_to(at)
 		if distance > 120.0 * 120.0:
 			continue
