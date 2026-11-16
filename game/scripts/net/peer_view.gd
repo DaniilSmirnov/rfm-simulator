@@ -102,6 +102,10 @@ static func animate(game: Node, peer: Dictionary, delta: float, clock: float, fr
 		pose.arms = Props.carry_arms(peer.held_kind)
 	if bool(state.get("relief", false)) and not collapsed:
 		pose.arms = "relief"
+	if bool(state.get("moon", false)) and not collapsed and not sitting:
+		# Back turned on the crew they looked at (moon_prank.gd).
+		pose.moon = true
+		peer.avatar.rotation.y += PI
 	if game.player.sauna.whisk.draw_peer(peer, state) and not collapsed:
 		pose.arms = "throw"
 		pose.lift = 0.5 + 0.5 * sin(clock * 12.0)

@@ -688,5 +688,9 @@
 "Дождь": "Rain",
 "Туман": "Fog",
 "Снег": "Snow",
-"В комнате время суток и погоду выбирает создатель.": "In a room the creator picks the time of day and weather."
+"В комнате время суток и погоду выбирает создатель.": "In a room the creator picks the time of day and weather.",
+"Показать зад экипажу": "Moon the crew",
+"Получай, экипаж!": "Take that, crew!",
+"Пилот засмотрелся — машину повело!": "The driver stared and the car got away from him!",
+"Экипаж №%d сошёл и пошёл обедать к болельщикам.": "Crew No. %d retired and went to have lunch with the fans."
 }

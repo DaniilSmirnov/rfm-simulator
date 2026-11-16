@@ -11,6 +11,9 @@ const BARRIER = "barrier"     # roadside posts and stones (alpine barriers)
 const BUILDING = "building"   # house footprints approximated by circles
 const OFFICIAL = "official"   # course officials' stands; rebuilt after baking
 const POST = "post"           # sign and fence posts, stakes, thin trunks
+# A flag, not a kind: stones along a drop stop cars but a walker jumps over
+# them (stage.rock_hit's `vault_tuck`).
+const VAULT = "vault"
 
 # Records spaced at most `spacing` apart strictly between a and b, so a run of
 # posts, rails or pickets leaves no gap a walker (0.3 m) or a car slips through.
@@ -36,6 +39,12 @@ static func rock(pos: Vector3, radius: float, height: float, kind: String = ROCK
 	var record = {"pos": pos, "radius": radius, "height": height}
 	if kind != ROCK:
 		record[kind] = true
+	return record
+
+# A barrier stone on the edge of a drop: a wall for cars, a hurdle on foot.
+static func edge_stone(pos: Vector3, radius: float, height: float) -> Dictionary:
+	var record = rock(pos, radius, height, BARRIER)
+	record[VAULT] = true
 	return record
 
 # Something to pick up: `parts` maps detail layers (stage.detail_batch names) to

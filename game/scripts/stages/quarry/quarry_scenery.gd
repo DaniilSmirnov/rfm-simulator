@@ -173,7 +173,7 @@ func _windrow(cooperative: bool = false) -> void:
 		var radius = rng.randf_range(0.75, 1.0)
 		poses.append(Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(radius * 1.3, radius * 0.75, radius * 1.1)), p + Vector3.UP * radius * 0.2))
 		colors.append(Machines.dusted(biome.rock_color(p), 0.45).lightened(rng.randf_range(-0.05, 0.05)))
-		stage.rocks.append(Records.rock(p, 0.7, 1.2, Records.BARRIER))
+		stage.rocks.append(Records.edge_stone(p, 0.7, 1.2))
 		s += WINDROW_SPACING
 	stage.detail_batch("HaulWindrow", stage.NATURE_BOULDER, poses, colors, DetailLayer.tiled(240.0))
 	counts["windrow"] = poses.size()
