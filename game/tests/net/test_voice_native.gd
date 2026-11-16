@@ -230,6 +230,22 @@ func real_links() -> void:
 	check(b.get_received_packets() >= 30, "Opus packets arrive (%d)" % b.get_received_packets())
 	check(loud > 0.1, "the tone is heard on the other side (rms %.3f)" % loud)
 	check(encoder.get_level() > 0.2, "the encoder reports the input level")
+	# Stereo inputs: a voice on one channel only keeps its full level, and
+	# channels in opposite phase do not cancel out.
+	var levels = {}
+	for kind in ["both", "left", "right", "inverted"]:
+		var stereo = ClassDB.instantiate("RallyVoiceEncoder")
+		var t = 0.0
+		for frame in range(10):
+			var chunk = PackedVector2Array()
+			chunk.resize(960)
+			for i in range(960):
+				var s = 0.5 * sin(t)
+				t += TAU * 440.0 / 48000.0
+				chunk[i] = {"both": Vector2(s, s), "left": Vector2(s, 0.0), "right": Vector2(0.0, s), "inverted": Vector2(s, -s)}[kind]
+			stereo.encode(chunk, 48000)
+		levels[kind] = stereo.get_level()
+	check(levels.both > 0.3 and levels.left > 0.3 and levels.right > 0.3 and levels.inverted > 0.3, "a stereo microphone is heard at full level from either channel or in opposite phase (%s)" % str(levels))
 	var far = 0.0
 	for frame in range(12):
 		var chunk = PackedVector2Array()

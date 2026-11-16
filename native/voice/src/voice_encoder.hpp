@@ -19,6 +19,13 @@ class RallyVoiceEncoder : public RefCounted {
 	std::vector<float> mono;
 	std::vector<float> resampled;
 	float level = 0.0f;
+	// Slowly averaged power of the left, right and averaged channels: picks
+	// how a stereo input becomes mono (see downmix in the .cpp).
+	double power_left = 0.0;
+	double power_right = 0.0;
+	double power_mid = 0.0;
+
+	void downmix(const PackedVector2Array &frames);
 
 protected:
 	static void _bind_methods();

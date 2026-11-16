@@ -1,6 +1,7 @@
 extends "res://tests/harness.gd"
 const VoiceWeb = preload("res://scripts/net/voice_web.gd")
 const SoundBank = preload("res://scripts/core/sound_bank.gd")
+const Microphone = preload("res://scripts/net/microphone.gd")
 # The settings window: the gear in the menu header (main menu and pause), draw
 # distance, master and radio volume and the desktop screen options, all kept between launches.
 func _initialize() -> void:
@@ -47,6 +48,19 @@ func run() -> void:
 	check(AudioServer.is_bus_mute(radio) and VoiceWeb.volume() == 0.0 and not AudioServer.is_bus_mute(sounds), "zero silences the radio and only the radio")
 	screen.radio_slider.value = 100
 	check(not AudioServer.is_bus_mute(radio), "the radio comes back")
+	# The microphone: system default first, every input after it, kept between launches.
+	check(screen.mic_choice.get_parent().visible == Microphone.available() and Microphone.available() == not OS.has_feature("web"), "the microphone list is offered outside the browser")
+	check(screen.mic_devices[0] == Microphone.DEFAULT and screen.mic_choice.items[0] == "По умолчанию" and screen.mic_devices.size() >= Array(AudioServer.get_input_device_list()).filter(func(d): return d != Microphone.DEFAULT).size() + 1, "the list starts with the system default and has every input")
+	var device = screen.mic_devices[screen.mic_devices.size() - 1]
+	screen.mic_choice.select(screen.mic_devices.size() - 1)
+	screen.mic_choice.item_selected.emit(screen.mic_devices.size() - 1)
+	saved = ConfigFile.new()
+	check(saved.load(screen.audio_path) == OK and saved.get_value("audio", "input_device") == device and AudioServer.input_device == device and is_equal_approx(float(saved.get_value("audio", "radio_volume")), 100.0), "the picked microphone is used and saved with the volumes")
+	check(Microphone.apply("Unplugged USB mic") == Microphone.DEFAULT and AudioServer.input_device == Microphone.DEFAULT, "a missing microphone falls back to the system default")
+	screen.mic_device = "Unplugged USB mic"
+	screen._list_microphones()
+	check(screen.mic_choice.selected == 0 and screen.mic_device == "Unplugged USB mic", "an unplugged saved microphone shows the default and is remembered for when it returns")
+	screen.set_microphone(Microphone.DEFAULT)
 	screen.volume_slider.value = 100
 	screen.set_window_mode(screen.WINDOWED)
 	screen.resolution_choice.cycle(-1)
