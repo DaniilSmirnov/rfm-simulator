@@ -618,9 +618,9 @@ static func label_3d(parent: Node3D, pos: Vector3, text: String, size: int, pixe
 	label.rotation.y = yaw
 	return label
 
-static func rally_car(variant: int, number_override: int = -1, sponsor_override: String = "") -> Node3D:
-	var car = RallyCarModel.build(variant, number_override, sponsor_override)
-	return bake_car(car, "rally:%d:%d:%s" % [car.get_meta("variant"), car.get_meta("number"), sponsor_override])
+static func rally_car(variant: int, number_override: int = -1, sponsor_override: String = "", crew: bool = true) -> Node3D:
+	var car = RallyCarModel.build(variant, number_override, sponsor_override, crew)
+	return bake_car(car, "rally:%d:%d:%s%s" % [car.get_meta("variant"), car.get_meta("number"), sponsor_override, "" if crew else ":empty"])
 
 static func course_car(role: String, zero_index: int = 0) -> Node3D:
 	if role == "zero":
