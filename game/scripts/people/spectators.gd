@@ -189,8 +189,7 @@ func update(world_time: float, delta: float, guest: bool) -> void:
 				elif action == "idle":
 					var passing = passing_racer(person.avatar.position)
 					if not passing.is_empty():
-						var ready = person.avatar.position.distance_to(person.watch) < 1.0
-						action = "moon" if ready and Mooning.prankster(int(person.id), game.stage.variant, int(passing.id)) else "cheer"
+						action = "moon" if _moons(person, passing) else "cheer"
 				person.avatar.rotation.y = _road_yaw(person.avatar.position)
 		if action == "moon":
 			# Back to the road, whoever decided it (the host or its snapshot).
@@ -224,6 +223,15 @@ func update(world_time: float, delta: float, guest: bool) -> void:
 	if not guest:
 		_scare_crews()
 	lunch.update(self, delta, guest)
+
+# A prankster moons each crew once, for a few seconds as it comes into view,
+# then stands up and cheers like everyone else.
+func _moons(person: Dictionary, racer: Dictionary) -> bool:
+	if int(person.get("moon_racer", -1)) != int(racer.id):
+		person.moon_racer = int(racer.id)
+		var ready = person.avatar.position.distance_to(person.watch) < 1.0
+		person.moon_until = clock + Mooning.TIME if ready and Mooning.prankster(int(person.id), game.stage.variant, int(racer.id)) else -INF
+	return clock < float(person.moon_until)
 
 # Host: crews driving at anyone mooning them (camp fans and players).
 func _scare_crews() -> void:

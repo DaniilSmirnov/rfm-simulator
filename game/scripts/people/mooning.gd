@@ -17,6 +17,8 @@ const AHEAD = 3.0
 # One in PRANKSTERS camp spectators moons, at about half the crews.
 const PRANKSTERS = 4
 const CHANCE = 0.5
+# Seconds a camp prankster stays bent over before he stands up and cheers.
+const TIME = 4.0
 
 # Whether camp spectator `id` moons the crew `racer_id` driving past.
 static func prankster(id: int, variant: int, racer_id: int) -> bool:
