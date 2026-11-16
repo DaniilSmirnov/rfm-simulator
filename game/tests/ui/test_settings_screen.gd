@@ -56,6 +56,11 @@ func run() -> void:
 	check(not screen.resolution_choice.get_child(0).disabled and screen.window_mode_buttons[screen.WINDOWED].button_pressed, "a window can be resized from the list")
 	screen.set_window_mode(screen.FULLSCREEN)
 	check(screen.resolution_choice.get_child(0).disabled and screen.window_mode_buttons[screen.FULLSCREEN].button_pressed, "fullscreen uses the screen resolution")
+	var probe_window = Window.new()
+	probe_window.mode = Window.MODE_FULLSCREEN
+	screen._cover_screen(probe_window)
+	check(probe_window.borderless and probe_window.mode == Window.MODE_MAXIMIZED, "on Windows fullscreen is a borderless maximized window that keeps its minimize button")
+	probe_window.free()
 	screen.window_mode = screen.WINDOWED
 	screen._load_display()
 	check(screen.window_mode == screen.FULLSCREEN and screen.resolution == pick, "the saved screen choice is read back")
