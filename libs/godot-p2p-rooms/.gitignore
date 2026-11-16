@@ -1,0 +1,3 @@
+.godot/
+# Downloaded by tests/run-e2e.mjs; install it yourself in your game (see README).
+webrtc/
