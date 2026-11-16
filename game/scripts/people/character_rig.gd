@@ -17,7 +17,8 @@ extends RefCounted
 #   kneel     crouch low (medic)              ground      feet height; with seat/kneel
 #                                                          the rig lowers the body onto it
 #   arms      "", "eat", "drink", "carry", "shovel", "push", "cheer", "flag", "wave",
-#             "clipboard", "treat", "throw", "pick", "lap", "limp", "relief"
+#             "clipboard", "treat", "throw", "pick", "lap", "limp", "relief", "steer"
+#   steer     right-hand grip on a steering wheel (left mirrored), with "steer"
 #   lift      0..1 progress of eat/drink/throw/pick    look  head yaw (rad)
 const KNEE = 0.33
 const SHIN = 0.31
@@ -160,6 +161,10 @@ static func _arms(j: Dictionary, p: Dictionary, gait: int, swing: float) -> void
 			"lap":
 				target = LAP_HAND
 				pole = POLE_LIFT
+			"steer":
+				# Hands on a steering wheel rim: `steer` is the right grip.
+				target = p.get("steer", LAP_HAND)
+				pole = POLE_OUT
 			"carry":
 				target = CARRY_HAND
 				pole = POLE_OUT

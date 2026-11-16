@@ -4,13 +4,15 @@ extends RefCounted
 # forks and napkins, the printed start list and a stage map, and a handful of
 # odd things (bottles, bread, chips, a thermos, a radio, sunglasses...). Which
 # of them and where comes from `variant`, so every camp along the stage looks
-# lived in and different, while host and guests see the same table.
+# lived in and different, while host and guests see the same table. A camp
+# table also carries the 24-can beer crate (beer_crate.gd), kept unbaked.
 #   TableModel.build(parent, variant)            # a spectators' camp table
 #   TableModel.build(parent, variant, "desk")    # the timing desk: papers only
 # Everything is baked into one mesh per (style, variant).
 const P = preload("res://scripts/core/props.gd")
 const MeshMerge = preload("res://scripts/core/mesh_merge.gd")
 const Perches = preload("res://scripts/player/perches.gd")
+const BeerCrate = preload("res://scripts/camp/beer_crate.gd")
 const VARIANTS = 6
 const TOP = 0.885
 const HALF_X = 1.05
@@ -35,6 +37,8 @@ static func build(parent: Node3D, variant: int = 0, style: String = "camp") -> v
 		for j in range(2):
 			cells.append(Vector3(-0.75 + i * 0.5, TOP, -0.24 + j * 0.48))
 	_shuffle(cells, rng)
+	# The camp table's beer crate takes a cell of its own (beer_crate.gd).
+	var crate_cell: Vector3 = cells.pop_back() if style != "desk" else Vector3.INF
 	var items: Array = ["start_list", "map"] if style == "desk" else ["start_list", "plates", "cups"]
 	var extras: Array = ["water", "ketchup", "bread", "chips", "thermos", "radio", "sunglasses", "cans", "napkins", "cap", "phone", "towels"]
 	if style == "desk":
@@ -51,6 +55,8 @@ static func build(parent: Node3D, variant: int = 0, style: String = "camp") -> v
 	# The baked mesh replaced their contents; the empty holders go too.
 	for holder in holders:
 		holder.free()
+	if crate_cell != Vector3.INF:
+		BeerCrate.build(parent, crate_cell, rng.randf_range(-0.25, 0.25))
 
 static func _shuffle(values: Array, rng: RandomNumberGenerator) -> void:
 	for i in range(values.size() - 1, 0, -1):
@@ -193,8 +199,66 @@ static func _plates(holder: Node3D, rng: RandomNumberGenerator) -> void:
 # Plastic cups: a stack, a few standing, one knocked over.
 static func _cups(holder: Node3D, rng: RandomNumberGenerator) -> void:
 	for i in range(3):
-		P.cylinder(holder, Vector3(0, 0.05 + i * 0.015, 0), 0.026, 0.037, 0.1, PLASTIC, 10)
+		_cup(holder, Vector3(0, 0.05 + i * 0.015, 0), PLASTIC)
 	for i in range(2 + rng.randi_range(0, 1)):
-		P.cylinder(holder, Vector3(0.1 + i * 0.08, 0.05, 0.03 * i), 0.026, 0.037, 0.1, RED_CUP if i % 2 == 0 else PLASTIC, 10)
-	var tipped = P.cylinder(holder, Vector3(-0.1, 0.034, 0.08), 0.026, 0.037, 0.1, RED_CUP, 10)
+		_cup(holder, Vector3(0.1 + i * 0.08, 0.05, 0.03 * i), RED_CUP if i % 2 == 0 else PLASTIC)
+	var tipped = _cup(holder, Vector3(-0.1, 0.034, 0.08), RED_CUP)
 	tipped.rotation = Vector3(PI / 2, 0, 0.4)
+
+# A disposable cup centred like a P.cylinder of the same size: an open
+# tapered shell with a thin wall, a rolled rim and a floor a little above the
+# base, so it is hollow when seen from above or lying on its side.
+const CUP_BOTTOM = 0.026
+const CUP_TOP = 0.037
+const CUP_HEIGHT = 0.1
+const CUP_WALL = 0.0018
+const CUP_FLOOR = 0.006
+const CUP_SIDES = 14
+static var _cup_mesh: ArrayMesh
+
+static func _cup(holder: Node3D, pos: Vector3, color: Color) -> MeshInstance3D:
+	if _cup_mesh == null:
+		_cup_mesh = cup_mesh()
+	var cup = MeshInstance3D.new()
+	cup.mesh = _cup_mesh
+	cup.material_override = P.shared_material(color)
+	holder.add_child(cup)
+	cup.position = pos
+	return cup
+
+static func cup_mesh() -> ArrayMesh:
+	var st = SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var low = -CUP_HEIGHT * 0.5
+	var high = CUP_HEIGHT * 0.5
+	var floor_y = low + CUP_FLOOR
+	var inner = func(y: float) -> float:
+		return lerpf(CUP_BOTTOM, CUP_TOP, (y - low) / CUP_HEIGHT) - CUP_WALL
+	var slope = (CUP_TOP - CUP_BOTTOM) / CUP_HEIGHT
+	for i in range(CUP_SIDES):
+		var a0 = TAU * i / CUP_SIDES
+		var a1 = TAU * (i + 1) / CUP_SIDES
+		var d0 = Vector3(cos(a0), 0, sin(a0))
+		var d1 = Vector3(cos(a1), 0, sin(a1))
+		var n0 = (d0 + Vector3(0, -slope, 0)).normalized()
+		var n1 = (d1 + Vector3(0, -slope, 0)).normalized()
+		# Outer wall, inner wall (facing the axis), the rim between them.
+		_quad(st, d0 * CUP_BOTTOM + Vector3(0, low, 0), d1 * CUP_BOTTOM + Vector3(0, low, 0), d1 * CUP_TOP + Vector3(0, high, 0), d0 * CUP_TOP + Vector3(0, high, 0), n0, n1)
+		_quad(st, d1 * inner.call(floor_y) + Vector3(0, floor_y, 0), d0 * inner.call(floor_y) + Vector3(0, floor_y, 0), d0 * inner.call(high) + Vector3(0, high, 0), d1 * inner.call(high) + Vector3(0, high, 0), -n1, -n0)
+		_quad(st, d0 * CUP_TOP + Vector3(0, high, 0), d1 * CUP_TOP + Vector3(0, high, 0), d1 * inner.call(high) + Vector3(0, high, 0), d0 * inner.call(high) + Vector3(0, high, 0), Vector3.UP, Vector3.UP)
+		# The base underneath and the floor inside.
+		_tri(st, Vector3(0, low, 0), d1 * CUP_BOTTOM + Vector3(0, low, 0), d0 * CUP_BOTTOM + Vector3(0, low, 0), Vector3.DOWN)
+		_tri(st, Vector3(0, floor_y, 0), d0 * inner.call(floor_y) + Vector3(0, floor_y, 0), d1 * inner.call(floor_y) + Vector3(0, floor_y, 0), Vector3.UP)
+	return st.commit()
+
+# a, b, c, d go round the quad clockwise seen from the side it faces, the
+# winding Godot draws.
+static func _quad(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: Vector3, na: Vector3, nb: Vector3) -> void:
+	for v in [[a, na], [b, nb], [c, nb], [a, na], [c, nb], [d, na]]:
+		st.set_normal(v[1])
+		st.add_vertex(v[0])
+
+static func _tri(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, normal: Vector3) -> void:
+	st.set_normal(normal)
+	for v in [a, b, c]:
+		st.add_vertex(v)

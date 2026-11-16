@@ -88,7 +88,7 @@ static func animate(game: Node, peer: Dictionary, delta: float, clock: float, fr
 		peer.held_kind = kind
 	peer.held_box.visible = kind != "" and not state.in_car
 	var sitting = bool(state.get("seated", false)) and not state.in_car
-	var collapsed = int(state.get("beers", 0)) >= 30
+	var collapsed = int(state.get("beers", 0)) >= game.COLLAPSE_BEERS
 	peer.avatar.rotation.z = lerp_angle(peer.avatar.rotation.z, PI / 2 if collapsed else 0.0, 1.0 - exp(-delta * 8))
 	if collapsed:
 		peer.avatar.position.y = avatar_pose.position.y + 0.25
@@ -102,6 +102,12 @@ static func animate(game: Node, peer: Dictionary, delta: float, clock: float, fr
 		pose.arms = Props.carry_arms(peer.held_kind)
 	if bool(state.get("relief", false)) and not collapsed:
 		pose.arms = "relief"
+	if game.player.sauna.whisk.draw_peer(peer, state) and not collapsed:
+		pose.arms = "throw"
+		pose.lift = 0.5 + 0.5 * sin(clock * 12.0)
+	if game.player.repair.draw_peer(peer, state) and not collapsed:
+		pose.arms = "pick"
+		pose.lift = 0.65 + 0.35 * sin(clock * TAU / game.player.repair.STRIKE)
 	if sitting:
 		pose.seat = Props.CHAIR_SEAT
 		pose.ground = avatar_pose.position.y

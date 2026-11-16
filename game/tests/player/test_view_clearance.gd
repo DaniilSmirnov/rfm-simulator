@@ -1,6 +1,7 @@
 extends "res://tests/harness.gd"
-# The chase camera stays in front of tent roofs and conifer crowns between it
-# and the car, and a fan getting out does not put his head inside a crown.
+# The chase camera starts settled behind the car and holds still while it is
+# parked, stays in front of tent roofs and conifer crowns between it and the
+# car, and a fan getting out does not put his head inside a crown.
 const ViewClearance = preload("res://scripts/player/view_clearance.gd")
 
 func _initialize() -> void:
@@ -15,9 +16,23 @@ func run() -> void:
 	await game.start_game()
 	var stage = game.stage
 
-	# The first frames in the service park: nothing between the car and the camera.
+	# The stage starts with the view already behind the parked car, and it
+	# holds still: no swing in from the menu camera, no hop between two spots
+	# at the edge of a crown (the spawn here sits at one) every frame.
 	game.in_car = true
 	var body: Node3D = game.rides.vehicle()
+	check(absf(angle_difference(game.view_yaw, game.rides.heading())) < 0.001, "the stage starts with the view along the car")
+	check(game.camera.position.distance_to(body.position) < 12.0, "the stage starts with the camera behind the car, not at the menu view")
+	var step = 0.0
+	var last = game.camera.position
+	for i in range(120):
+		game.player.update_camera(1.0 / 60.0)
+		if i >= 60:
+			step = maxf(step, game.camera.position.distance_to(last))
+		last = game.camera.position
+	check(step < 0.005, "the camera behind a parked car holds still (largest step %.3f m)" % step)
+
+	# The first frames in the service park: nothing between the car and the camera.
 	game.camera.position = body.position + Vector3(0, 30, 0)
 	for i in range(90):
 		game.player.update_camera(1.0 / 30.0)

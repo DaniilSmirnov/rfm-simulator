@@ -26,6 +26,11 @@ const PUDDLE_RX = 1.25
 const PUDDLE_RZ = 2.1
 const PUDDLE_DEPTH = 0.11
 const WATER_DROP = 0.04
+# How far from the regular spacing a puddle may move to find a dip, and how
+# many directions its footprint and surroundings are sampled in.
+const SITE_REACH = 12.0
+const SITE_RAYS = 12
+const SHEET_SEGMENTS = 24
 const MAX_DEPTH = 0.2
 const REACH = 3.2
 const FINE_STRIP = 0.2
@@ -90,8 +95,9 @@ func _track(s: float, lat: float) -> float:
 	return (trough - berm) * depth * broken * stage.biome.rut_strength(s)
 
 # The puddle nearest to station s: {"s", "lat", "level"} or an empty dictionary.
-# Its place is the flattest spot within a few metres of the regular spacing, so
-# the basin does not sit on a crest.
+# Its place is the lowest, most level spot within SITE_REACH m of the regular
+# spacing: a dip in the road, never a crest or a hump, where water would not
+# gather and the flat disc would stand proud of the falling ground around it.
 func site(s: float) -> Dictionary:
 	var index = roundi((s - PUDDLE_FIRST) / PUDDLE_SPACING)
 	if index < 0:
@@ -107,13 +113,31 @@ func _find_site(index: int) -> Dictionary:
 	var lat = PUDDLE_SIDE * (1.0 if index % 2 == 0 else -1.0)
 	var best = INF
 	var chosen = nominal
-	for step in range(-4, 5):
+	var level = 0.0
+	var steps = int(SITE_REACH / 2.0)
+	for step in range(-steps, steps + 1):
 		var s = nominal + step * 2.0
-		var score = absf(_plain(s + 2.0, lat) - _plain(s - 2.0, lat)) + absf(_plain(s, lat + 1.2) - _plain(s, lat - 1.2)) + absf(step) * 0.004
+		if stage.biome.rut_strength(s) < 0.6:
+			continue
+		var centre = _plain(s, lat)
+		# The water fills the basin up to its lowest point, so none of the disc
+		# can lie above the ground at its edge.
+		var lowest = centre
+		var around = 0.0
+		for a in range(SITE_RAYS):
+			var angle = TAU * a / SITE_RAYS
+			var dir = Vector2(cos(angle) * PUDDLE_RX, sin(angle) * PUDDLE_RZ)
+			lowest = minf(lowest, _plain(s + dir.y * 0.55, lat + dir.x * 0.55))
+			lowest = minf(lowest, _plain(s + dir.y, lat + dir.x))
+			around += _plain(s + dir.y * 2.0, lat + dir.x * 2.0)
+		# How far the basin would be cut below its centre, and how far the centre
+		# stands above the land around it (a crest or a hump).
+		var score = (centre - lowest) + maxf(0.0, centre - around / SITE_RAYS) * 2.0 + absf(step) * 0.004
 		if score < best:
 			best = score
 			chosen = s
-	return {"s": chosen, "lat": lat, "level": _plain(chosen, lat)}
+			level = lowest
+	return {"s": chosen, "lat": lat, "level": level}
 
 # The land height at (s, lat) before anything is dug into it.
 func _plain(s: float, lat: float) -> float:
@@ -156,7 +180,7 @@ func tint(p: Vector3, color: Color) -> Color:
 
 # ---------------------------------------------------------------- water
 
-# One thin disc of water in each basin, at the level the ground was flattened to.
+# One thin sheet of water in each basin, at the level the ground was flattened to.
 func build_water(parent: Node3D) -> void:
 	if not enabled():
 		return
@@ -172,15 +196,33 @@ func build_water(parent: Node3D) -> void:
 		if puddle.is_empty():
 			continue
 		var disc = MeshInstance3D.new()
-		var mesh = CylinderMesh.new()
-		mesh.top_radius = 1.0
-		mesh.bottom_radius = 1.0
-		mesh.height = 0.004
-		mesh.radial_segments = 24
-		mesh.rings = 1
-		disc.mesh = mesh
+		disc.mesh = _sheet(puddle)
 		disc.material_override = _water_material
 		disc.name = "RoadPuddle_%d" % (index - 1)
 		parent.add_child(disc)
-		disc.scale = Vector3(PUDDLE_RX, 1.0, PUDDLE_RZ)
 		disc.position = Vector3(stage.at(puddle.s).x + puddle.lat, puddle.level - WATER_DROP, -puddle.s)
+
+# The water's outline in road coordinates, the same ellipse the basin is dug in:
+# on a bend the road shifts sideways under it, and a plain world-space disc would
+# slide off the basin and lie on the bank in two crescents.
+func _sheet(puddle: Dictionary) -> ArrayMesh:
+	var origin = Vector3(stage.at(puddle.s).x + puddle.lat, 0.0, -puddle.s)
+	var rings = [0.0, 0.5, 1.0]
+	var points: Array = []
+	for ring in rings:
+		var row: Array = []
+		for a in range(SHEET_SEGMENTS):
+			var angle = TAU * a / SHEET_SEGMENTS
+			var s = puddle.s + sin(angle) * PUDDLE_RZ * ring
+			var x = stage.at(s).x + puddle.lat + cos(angle) * PUDDLE_RX * ring
+			row.append(Vector3(x, 0.0, -s) - origin)
+		points.append(row)
+	var surface = SurfaceTool.new()
+	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+	surface.set_normal(Vector3.UP)
+	for r in range(rings.size() - 1):
+		for a in range(SHEET_SEGMENTS):
+			var b = (a + 1) % SHEET_SEGMENTS
+			for vertex in [points[r][a], points[r + 1][b], points[r + 1][a], points[r][a], points[r][b], points[r + 1][b]]:
+				surface.add_vertex(vertex)
+	return surface.commit()

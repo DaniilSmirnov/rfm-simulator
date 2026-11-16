@@ -54,7 +54,7 @@ func remove(item: Dictionary) -> void:
 	item.node.queue_free()
 
 func pack(spot: Vector3, remote: bool = false, rearrange: bool = false) -> bool:
-	if game.injuries.is_down("player:" + game.cargo.actor()) or (not active() and not rearrange) or not game.playing or game.paused or game.dead or game.finished or game.actor_in_car() or game.actor_beers() >= 30 or (not remote and (game.eat_time >= 0 or game.drink_time >= 0)) or game.actor_pos().distance_to(spot) > 3.5:
+	if game.injuries.is_down("player:" + game.cargo.actor()) or (not active() and not rearrange) or not game.playing or game.paused or game.dead or game.finished or game.actor_in_car() or game.actor_beers() >= game.COLLAPSE_BEERS or (not remote and (game.eat_time >= 0 or game.drink_time >= 0)) or game.actor_pos().distance_to(spot) > 3.5:
 		return false
 	for item in items():
 		# The position identifies the exact item: retries cannot pack a different flag.

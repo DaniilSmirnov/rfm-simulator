@@ -51,8 +51,10 @@ var mic_player: AudioStreamPlayer
 var capture: AudioEffectCapture
 var encoder: RefCounted
 const LIBRARY_DIR = "res://addons/rally_voice/bin"
-# Every radio sounds the same at any distance: a clean voice band, no hiss.
+# The radio has no range and no interference: every voice is the same clean
+# band at full volume anywhere on the map, with no hiss mixed in.
 const CUTOFF = 3400.0
+const NO_HISS = 0.0
 
 # The library for this platform ships inside the pack (see build-voice.mjs).
 static func supported() -> bool:
@@ -221,7 +223,7 @@ func _open(id: String, initiator: bool) -> Dictionary:
 		_note_failure(id)
 		return {}
 	var peer = {"id": id, "link": link, "offering": initiator, "described": false, "candidates": [], "remote_session": "",
-		"opened_at": Time.get_ticks_msec(), "connected": false, "distance": 9999.0, "talking": false, "player": null}
+		"opened_at": Time.get_ticks_msec(), "connected": false, "talking": false, "player": null}
 	peers[id] = peer
 	return peer
 
@@ -408,7 +410,7 @@ func _pump_speakers() -> void:
 		var frames = playback.get_frames_available()
 		if frames <= 0:
 			continue
-		playback.push_buffer(peer.link.pull(frames, rate, 0.0 if muted.has(peer.id) else 1.0, CUTOFF, 0.0))
+		playback.push_buffer(peer.link.pull(frames, rate, 0.0 if muted.has(peer.id) else 1.0, CUTOFF, NO_HISS))
 
 func mute(id: String, value: bool = true) -> void:
 	if value:
@@ -428,7 +430,6 @@ func tick(levels: Array) -> Dictionary:
 	for entry in levels:
 		var peer: Dictionary = peers.get(str(entry.get("id", "")), {})
 		if not peer.is_empty():
-			peer.distance = float(entry.get("distance", 0.0))
 			peer.talking = entry.get("talking") == true
 	sync_members(members)
 	var result = {"signals": outgoing, "mic": mic, "events": events, "connected": connected_count()}

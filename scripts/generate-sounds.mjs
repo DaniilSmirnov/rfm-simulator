@@ -544,6 +544,17 @@ function place(material, seed) {
   return fadeEdges(out);
 }
 
+// A spanner struck on engine iron: a sharp tick, then a short bright ring
+// of the tool over a dull knock of the cast block.
+function wrenchClank(seed) {
+  const rnd = random(seed);
+  const out = new Float32Array(samples(0.45));
+  mix(out, thump(samples(0.12), 180, 0.018, rnd), 0.55);
+  mix(out, modes(samples(0.45), [[1180, 0.09, 0.32], [2870, 0.06, 0.26], [4630, 0.035, 0.18], [6150, 0.02, 0.1]], rnd), 0.75);
+  mix(out, modes(samples(0.2), [[410, 0.03, 0.3], [960, 0.02, 0.18]], rnd), 0.5);
+  return fadeEdges(out);
+}
+
 function eat(seed) {
   const rnd = random(seed);
   const out = new Float32Array(samples(0.7));
@@ -646,6 +657,42 @@ function bell() {
   return fadeEdges(out, 0.001, 0.3);
 }
 
+// Weather loops (sky_weather.gd). Rain: a steady hiss of far drops plus
+// near drops ticking on leaves and the ground, swelling slowly.
+function rain() {
+  const rnd = random(seedOf('rain'));
+  const seconds = 4.0, n = loopSamples(seconds);
+  const out = filtered(noise(n, rnd), biquad('hp', 600), biquad('lp', 7000), biquad('peak', 2500, 0.8, 4));
+  const swell = drift(n, rnd, 0.6);
+  for (let i = 0; i < n; i++) out[i] *= 0.35 + 0.15 * swell[i];
+  mix(out, grains(n, rnd, { rate: 260, band: [1800, 4200], q: 1.2, decay: 0.002, sizeSpread: 1.2 }), 0.9);
+  mix(out, grains(n, rnd, { rate: 40, band: [700, 1500], q: 2, decay: 0.004 }), 0.6);
+  return closeLoop(out, seconds);
+}
+
+// Snowfall: a low gusting wind that rises and falls, with a faint whistle.
+function snowWind() {
+  const rnd = random(seedOf('snow-wind'));
+  const seconds = 6.0, n = loopSamples(seconds);
+  const out = filtered(noise(n, rnd), biquad('lp', 900), biquad('hp', 80));
+  const gust = drift(n, rnd, 0.35);
+  const whistle = filtered(noise(n, rnd), biquad('bp', 1300, 12));
+  for (let i = 0; i < n; i++) out[i] = out[i] * (0.3 + 0.7 * gust[i]) + whistle[i] * gust[i] * gust[i] * 0.8;
+  return closeLoop(out, seconds);
+}
+
+// Water thrown on hot sauna stones (lake_sauna.gd): a sharp sizzle with
+// crackling bursts that fades into a soft hiss of rising steam.
+function saunaHiss() {
+  const rnd = random(seedOf('sauna-hiss'));
+  const seconds = 2.2, n = samples(seconds);
+  const out = envelope(filtered(noise(n, rnd), biquad('hp', 1800), biquad('peak', 4200, 0.9, 6), biquad('lp', 9000)),
+    t => Math.min(t / 0.03, 1) * (0.55 * Math.exp(-t / 0.35) + 0.25 * Math.exp(-t / 1.1)));
+  const crackle = envelope(grains(n, rnd, { rate: 180, band: [2500, 6000], q: 2, decay: 0.0015 }), t => Math.exp(-t / 0.5));
+  mix(out, crackle, 0.8);
+  return fadeEdges(out, 0.002, 0.3);
+}
+
 // ---------------------------------------------------------------- catalogue
 
 const LOOP = { loudness: 0.16 };
@@ -673,12 +720,16 @@ for (const surface of ['gravel', 'grass', 'snow', 'asphalt']) {
 }
 sounds['place-wood'] = () => level(place('wood', seedOf('place-wood')));
 sounds['place-metal'] = () => level(place('metal', seedOf('place-metal')));
+sounds['wrench-clank'] = () => level(wrenchClank(seedOf('wrench-clank')));
 sounds['eat'] = () => level(eat(seedOf('eat')));
 for (let k = 1; k <= 3; k++) sounds[`bird-${k}`] = () => level(bird(k - 1));
 sounds['cicadas'] = () => level(cicadas());
 sounds['church-bell'] = () => level(bell());
+sounds['rain'] = () => level(rain(), LOOP);
+sounds['snow-wind'] = () => level(snowWind(), LOOP);
+sounds['sauna-hiss'] = () => level(saunaHiss());
 
-export const LOOPS = Object.keys(sounds).filter(name => /^(engine-.*-(low|on|off)|siren-(police|ambulance))/.test(name));
+export const LOOPS = Object.keys(sounds).filter(name => /^(engine-.*-(low|on|off)|siren-(police|ambulance)|rain$|snow-wind$)/.test(name));
 
 const SIDECAR = name => `[remap]
 

@@ -169,7 +169,7 @@ func run() -> void:
 	await peer_pose("drink", {"beer": 1.6, "frames": 2})
 	await peer_pose("carry_box", {}, 0.3, "table")
 	await peer_pose("carry_shovel", {}, 0.3, "shovel")
-	await peer_pose("collapsed", {"beers": 30, "frames": 40})
+	await peer_pose("collapsed", {"beers": 24, "frames": 40})
 	await peer_pose("radio", {"radio": true, "frames": 10})
 	await closeup("peer_radio_closeup", last_spot, 0.4)
 	await peer_pose("radio_raising", {"radio": true, "frames": 3})

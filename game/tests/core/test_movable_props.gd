@@ -25,44 +25,42 @@ func run() -> void:
 	node.set_meta("servings", 7)
 	Registry.register(game.stage.solids, node, 15, false, "test:prop")
 	props.refresh()
+	# Only a car moves camp gear and props: on foot, holding T, walking or
+	# running into one leaves it where it stands.
 	var helper = {"pos": game.room.a(pos + Vector3(2, 0, 0)), "in_car": false, "tow": true}
 	var occupied = props.update({"local": helper}, {}, 0.05)
-	await physics_frame
-	await physics_frame
+	for i in range(30): await physics_frame
 	await process_frame
-	check(occupied.has("local") and node.position.x > pos.x, "holding T moves the nearest prop")
-	check(node.get_meta("servings") == 7, "dragging preserves gameplay state on the same node")
-
-	var friend = helper.duplicate(true)
-	props.update({"friend": friend, "local": helper}, {}, 0.05)
-	check(props.grips.has("local") and not props.grips.has("friend"), "an existing grip cannot be stolen by player iteration order")
+	check(not occupied.has("local") and props.grips.is_empty() and node.global_position.distance_to(pos) < 0.01, "holding T beside a prop does not drag it")
+	check(node.get_meta("servings") == 7, "a prop keeps its gameplay state on the same node")
 	helper.tow = false
-	props.update({"local": helper}, {}, 0.05)
-	check(props.grips.is_empty(), "releasing T releases the prop")
 	for i in range(120): await physics_frame
 	var walk_start: Vector3 = node.global_position
-	game.walker = walk_start + Vector3.RIGHT * 1.5
-	game.view_yaw = PI / 2
-	Input.action_press("forward")
-	for i in range(90):
-		game.player.walk_step(1.0 / 60.0)
-		game._update_tow(1.0 / 60.0)
+	for sprint in [false, true]:
+		game.walker = walk_start + Vector3.RIGHT * 1.5
+		game.view_yaw = PI / 2
+		Input.action_press("forward")
+		if sprint: Input.action_press("sprint")
+		for i in range(90):
+			game.player.walk_step(1.0 / 60.0)
+			game._update_tow(1.0 / 60.0)
+			await physics_frame
+		Input.action_release("sprint")
+		Input.action_release("forward")
+		await process_frame
+		check(node.global_position.distance_to(walk_start) < 0.01, "%s into a prop does not push it" % ("running" if sprint else "walking"))
+		check(game.walker.x > walk_start.x + 0.3, "the prop still stops a walker (%s)" % ("running" if sprint else "walking"))
+	# A slow car (9 km/h): at 1.5 m/s the crate only rocked on its edge.
+	check(props.knock("test:prop", Vector3(-2.5, 0, 0)), "a car hit moves the prop")
+	for i in range(60):
+		props.update({}, {}, 1.0 / 60.0)
 		await physics_frame
-	Input.action_release("forward")
 	await process_frame
-	check(node.global_position.distance_to(walk_start) < 0.01, "walking into a prop does not push it")
-	game.walker = walk_start + Vector3.RIGHT * 1.5
-	Input.action_press("forward")
-	Input.action_press("sprint")
-	for i in range(90):
-		game.player.walk_step(1.0 / 60.0)
-		game._update_tow(1.0 / 60.0)
-		await physics_frame
-	Input.action_release("sprint")
-	Input.action_release("forward")
-	await process_frame
-	check(node.global_position.distance_to(walk_start) > 0.05, "running into a sleeping prop wakes and pushes it through actual player movement")
-	var hit = game.stage.solids.hit(pos + Vector3(-3, 0.4, 0), node.position + Vector3(0, 0.4, 0), 0.1)
+	check(node.global_position.distance_to(walk_start) > 0.05, "the car hit slides the prop (%.2f m)" % node.global_position.distance_to(walk_start))
+	# A car hit can tip the crate onto its side: aim at its middle, not 0.4 m
+	# above its (now sideways) origin.
+	var middle: Vector3 = node.global_transform * Vector3(0, 0.4, 0)
+	var hit = game.stage.solids.hit(middle + Vector3(-3, 0, 0), middle, 0.1)
 	check(hit.get("prop", "") == "test:prop", "collision follows the moving prop")
 	var data = props.snapshot()
 	var saved = node.global_position
@@ -70,12 +68,14 @@ func run() -> void:
 	for item in shifted:
 		if item.key == "test:prop": item.pos[0] += 40
 	props.apply_snapshot(shifted)
-	var moved: Vector3 = node.position + Vector3.UP * 0.4
+	var moved: Vector3 = node.global_transform * Vector3(0, 0.4, 0)
 	check(game.stage.solids.hit(moved - Vector3.RIGHT * 2, moved + Vector3.RIGHT * 2, 0.1).get("prop", "") == "test:prop", "replication updates collision across spatial cells in the same frame")
 	check(game.stage.solids.hit(saved - Vector3.RIGHT * 2, saved + Vector3.RIGHT * 2, 0.1).get("prop", "") != "test:prop", "moving an indexed prop leaves no collision at its former position")
 	props.apply_snapshot(data)
 	check(node.global_position.distance_to(saved) < 0.01, "network snapshot restores prop transform")
 	var placed: Vector3 = saved + Vector3(4, 0, 0)
+	# Placing stands the item upright on the ground, wherever it lay before.
+	placed.y = game.stage.ground(placed)
 	game.camp_actions.ground_item(node, placed, 0.3)
 	await physics_frame
 	await physics_frame
@@ -84,7 +84,7 @@ func run() -> void:
 	props.records["test:prop"].anchored = true
 	check(not props.knock("test:prop", Vector3(1, 0, 0)), "small contact cannot uproot an anchored prop")
 	check(props.knock("test:prop", Vector3(10, 0, 0)), "vehicle impact releases anchored prop")
-	check(not props.records["test:prop"].anchored, "released prop can be dragged")
+	check(not props.records["test:prop"].anchored, "released prop is free to move")
 	helper.tow = true
 	helper.in_car = true
 	props.update({"local": helper}, {}, 0.05)
@@ -139,6 +139,9 @@ func tree_and_lamp(game) -> void:
 		await physics_frame
 	await process_frame
 	check(tree.body.linear_velocity.x > 0.1 and stage.trees[0].distance_to(point) > 0.01 and stage.trees[0].is_equal_approx(tree.node.position), "dragging changes tree collision and rendering origin together")
+	var friend = helper.duplicate(true)
+	props.update({"friend": friend, "local": helper}, {}, 1.0 / 60.0)
+	check(props.grips.has("local") and not props.grips.has("friend"), "an existing grip cannot be stolen by player iteration order")
 	var dragged: Vector3 = stage.trees[0]
 	for i in range(30):
 		props.update({}, {}, 1.0 / 60.0)
@@ -159,7 +162,7 @@ func tree_and_lamp(game) -> void:
 	lamp.linear_velocity = Vector3.ZERO
 	helper.pos = game.room.a(lamp_point + Vector3(2, 0, 0))
 	props.update({"local": helper}, {}, 0.05)
-	check(lamp.linear_velocity.x > 0, "dragging drives the existing lamp physics body")
+	check(lamp.linear_velocity.length() < 0.01 and props.grips.is_empty(), "a knocked lamp is not dragged on foot")
 
 func guest_camp(host) -> void:
 	var guest = load("res://main.tscn").instantiate()

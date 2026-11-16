@@ -64,6 +64,8 @@ var stage_choice: HBoxContainer
 var fps_label: Label
 var fps_clock = 0.0
 var stage_caption: Label
+# Sky, sun, time of day and weather (sky_weather.gd) and the nodes it built.
+var sky_weather = preload("res://scripts/core/sky_weather.gd").new()
 var world_environment: WorldEnvironment
 var sunlight: DirectionalLight3D
 var car: Node3D
@@ -128,6 +130,7 @@ var drunk_strength = 0.0
 const DRUNK_FADE_SECONDS = 60.0
 var collapse_time = 0.0
 const SOBER_SECONDS = 180.0
+const COLLAPSE_BEERS = 24 # the whole crate: the fan falls and lies for SOBER_SECONDS
 var sober_remaining = 0.0
 var sobriety_panel: PanelContainer
 var sobriety_label: Label
@@ -293,7 +296,7 @@ func _ready() -> void:
 		draw_distance.apply(stage)
 		world_ready = true
 	print("[RFM] Лёгкое меню: карта будет подготовлена при входе" if defer_world else "[RFM] Рельеф и объекты карты готовы")
-	_build_environment()
+	sky_weather.setup(self); add_child(sky_weather); sky_weather.rebuild()
 	spectators = Spectators.new()
 	spectators.game = self
 	add_child(spectators)
@@ -370,44 +373,6 @@ func _setup_input() -> void:
 			e.physical_keycode = key
 			InputMap.action_add_event(action, e)
 
-# Sky, fog, ambient light and sun of the selected stage (res://data/stages.json).
-func _build_environment() -> void:
-	var world = WorldEnvironment.new()
-	world_environment = world
-	var look = StageRegistry.section(stage.variant, "environment")
-	var env = Environment.new()
-	env.background_mode = Environment.BG_SKY
-	var sky = Sky.new()
-	var sky_mat = ProceduralSkyMaterial.new()
-	sky_mat.sky_top_color = Color(look.sky_top)
-	sky_mat.sky_horizon_color = Color(look.sky_horizon)
-	sky_mat.ground_bottom_color = Color(look.ground_bottom)
-	sky_mat.ground_horizon_color = Color(look.ground_horizon)
-	if look.has("sky_curve"):
-		sky_mat.sky_curve = float(look.sky_curve)
-	sky.sky_material = sky_mat
-	env.sky = sky
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(look.ambient)
-	env.ambient_light_energy = float(look.ambient_energy)
-	env.tonemap_mode = Environment.TONE_MAPPER_LINEAR
-	env.fog_enabled = true
-	env.fog_light_color = Color(look.fog)
-	env.fog_density = float(look.fog_density)
-	if look.has("fog_sky_affect"):
-		env.fog_sky_affect = float(look.fog_sky_affect)
-	world.environment = env
-	add_child(world)
-	var light = StageRegistry.section(stage.variant, "sun")
-	var sun = DirectionalLight3D.new()
-	sunlight = sun
-	sun.rotation_degrees = Vector3(light.rotation[0], light.rotation[1], light.rotation[2])
-	sun.light_color = Color(light.color)
-	sun.light_energy = float(light.energy)
-	sun.shadow_enabled = true
-	draw_distance.apply_shadows(sun)
-	add_child(sun)
-
 func _panel(color: Color) -> StyleBoxFlat:
 	return hud.panel(color)
 
@@ -470,7 +435,7 @@ func start_game() -> void:
 	course_label.text = course.caption()
 	for panel in hud_panels:
 		panel.show()
-	mobile_sidebar.show()
+	mobile_sidebar.show(); player.snap_camera() # the view starts settled behind the car
 	_request_game_mouse_capture()
 	toast("Найди подходящее место и разложи лагерь. Установка стола засчитывает выбор места.")
 	if not ("--script" in OS.get_cmdline_args() or "--smoke-test" in OS.get_cmdline_user_args() or "--capture" in OS.get_cmdline_user_args() or "--capture-menu" in OS.get_cmdline_user_args() or "--dedicated" in OS.get_cmdline_user_args()):
@@ -684,6 +649,7 @@ func _process(delta: float) -> void:
 	camp_actions.update_placement()
 	Props.animate_wheels(car)
 	cargo.update(delta)
+	player.repair.update_hoods(delta)
 	movable_props.refresh()
 	camp_cooking.update(delta, room.is_guest())
 	injuries.update(delta)
@@ -752,9 +718,6 @@ func _update_camera(delta: float) -> void:
 
 func _toggle_car() -> void:
 	player.toggle_car()
-
-func nearby_drink_source() -> bool:
-	return camp_actions.nearby_drink_source()
 
 func can_eat_meat() -> bool:
 	return camp_actions.can_eat_meat()
@@ -825,9 +788,7 @@ func select_stage(variant: int, hosted_guest: bool = false) -> void:
 		spectators.rebuild()
 	else:
 		world_ready = false
-	world_environment.free()
-	sunlight.free()
-	_build_environment()
+	sky_weather.rebuild()
 	heading = stage.parks.park_visitor(car, 0)
 	vehicle_motion = Motion.new()
 	speed = 0

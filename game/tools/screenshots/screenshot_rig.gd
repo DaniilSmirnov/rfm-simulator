@@ -8,6 +8,7 @@ extends RefCounted
 #   await rig.capture("res://../docs/screenshots/x.webp", Vector2i(1920, 1080))
 const SETTLE_FRAMES = 8
 const QUALITY = 0.9
+const ConditionPreviews = preload("res://tools/screenshots/condition_previews.gd")
 
 var tree: SceneTree
 var game: Node
@@ -53,8 +54,14 @@ func aim(position: Vector3, target: Vector3, fov: float = 56.0) -> void:
 	camera.look_at(target)
 
 # Saves outside assert(): asserts are stripped from release builds.
+# With `-- --conditions` only the stage card preview is captured, under every
+# time of day and weather (condition_previews.gd).
 func capture(path: String, size: Vector2i, quality: float = QUALITY) -> bool:
 	viewport.size = size
+	if ConditionPreviews.requested():
+		if ConditionPreviews.stage_of(path) >= 0:
+			await ConditionPreviews.capture_all(tree, game, viewport, ConditionPreviews.stage_of(path))
+		return true
 	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	for frame in range(SETTLE_FRAMES):
 		await tree.process_frame

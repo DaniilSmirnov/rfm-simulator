@@ -1,6 +1,6 @@
 extends Node
-# Sounds of the outing apart from the cars (vehicle_audio.gd): wind, birds,
-# cicadas, the grill fire, footsteps on the surface underfoot, knocks, camp
+# Sounds of the outing apart from the cars (vehicle_audio.gd): wind, rain or
+# snowfall, birds, cicadas, the grill fire, footsteps on the surface underfoot, knocks, camp
 # gear being set down, eating. Most files come from scripts/generate-sounds.mjs.
 # Background birds and cooking fire are deliberately sparse instead of looping.
 # Their gain also stays at 20% of the previous linear amplitude.
@@ -20,11 +20,16 @@ const FIRE_GAP_MAX = 30.0
 const STEP_TAKES = 3
 # Gear put down: what it is made of.
 const METAL_GEAR = ["grill", "cauldron", "light_grill"]
+# Weather loops (sky_weather.gd): rain hiss, snowfall wind. Muffled a little
+# inside a car.
+const WEATHER_SOUNDS = {"rain": ["rain", -22.0], "snow": ["snow-wind", -24.0]}
+const IN_CAR_DB = -5.0
 var game: Node
 var shutting_down = false
 var birds: AudioStreamPlayer
 var cicadas: AudioStreamPlayer
 var effects: AudioStreamPlayer
+var weather_audio: AudioStreamPlayer
 var steps: AudioStreamPlayer
 var vehicles: Node
 var step_clock = 0.0
@@ -54,6 +59,7 @@ func _ready() -> void:
 	cicadas = SoundBank.player(self, CICADA_VOLUME_DB, "cicadas")
 	birds = SoundBank.player(self, BIRDS_VOLUME_DB, "bird-1")
 	effects = SoundBank.player(self, -17.0)
+	weather_audio = SoundBank.player(self, -22.0)
 	effects.max_polyphony = 4
 	steps = SoundBank.player(self, -23.0)
 	steps.max_polyphony = 2
@@ -92,6 +98,7 @@ func update(delta: float) -> void:
 		repair()
 	vehicles.update(delta, active(), world_paused())
 	_update_sparse_ambience(delta)
+	_update_weather()
 	effect_clock = maxf(0.0, effect_clock - delta)
 	if active() and game.impact_shake > last_impact + 0.12 and effect_clock <= 0:
 		vehicles.impact(game.impact_shake)
@@ -140,7 +147,8 @@ func _update_sparse_ambience(delta: float) -> void:
 	if world_paused():
 		return
 
-	if game.selected_stage != 1:
+	# No birdsong on the winter pass, at night or in the rain.
+	if game.selected_stage != 1 and game.sky_weather.daytime == "day" and game.sky_weather.weather != "rain":
 		bird_clock -= delta
 		if bird_clock <= 0.0:
 			birds.stream = SoundBank.take("bird", BIRD_TAKES, ambient_random)
@@ -178,6 +186,20 @@ func _update_sparse_ambience(delta: float) -> void:
 		fire_burst_clock = FIRE_BURST_SECONDS
 		fire_clock = ambient_random.randf_range(FIRE_GAP_MIN, FIRE_GAP_MAX)
 
+# The weather loop of the room's weather, from the start of play to the end.
+func _update_weather() -> void:
+	var sound: Array = WEATHER_SOUNDS.get(game.sky_weather.weather, [])
+	var wanted = null if sound.is_empty() or not game.playing else SoundBank.stream(sound[0])
+	if weather_audio.stream != wanted:
+		weather_audio.stop()
+		weather_audio.stream = wanted
+	if wanted == null:
+		return
+	weather_audio.volume_db = float(sound[1]) + (IN_CAR_DB if game.in_car else 0.0)
+	SoundBank.set_paused(weather_audio, world_paused())
+	if not weather_audio.playing and not world_paused():
+		game._play_audio(weather_audio)
+
 # Gear set down, the grill lit, snow dug: what it was decides the sound.
 func placement(kind: String = "") -> void:
 	if shutting_down:
@@ -196,6 +218,6 @@ func _effect(sound: String) -> void:
 
 func stop_all() -> void:
 	shutting_down = true
-	for player in [birds, cicadas, effects, steps]:
+	for player in [birds, cicadas, effects, steps, weather_audio]:
 		player.stop()
 	vehicles.silence()

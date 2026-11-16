@@ -59,7 +59,7 @@ static func update(game, players: Dictionary, delta: float) -> void:
 		if occupied.has(str(id)) or game.movable_props.grips.has(id):
 			continue
 		var p: Dictionary = participants[id]
-		if p.get("in_car", true) or p.get("seated", false) or p.get("airborne", false) or int(p.get("beers", 0)) >= 30:
+		if p.get("in_car", true) or p.get("seated", false) or p.get("airborne", false) or int(p.get("beers", 0)) >= game.COLLAPSE_BEERS:
 			continue
 		if game.injuries.is_down("player:%s" % id):
 			continue

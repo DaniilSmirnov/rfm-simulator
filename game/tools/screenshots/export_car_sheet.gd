@@ -1,13 +1,14 @@
 extends SceneTree
 # Contact sheet of every vehicle model, for reviewing car geometry by eye:
-#   xvfb-run godot --path game --script res://tools/screenshots/export_car_sheet.gd -- [out.png] [player|rally|all] [spin] [only=0,2] [cell=360x220] [views=fq,side,rq,front,rear,top,low]
+#   xvfb-run godot --path game --script res://tools/screenshots/export_car_sheet.gd -- [out.png] [player|rally|all] [spin] [night] [hood] [only=0,2] [cell=360x220] [views=fq,side,rq,front,rear,top,low,cabin]
+# "night" darkens the scene and switches every car's lamps and beams on.
 # Each car is shown from front-three-quarter, side and rear-three-quarter.
 # "spin" drives every car 0.3 m before capturing, so frozen wheels stand out.
 var CELL = Vector2i(360, 220)
 const NAMED_VIEWS = {
 	"fq": Vector3(4.4, 1.7, -4.6), "side": Vector3(6.2, 1.1, 0.0), "rq": Vector3(-4.4, 2.0, 4.8),
 	"front": Vector3(0.0, 1.2, -6.4), "rear": Vector3(0.0, 1.4, 6.4), "top": Vector3(0.6, 6.4, 0.2),
-	"low": Vector3(3.2, 0.25, -2.2),
+	"low": Vector3(3.2, 0.25, -2.2), "cabin": Vector3(2.4, 1.0, -1.2),
 }
 var VIEWS: Array = [NAMED_VIEWS.fq, NAMED_VIEWS.side, NAMED_VIEWS.rq]
 
@@ -19,6 +20,8 @@ func run() -> void:
 	var out = args[0] if args.size() > 0 else "res://../docs/screenshots/cars.png"
 	var which = args[1] if args.size() > 1 else "all"
 	var spin = "spin" in args
+	var night = "night" in args
+	var hood = "hood" in args # bonnets open on the engine bay, a wrench raised
 	var only: Array = []
 	for arg in args:
 		if arg.begins_with("only="):
@@ -48,14 +51,14 @@ func run() -> void:
 	var env = WorldEnvironment.new()
 	env.environment = Environment.new()
 	env.environment.background_mode = Environment.BG_COLOR
-	env.environment.background_color = Color("b9c7cc")
+	env.environment.background_color = Color("0a1020") if night else Color("b9c7cc")
 	env.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.environment.ambient_light_color = Color("9aa7ad")
-	env.environment.ambient_light_energy = 0.9
+	env.environment.ambient_light_color = Color("5d6f9c") if night else Color("9aa7ad")
+	env.environment.ambient_light_energy = 0.35 if night else 0.9
 	world.add_child(env)
 	var sun = DirectionalLight3D.new()
 	sun.rotation = Vector3(-0.9, 0.7, 0)
-	sun.light_energy = 1.2
+	sun.light_energy = 0.15 if night else 1.2
 	sun.shadow_enabled = true
 	world.add_child(sun)
 	props.box(world, Vector3(0, -0.05, 0), Vector3(40, 0.1, 40), Color("6f7a68"))
@@ -72,6 +75,13 @@ func run() -> void:
 	for row in range(builders.size()):
 		var car: Node3D = builders[row].call()
 		world.add_child(car)
+		if night:
+			load("res://scripts/cars/car_lamps.gd").set_lit(car, true)
+			car.add_child(load("res://scripts/core/sky_weather.gd").headlights(car))
+		if hood:
+			load("res://scripts/cars/car_hood.gd").animate(car, true, 10.0)
+			if car.has_node("EngineBay/Wrench"):
+				car.get_node("EngineBay/Wrench").show()
 		if spin:
 			props.animate_wheels(car)
 			car.position.z -= 0.3
@@ -99,6 +109,8 @@ static func _bounds(node: Node3D) -> AABB:
 	var result = AABB()
 	var first = true
 	for mesh in node.find_children("*", "MeshInstance3D", true, false):
+		if mesh.name == "LampBeams": # light, not bodywork: frame the car itself
+			continue
 		var box: AABB = mesh.global_transform * mesh.get_aabb()
 		result = box if first else result.merge(box)
 		first = false

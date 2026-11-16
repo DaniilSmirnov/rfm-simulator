@@ -6,6 +6,7 @@ extends RefCounted
 # Body, glass, trim and lamps are direct MeshInstance3D children, so
 # RallyProps.add_player_trunk() can cut the rear hatch out of each of them.
 const CarParts = preload("res://scripts/cars/car_parts.gd")
+const CarLamps = preload("res://scripts/cars/car_lamps.gd")
 const COLORS = {
 	"body": Color("283f87"),
 	"glass": Color("253d49"),
@@ -76,10 +77,14 @@ static func build() -> Node3D:
 	for part in ["body", "glass", "trim", "lights"]:
 		var node = _commit(parts, part)
 		node.name = "BodyShellHatchback" if part == "body" else "Camping_" + part
+		if part == "lights":
+			CarLamps.mark(node, "tail")
 		root.add_child(node)
 	for part in ["headlights", "indicators", "plates", "rack", "boat", "boat_floor"]:
 		var node = _commit(parts, part)
 		node.name = "Camping_" + part
+		if part == "headlights":
+			CarLamps.mark(node, "head")
 		details.add_child(node)
 	for side in [-1.0, 1.0]:
 		for index in range(2):

@@ -407,7 +407,7 @@ func update_hud() -> void:
 		int(game.camp_cooking.cook_time / game.camp_cooking.COOK_SECONDS * 100) if pot else 0,
 		int(game.camp_cooking.cook_time / 45 * 100) if pot and game.mobile_mode else 0,
 		target.get("label", ""), game.toast_label.text if game.mobile_mode and game.toast_time > 0 else "",
-		game.toast_time > 0 if game.mobile_mode else false, game.sober_remaining if game.beers >= 30 else 0, game.rides.hud_state()]
+		game.toast_time > 0 if game.mobile_mode else false, game.sober_remaining if game.beers >= game.COLLAPSE_BEERS else 0, game.rides.hud_state()]
 	if state == game.hud_state:
 		return
 	game.hud_state = state
@@ -417,7 +417,7 @@ func update_hud() -> void:
 	var status_text = ""
 	var info_text = ""
 	var hint_text = ""
-	game.sobriety_panel.visible = game.beers >= 30 and game.playing and not game.dead and not game.finished
+	game.sobriety_panel.visible = game.beers >= game.COLLAPSE_BEERS and game.playing and not game.dead and not game.finished
 	if game.sobriety_panel.visible:
 		var seconds = ceili(game.sober_remaining if game.sober_remaining > 0 else game.SOBER_SECONDS)
 		set_hud_text(game.sobriety_label, Loc.t("ПРОТРЕЗВЛЕНИЕ · ВСТАНЕШЬ ЧЕРЕЗ %02d:%02d") % [seconds / 60, seconds % 60])
@@ -447,7 +447,7 @@ func update_hud() -> void:
 			info_text = Loc.t("ОТКРЫВАЕМ БАНКУ") if game.drink_time < 1.25 else Loc.t("ЗА ХОРОШИЙ ВЫЕЗД!")
 		if game.eat_time >= 0:
 			info_text = Loc.t("ЕДИМ ПЛОВ") if game.eat_kind == "plov" else (Loc.t("ЕДИМ ЯГОДЫ") if game.eat_kind == "berries" else (Loc.t("ЕДИМ ГРИБЫ") if game.eat_kind == "mushroom" else Loc.t("ЕДИМ ШАШЛЫК")))
-		if game.beers >= 30:
+		if game.beers >= game.COLLAPSE_BEERS:
 			info_text = Loc.t("ТЫ ЛЕЖИШЬ · ОТДОХНИ ДО ВОССТАНОВЛЕНИЯ")
 	if game.crews.car_towed and game.tow_target == null:
 		info_text = Loc.t("ТВОЮ МАШИНУ ТЯНУТ НА ТРОСЕ")
@@ -458,7 +458,7 @@ func update_hud() -> void:
 		if game.injuries.down:
 			hint_text = Loc.t("Лежи и жди скорую · мышь — осмотреться")
 	elif near_prop:
-		hint_text += Loc.t("   ·   Удерживай T и иди — тащить предмет")
+		hint_text += Loc.t("   ·   Удерживай T и иди — оттащить дерево")
 	elif near_tow:
 		hint_text += Loc.t("   ·   T — тянуть тросом в любую сторону · иди на машину — толкать")
 	if not game.in_car:
@@ -481,7 +481,7 @@ func update_hud() -> void:
 			info_text = Loc.t("ПАССАЖИР · %02d КМ/Ч") % int(absf(game.rides.speed()) * 3.6)
 		elif game.in_car:
 			info_text = Loc.t("%02d КМ/Ч · МАШИНА %d%%") % [int(absf(game.speed) * 3.6), int(game.condition)] if game.condition > 0 else Loc.t("МАШИНА СЛОМАНА · САДИСЬ К ДРУГУ")
-		elif game.drink_time < 0 and game.eat_time < 0 and game.beers < 30:
+		elif game.drink_time < 0 and game.eat_time < 0 and game.beers < game.COLLAPSE_BEERS:
 			if game.packing.active():
 				info_text = Loc.t("ВЕРНУТЬ ВЕЩИ В БАГАЖНИК · ОСТАЛОСЬ %d") % remaining_items
 			else:

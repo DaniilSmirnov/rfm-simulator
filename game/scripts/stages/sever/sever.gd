@@ -501,7 +501,7 @@ func sync_providers(_game) -> Array:
 	var apply = func(f: Dictionary, _t: float) -> void:
 		snow.authoritative = false
 		snow.apply_snapshot(f.get("snow", []))
-		snow.apply_dug_snapshot(f.get("snow_dug", []))
+		snow.apply_dug_snapshot(f.get("snow_dug", []), stage)
 	return [WorldSync.provider("snow", "snow", ["snow", "snow_dug"], snapshot, apply, true)]
 
 func marshal_stations() -> Array:

@@ -23,7 +23,7 @@ func current() -> Dictionary:
 	return target
 
 func hold_target() -> Dictionary:
-	if not game.playing or game.paused or game.dead or game.finished or game.in_car or game.seated or game.beers >= 30 or game.injuries.down or game.drink_time >= 0 or game.eat_time >= 0 or game.placement_kind != "" or game.how_to_play.is_open() or game.cargo.held.has(game.chair_owner()) or (game.room.is_guest() and game.room.world_paused):
+	if not game.playing or game.paused or game.dead or game.finished or game.in_car or game.seated or game.beers >= game.COLLAPSE_BEERS or game.injuries.down or game.drink_time >= 0 or game.eat_time >= 0 or game.placement_kind != "" or game.how_to_play.is_open() or game.cargo.held.has(game.chair_owner()) or (game.room.is_guest() and game.room.world_paused):
 		return {}
 	var candidates: Array = []
 	for item in game.packing.items():
@@ -50,12 +50,14 @@ func normal_target() -> Dictionary:
 		return {}
 	if game.in_car:
 		return {"action": "car", "label": Loc.t("Выйти из машины")} if absf(game.rides.speed()) <= 1 else {}
-	if game.beers >= 30 or game.injuries.down:
+	if game.beers >= game.COLLAPSE_BEERS or game.injuries.down:
 		return {}
 	if game.seated:
-		return {"action": "stand", "label": Loc.t("Встать со стула")}
+		return game.player.sauna.seated_target(self) if game.player.sauna.steaming else {"action": "stand", "label": Loc.t("Встать со стула")}
 	if game.player.relief.active:
 		return {"action": "relief_stop", "label": Loc.t("Закончить")}
+	if game.player.repair.active():
+		return game.player.repair.target()
 	var items: Array = []
 	game.cargo.offers(items, self)
 	if not game.cargo.held.has(game.chair_owner()):
@@ -105,8 +107,11 @@ func normal_target() -> Dictionary:
 			grill_offers(items, source, grill)
 		var table = game.camp if source == -1 else game.spectators.groups[source].table
 		if table != null:
-			offer(items, table.position + Vector3(0, 0.75, 0), 0.85, 3, "beer" if game.beer_timer <= 0 else "", "Выпить пиво" if game.beer_timer <= 0 else "")
+			var beer = "" if game.beer_timer > 0 else ("Выпить пиво" if game.camp_actions.crates.count(source) > 0 else "Ящик пуст")
+			offer(items, table.position + Vector3(0, 0.75, 0), 0.85, 3, "beer" if beer != "" else "", beer)
 	game.player.relief.offers(items, self)
+	game.player.repair.offers(items, self)
+	game.player.sauna.offers(items, self)
 	return select_target(items)
 
 # A grill offers what the fan is looking at: the skewer rails carry the food
@@ -210,4 +215,9 @@ func activate() -> void:
 		"beer": game.drink_beer()
 		"relief": game.player.relief.start()
 		"relief_stop": game.player.relief.stop()
+		"repair_car": game.player.repair.start(str(target.value))
+		"repair_stop": game.player.repair.stop()
+		"sauna": game.player.sauna.start(float(target.value))
+		"venik": game.player.sauna.whisk.start()
+		"sauna_ladle": game.player.sauna.ladle()
 

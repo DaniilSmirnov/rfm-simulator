@@ -5,12 +5,16 @@ const MAX_CELLS = 768
 const MAX_DUG = 256
 # Share of loose snow depth a walker wades through (about thigh-deep in forest).
 const FOOT_SINK = 0.72
+const SnowStumps = preload("res://scripts/stages/winter/snow_stumps.gd")
 var dug: Dictionary = {}
 var cells: Dictionary = {}
 var dirty: Dictionary = {}
 var chunks: Dictionary = {}
 var authoritative = true
 var refresh_clock = 0.0
+# Set when the dug triangles change; trunks over them are extended to the floor.
+var stumps_dirty = false
+var stage_ref: WeakRef
 
 static func natural_depth(stage, point: Vector3) -> float:
 	if not stage.has_snow: return 0.0
@@ -97,6 +101,9 @@ func update(delta: float) -> void:
 	refresh_clock += delta
 	if refresh_clock < 0.5: return
 	refresh_clock = 0.0
+	if stumps_dirty and stage_ref != null:
+		stumps_dirty = false
+		SnowStumps.rebuild(stage_ref.get_ref(), self)
 	var count = 0
 	for tile in dirty.keys():
 		dirty.erase(tile)
@@ -207,9 +214,14 @@ func dig(stage, point: Vector3) -> bool:
 	var key = polygon(stage, point)
 	dug[key] = true
 	dirty_polygon(key)
+	mark_stumps(stage)
 	reshape_ground(stage, key)
 	refresh_clock = 0.5
 	return true
+
+func mark_stumps(stage) -> void:
+	stumps_dirty = true
+	stage_ref = weakref(stage)
 
 # Prop physics samples ground() into cached tiles; they must follow the pit.
 func reshape_ground(stage, key: Vector4i) -> void:
@@ -221,7 +233,7 @@ func dug_snapshot() -> Array:
 	for key in dug: rows.append([key.x, key.y, key.z, key.w])
 	return rows
 
-func apply_dug_snapshot(rows: Array) -> void:
+func apply_dug_snapshot(rows: Array, stage = null) -> void:
 	var next: Dictionary = {}
 	for row in rows.slice(0, MAX_DUG):
 		if row is Array and row.size() == 4 and int(row[2]) in [2, 4] and int(row[3]) in [0, 1]:
@@ -230,4 +242,6 @@ func apply_dug_snapshot(rows: Array) -> void:
 		if not next.has(key): dirty_polygon(key)
 	for key in next:
 		if not dug.has(key): dirty_polygon(key)
+	var changed = next.size() != dug.size() or not next.keys().all(func(key): return dug.has(key))
 	dug = next
+	if changed and stage != null: mark_stumps(stage)

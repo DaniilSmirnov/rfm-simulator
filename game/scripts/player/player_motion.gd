@@ -17,9 +17,18 @@ var game:
 		game = value
 		relief.game = value
 		perches.game = value
+		sauna.game = value
+		repair.game = value
 var flight_solver = preload("res://scripts/net/drive_prediction.gd").new()
 var relief = preload("res://scripts/player/tree_relief.gd").new()
 var perches = preload("res://scripts/player/perches.gd").new()
+var sauna = preload("res://scripts/player/sauna_steam.gd").new()
+var repair = preload("res://scripts/cars/car_repair.gd").new()
+var drunk = preload("res://scripts/player/drunk_camera.gd").new()
+# Seated on a chair or a sauna bench the view turns only as far as a head and
+# shoulders do, not round the chair's back (SEAT_LOOK either way).
+const SEAT_LOOK = 1.75
+var seat_yaw = NAN
 
 func drive(delta: float) -> void:
 	if Dedicated.active(): return # a dedicated server has no player of its own
@@ -108,12 +117,10 @@ func drive(delta: float) -> void:
 		game.condition = maxf(0, game.condition - delta * 6.0 * game.vehicle_motion.flood)
 		if game.vehicle_motion.flood > 0.3 and game.toast_time <= 0:
 			game.toast("Машина набирает воду! Выезжай на берег или выходи (F).")
-	# Alone nobody can tow the car or give a lift; in a room car_rides.gd decides.
-	if game.condition <= 0 and not game.room.connected:
-		if flooded:
-			game.die("Легковушка утонула в финском озере.\nДальше только пешком.")
-			return
-		game.die("Легковушка сдалась раньше тебя.\nРазбитый СУ победил подвеску.")
+	# A drowned car is lost; a broken one waits for a repair under the bonnet
+	# (car_repair.gd), a lift or a tow (car_rides.gd).
+	if game.condition <= 0 and flooded and not game.room.connected:
+		game.die("Легковушка утонула в финском озере.\nДальше только пешком.")
 
 func drive_helicopter(delta: float) -> void:
 	game.vehicle_motion.drive_clock += clampf(delta, 0, 1.0)
@@ -185,7 +192,7 @@ func walk(delta: float) -> void:
 	if Dedicated.active(): return
 	game.rides.update()
 	perches.carry()
-	if relief.update(delta):
+	if relief.update(delta) or repair.update(delta):
 		return
 	perches.gather(game.walker)
 	var remaining = maxf(delta, 0.0)
@@ -197,7 +204,7 @@ func walk(delta: float) -> void:
 
 func walk_step(delta: float) -> void:
 	var previous_feet: Vector3 = game.walker
-	if game.beers >= 30 or game.seated or game.injuries.down:
+	if game.beers >= game.COLLAPSE_BEERS or game.seated or game.injuries.down:
 		return
 	var motion = Vector2(Input.get_axis("left", "right"), Input.get_axis("forward", "back"))
 	if motion.length() > 1:
@@ -266,7 +273,7 @@ func snow_hint(delta: float) -> void:
 	game.snow_stuck = deep
 
 func running() -> bool:
-	return not game.in_car and not game.seated and game.beers < 30 and game.injuries.limp <= 0.0 and not game.injuries.down and not game.paused and not game.dead and not game.finished and game.drink_time < 0 and game.eat_time < 0 and Input.is_action_pressed("sprint") and (absf(Input.get_axis("left", "right")) + absf(Input.get_axis("forward", "back"))) > 0.01
+	return not game.in_car and not game.seated and game.beers < game.COLLAPSE_BEERS and game.injuries.limp <= 0.0 and not game.injuries.down and not game.paused and not game.dead and not game.finished and game.drink_time < 0 and game.eat_time < 0 and Input.is_action_pressed("sprint") and (absf(Input.get_axis("left", "right")) + absf(Input.get_axis("forward", "back"))) > 0.01
 
 func jump() -> bool:
 	if game.injuries.down and not game.paused and not game.dead and not game.finished:
@@ -274,46 +281,71 @@ func jump() -> bool:
 			return true
 		game.injuries.play.injuries = game.injuries
 		return game.injuries.play.stand(game.injuries.local_key())
-	if not game.playing or relief.active or game.in_car or game.seated or game.beers >= 30 or game.injuries.down or game.injuries.limp > 0.0 or game.paused or game.dead or game.finished or game.drink_time >= 0 or game.eat_time >= 0 or game.jump_height > 0.01 or game.jump_velocity > 0:
+	if not game.playing or relief.active or game.in_car or game.seated or game.beers >= game.COLLAPSE_BEERS or game.injuries.down or game.injuries.limp > 0.0 or game.paused or game.dead or game.finished or game.drink_time >= 0 or game.eat_time >= 0 or game.jump_height > 0.01 or game.jump_velocity > 0:
 		return false
 	if game.stage.water != null and game.stage.water.depth(game.walker) > 0.6:
 		return false # No push-off while wading deep or swimming.
 	game.jump_velocity = game.JUMP_SPEED
 	return true
 
-func update_camera(delta: float) -> void:
+func update_camera(delta: float, snap: bool = false) -> void:
 	if game.capture_mode:
 		return
 	if game.injuries.down:
 		game.injuries.update_camera(delta)
 		return
 	game.impact_shake = maxf(0, game.impact_shake - delta)
-	game.collapse_time = minf(0.8, game.collapse_time + delta) if game.beers >= 30 else 0.0
+	game.collapse_time = minf(0.8, game.collapse_time + delta) if game.beers >= game.COLLAPSE_BEERS else 0.0
 	var collapse = smoothstep(0, 0.8, game.collapse_time)
 	if game.in_car:
 		var body: Node3D = game.rides.vehicle()
 		var travel_yaw = game.rides.heading() + (PI if game.rides.speed() < -0.5 else 0.0)
-		game.view_yaw = lerp_angle(game.view_yaw, travel_yaw, 1.0 - exp(-delta * 2.8))
+		game.view_yaw = travel_yaw if snap else lerp_angle(game.view_yaw, travel_yaw, 1.0 - exp(-delta * 2.8))
 		var behind = Vector3(sin(game.view_yaw), 0, cos(game.view_yaw))
 		var elevation = clampf(atan2(4.4, 8.2) - (game.view_pitch + 0.12), 0.14, 1.25)
 		var distance = Vector2(8.2, 4.4).length()
 		var desired = body.position + behind * cos(elevation) * distance + Vector3.UP * sin(elevation) * distance
 		desired.y = maxf(desired.y, game.stage.ground(desired) + 1.1)
-		var eased = game.camera.position.lerp(desired, 1 - exp(-delta * 7))
-		# Snap in front of a tent roof or a crown at once; ease back out.
-		var reach = Hitbox.bounds(body).size.length() * 0.5 + 1.0
-		game.camera.position = ViewClearance.chase_view(game.stage, body.position + Vector3(0, 1.1, 0), eased, body, reach)
+		game.camera.position = chase_position(delta, body, desired, not snap)
 		game.camera.look_at(body.position + Vector3(0, 1.1, 0) - behind * 1.5)
 	else:
+		seated_look()
 		game.camera.position = game.walker + Vector3(0, lerpf(1.45 if game.seated else 1.72, 0.36, collapse) + sin(game.elapsed * 12) * 0.015, 0)
 		var sip = sin(clampf((game.drink_time - 1.3) / 1.2, 0, 1) * PI) if game.drink_time >= 0 else 0.0
 		game.camera.rotation = Vector3(game.view_pitch + sip * 0.035, game.view_yaw, 0.0)
 		game.camera.fov = 68 - sip * 2.0
 
-	# Bounded gentle sway, with an envelope that fades between sips.
-	game.camera.rotation.z += sin(game.drunk_phase) * deg_to_rad(3.0) * game.drunk_strength + PI / 2 * collapse
-	game.camera.rotation.x += sin(game.drunk_phase * 2.0) * deg_to_rad(0.6) * game.drunk_strength
+	# The drunk reel (drunk_camera.gd) and the fall to the ground.
+	drunk.apply(game, collapse)
 	game.camera.position += Vector3(sin(game.elapsed * 91), cos(game.elapsed * 73), 0) * game.impact_shake * 0.12
+
+# Puts the view straight where it settles: behind the car along its heading,
+# or at the fan's eyes. The stage starts here instead of swinging in from the
+# menu camera and slewing around the parked car for its first seconds.
+func snap_camera() -> void:
+	if game.camera != null:
+		update_camera(0.0, true)
+
+# The chase camera eases toward the clear spot behind the car (in front of a
+# tent roof or a crown that hides `desired`), never farther from the car than
+# that spot: it snaps in front of scenery at once and eases back out. The
+# clear spot is found from `desired`, not from last frame's camera, so a
+# parked car's camera settles instead of hopping between two spots at a
+# crown's edge every frame.
+func chase_position(delta: float, body: Node3D, desired: Vector3, ease: bool = true) -> Vector3:
+	var pivot = body.position + Vector3(0, 1.1, 0)
+	var reach = Hitbox.bounds(body).size.length() * 0.5 + 1.0
+	var target = ViewClearance.chase_view(game.stage, pivot, desired, body, reach)
+	if not ease:
+		return target
+	var eased = game.camera.position.lerp(target, 1 - exp(-delta * 7))
+	var limit = pivot.distance_to(target)
+	if pivot.distance_to(eased) > limit:
+		eased = pivot + (eased - pivot).normalized() * limit
+	# Scenery that newly cuts across the eased line (the car turned behind a
+	# tree) still pulls the camera in front of it at once.
+	var seen = ViewClearance.clear_view(game.stage, pivot, eased, body)
+	return seen if pivot.distance_to(seen) < pivot.distance_to(eased) - 0.5 else eased
 
 # Getting into a car (own or a friend's) needs free hands and firm feet.
 func can_change_seat() -> bool:
@@ -322,8 +354,8 @@ func can_change_seat() -> bool:
 		return false
 	if game.jump_height > 0.01 or game.jump_velocity > 0:
 		return false
-	if game.beers >= 30 or game.injuries.down:
-		game.toast("Ты лежишь. Дождись восстановления — три минуты." if game.beers >= 30 else "Ты лежишь. Дождись скорую.")
+	if game.beers >= game.COLLAPSE_BEERS or game.injuries.down:
+		game.toast("Ты лежишь. Дождись восстановления — три минуты." if game.beers >= game.COLLAPSE_BEERS else "Ты лежишь. Дождись скорую.")
 		return false
 	if game.drink_time >= 0 or game.eat_time >= 0:
 		game.toast("Сначала закончи есть или пить и освободи руки.")
@@ -358,31 +390,47 @@ func toggle_car() -> void:
 		game.toast("Подойди к своей машине, чтобы сесть.")
 
 func walking_intent() -> Vector3:
-	if relief.active or game.in_car or game.seated or game.jump_height > 0.01 or game.paused or game.dead or game.finished or game.beers >= 30 or game.drink_time >= 0 or game.eat_time >= 0:
+	if relief.active or game.in_car or game.seated or game.jump_height > 0.01 or game.paused or game.dead or game.finished or game.beers >= game.COLLAPSE_BEERS or game.drink_time >= 0 or game.eat_time >= 0:
 		return Vector3.ZERO
 	var input = Vector2(Input.get_axis("left", "right"), Input.get_axis("forward", "back")).limit_length(1)
 	return Vector3(input.x, 0, input.y).rotated(Vector3.UP, game.view_yaw)
 
 func sit_down() -> void:
 	var owner = game.chair_owner()
-	if not game.personal_chairs.has(owner) or game.in_car or game.beers >= 30 or game.jump_height > 0.01 or game.jump_velocity > 0:
+	if not game.personal_chairs.has(owner) or game.in_car or game.beers >= game.COLLAPSE_BEERS or game.jump_height > 0.01 or game.jump_velocity > 0:
 		return
 	game.seat_exit = game.walker
 	var chair: Node3D = game.personal_chairs[owner]
 	game.walker = chair.position
 	game.view_yaw = chair.rotation.y
 	game.seated = true
+	seat_yaw = game.view_yaw
 	game.toast("F — встать. Мышь — смотреть.")
 
 func stand_up() -> void:
 	game.seated = false
+	sauna.leave()
 	game.walker = game.seat_exit
-	game.walker.y = game.stage.ground(game.walker)
+	# Authored floors (the sauna) hold the feet up; otherwise the ground.
+	game.walker.y = game.stage.walk_floor(game.walker, game.stage.solids.walking_floor(game.walker, game.walker.y)) if inside_floor() else game.stage.ground(game.walker)
+
+# Keeps a seated view within SEAT_LOOK of the way the seat faces (set when the
+# player sits down on a chair or a sauna bench).
+func seated_look() -> void:
+	if not game.seated:
+		seat_yaw = NAN
+		return
+	if is_nan(seat_yaw):
+		seat_yaw = game.view_yaw
+	game.view_yaw = seat_yaw + clampf(wrapf(game.view_yaw - seat_yaw, -PI, PI), -SEAT_LOOK, SEAT_LOOK)
+
+func inside_floor() -> bool:
+	return sauna.inside(game.seat_exit)
 
 func update_sobriety(delta: float) -> void:
 	if not game.playing or game.paused or game.dead or game.finished or (game.room.is_guest() and game.room.world_paused):
 		return
-	if game.beers < 30:
+	if game.beers < game.COLLAPSE_BEERS:
 		game.sober_remaining = 0.0
 		return
 	if game.sober_remaining <= 0:
@@ -398,8 +446,10 @@ func update_sobriety(delta: float) -> void:
 		game.toast("Ты протрезвел. Можно встать, собрать вещи и вернуться в машину.")
 
 func update_intoxication(delta: float) -> void:
+	sauna.update(delta)
 	game.drunk_strength = maxf(0.0, game.drunk_strength - delta / game.DRUNK_FADE_SECONDS)
 	if game.drunk_strength > 0:
 		game.drunk_phase = fposmod(game.drunk_phase + delta * 1.25, TAU)
 	else:
 		game.drunk_phase = 0.0
+	drunk.update(game)

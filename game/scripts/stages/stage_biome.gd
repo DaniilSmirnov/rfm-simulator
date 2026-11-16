@@ -14,6 +14,31 @@ var stage # RallyStage that owns this biome; set by attach()
 func attach(owner) -> void:
 	stage = owner
 
+# Helpers a biome builds (scenery, life, the village's architecture and
+# landscape) keep a link back to it ("biome", "village"). They are RefCounted,
+# so the pair keeps itself alive after the stage is freed and leaks at exit
+# with every mesh it holds. The stage calls this when it goes.
+func release() -> void:
+	for helper in _script_values(self):
+		if helper is RefCounted and helper != self:
+			_unlink(helper, self)
+
+# Clears every script variable of `helper` that points at `target`.
+static func _unlink(helper: Object, target: Object) -> void:
+	for property in helper.get_property_list():
+		if not property.usage & PROPERTY_USAGE_SCRIPT_VARIABLE:
+			continue
+		var link = helper.get(property.name)
+		if link is Object and link == target:
+			helper.set(property.name, null)
+
+static func _script_values(object: Object) -> Array:
+	var values = []
+	for property in object.get_property_list():
+		if property.usage & PROPERTY_USAGE_SCRIPT_VARIABLE:
+			values.append(object.get(property.name))
+	return values
+
 # ---------------------------------------------------------------- features
 # Shared subsystems a stage switches on, instead of checks of its identity.
 
