@@ -92,6 +92,19 @@ func at_open_trunk(owner: String) -> bool:
 func owner_of(item: Dictionary) -> String:
 	return str(item.get("owner", item.node.get_meta("gear_owner", game.chair_owner())))
 
+# The shovel is a tool, not a box: it never blocks another action. Starting one
+# (sit, drink, eat, get in a car...) sends it straight back to the owner's trunk.
+func blocks(owner: String) -> bool:
+	return held.has(owner) and str(held[owner].kind) != "shovel"
+
+func stow_shovel() -> void:
+	var owner = actor()
+	if str(held.get(owner, {}).get("kind", "")) != "shovel":
+		return
+	held.erase(owner)
+	if context.is_empty():
+		game.room.submit("stow_shovel")
+
 func enabled(kind: String) -> bool:
 	return kind != "shovel" or (game.stage != null and game.stage.has_snow)
 

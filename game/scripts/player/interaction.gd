@@ -4,6 +4,8 @@ const Props = preload("res://scripts/core/props.gd")
 const GrillModel = preload("res://scripts/camp/grill_model.gd")
 const Loc = preload("res://scripts/ui/loc.gd")
 var game: Node3D
+# Actions done with the shovel in hand (or that return it the usual way).
+const SHOVEL_ACTIONS = ["dig_snow", "return_gear", "take_gear", "trunk", "place_held", "pack", "hold_gear"]
 var hold = preload("res://scripts/player/interaction_hold.gd").new()
 
 func offer(items: Array, point: Vector3, radius: float, reach: float, action: String, label: String, value: Variant = null) -> void:
@@ -64,7 +66,7 @@ func normal_target() -> Dictionary:
 		return game.player.repair.target()
 	var items: Array = []
 	game.cargo.offers(items, self)
-	if not game.cargo.held.has(game.chair_owner()):
+	if not game.cargo.blocks(game.chair_owner()):
 		if not game.cargo.at_open_trunk(game.chair_owner()):
 			offer(items, game.car.position + Vector3(0, 0.9, 0), 1.4, 4, "car", "Сесть в машину")
 		game.rides.offers(items, self)
@@ -79,15 +81,15 @@ func normal_target() -> Dictionary:
 				continue
 			offer(items, item.node.global_position + Vector3.UP * item.height * 0.5, maxf(item.radius, 0.8), 3.5, "pack", item.label, item.node.global_position)
 		return select_target(items)
-	if game.cargo.held.has(game.chair_owner()):
-		if game.cargo.held[game.chair_owner()].kind == "shovel" and game.stage.has_snow:
-			var ray = -game.camera.global_basis.z
-			for distance in range(1, 81):
-				var point = game.camera.global_position + ray * (distance * 0.05)
-				if point.y <= game.stage.snow.visible_height(game.stage, point):
-					if game.stage.snow.can_dig(game.stage, point):
-						offer(items, point, 0.15, 4.0, "dig_snow", "Копать снег", point)
-					break
+	if str(game.cargo.held.get(game.chair_owner(), {}).get("kind", "")) == "shovel" and game.stage.has_snow:
+		var ray = -game.camera.global_basis.z
+		for distance in range(1, 81):
+			var point = game.camera.global_position + ray * (distance * 0.05)
+			if point.y <= game.stage.snow.visible_height(game.stage, point):
+				if game.stage.snow.can_dig(game.stage, point):
+					offer(items, point, 0.15, 4.0, "dig_snow", "Копать снег", point)
+				break
+	if game.cargo.blocks(game.chair_owner()):
 		var target = select_target(items)
 		if target.is_empty() and game.cargo.can_redeploy():
 			return {"action": "place_held", "label": Loc.t("Поставить предмет")}
@@ -192,6 +194,9 @@ func activate() -> void:
 	var target = current()
 	if target.is_empty():
 		return
+	# Any other action puts a held shovel back in the trunk first.
+	if target.action not in SHOVEL_ACTIONS:
+		game.cargo.stow_shovel()
 	match target.action:
 		"place_held": game.begin_placement(game.cargo.held[game.chair_owner()].kind)
 		"church_bell":

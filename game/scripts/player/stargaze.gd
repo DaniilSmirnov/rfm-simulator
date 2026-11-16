@@ -27,7 +27,7 @@ var lean = 0.0
 func can_start() -> bool:
 	return not active and game.sky_weather.aurora.level >= MIN_LEVEL and game.view_pitch >= LOOK_UP and not game.in_car and not game.seated \
 		and not game.injuries.down and game.beers < game.COLLAPSE_BEERS and game.drink_time < 0 and game.eat_time < 0 and game.placement_kind == "" \
-		and not game.player.relief.active and not game.player.moon.active and not game.player.repair.active() and game.jump_height <= 0.01 and not game.cargo.held.has(game.chair_owner())
+		and not game.player.relief.active and not game.player.moon.active and not game.player.repair.active() and game.jump_height <= 0.01 and not game.cargo.blocks(game.chair_owner())
 
 # The sky itself is the target: offered when nothing nearer is in view.
 func offer() -> Dictionary:

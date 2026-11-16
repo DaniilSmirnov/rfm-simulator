@@ -385,7 +385,7 @@ func chase_position(delta: float, body: Node3D, desired: Vector3, ease: bool = t
 
 # Getting into a car (own or a friend's) needs free hands and firm feet.
 func can_change_seat() -> bool:
-	if not game.in_car and game.cargo.held.has(game.chair_owner()):
+	if not game.in_car and game.cargo.blocks(game.chair_owner()):
 		game.toast("Сначала поставь предмет или верни коробку в багажник.")
 		return false
 	if game.jump_height > 0.01 or game.jump_velocity > 0:
@@ -396,6 +396,7 @@ func can_change_seat() -> bool:
 	if game.drink_time >= 0 or game.eat_time >= 0:
 		game.toast("Сначала закончи есть или пить и освободи руки.")
 		return false
+	game.cargo.stow_shovel()
 	return true
 
 func toggle_car() -> void:
@@ -435,6 +436,7 @@ func sit_down() -> void:
 	var owner = game.chair_owner()
 	if not game.personal_chairs.has(owner) or game.in_car or game.beers >= game.COLLAPSE_BEERS or game.jump_height > 0.01 or game.jump_velocity > 0:
 		return
+	game.cargo.stow_shovel()
 	game.seat_exit = game.walker
 	var chair: Node3D = game.personal_chairs[owner]
 	game.walker = chair.position

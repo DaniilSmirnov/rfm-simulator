@@ -292,7 +292,7 @@ func update_cooking(delta: float) -> void:
 func drink_beer() -> bool:
 	if game.beers >= game.COLLAPSE_BEERS or game.injuries.down:
 		return false
-	if game.cargo.held.has(game.chair_owner()):
+	if game.cargo.blocks(game.chair_owner()):
 		return false
 	if not game.playing or game.paused or game.dead or game.finished:
 		return false
@@ -306,6 +306,7 @@ func drink_beer() -> bool:
 	if crates.count(source) <= 0:
 		game.toast("Ящик пуст: пиво на этом столе кончилось.")
 		return false
+	game.cargo.stow_shovel()
 	# The can leaves the crate as the fan picks it up; the host keeps the count.
 	crates.take(source)
 	if not game.room.is_authority():
@@ -385,7 +386,7 @@ func cancel_drink() -> void:
 		game.beer_audio.stop()
 
 func eat_meat(source_group: int = -2) -> bool:
-	if game.cargo.held.has(game.chair_owner()):
+	if game.cargo.blocks(game.chair_owner()):
 		return false
 	if not game.playing or game.paused or game.dead or game.finished or game.eat_time >= 0 or game.drink_time >= 0:
 		return false
@@ -393,6 +394,7 @@ func eat_meat(source_group: int = -2) -> bool:
 	if game.eat_source_group == -2:
 		game.toast("Шашлык не готов или рядом нет мангала с порциями.")
 		return false
+	game.cargo.stow_shovel()
 	game.eat_kind = "meat"
 	game.eat_time = 0
 	game.eat_committed = false
@@ -403,8 +405,9 @@ func eat_meat(source_group: int = -2) -> bool:
 	return true
 
 func eat_plov(source: int = -1) -> bool:
-	if game.cargo.held.has(game.chair_owner()) or not game.camp_cooking.can_eat(source) or game.eat_time >= 0 or game.drink_time >= 0:
+	if game.cargo.blocks(game.chair_owner()) or not game.camp_cooking.can_eat(source) or game.eat_time >= 0 or game.drink_time >= 0:
 		return false
+	game.cargo.stow_shovel()
 	game.eat_kind = "kuyrdak" if source >= 0 else "plov"
 	game.forage_source = source
 	game.eat_time = 0
@@ -416,7 +419,7 @@ func eat_plov(source: int = -1) -> bool:
 	return true
 
 func eat_foraged(kind: String, source: int = -2) -> bool:
-	if game.cargo.held.has(game.chair_owner()):
+	if game.cargo.blocks(game.chair_owner()):
 		return false
 	if source == -2 and not game.foraging.can_eat(kind):
 		return false
@@ -424,6 +427,7 @@ func eat_foraged(kind: String, source: int = -2) -> bool:
 	game.forage_source = (game.foraging.nearby_source() if source == -2 else source) if kind == "mushroom" else -2
 	if kind == "mushroom" and (game.foraging.grill_node(game.forage_source) == null or game.player_position().distance_to(game.foraging.grill_node(game.forage_source).position) > 4 or game.foraging.ready_index(game.forage_source) < 0):
 		return false
+	game.cargo.stow_shovel()
 	game.food_species = game.foraging.ready_species(game.forage_source) if kind == "mushroom" else "edible"
 	game.eat_time = 0
 	game.eat_committed = false
