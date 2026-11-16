@@ -61,7 +61,8 @@
   "vars": {
     "RATE_LIMIT_ENABLED": "true",
     "VK_APP_ID": "54809523",
-    "VK_PAYMENTS_MODE": "production"
+    "VK_PAYMENTS_MODE": "production",
+    "TURN_SERVERS": "[{\"id\":\"relay-1\",\"urls\":[\"stun:149.33.55.120:3478\",\"turn:149.33.55.120:3478?transport=udp\",\"turn:149.33.55.120:3478?transport=tcp\"],\"weight\":1}]"
   },
   "compatibility_flags": [
     "nodejs_compat"
