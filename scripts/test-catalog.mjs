@@ -23,6 +23,7 @@ export const groups = Object.freeze({
   "test_physics.gd", "test_prop_contact.gd", "test_car_hitbox.gd", "test_food_fleet.gd", "test_foraging.gd", "test_grill_fire.gd", "test_camp_models.gd",
   "test_poison_mushrooms.gd", "test_network_motion.gd", "test_tow_recovery.gd", "test_car_rides.gd", "test_car_repair.gd", "test_police_bridge.gd",
   "test_crew_limit.gd", "test_drive_prediction.gd", "test_route_index.gd", "test_knockdown.gd", "test_ambulance_medics.gd", "test_ambulance_right_of_way.gd", "test_ambulance_ford.gd", "test_away_players.gd", "test_ambulance_unreachable.gd",
+  "test_fan_gags.gd",
  ],
  world: [
   "test_baked_village.gd", "test_village_landmarks.gd", "test_navigation_budget.gd",

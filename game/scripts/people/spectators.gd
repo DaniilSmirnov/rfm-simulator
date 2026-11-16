@@ -7,6 +7,9 @@ const GrillModel = preload("res://scripts/camp/grill_model.gd")
 const CharacterRig = preload("res://scripts/people/character_rig.gd")
 const SnapshotMotion = preload("res://scripts/net/snapshot_motion.gd")
 const CampSite = preload("res://scripts/people/camp_site.gd")
+const Mooning = preload("res://scripts/people/mooning.gd")
+const FanFlares = preload("res://scripts/people/fan_flares.gd")
+const CrewLunch = preload("res://scripts/people/crew_lunch.gd")
 var game: Node3D
 var groups: Array[Dictionary] = []
 var people: Array[Dictionary] = []
@@ -14,6 +17,8 @@ var clock = 0.0
 var navigation_budget = preload("res://scripts/people/navigation_budget.gd").new()
 var actor_targets: Dictionary = {}
 var actor_arrivals: Dictionary = {}
+# Crews that retired walk over to a camp for lunch (crew_lunch.gd).
+var lunch = CrewLunch.new()
 
 func rebuild(cooperative: bool = false) -> void:
 	navigation_budget = preload("res://scripts/people/navigation_budget.gd").new()
@@ -23,6 +28,7 @@ func rebuild(cooperative: bool = false) -> void:
 	people.clear()
 	clock = 0.0
 	actor_targets.clear()
+	lunch = CrewLunch.new()
 	var stage = game.stage
 	for i in range(stage.clearings.size()):
 		var clearing = stage.clearings[i]
@@ -180,9 +186,15 @@ func update(world_time: float, delta: float, guest: bool) -> void:
 				move_person(person, destination, delta)
 				if action in ["beer", "eat"] and person.avatar.position.distance_to(person.home) > 0.7:
 					action = "return"
-				elif action == "idle" and passing_car(person.avatar.position):
-					action = "cheer"
+				elif action == "idle":
+					var passing = passing_racer(person.avatar.position)
+					if not passing.is_empty():
+						var ready = person.avatar.position.distance_to(person.watch) < 1.0
+						action = "moon" if ready and Mooning.prankster(int(person.id), game.stage.variant, int(passing.id)) else "cheer"
 				person.avatar.rotation.y = _road_yaw(person.avatar.position)
+		if action == "moon":
+			# Back to the road, whoever decided it (the host or its snapshot).
+			person.avatar.rotation.y = _road_yaw(person.avatar.position) + PI
 		if action == "eat" and int(group.servings) <= 0 and int(person.eat_cycle) != int(pose.cycle):
 			action = "idle"
 		person.action = action
@@ -205,7 +217,23 @@ func update(world_time: float, delta: float, guest: bool) -> void:
 			person.can.rotation.x = 0.35 * lift
 		var moving: bool = person.avatar.position.distance_to(previous_position) > 0.001
 		var arms = {"eat": "eat", "beer": "drink", "cheer": "cheer", "push": "push"}.get(action, "")
-		CharacterRig.pose(person.avatar, {"gait": 1 if moving else 0, "time": clock, "seed": float(person.id), "arms": arms, "lift": lift, "wave": clock + person.id, "look": sin(clock * 0.35 + person.id) * 0.08})
+		# At night the camp's first fan lights a flare for a passing crew.
+		if FanFlares.update(person, action == "cheer" and int(person.id) % 2 == 0 and game.sky_weather.daytime == "night", delta):
+			arms = "flag"
+		CharacterRig.pose(person.avatar, {"gait": 1 if moving else 0, "time": clock, "seed": float(person.id), "arms": arms, "lift": lift, "wave": clock + person.id, "look": sin(clock * 0.35 + person.id) * 0.08, "moon": action == "moon"})
+	if not guest:
+		_scare_crews()
+	lunch.update(self, delta, guest)
+
+# Host: crews driving at anyone mooning them (camp fans and players).
+func _scare_crews() -> void:
+	var mooners: Array = Mooning.players(game)
+	for person in people:
+		if person.action == "moon":
+			mooners.append({"key": "npc:%d" % person.id, "pos": person.avatar.position})
+	for hit in Mooning.scare(game, mooners):
+		if hit.key == game.injuries.local_key():
+			game.toast("Пилот засмотрелся — машину повело!")
 
 
 func nearby_table(spot: Vector3, max_distance: float = 4.5) -> int:
@@ -298,10 +326,13 @@ func _road_yaw(point: Vector3) -> float:
 	return atan2(-toward.x, -toward.z)
 
 func passing_car(point: Vector3) -> bool:
+	return not passing_racer(point).is_empty()
+
+func passing_racer(point: Vector3) -> Dictionary:
 	for racer in game.racers:
 		if racer.state in ["racing", "offroad", "rock_bounce"] and racer.node.position.distance_to(point) < 42:
-			return true
-	return false
+			return racer
+	return {}
 
 func push_helpers() -> Dictionary:
 	var result = {}

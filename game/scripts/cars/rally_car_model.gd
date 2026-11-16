@@ -26,11 +26,16 @@ static func spawn_variant(count: int) -> int:
 		return posmod(count, models.size())
 	return posmod(int(order[posmod(count, order.size())]), models.size())
 
+# The livery record of a variant (colours of the crew's overalls too).
+static func record(variant: int) -> Dictionary:
+	return models[posmod(variant, models.size())]
+
 static func zero_variant(zero_index: int) -> int:
 	var zero: Array = spec.get("zero_cars", [0])
 	return posmod(int(zero[clampi(zero_index - 1, 0, zero.size() - 1)]), models.size())
 
-static func build(variant: int, number_override: int = -1, sponsor_override: String = "") -> Node3D:
+# `crew` false leaves the cabin empty (a crew that got out, crew_lunch.gd).
+static func build(variant: int, number_override: int = -1, sponsor_override: String = "", crew: bool = true) -> Node3D:
 	variant = posmod(variant, models.size())
 	var p: Dictionary = models[variant].duplicate(true)
 	p.color = p.body
@@ -48,7 +53,8 @@ static func build(variant: int, number_override: int = -1, sponsor_override: Str
 	root.set_meta("zero_to_100", float(p.zero_to_100))
 	root.set_meta("engine", str(p.engine))
 	var f = CarBody.build(root, p)
-	CarOccupants.seat(root, p, f, "pilot", "navigator", false, "", variant)
+	if crew:
+		CarOccupants.seat(root, p, f, "pilot", "navigator", false, "", variant)
 	for side in [-1.0, 1.0]:
 		_doors(root, p, f, side)
 	_bonnet_and_roof(root, p, f)
