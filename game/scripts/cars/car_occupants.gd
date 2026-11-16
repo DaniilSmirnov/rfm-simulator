@@ -213,7 +213,19 @@ static func _above(mesh: ArrayMesh, floor: float) -> ArrayMesh:
 		out[Mesh.ARRAY_COLOR] = kc
 		result.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, out)
 		result.surface_set_material(result.get_surface_count() - 1, mesh.surface_get_material(surface))
-	return result
+	return with_lods(result)
+
+# The same mesh with automatic detail levels: a figure seen through glass a few
+# car lengths away is drawn with a fraction of its triangles.
+static func with_lods(mesh: ArrayMesh) -> ArrayMesh:
+	var importer = ImporterMesh.new()
+	for surface in range(mesh.get_surface_count()):
+		var tool = SurfaceTool.new()
+		tool.create_from(mesh, surface)
+		tool.index()
+		importer.add_surface(Mesh.PRIMITIVE_TRIANGLES, tool.commit_to_arrays(), [], {}, mesh.surface_get_material(surface))
+	importer.generate_lods(60.0, 60.0, [])
+	return importer.get_mesh()
 
 # Seats `avatar` (a character model) in the cabin `c` at lateral `x`: scaled to
 # the cabin, hands on the wheel when `wheel` is a hub position, otherwise in

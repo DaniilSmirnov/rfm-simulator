@@ -15,6 +15,7 @@ const DRIVER = "SeatedDriver"
 const RIDER = "SeatedRider"
 # Same reach as the avatar's own body parts (props.gd player_avatar()).
 const VISIBLE_RANGE = 110.0
+static var _lods: Dictionary = {}
 
 static func update(game) -> void:
 	if game.car == null or game.room == null or game.room.Dedicated.active():
@@ -65,8 +66,15 @@ static func seat(car: Node3D, slot: String, who: Dictionary) -> void:
 		CarOccupants.place(holder, c, wheel.x, avatar, wheel)
 	else:
 		CarOccupants.place(holder, c, -wheel.x, avatar, null)
-	var baked = MeshMerge.bake(holder, "seated:%s:%s:%s" % [car.get_meta("variant", car.name), slot, key])
+	var cache_key = "seated:%s:%s:%s" % [car.get_meta("variant", car.name), slot, key]
+	var baked = MeshMerge.bake(holder, cache_key)
 	if baked != null:
+		# Detail levels like the crews' (car_occupants.gd), made once per
+		# person and seat; no shadow: the cabin is under the car's own.
+		if not _lods.has(cache_key):
+			_lods[cache_key] = CarOccupants.with_lods(baked.mesh)
+		baked.mesh = _lods[cache_key]
+		baked.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		baked.visibility_range_end = VISIBLE_RANGE
 		baked.set_meta("perch_ignore", true)
 
