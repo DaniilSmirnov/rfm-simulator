@@ -364,7 +364,7 @@ func _requests(source: Dictionary) -> Array:
 	return result.slice(0, NetProtocol.limit("object_requests_per_sync"))
 
 func local_state() -> Dictionary:
-	return {"drive_enabled": prediction_enabled, "drive_inputs": prediction.outgoing() if prediction_enabled else [], "pos": a(game.player_position()), "car": a(game.car.position), "heading": snappedf(game.heading, 0.001), "tilt": a(game.car.rotation), "yaw": snappedf(game.view_yaw, 0.001), "pitch": snappedf(game.view_pitch, 0.001), "in_car": game.in_car,
+	return {"drive_enabled": prediction_enabled, "drive_inputs": prediction.outgoing() if prediction_enabled else [], "pos": a(game.player_position()), "car": a(game.car.position), "heading": snappedf(game.heading, 0.001), "tilt": a(game.car.rotation), "yaw": snappedf(game.view_yaw, 0.001), "pitch": snappedf(game.player.stargaze.pitch(), 0.001), "in_car": game.in_car,
 		"tow": Input.is_action_pressed("tow") and not game.in_car and not game.injuries.down and not game.paused and not game.dead and not game.finished and game.beers < game.COLLAPSE_BEERS and game.drink_time < 0 and game.eat_time < 0,
 		"push": a(game.walking_intent()), "speed": snappedf(game.speed, 0.01), "beers": game.beers, "trees": _requests(game.tree_requests), "lamps": _requests(game.lamp_requests), "beer": snappedf(game.drink_time, 0.01), "eat": snappedf(game.eat_time, 0.01), "food_kind": game.eat_kind, "food_species": game.food_species, "seated": game.seated, "running": game.running(), "airborne": game.jump_height > 0.01, "relief": game.player.relief.active, "moon": game.player.moon.active, "venik": game.player.sauna.whisk.whipping(), "repair": game.player.repair.active(),
 		"ride": game.rides.ride, "hitch": game.rides.hitch, "broken": game.condition <= 0,

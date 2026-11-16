@@ -58,6 +58,8 @@ var _last_camera = Vector3.INF
 var _drift = Vector3.ZERO
 # Campfires, grills and beacons that light their surroundings at night.
 var night_lights = preload("res://scripts/core/night_lights.gd").new()
+# Northern lights on a clear night over the stages that have them (aurora.gd).
+var aurora = preload("res://scripts/core/aurora.gd").new()
 var _lamp_clock = 0.0
 
 static func night_or_day(value) -> String:
@@ -106,6 +108,8 @@ static func look(variant: int, time: String, kind: String) -> Dictionary:
 func setup(owner: Node3D) -> void:
 	game = owner
 	name = "SkyWeather"
+	aurora.setup(owner)
+	owner.add_child(aurora)
 
 func snowy() -> bool:
 	return game.stage != null and game.stage.has_snow
@@ -142,6 +146,7 @@ func rebuild() -> void:
 		fall = _fall(FALL[weather])
 		game.add_child(fall)
 	_last_camera = Vector3.INF
+	aurora.configure(daytime, weather, game.stage.variant if game.stage != null else 0, environment.environment)
 	_update_headlights()
 
 func _environment(look_env: Dictionary) -> WorldEnvironment:
@@ -307,9 +312,14 @@ static func headlights(car: Node3D = null) -> SpotLight3D:
 
 # ---------------------------------------------------------------- room
 
+# "aurora" travels only while the northern lights show.
 func snapshot() -> Dictionary:
-	return {"time": daytime, "weather": weather}
+	var data = {"time": daytime, "weather": weather}
+	if aurora.shown:
+		data.aurora = true
+	return data
 
 func apply_snapshot(data) -> void:
 	if data is Dictionary:
 		set_conditions(data.get("time", "day"), data.get("weather", "sun"))
+		aurora.set_shown(data.get("aurora", false) == true)

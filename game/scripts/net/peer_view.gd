@@ -6,6 +6,8 @@ const Props = preload("res://scripts/core/props.gd")
 const SnapshotMotion = preload("res://scripts/net/snapshot_motion.gd")
 const NetProtocol = preload("res://scripts/net/net_protocol.gd")
 const CharacterRig = preload("res://scripts/people/character_rig.gd")
+# Leaning back to watch the northern lights: pose.gaze from the sent pitch.
+const Stargaze = preload("res://scripts/player/stargaze.gd")
 const RadioModel = preload("res://scripts/people/radio_model.gd")
 const RoomTransport = preload("res://scripts/net/room_transport.gd")
 # Seconds to raise the radio to the mouth (and to lower it again).
@@ -115,6 +117,7 @@ static func animate(game: Node, peer: Dictionary, delta: float, clock: float, fr
 	if sitting:
 		pose.seat = Props.CHAIR_SEAT
 		pose.ground = avatar_pose.position.y
+	pose.gaze = 0.0 if sitting or collapsed or moving or state.in_car or pose.get("moon", false) else Stargaze.gaze_of(float(state.get("pitch", 0.0)))
 	CharacterRig.pose(peer.avatar, pose)
 	_hold_radio(peer)
 	game.player.relief.draw_peer(peer, state)

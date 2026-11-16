@@ -20,6 +20,9 @@ extends RefCounted
 #             "clipboard", "treat", "throw", "pick", "lap", "limp", "relief", "steer"
 #   steer     right-hand grip on a steering wheel (left mirrored), with "steer"
 #   lift      0..1 progress of eat/drink/throw/pick    look  head yaw (rad)
+#   gaze      0..1 leaning far back to watch the sky (northern lights): the
+#             body arches back from bent knees, the head tips up, arms hang;
+#             the feet stay where they stood
 #   moon      bent over, trousers down, the backside (behind a censor mosaic)
 #             to whoever the person turned their back on (mooning.gd)
 const KNEE = 0.33
@@ -50,6 +53,14 @@ const RELIEF_HAND = Vector3(0.10, 0.80, -0.27)
 const POLE_HANG = Vector3(0.45, 0.0, 1.0)
 const POLE_LIFT = Vector3(0.75, -1.0, 0.2)
 const POLE_OUT = Vector3(1.0, -0.3, 0.6)
+# Watching the sky at full gaze: how far the body leans back, the hips push
+# forward over nearly upright thighs, the knees bend a little and the head
+# tips up (rad).
+const GAZE_LEAN = 0.55
+const GAZE_HIP = -0.43
+const GAZE_KNEE = -0.36
+const GAZE_HEAD = 0.6
+const GAZE_HAND = Vector3(0.38, 0.86, 0.22)
 # Mooning: the body bends forward this far (rad) about the feet and the knees
 # bend as much again, which keeps the feet under the hips and on the ground;
 # the hands rest on the thighs and the head turns to watch over the shoulder.
@@ -102,6 +113,36 @@ static func pose(avatar: Node3D, p: Dictionary = {}) -> void:
 		head.rotation = Vector3(-0.45, 0.95 + 0.08 * sin(float(p.get("time", 0.0)) * 3.0 + float(p.get("seed", 0.0))), 0.0)
 	if j.torso != null:
 		j.torso.rotation.x = -0.45 if p.get("kneel", false) else 0.0
+	if p.has("gaze"):
+		_gaze(avatar, j, clampf(float(p.gaze), 0.0, 1.0))
+
+# Leans the whole body back about the feet, then puts the feet back where the
+# upright body had them. The shift is kept in a meta and undone first, so a
+# caller that does not reset the position every frame does not drift.
+static func _gaze(avatar: Node3D, j: Dictionary, gaze: float) -> void:
+	# Nothing is touched for someone who is not and was not gazing (the lean
+	# of a mooning body stays its own).
+	if gaze <= 0.0 and not avatar.has_meta("gaze_shift"):
+		return
+	var shift: Vector3 = avatar.get_meta("gaze_shift", Vector3.ZERO)
+	avatar.position -= shift
+	avatar.rotation.x = GAZE_LEAN * gaze
+	j.head.rotation.x += GAZE_HEAD * gaze
+	shift = Vector3.ZERO
+	if gaze > 0.0:
+		var feet = Vector3.ZERO
+		for i in range(2):
+			j.legs[i].rotation.x = GAZE_HIP * gaze
+			j.shins[i].rotation.x = GAZE_KNEE * gaze
+			var foot = j.legs[i].transform * j.shins[i].transform * Vector3(0, -SHIN, 0)
+			var upright = Vector3(foot.x, j.legs[i].position.y - KNEE - SHIN, 0.0)
+			feet += avatar.basis * foot - Basis(Vector3.UP, avatar.rotation.y) * upright
+		shift = -feet * 0.5
+	avatar.position += shift
+	if gaze > 0.0:
+		avatar.set_meta("gaze_shift", shift)
+	else:
+		avatar.remove_meta("gaze_shift")
 
 # Root lowering for a seat or a kneel, relative to the feet.
 static func body_drop(p: Dictionary) -> float:
@@ -229,6 +270,8 @@ static func _arms(j: Dictionary, p: Dictionary, gait: int, swing: float) -> void
 			"relief":
 				target = RELIEF_HAND
 				pole = POLE_OUT
+		if float(p.get("gaze", 0.0)) > 0.0 and mode == "":
+			target = rest.lerp(GAZE_HAND, clampf(float(p.gaze), 0.0, 1.0))
 		# Targets are written for a shoulder at its usual place on an upright
 		# body; a shoulder mounted elsewhere (the medic's leaning torso) moves them along.
 		var shoulder_shift: Vector3 = j.arms[i].position - Vector3(SHOULDER.x * side, SHOULDER.y, SHOULDER.z)
