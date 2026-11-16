@@ -4,6 +4,9 @@ const Hitbox = preload("res://scripts/cars/car_hitbox.gd")
 const SMALL_MASS = 15.0
 const BLOCKING_MASS = 500.0
 const RELEASE_TIME = 0.25
+# A sturdy prop (a cauldron on its stand, movable_props.gd STURDY_KINDS) stops
+# a car slower than this, about 30 km/h, like a rock; a faster one knocks it.
+const STURDY_SPEED = 8.0
 
 static func resolve(stage, motion, start: Vector3, end: Vector3, delta: float, car: Dictionary = {}) -> Dictionary:
 	if car.is_empty(): car = Hitbox.shape(Hitbox.player(0), 0)
@@ -25,7 +28,8 @@ static func resolve(stage, motion, start: Vector3, end: Vector3, delta: float, c
 					break
 		var velocity: Vector3 = motion.velocity
 		var anchored = not prop.is_empty() and bool(prop.node.get_meta("prop_anchored", prop.anchored)) and not prop.node.get_meta("prop_staked", false)
-		if prop.is_empty() or float(prop.mass) >= BLOCKING_MASS or (anchored and velocity.length() < 5.0):
+		var sturdy = not prop.is_empty() and prop.node.get_meta("prop_sturdy", false) and velocity.length() < STURDY_SPEED
+		if prop.is_empty() or float(prop.mass) >= BLOCKING_MASS or (anchored and velocity.length() < 5.0) or sturdy:
 			result.position = hit.position
 			result.blocked = true
 			result.closing = maxf(result.closing, velocity.length())

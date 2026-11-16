@@ -50,6 +50,14 @@ var _return_from = Transform3D()
 var _return_to = Transform3D()
 var _return_t = -1.0
 
+# Cars are kinematic boxes in prop physics (prop_actors.gd, layer 13). A sturdy
+# prop (a cauldron) ignores them until a crash knocks it (allow_tip): a car that
+# stopped against it, or crept into it, pressed it aside and down into the snow.
+const MASK = 1 | (1 << 9) | (1 << 12)
+const CARS = 1 << 13
+const STURDY_FLING = 8.0
+const STURDY_LIFT = 2.5
+
 static func create(r: Dictionary, world_solids, owner_game) -> RigidBody3D:
 	var body = load("res://scripts/core/prop_body.gd").new()
 	body.name = "PropBody"
@@ -59,7 +67,8 @@ static func create(r: Dictionary, world_solids, owner_game) -> RigidBody3D:
 	body.mass = r.mass
 	body.center_of_mass_mode = RigidBody3D.CENTER_OF_MASS_MODE_CUSTOM
 	body.center_of_mass = r.box.get_center()
-	body.collision_mask = 1 | (1 << 9) | (1 << 12) | (1 << 13)
+	body.collision_mask = MASK | CARS
+	if r.node.get_meta("prop_sturdy", false): body.collision_mask = MASK
 	Settler.configure(body)
 	var material = PhysicsMaterial.new()
 	material.friction = 0.65
@@ -259,7 +268,11 @@ func _ground() -> void:
 # between samples, so only a body below the lowest corner of its tile cell has
 # sunk: one at the foot of a cliff is not lifted onto the clifftop. A trunk
 # is laid along the land again once its centre line is in it anywhere.
-const SINK = 0.4
+# The centre of mass of a prop never rests under the tiles: a car ran a camp
+# cauldron into the snow on Зимний Турини, and with its centre 0.5 m under the
+# surface (the 0.4 m slack this check had, plus the road cut that snowy stages
+# do not have) it stayed buried and jittering for good.
+const SINK = 0.1
 const TRUNK_RADIUS = 0.2
 
 func _keep_on_land() -> void:
@@ -267,7 +280,7 @@ func _keep_on_land() -> void:
 		_keep_trunk_on_land()
 		return
 	var center: Vector3 = global_transform * center_of_mass
-	if center.y >= solids.stage.ground(center) - SINK or center.y >= _cell_ground(center).x - SINK: return
+	if center.y >= _cell_ground(center).x - SINK: return
 	global_position.y += _cell_ground(center).y + record.box.size.y * 0.5 + 0.02 - center.y
 	_landed()
 
@@ -313,7 +326,9 @@ func _cell_ground(p: Vector3) -> Vector2:
 		var height: float = solids.stage.ground(corner)
 		low = minf(low, height)
 		high = maxf(high, height)
-	return Vector2(low - RoadCut.DEPTH, high)
+	# prop_ground.gd cuts the tiles beside the road only on stages without snow.
+	var cut: bool = solids.stage.has_method("route_nearest") and not solids.stage.has_snow
+	return Vector2(low - (RoadCut.DEPTH if cut else 0.0), high)
 
 func _physics_process(delta: float) -> void:
 	if not is_instance_valid(record.node) or record.node.is_queued_for_deletion(): return
@@ -336,6 +351,13 @@ func _physics_process(delta: float) -> void:
 	if not sleeping: _keep_on_land()
 	if _tip_time > 0.0 and angular_velocity.length() < TUMBLE_SPIN:
 		_tip_time -= delta
+	if record.node.get_meta("prop_sturdy", false):
+		var mask: int = MASK | (CARS if _tip_time > 0.0 else 0)
+		if collision_mask != mask: collision_mask = mask
+		# A car box crossing 0.6 m a tick at 130 km/h threw a cauldron 57 m up.
+		var flung := Vector3(linear_velocity.x, 0, linear_velocity.z).limit_length(STURDY_FLING)
+		flung.y = minf(linear_velocity.y, STURDY_LIFT)
+		if not flung.is_equal_approx(linear_velocity): linear_velocity = flung
 	if not righting or record.has("tree"):
 		_rising = false
 	elif not _rising and _tilt() > TIPPED_ANGLE:

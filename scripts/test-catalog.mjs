@@ -18,7 +18,7 @@ export const groups = Object.freeze({
   "test_furniture.gd", "test_flag_stake.gd", "test_interaction.gd", "test_soundscape.gd", "test_vehicle_audio.gd", "test_perches.gd", "test_glass_interiors.gd", "test_people_play.gd", "test_movable_props.gd", "test_prop_drag_ground.gd",
  ],
  simulation: [
-  "test_stage_meals.gd", "test_camp_cooking.gd", "test_camp_ground.gd", "test_course_schedule.gd", "test_course_schedule_late.gd", "test_service_parks.gd", "test_rally_handling.gd",
+  "test_stage_meals.gd", "test_camp_cooking.gd", "test_cauldron_snow.gd", "test_camp_ground.gd", "test_course_schedule.gd", "test_course_schedule_late.gd", "test_service_parks.gd", "test_rally_handling.gd",
   "test_rally_rejoin.gd", "test_rally_driver.gd", "test_rally_smoothness.gd", "test_rally_tracks.gd", "test_rally_traffic.gd", "test_room.gd", "test_room_recovery.gd", "test_direct_link.gd", "test_join_check.gd", "test_world_validation.gd", "test_voice_radio.gd", "test_voice_native.gd",
   "test_physics.gd", "test_prop_contact.gd", "test_car_hitbox.gd", "test_food_fleet.gd", "test_foraging.gd", "test_grill_fire.gd", "test_camp_models.gd",
   "test_poison_mushrooms.gd", "test_network_motion.gd", "test_tow_recovery.gd", "test_car_rides.gd", "test_car_repair.gd", "test_police_bridge.gd",
@@ -59,7 +59,7 @@ export const slowTests = new Set([
  "test_village_terrain_performance.gd", "test_canyon.gd", "test_finnish_forest.gd", "test_mineshaft.gd", "test_sever.gd", "test_quarry.gd", "test_offroad_contact.gd", "test_offroad_contact_late.gd", "test_offroad_contact_last.gd",
  "test_course_schedule.gd", "test_course_schedule_late.gd", "test_course_officials.gd", "test_spectators.gd", "test_alpine_winter.gd",
  "test_selection.gd", "test_world_loading.gd", "test_baked_village.gd",
- "test_provence_village.gd", "test_stage_solids.gd", "test_canyon_yurt.gd", "test_service_parks.gd", "test_service_park_layout.gd",
+ "test_provence_village.gd", "test_stage_solids.gd", "test_cauldron_snow.gd", "test_canyon_yurt.gd", "test_service_parks.gd", "test_service_park_layout.gd",
 ]);
 // Tests that outgrow the slow-test limit (180 s), with their own, in ms.
 export const timeouts = Object.freeze({
@@ -69,7 +69,7 @@ export const timeouts = Object.freeze({
 // Unlisted tests count as 10 s, or 60 s when they are in slowTests.
 export const seconds = Object.freeze({
  "test_spectators.gd": 160, "test_course_schedule.gd": 85, "test_course_schedule_late.gd": 80, "test_prop_physics.gd": 72, "test_selection.gd": 36, "test_knockdown.gd": 35,
- "test_camp_cooking.gd": 30, "test_tow_recovery.gd": 30, "test_service_parks.gd": 28, "test_room.gd": 28,
+ "test_cauldron_snow.gd": 95, "test_camp_cooking.gd": 30, "test_tow_recovery.gd": 30, "test_service_parks.gd": 28, "test_room.gd": 28,
  "test_food_fleet.gd": 28, "test_foraging.gd": 28, "test_grill_fire.gd": 28, "test_ambulance_medics.gd": 28,
  "test_rally_traffic.gd": 25, "test_direct_link.gd": 25, "test_poison_mushrooms.gd": 25, "test_police_bridge.gd": 25, "test_world_loading.gd": 24,
  "test_ambulance_right_of_way.gd": 22, "test_ambulance_ford.gd": 26, "test_movable_props.gd": 22, "test_prop_drag_ground.gd": 20, "test_party.gd": 20, "test_cargo_selection_order.gd": 19,
