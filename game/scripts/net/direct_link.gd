@@ -21,6 +21,7 @@ const WorldValidation = preload("res://scripts/net/world_validation.gd")
 const DirectNative = preload("res://scripts/net/direct_native.gd")
 const NetProtocol = preload("res://scripts/net/net_protocol.gd")
 const WorldDelta = preload("res://scripts/net/world_delta.gd")
+const LinkReport = preload("res://scripts/net/link_report.gd")
 # Numeric engine enums, so the script parses without the WebRTC module.
 const PEER_CONNECTED = 2
 const PEER_FAILED = 4
@@ -38,6 +39,13 @@ var enabled = false
 # Peer id -> link: {"pc", "channel", "session", "started", "open",
 #                   "last_received", "attempts", "retry_at", "initiator"}
 var links: Dictionary = {}
+# TURN relays with their passwords from the join reply (server/relays.mjs),
+# in the RTCPeerConnection format: [{"urls", "username", "credential"}].
+var relay_ice: Array = []
+# Peer id -> {"local": {type: true}, "remote": {type: true}}: the ICE
+# candidate types seen on every attempt, for the link report.
+var candidates: Dictionary = {}
+var last_report: Dictionary = {}
 var session_counter = 0
 # Send timers: guest state upstream, host world downstream, and how often the
 # host takes the slow sections afresh.
@@ -98,6 +106,7 @@ func close_all() -> void:
 	for id in links.keys():
 		close_link(id)
 	links.clear()
+	candidates.clear()
 
 func close_link(id: String) -> void:
 	var link: Dictionary = links.get(id, {})
@@ -117,10 +126,7 @@ func _new_link(id: String, session: int, initiator: bool, attempts: int) -> Dict
 	var pc = connection_factory.call()
 	if pc == null:
 		return {}
-	var servers: Array = []
-	for url in NetProtocol.direct("ice_servers", []):
-		servers.append({"urls": [str(url)]})
-	if pc.initialize({"iceServers": servers}) != OK:
+	if pc.initialize({"iceServers": ice_servers()}) != OK:
 		return {}
 	# Both sides create the same negotiated channel, so no in-band setup is needed.
 	var channel = pc.create_data_channel("fast", {"negotiated": true, "id": 1, "ordered": false, "maxRetransmits": 0})
@@ -133,13 +139,37 @@ func _new_link(id: String, session: int, initiator: bool, attempts: int) -> Dict
 		if links.get(id, {}).get("pc") != pc:
 			return
 		pc.set_local_description(type, sdp)
+		_seen(id, "local", sdp)
 		signal_sender.call(id, {"kind": type, "sdp": sdp, "session": session}))
 	pc.ice_candidate_created.connect(func(media: String, index: int, candidate: String) -> void:
 		if links.get(id, {}).get("pc") != pc:
 			return
+		_seen(id, "local", candidate)
 		signal_sender.call(id, {"kind": "candidate", "media": media, "index": index, "name": candidate, "session": session}))
 	links[id] = link
 	return link
+
+# The room's STUN servers and the relays this player was given.
+func ice_servers() -> Array:
+	var servers: Array = []
+	for url in NetProtocol.direct("ice_servers", []):
+		servers.append({"urls": [str(url)]})
+	for server in relay_ice:
+		if server is Dictionary and server.get("urls") is Array:
+			servers.append(server)
+	return servers
+
+func set_relays(ice) -> void:
+	relay_ice = ice.filter(func(server): return server is Dictionary) if ice is Array else []
+
+func _seen(id: String, side: String, text: String) -> void:
+	var seen: Dictionary = candidates.get_or_add(id, {"local": {}, "remote": {}})
+	for type in LinkReport.candidate_types(text):
+		seen[side][type] = true
+
+# How the link to `id` went, for the room server's log (link_report.gd).
+func report(id: String, result: String, reason: String, waited: float) -> void:
+	last_report = LinkReport.send(room, self, id, result, reason, waited)
 
 func _offer(id: String, attempts: int) -> void:
 	session_counter += 1
@@ -168,12 +198,15 @@ func on_signal(from: String, data: Dictionary) -> void:
 		if link.is_empty():
 			return
 		link.pc.set_remote_description("offer", str(data.get("sdp", "")))
+		_seen(from, "remote", str(data.get("sdp", "")))
 		return
 	if link.is_empty() or link.pc == null or int(link.session) != session:
 		return
 	if kind == "answer" and link.initiator:
 		link.pc.set_remote_description("answer", str(data.get("sdp", "")))
+		_seen(from, "remote", str(data.get("sdp", "")))
 	elif kind == "candidate":
+		_seen(from, "remote", str(data.get("name", "")))
 		link.pc.add_ice_candidate(str(data.get("media", "")), int(data.get("index", 0)), str(data.get("name", "")))
 
 # ---------------------------------------------------------------- traffic

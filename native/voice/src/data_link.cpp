@@ -68,6 +68,7 @@ void RallyDataLink::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("poll"), &RallyDataLink::poll);
 	ClassDB::bind_method(D_METHOD("get_state"), &RallyDataLink::get_state);
 	ClassDB::bind_method(D_METHOD("get_channel_state"), &RallyDataLink::get_channel_state);
+	ClassDB::bind_method(D_METHOD("get_selected_pair"), &RallyDataLink::get_selected_pair);
 	ClassDB::bind_method(D_METHOD("get_packets"), &RallyDataLink::get_packets);
 	ClassDB::bind_method(D_METHOD("send", "packet"), &RallyDataLink::send);
 	ClassDB::bind_method(D_METHOD("close"), &RallyDataLink::close);
@@ -199,6 +200,28 @@ String RallyDataLink::get_state() const {
 String RallyDataLink::get_channel_state() const {
 	std::lock_guard lock(shared->mutex);
 	return String(shared->channel_state.c_str());
+}
+
+static const char *candidate_type(const rtc::Candidate &candidate) {
+	switch (candidate.type()) {
+	case rtc::Candidate::Type::Host: return "host";
+	case rtc::Candidate::Type::ServerReflexive: return "srflx";
+	case rtc::Candidate::Type::PeerReflexive: return "prflx";
+	case rtc::Candidate::Type::Relayed: return "relay";
+	default: return "";
+	}
+}
+
+String RallyDataLink::get_selected_pair() {
+	if (!pc) return String();
+	try {
+		rtc::Candidate local, remote;
+		if (!pc->getSelectedCandidatePair(&local, &remote)) return String();
+		const std::string pair = std::string(candidate_type(local)) + "/" + candidate_type(remote);
+		return pair == "/" ? String() : String(pair.c_str());
+	} catch (const std::exception &) {
+		return String();
+	}
 }
 
 Array RallyDataLink::get_packets() {

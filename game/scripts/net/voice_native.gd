@@ -108,6 +108,30 @@ static func load_extension() -> bool:
 		push_warning("Radio extension did not load (%d)" % status)
 	return ClassDB.class_exists("RallyVoiceLink")
 
+# ICE servers ([{"urls", "username", "credential"}] or plain URLs) as the
+# URL strings libdatachannel takes: a TURN password goes inside the URL
+# ("turn:user:password@host:port", both URL-encoded). The library's ICE
+# (libjuice) relays over UDP only and uses at most two TURN servers, picked at
+# random, so only the first two UDP relays are kept, in the server's order.
+static func ice_urls(servers) -> PackedStringArray:
+	var urls := PackedStringArray()
+	var relays = 0
+	for server in servers if servers is Array else []:
+		if not server is Dictionary:
+			urls.append(str(server))
+			continue
+		var user = str(server.get("username", ""))
+		var relay = false
+		for url in server.get("urls", []) if server.get("urls") is Array else [server.get("urls", "")]:
+			url = str(url)
+			if url.begins_with("stun:"):
+				urls.append(url)
+			elif url.begins_with("turn:") and not "transport=tcp" in url and user != "" and relays < 2:
+				urls.append("turn:%s:%s@%s" % [user.uri_encode(), str(server.get("credential", "")).uri_encode(), url.trim_prefix("turn:")])
+				relay = true
+		relays += 1 if relay else 0
+	return urls
+
 # ---------------------------------------------------------------- room
 
 func join(options: Dictionary) -> bool:
@@ -117,9 +141,7 @@ func join(options: Dictionary) -> bool:
 		return false
 	local_id = str(options.get("localId", ""))
 	session = str(options.get("session", ""))
-	ice_servers = PackedStringArray()
-	for url in options.get("iceServers", []):
-		ice_servers.append(str(url))
+	ice_servers = ice_urls(options.get("iceServers", []))
 	attempts.clear()
 	joined = local_id != "" and session.length() >= 8
 	if joined:

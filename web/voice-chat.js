@@ -287,7 +287,9 @@
     if (state.joined) leave();
     state.localId = String(options.localId || '');
     state.session = String(options.session || '');
-    state.iceServers = (Array.isArray(options.iceServers) ? options.iceServers : []).map(url => ({ urls: [String(url)] }));
+    // Plain URLs, or {urls, username, credential} for a TURN relay.
+    state.iceServers = (Array.isArray(options.iceServers) ? options.iceServers : []).map(server =>
+      server && typeof server === 'object' ? { ...server, urls: [].concat(server.urls).map(String) } : { urls: [String(server)] });
     state.attempts.clear();
     state.joined = state.localId !== '' && state.session.length >= 8;
     if (state.joined) syncMembers(state.members);

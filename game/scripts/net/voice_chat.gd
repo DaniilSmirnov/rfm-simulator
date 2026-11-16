@@ -4,7 +4,6 @@ extends Node
 # GDExtension on desktop and Android (voice_native.gd). This node feeds the
 # backend the roster, who is on air and the key, and relays its signaling over the
 # room socket (`space: "voice"`). Without either backend the radio is hidden.
-const NetProtocol = preload("res://scripts/net/net_protocol.gd")
 const VoiceWeb = preload("res://scripts/net/voice_web.gd")
 const VoiceNative = preload("res://scripts/net/voice_native.gd")
 const UiKit = preload("res://scripts/ui/ui_kit.gd")
@@ -59,7 +58,7 @@ func join() -> void:
 	if not supported or room.player_id == "" or Dedicated.active():
 		return
 	var session = ("%s-%s-%d" % [room.room_id, room.player_id, Time.get_ticks_msec()]).left(96)
-	var options = {"localId": room.player_id, "session": session, "iceServers": NetProtocol.direct("ice_servers", [])}
+	var options = {"localId": room.player_id, "session": session, "iceServers": room.direct.ice_servers()}
 	joined = backend.join(options)
 	socket_was_open = false
 	if joined:
