@@ -14,11 +14,10 @@ const Props = preload("res://scripts/core/props.gd")
 const Glass = preload("res://scripts/core/glass.gd")
 const NightLights = preload("res://scripts/core/night_lights.gd")
 const WindowRooms = preload("res://scripts/core/window_rooms.gd")
+const Shops = preload("res://scripts/stages/village/village_shops.gd")
 # Curtains of the window rooms, one colour per house.
 const CURTAIN_CLOTH = [Color("c7553f"), Color("e7dcc2"), Color("6f8c6a"), Color("d0a24c"), Color("4f6f9a"), Color("9a5a7a")]
 # Goods on a shop's shelves.
-const SHOP_GOODS = {"BOULANGERIE": Color("d6a35a"), "TABAC · PRESSE": Color("c0503c"), "PHARMACIE": Color("4c9a5c"), "ÉPICERIE": Color("d9482f"),
-	"SAVONNERIE": Color("8c6cc0"), "CAVE À VINS": Color("6a2a3a"), "BOUCHERIE": Color("b04a3c"), "LA POSTE": Color("e2b83e"), "ANTIQUITÉS": Color("8a6a48")}
 const WALL = 0.3
 const FLOOR_Y = 0.12
 const PANE = Vector2(0.82, 1.38)
@@ -35,8 +34,12 @@ static func furnished(seed_value: int, shop: Dictionary) -> bool:
 	return shop.is_empty() and seed_value < 500 and seed_value % 3 == 0
 
 # The house mass up to the eaves. A furnished house is hollow on the ground
-# floor with openings at the window bays; others stay one block.
+# floor with openings at the window bays; shops are built by village_shops.gd;
+# others stay one block.
 static func mass(root: Node3D, width: float, depth: float, height: float, bottom: float, floor_h: float, wall: Color, seed_value: int, shop: Dictionary) -> void:
+	if not shop.is_empty():
+		Shops.mass(root, width, depth, height, bottom, floor_h, wall, shop)
+		return
 	if not furnished(seed_value, shop):
 		Props.box(root, Vector3(0, (height + bottom) * 0.5, depth * 0.5), Vector3(width, height - bottom, depth), wall)
 		return
@@ -93,16 +96,6 @@ static func pane(w: Node3D, parent: Node3D, p: Vector3) -> void:
 	var house = posmod(hash(str(parent.name)), CURTAIN_CLOTH.size())
 	WindowRooms.pane(w, Vector3(0, 0, -0.011), PANE, Vector3.FORWARD, kind, {"drop": clampf(fposmod(p.y, 3.0), 1.1, 1.6), "accent": CURTAIN_CLOTH[house], "lit": 0.55,
 		"seed": float(posmod(hash("%s:%s" % [parent.name, p]), 997)) / 997.0})
-
-# Shop window and glazed door of a shopfront, with the shop inside: shelves of
-# its goods, a counter; the café has tables and a bar.
-static func shop_glass(root: Node3D, width: float, shop: Dictionary) -> void:
-	var kind = "cafe" if str(shop.text).begins_with("CAFÉ") else "shop"
-	var options = {"drop": 1.2, "accent": SHOP_GOODS.get(shop.text, Color("b58a52")), "lit": 0.9}
-	WindowRooms.pane(root, Vector3(-0.6, 1.25, -0.092), Vector2(width * 0.5 - 0.4, 1.9), Vector3.FORWARD, kind, options)
-	Props.box(root, Vector3(width * 0.25 + 0.15, 1.15, -0.07), Vector3(1.0, 2.1, 0.04), Color("324441"))
-	options.drop = 1.55
-	WindowRooms.pane(root, Vector3(width * 0.25 + 0.15, 1.5, -0.092), Vector2(0.72, 1.05), Vector3.FORWARD, kind, options)
 
 # Arched upper window of the wine cooperative: the cellar hall inside.
 static func hall_window(root: Node3D, at: Vector3) -> void:

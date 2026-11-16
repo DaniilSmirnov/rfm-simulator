@@ -237,7 +237,10 @@ func house(p: Vector3, yaw: float, width: float, depth: float, floors: int, seed
 	var lowest = 0.0
 	for corner in [Vector3(-width * 0.5, 0, 0), Vector3(width * 0.5, 0, 0), Vector3(-width * 0.5, 0, depth), Vector3(width * 0.5, 0, depth)]:
 		lowest = minf(lowest, stage.ground(root.transform * corner) - p.y)
-	var bottom = lowest - 0.3
+	# Hollow ground floors are lifted over the slope behind the facade.
+	var lift = Rooms.Shops.lift(stage, root.transform, width, depth, p.y) if not shop.is_empty() or Rooms.furnished(seed_value, shop) else 0.0
+	root.position.y += lift
+	var bottom = lowest - 0.3 - lift
 	Rooms.mass(root, width, depth, height, bottom, FLOOR, wall, seed_value, shop)
 	Props.box(root, Vector3(0, (0.45 + bottom) * 0.5, -0.03), Vector3(width + 0.02, 0.45 - bottom, 0.06), wall.darkened(0.18))
 	if stone:
@@ -296,9 +299,6 @@ func house(p: Vector3, yaw: float, width: float, depth: float, floors: int, seed
 
 func _shopfront(root: Node3D, width: float, shop: Dictionary) -> void:
 	shop_count += 1
-	var frame = Color("4a5b55") if shop.text != "BOULANGERIE" else Color("6b3e2e")
-	Props.box(root, Vector3(0, 1.45, -0.04), Vector3(width - 0.8, 2.7, 0.08), frame)
-	Rooms.shop_glass(root, width, shop)
 	var sign = Props.label_3d(root, Vector3(0, 2.62, -0.11), shop.text, 64, 0.0042, Color("f1e7cf"), PI)
 	sign.name = "ShopSign"
 	sign.double_sided = false
@@ -745,10 +745,11 @@ func _cafe() -> void:
 	var depth = 9.0
 	var height = 6.6
 	var wall = Color("e2c18f")
-	Props.box(root, Vector3(0, height * 0.5 - 0.3, depth * 0.5), Vector3(width, height + 0.6, depth), wall)
+	var cafe = {"text": "CAFÉ DE LA PLACE", "awning": ["f0e6cf", "9a2f2f"], "goods": "none"}
+	Rooms.Shops.mass(root, width, depth, height, -0.6, 3.2, wall, cafe)
 	solids.solid(root, Vector3(0, height * 0.5, depth * 0.5), Vector3(width, height, depth), "building")
 	reserve(root.transform * Vector3(0, 0, depth * 0.5), yaw, Vector2(width * 0.5, depth * 0.5))
-	_shopfront(root, width, {"text": "CAFÉ DE LA PLACE", "awning": ["f0e6cf", "9a2f2f"], "goods": "none"})
+	_shopfront(root, width, cafe)
 	for i in range(4):
 		window(root, Vector3(-5.0 + i * 3.3, 4.4, 0), 0.0, Color("5f8e8c"), "flowers")
 	genoise(root, width, 0.0, height, -1.0)

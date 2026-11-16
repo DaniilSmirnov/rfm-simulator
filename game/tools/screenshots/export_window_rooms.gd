@@ -4,7 +4,7 @@ extends SceneTree
 # stage: index in data/stages.json (1 winter, 2 Provence, 6 Поречье, 7 quarry).
 # Nodes whose names start with a prefix are shot from `distance` m in front of
 # their facade; facade is the local z direction the front faces (-1 village
-# houses, 1 izbas and chalets).
+# houses, 1 izbas and chalets). Prefix "shop" picks the village shops.
 var game
 
 func _initialize() -> void:
@@ -34,7 +34,8 @@ func run() -> void:
 	var targets: Array = []
 	for node in game.stage.find_children("*", "Node3D", true, false):
 		for prefix in prefixes:
-			if str(node.name).begins_with(prefix) and not node.get_meta("room", false):
+			var shop = prefix == "shop" and node.has_meta("shop_room")
+			if shop or (str(node.name).begins_with(prefix) and not node.get_meta("room", false) and not node.has_meta("shop_room")):
 				targets.append(node)
 				break
 	print("targets: ", targets.size())
