@@ -111,6 +111,23 @@ func run() -> void:
 	frames(game, 1.5)
 	check(not CarHood.is_open(game.car) and not wrench.visible, "a mended car shuts its bonnet")
 
+	# After the stage (both passes done, the camp being packed) a broken car
+	# can still be mended to drive back to the service park.
+	var schedule = [game.course.phase, game.course.pass_index]
+	game.course.phase = "complete"
+	game.course.pass_index = 2
+	check(game.packing.active(), "the stage is over and the camp is being packed")
+	game.condition = 0.0
+	frames(game, 1.5)
+	aim(game, bay)
+	check(game.interaction.current().get("action", "") == "repair_car", "after the stage a broken car still offers a repair")
+	repair.start("local")
+	frames(game, CarRepair.SECONDS + 0.2)
+	check(game.condition == CarRepair.REPAIRED, "after the stage the repair mends the car")
+	game.course.phase = schedule[0]
+	game.course.pass_index = schedule[1]
+	frames(game, 1.5)
+
 	# A guest mends a friend's car through the host.
 	game.room.connected = true
 	game.room.is_host = true
