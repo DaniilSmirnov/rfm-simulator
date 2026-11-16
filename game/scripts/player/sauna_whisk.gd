@@ -31,7 +31,7 @@ func whipping() -> bool:
 func can_start() -> bool:
 	var game = steam.game
 	return not whipping() and not game.in_car and not game.injuries.down and game.beers < game.COLLAPSE_BEERS and game.drink_time < 0 and game.eat_time < 0 \
-		and game.placement_kind == "" and not game.cargo.held.has(game.chair_owner()) and steam.inside(game.walker)
+		and game.placement_kind == "" and not game.cargo.blocks(game.chair_owner()) and steam.inside(game.walker)
 
 # Friends inside the sauna, aimed at by the body.
 func offers(items: Array, interaction) -> void:

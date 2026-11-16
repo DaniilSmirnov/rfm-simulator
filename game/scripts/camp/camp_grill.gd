@@ -55,7 +55,7 @@ func free_slots() -> int:
 
 func _can_act() -> bool:
 	return game.playing and not game.actor_in_car() and not game.paused and not game.dead and not game.finished \
-		and game.actor_beers() < game.COLLAPSE_BEERS and not game.packing.active() and not game.cargo.held.has(game.cargo.actor())
+		and game.actor_beers() < game.COLLAPSE_BEERS and not game.packing.active() and not game.cargo.blocks(game.cargo.actor())
 
 func near() -> bool:
 	return game.grill != null and game.actor_position().distance_to(game.grill.position) <= REACH

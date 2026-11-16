@@ -56,7 +56,7 @@ func mount() -> bool:
 	return game.cargo.deploy("cauldron", fire.position, 0)
 
 func start() -> bool:
-	if not can_act() or not game.cargo.available() or game.packing.active() or not heated() or phase != "empty" or game.actor_pos().distance_to(pot.position) > 3.5 or game.cargo.held.has(game.cargo.actor()):
+	if not can_act() or not game.cargo.available() or game.packing.active() or not heated() or phase != "empty" or game.actor_pos().distance_to(pot.position) > 3.5 or game.cargo.blocks(game.cargo.actor()):
 		return false
 	if game.room.submit("plov_cook"):
 		return true
@@ -73,8 +73,8 @@ func can_eat(source: int = -1) -> bool:
 
 func consume(source: int = -1) -> bool:
 	if source >= 0:
-		return can_eat(source) and not game.cargo.held.has(game.cargo.actor()) and meals.consume(game, source)
-	if not can_eat() or game.cargo.held.has(game.cargo.actor()):
+		return can_eat(source) and not game.cargo.blocks(game.cargo.actor()) and meals.consume(game, source)
+	if not can_eat() or game.cargo.blocks(game.cargo.actor()):
 		return false
 	servings -= 1
 	if servings == 0:
@@ -104,12 +104,12 @@ func animate_flames(visual_time: float) -> void:
 		flame.scale = Vector3(1 + sin(visual_time * 9 + i) * 0.08, 0.85 + sin(visual_time * 7 + i * 2) * 0.22, 1)
 
 func offers(items: Array, interaction) -> void:
-	if can_act() and not game.packing.active() and not game.cargo.held.has(game.chair_owner()):
+	if can_act() and not game.packing.active() and not game.cargo.blocks(game.chair_owner()):
 		meals.offers(game, items, interaction)
 	if (fire == null and pot == null) or game.packing.active():
 		return
 	var carry = game.cargo.held.get(game.chair_owner(), {})
-	if not carry.is_empty():
+	if game.cargo.blocks(game.chair_owner()):
 		if fire != null and carry.kind == "cauldron" and not carry.returning:
 			interaction.offer(items, fire.position + Vector3(0, 0.45, 0), 0.8, 3.5, "mount_cauldron", "Поставить казан на костёр")
 		if pot != null and carry.kind == "firewood" and not carry.returning:

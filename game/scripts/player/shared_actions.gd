@@ -32,6 +32,7 @@ static func run(game: Node, context, action: String, placement: Dictionary) -> v
 			var index = int(placement.get("resource_id", -1))
 			if index >= 0 and index < game.cargo.KINDS.size():
 				game.cargo.take(game.cargo.KINDS[index])
+		"stow_shovel": game.cargo.stow_shovel()
 		"return_gear":
 			if spot != Vector3.INF:
 				game.cargo.return_item(spot)

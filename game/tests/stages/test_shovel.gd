@@ -1,6 +1,13 @@
 extends "res://tests/harness.gd"
 const Stage = preload("res://scripts/stages/stage.gd")
 const Props = preload("res://scripts/core/props.gd")
+class FakeRoom extends Node:
+	var sent: Array
+	var connected = false
+	func submit(action: String, _placement: Dictionary = {}) -> bool:
+		sent.append(action)
+		return true
+
 func _initialize() -> void: call_deferred("run")
 func run() -> void:
 	var stage = Stage.new(1)
@@ -146,6 +153,22 @@ func run() -> void:
 	game.walker = stage.at(400) + stage.side(400) * 12.0
 	game._snow_hint(0.1)
 	check("F" in game.toast_label.text, "player holding the shovel is told how to dig")
+	# The shovel never blocks another action: starting one puts it back in the trunk.
+	game.cargo.game = game
+	var sent: Array = []
+	game.room = FakeRoom.new()
+	game.room.sent = sent
+	var fake_room = game.room
+	check(not game.cargo.blocks("local"), "a held shovel does not block sitting, drinking or eating")
+	game.cargo.stow_shovel()
+	check(not game.cargo.held.has("local") and sent == ["stow_shovel"], "starting another action teleports the shovel back to the trunk and tells the host")
+	game.cargo.held["local"] = {"kind": "table", "owner": "local", "returning": false}
+	game.cargo.stow_shovel()
+	check(game.cargo.blocks("local") and game.cargo.held.has("local"), "a carried box still blocks actions and is never stowed automatically")
+	game.cargo.held.erase("local")
+	game.room = null
+	fake_room.free()
+	check("stow_shovel" in preload("res://scripts/net/net_protocol.gd").actions(), "guests can ask the host to stow their shovel")
 	game.toast_label.free()
 	game.stage = null
 	game.free()
