@@ -8,6 +8,7 @@ const Movable = preload("res://scripts/core/prop_registry.gd")
 # around. Positions are deterministic and identical on every client; barriers
 # and buildings join `stage.rocks`, so cars and walkers collide with them.
 const Props = preload("res://scripts/core/props.gd")
+const WindowRooms = preload("res://scripts/core/window_rooms.gd")
 const Banks = preload("res://scripts/stages/winter/snowbanks.gd")
 
 # Hamlet on the col. `side` follows stage.side(); `size` is width, floors, depth.
@@ -27,7 +28,6 @@ const Records = preload("res://scripts/stages/stage_records.gd")
 
 static var _vertex_material: StandardMaterial3D
 static var _ice_material: StandardMaterial3D
-static var _glow_material: StandardMaterial3D
 
 # ---------------------------------------------------------------- layout
 
@@ -92,16 +92,6 @@ static func ice_material() -> StandardMaterial3D:
 		_ice_material.vertex_color_use_as_albedo = true
 		_ice_material.vertex_color_is_srgb = true
 	return _ice_material
-
-# Warm light behind hotel and chalet windows.
-static func glow_material() -> StandardMaterial3D:
-	if _glow_material == null:
-		_glow_material = StandardMaterial3D.new()
-		_glow_material.albedo_color = Color("ffd59a")
-		_glow_material.emission_enabled = true
-		_glow_material.emission = Color("ffb35a")
-		_glow_material.emission_energy_multiplier = 0.75
-	return _glow_material
 
 static func unit_box() -> BoxMesh:
 	var mesh = BoxMesh.new()
@@ -444,9 +434,8 @@ static func _gables(node: Node3D, top: float, ridge: float, span: float, at: flo
 static func _window(node: Node3D, at: Vector3, size: Vector2, yaw: float, lit: bool, shutters: bool) -> void:
 	var frame = Props.box(node, at, Vector3(size.x + 0.16, size.y + 0.16, 0.06), Color("efe8da"))
 	frame.rotation.y = yaw
-	var glass = Props.box(frame, Vector3(0, 0, 0.02), Vector3(size.x, size.y, 0.05), Color("2f3a42"))
-	if lit:
-		glass.material_override = glow_material()
+	# A chalet room behind the glass (window_rooms.gd), its lamp on if `lit`.
+	WindowRooms.pane(frame, Vector3(0, 0, 0.046), size, Vector3.BACK, "chalet", {"drop": 1.25, "lit": 1.0 if lit else 0.3, "accent": Color("b0453a")})
 	if shutters:
 		for sign in [-1.0, 1.0]:
 			Props.box(frame, Vector3(sign * (size.x * 0.5 + 0.32), 0, 0.01), Vector3(0.42, size.y + 0.1, 0.05), Color("4d6a3b"))
@@ -474,6 +463,7 @@ static func _build_house(stage, root: Node3D, item: Dictionary) -> void:
 	# camps and gravel off the footprint without reaching past the walls.
 	stage.solids.solid(node, Vector3(0, (height - 2.0) * 0.5, 0), Vector3(w + 0.3, height + 2.0, d + 0.3), "building")
 	stage.rocks.append_array(Records.footprint(node.position, node.basis.x, w + 0.3, d + 0.3, height))
+	WindowRooms.merge(node)
 
 static func _build_chalet(stage, node: Node3D, w: float, d: float, floors: int, hotel: bool) -> float:
 	var ground_floor = 3.0
@@ -530,6 +520,7 @@ static func _build_chapel(node: Node3D, w: float, d: float) -> float:
 	rose.rotation.x = PI * 0.5
 	for sign in [-1.0, 1.0]:
 		Props.box(node, Vector3(sign * (w * 0.5 + 0.03), 2.4, 0.0), Vector3(0.06, 1.4, 0.6), Color("3b4f6b"))
+		WindowRooms.pane(node, Vector3(sign * (w * 0.5 + 0.062), 2.4, 0.0), Vector2(0.6, 1.4), Vector3(sign, 0, 0), "church", {"drop": 2.2, "lit": 0.5})
 	# Bell tower behind the nave, stone base and slate spire.
 	var tower = Vector3(w * 0.5 - 0.9, 0, -d * 0.5 + 0.9)
 	Props.box(node, tower + Vector3(0, 4.6, 0), Vector3(1.9, 9.2, 1.9), Color("e4ded1"))

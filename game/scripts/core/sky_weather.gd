@@ -58,6 +58,8 @@ var _last_camera = Vector3.INF
 var _drift = Vector3.ZERO
 # Campfires, grills and beacons that light their surroundings at night.
 var night_lights = preload("res://scripts/core/night_lights.gd").new()
+# Rooms behind building windows: lit or dark at night.
+const WindowRooms = preload("res://scripts/core/window_rooms.gd")
 # Keeps the drops out of houses, cars and from under crowns (rain_shelter.gd).
 var shelter = preload("res://scripts/core/rain_shelter.gd").new()
 var drop_material: ShaderMaterial
@@ -152,6 +154,7 @@ func rebuild() -> void:
 	_last_camera = Vector3.INF
 	aurora.configure(daytime, weather, game.stage.variant if game.stage != null else 0, environment.environment)
 	_update_headlights()
+	WindowRooms.set_night(1.0 if daytime == "night" else 0.0)
 
 func _environment(look_env: Dictionary) -> WorldEnvironment:
 	var world = WorldEnvironment.new()

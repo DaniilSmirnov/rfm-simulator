@@ -4,11 +4,14 @@ extends RefCounted
 # temporary Node3D; collect() moves every primitive into a 64 m tile batch and
 # frees the node, flush() uploads one MultiMesh per (primitive, tile).
 const Props = preload("res://scripts/core/props.gd")
+const WindowRooms = preload("res://scripts/core/window_rooms.gd")
 const TILE = 64.0
 
 var prefix: String
 var batches: Dictionary = {}
 var meshes: Dictionary = {}
+# Window rooms (window_rooms.gd) per tile: one shader mesh each.
+var windows: Dictionary = {}
 
 func _init(name_prefix: String = "VillageDetail_") -> void:
 	prefix = name_prefix
@@ -24,6 +27,14 @@ func has_mesh(key: String) -> bool:
 func collect(parent: Node3D, pose: Transform3D) -> void:
 	for child in parent.get_children():
 		if child.has_meta("unbatched") or child is CollisionObject3D:
+			continue
+		if WindowRooms.is_pane(child):
+			var pose_w: Transform3D = pose * child.transform
+			var cell_w = Vector2i(floori(pose_w.origin.x / TILE), floori(pose_w.origin.z / TILE))
+			if not windows.has(cell_w):
+				windows[cell_w] = WindowRooms.new_arrays()
+			WindowRooms.append(windows[cell_w], child, pose_w)
+			child.free()
 			continue
 		if child is MeshInstance3D:
 			var key = ""
@@ -78,6 +89,7 @@ func flush(stage: Node3D) -> void:
 	open_shell.cull_mode = BaseMaterial3D.CULL_DISABLED
 	var titles = batches.keys()
 	titles.sort()
+	_flush_windows(stage)
 	for title in titles:
 		var data: Dictionary = batches[title]
 		var mm = MultiMesh.new()
@@ -101,3 +113,21 @@ func flush(stage: Node3D) -> void:
 			node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		node.material_override = material if data.key == "box" or data.key.begins_with("cylinder_") else open_shell
 	batches.clear()
+
+func _flush_windows(stage: Node3D) -> void:
+	var cells = windows.keys()
+	cells.sort()
+	for cell in cells:
+		var centre = Vector3((cell.x + 0.5) * TILE, 0, (cell.y + 0.5) * TILE)
+		var data: Dictionary = windows[cell]
+		for i in range(data.vertex.size()):
+			data.vertex[i] -= centre
+		var node = MeshInstance3D.new()
+		node.name = "%sWindowRooms_%d_%d" % [prefix, cell.x, cell.y]
+		node.mesh = WindowRooms.commit(data)
+		node.material_override = WindowRooms.material()
+		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		node.visibility_range_end = WindowRooms.RANGE
+		stage.add_child(node)
+		node.position = centre
+	windows.clear()

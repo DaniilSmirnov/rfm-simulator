@@ -13,6 +13,11 @@ extends RefCounted
 const Props = preload("res://scripts/core/props.gd")
 const Glass = preload("res://scripts/core/glass.gd")
 const NightLights = preload("res://scripts/core/night_lights.gd")
+const WindowRooms = preload("res://scripts/core/window_rooms.gd")
+const Shops = preload("res://scripts/stages/village/village_shops.gd")
+# Curtains of the window rooms, one colour per house.
+const CURTAIN_CLOTH = [Color("c7553f"), Color("e7dcc2"), Color("6f8c6a"), Color("d0a24c"), Color("4f6f9a"), Color("9a5a7a")]
+# Goods on a shop's shelves.
 const WALL = 0.3
 const FLOOR_Y = 0.12
 const PANE = Vector2(0.82, 1.38)
@@ -29,8 +34,12 @@ static func furnished(seed_value: int, shop: Dictionary) -> bool:
 	return shop.is_empty() and seed_value < 500 and seed_value % 3 == 0
 
 # The house mass up to the eaves. A furnished house is hollow on the ground
-# floor with openings at the window bays; others stay one block.
+# floor with openings at the window bays; shops are built by village_shops.gd;
+# others stay one block.
 static func mass(root: Node3D, width: float, depth: float, height: float, bottom: float, floor_h: float, wall: Color, seed_value: int, shop: Dictionary) -> void:
+	if not shop.is_empty():
+		Shops.mass(root, width, depth, height, bottom, floor_h, wall, shop)
+		return
 	if not furnished(seed_value, shop):
 		Props.box(root, Vector3(0, (height + bottom) * 0.5, depth * 0.5), Vector3(width, height - bottom, depth), wall)
 		return
@@ -69,14 +78,28 @@ static func _front(root: Node3D, width: float, floor_h: float, holes: Array, wal
 			Props.box(root, Vector3(hole, low - 0.02, WALL + 0.06), Vector3(PANE.x + 0.12, 0.04, 0.14), Color("e9e1cd"))
 		x = hole + PANE.x * 0.5
 
-# Window pane of village_architecture.gd window(): glass on the ground floor of
-# a furnished house's street facade, the usual dark pane everywhere else.
+# Window pane of village_architecture.gd window(): real glass on the ground
+# floor of a furnished house's street facade, a window room (window_rooms.gd)
+# everywhere else: a home, the mairie's offices, the church.
 static func pane(w: Node3D, parent: Node3D, p: Vector3) -> void:
-	var pane_node = Props.box(w, Vector3(0, 0, 0.02), Vector3(0.82, 1.38, 0.06), Color("3e4a4c"))
 	if parent.get_meta("room", false) and p.y < 3.0 and absf(p.z) < 0.01 and absf(w.rotation.y) < 0.01:
+		var pane_node = Props.box(w, Vector3(0, 0, 0.02), Vector3(0.82, 1.38, 0.06), Color("3e4a4c"))
 		Glass.glaze(pane_node)
 		pane_node.set_meta("unbatched", true)
 		pane_node.name = "WindowGlass"
+		return
+	var kind = "home"
+	if str(parent.name).begins_with("VillageMairie"):
+		kind = "office"
+	elif str(parent.name).begins_with("VillageChurch"):
+		kind = "church"
+	var house = posmod(hash(str(parent.name)), CURTAIN_CLOTH.size())
+	WindowRooms.pane(w, Vector3(0, 0, -0.011), PANE, Vector3.FORWARD, kind, {"drop": clampf(fposmod(p.y, 3.0), 1.1, 1.6), "accent": CURTAIN_CLOTH[house], "lit": 0.55,
+		"seed": float(posmod(hash("%s:%s" % [parent.name, p]), 997)) / 997.0})
+
+# Arched upper window of the wine cooperative: the cellar hall inside.
+static func hall_window(root: Node3D, at: Vector3) -> void:
+	WindowRooms.pane(root, at + Vector3(0, 0, -0.045), Vector2(1.1, 1.0), Vector3.FORWARD, "hall", {"drop": 3.6, "lit": 0.6})
 
 static func _room(root: Node3D, width: float, depth: float, floor_h: float, holes: Array, seed_value: int) -> void:
 	var inner = Vector2(width * 0.5 - WALL, depth - WALL)

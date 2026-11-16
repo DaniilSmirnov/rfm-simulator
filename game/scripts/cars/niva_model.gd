@@ -9,6 +9,8 @@ extends RefCounted
 const P = preload("res://scripts/core/props.gd")
 const CarParts = preload("res://scripts/cars/car_parts.gd")
 const CarLamps = preload("res://scripts/cars/car_lamps.gd")
+const CarInterior = preload("res://scripts/cars/car_interior.gd")
+const Glass = preload("res://scripts/core/glass.gd")
 const VARIANT = 2
 const HINGE = Vector3(0.0, 1.56, 1.42)
 const WHEEL_RADIUS = 0.34
@@ -112,27 +114,28 @@ static func _body(parts: Node3D, paint: Color) -> void:
 		Vector4(1.38, 0.71, 1.49, 1.605),
 		Vector4(1.44, 0.69, 1.50, 1.585),
 	], paint).name = "NivaRoof"
-	# Dark cabin behind the glass, also the back of the rear seats.
-	_box(parts, Vector3(0, 1.0, 0.44), Vector3(1.30, 0.9, 1.68), DARK, "NivaCabin")
+	# Dark tub up to the belt line; the cabin stands on it behind the glass.
+	_box(parts, Vector3(0, 0.81, 0.44), Vector3(1.30, 0.52, 1.68), DARK, "NivaCabin")
+
 	_box(parts, Vector3(0, 0.728, 0.0), Vector3(1.40, 0.02, 3.2), DARK, "NivaWheelWells")
 
 static func _glasshouse(parts: Node3D, paint: Color) -> void:
-	_panel(parts, PackedVector3Array([
+	Glass.glaze(_panel(parts, PackedVector3Array([
 		Vector3(-0.71, 1.08, -0.66), Vector3(0.71, 1.08, -0.66),
 		Vector3(0.645, 1.50, -0.25), Vector3(-0.645, 1.50, -0.25),
-	]), GLASS).name = "NivaWindscreen"
+	]), GLASS)).name = "NivaWindscreen"
 	_box(parts, Vector3(0, 1.085, -0.70), Vector3(1.36, 0.02, 0.08), DARK, "NivaCowl")
 	for side in [-1.0, 1.0]:
 		var low = side * 0.765
 		var high = side * 0.672
-		_panel(parts, PackedVector3Array([
+		Glass.glaze(_panel(parts, PackedVector3Array([
 			Vector3(low, 1.09, -0.61), Vector3(low, 1.09, 0.50),
 			Vector3(high, 1.49, 0.50), Vector3(high, 1.49, -0.26),
-		]), GLASS).name = "NivaDoorGlass"
-		_panel(parts, PackedVector3Array([
+		]), GLASS)).name = "NivaDoorGlass"
+		Glass.glaze(_panel(parts, PackedVector3Array([
 			Vector3(low, 1.09, 0.58), Vector3(low, 1.09, 1.42),
 			Vector3(high, 1.49, 1.33), Vector3(high, 1.49, 0.58),
-		]), GLASS).name = "NivaQuarterGlass"
+		]), GLASS)).name = "NivaQuarterGlass"
 		P.car_beam(parts, Vector3(side * 0.735, 1.07, -0.67), Vector3(side * 0.675, 1.52, -0.25), 0.07, paint)
 		_box(parts, Vector3(side * 0.725, 1.29, 0.54), Vector3(0.07, 0.43, 0.08), paint, "NivaBPillar")
 		# Wide rear pillar, from the quarter glass back to the tailgate edge.
@@ -210,6 +213,8 @@ static func _tailgate(hinge: Node3D, paint: Color) -> void:
 	for part in parts:
 		var node = _box(hinge, part[1] - HINGE, part[2], part[3], part[0])
 		node.rotation.x = -tilt
+		if part[3] == GLASS:
+			Glass.glaze(node)
 
 static func build() -> Node3D:
 	var look: Dictionary = P.PLAYER_MODELS[VARIANT]
@@ -226,6 +231,13 @@ static func build() -> Node3D:
 	parts.name = "NivaStaticParts"
 	root.add_child(parts)
 	_body(parts, paint)
+	# Cabin frame from the glasshouse: windscreen base, roof edges, tailgate
+	# glass. Its own holder, so the bonnet cut (car_hood.gd) leaves it alone.
+	var cabin = Node3D.new()
+	cabin.name = "NivaCabinInterior"
+	parts.add_child(cabin)
+	CarInterior.build(cabin, {"pillar": 0.42, "interior": "2b2f2c", "seat": "4a4136", "seat_insert": "6b5d4b"}, {"shape": [-0.66, -0.25, 1.33, 1.43], "bonnet": 1.08, "deck": 1.08, "floor": 1.08, "height": 1.56, "glass_half": 0.72})
+	root.set_meta(CarInterior.SEAT_META, cabin.get_meta(CarInterior.SEAT_META))
 	_glasshouse(parts, paint)
 	_front(parts, trim)
 	_sides(parts, paint)

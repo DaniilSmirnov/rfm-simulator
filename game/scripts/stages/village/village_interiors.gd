@@ -4,6 +4,9 @@ extends RefCounted
 const Props = preload("res://scripts/core/props.gd")
 const STONE = Color("d8c7a4")
 const WOOD = Color("73513b")
+const Glass = preload("res://scripts/core/glass.gd")
+# Stations of the nave windows along each side wall.
+const NAVE_WINDOWS = [-5.0, 1.0, 7.0]
 
 static func block(arch, root: Node3D, p: Vector3, size: Vector3, color: Color, solid: bool = true) -> void:
 	Props.box(root, p, size, color)
@@ -69,8 +72,20 @@ static func church(arch, root: Node3D) -> void:
 	root.set_meta("accessible", true)
 	var footprint = root.transform * Transform3D(Basis.IDENTITY, Vector3(0, 0, -2))
 	arch.solids.interior_footprints.append({"inverse": footprint.affine_inverse(), "half": Vector2(5.6, 12.6)})
+	# Nave walls with three tall glazed windows each: daylight falls on the
+	# pews, and from the street you see in.
 	for x in [-4.8, 4.8]:
-		block(arch, root, Vector3(x, 4.5, 1), Vector3(0.4, 9, 19), STONE)
+		block(arch, root, Vector3(x, 1.8, 1), Vector3(0.4, 3.6, 19), STONE)
+		block(arch, root, Vector3(x, 7.7, 1), Vector3(0.4, 2.6, 19), STONE)
+		var from = -8.5
+		for z in NAVE_WINDOWS + [11.1]:
+			if z - 0.6 > from:
+				block(arch, root, Vector3(x, 5.0, (from + z - 0.6) * 0.5), Vector3(0.4, 2.8, z - 0.6 - from), STONE)
+			from = z + 0.6
+		for z in NAVE_WINDOWS:
+			var pane = Glass.glaze(Props.box(root, Vector3(x, 5.0, z), Vector3(0.04, 2.8, 1.2), Color("78988e")))
+			pane.set_meta("unbatched", true)
+			pane.name = "NaveWindow"
 	block(arch, root, Vector3(0, 4.5, 10.3), Vector3(10, 9, 0.4), STONE)
 	door_wall(arch, root, -8.3, 10, 9, false)
 	floor_panel(arch, root, Vector3(0, 0.10, 1), 9.6, 19)
@@ -91,10 +106,6 @@ static func church(arch, root: Node3D) -> void:
 	Props.box(root, Vector3(0, 4.5, 9.98), Vector3(1.5, 0.16, 0.12), WOOD)
 	for x in [-1.0, 1.0]:
 		Props.cylinder(root, Vector3(x, 1.3, 8.5), 0.09, 0.09, 0.4, Color("e4c774"), 8)
-	for z in [-5.0, 1.0, 7.0]:
-		for x in [-4.55, 4.55]:
-			# Bright inset panes can be seen from inside and outside.
-			Props.box(root, Vector3(x, 5, z), Vector3(0.12, 2.8, 1.2), Color("78988e"))
 	for x in [-5.3, 5.3]:
 		for z in [-7.0, -2.0, 3.0, 8.0]:
 			block(arch, root, Vector3(x, 3.2, z), Vector3(0.8, 6.4, 0.8), Color("c3b9a1"))

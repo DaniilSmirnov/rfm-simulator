@@ -172,22 +172,10 @@ static func _bake_person(p: Dictionary, c: Dictionary, x: float, role: String, w
 		avatar = MedicModel.create("")
 	else:
 		avatar = P.player_avatar(BARE_HEADS[posmod(seed, BARE_HEADS.size())])
-	holder.add_child(avatar)
-	var place = fit(c)
-	avatar.scale = Vector3.ONE * place.x
-	avatar.position = Vector3(x, place.y, c.front_seat - 0.2 * place.x)
-	if not spec.get("medic", false):
-		_dress(avatar, p, spec)
-	_strip_hidden(avatar)
-	_pose(avatar, wheel)
-	# The formula guesses the seated height; hats and big heads can still
-	# reach above it, so measure the posed figure and shrink it under the roof.
-	var roof: float = c.floor + c.avail - 0.03
-	var top = _top(avatar, holder)
-	if top > roof:
-		var k = (roof - place.y) / maxf(0.1, top - place.y)
-		avatar.scale *= k
-		_pose(avatar, wheel)
+	var dress = func() -> void:
+		if not spec.get("medic", false):
+			_dress(avatar, p, spec)
+	place(holder, c, x, avatar, wheel, dress)
 	if spec.get("holds", "") == "notes":
 		# Pace-note book in the navigator's right hand.
 		P.box(CharacterRig.hand(avatar), CharacterRig.grip() + Vector3(-0.08, 0, -0.06), Vector3(0.22, 0.02, 0.16), Color("f3efe2"))
@@ -226,6 +214,27 @@ static func _above(mesh: ArrayMesh, floor: float) -> ArrayMesh:
 		result.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, out)
 		result.surface_set_material(result.get_surface_count() - 1, mesh.surface_get_material(surface))
 	return result
+
+# Seats `avatar` (a character model) in the cabin `c` at lateral `x`: scaled to
+# the cabin, hands on the wheel when `wheel` is a hub position, otherwise in
+# the lap. `dress` runs before the figure is measured against the roof.
+static func place(root: Node3D, c: Dictionary, x: float, avatar: Node3D, wheel, dress: Callable = Callable()) -> void:
+	root.add_child(avatar)
+	var seat = fit(c)
+	avatar.scale = Vector3.ONE * seat.x
+	avatar.position = Vector3(x, seat.y, c.front_seat - 0.2 * seat.x)
+	if dress.is_valid():
+		dress.call()
+	_strip_hidden(avatar)
+	_pose(avatar, wheel)
+	# The formula guesses the seated height; hats and big heads can still
+	# reach above it, so measure the posed figure and shrink it under the roof.
+	var roof: float = c.floor + c.avail - 0.03
+	var top = _top(avatar, root)
+	if top > roof:
+		var k = (roof - seat.y) / maxf(0.1, top - seat.y)
+		avatar.scale *= k
+		_pose(avatar, wheel)
 
 static func _pose(avatar: Node3D, wheel) -> void:
 	var pose = {"seat": SEAT, "arms": "lap"}

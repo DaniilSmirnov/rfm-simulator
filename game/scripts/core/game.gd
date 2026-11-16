@@ -650,6 +650,7 @@ func _process(delta: float) -> void:
 	Props.animate_wheels(car)
 	cargo.update(delta)
 	player.repair.update_hoods(delta)
+	preload("res://scripts/cars/car_drivers.gd").update(self) # players seen at the wheel
 	movable_props.refresh()
 	camp_cooking.update(delta, room.is_guest())
 	injuries.update(delta)

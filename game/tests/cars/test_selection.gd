@@ -55,6 +55,10 @@ func run() -> void:
 	var camping_hatch_complete = camping_lid != null
 	# The lid parts are baked into one mesh on the hinge; their bounds stay in its meta.
 	var lid_parts: Dictionary = baked(camping_lid) if camping_lid != null else {}
+	# See-through glass is not baked: it rides on the hinge as its own mesh.
+	if camping_lid != null:
+		for glass in camping_lid.find_children("*_Lid", "MeshInstance3D", false, false):
+			lid_parts[str(glass.name)] = glass.transform * glass.get_aabb()
 	for lid_name in camping_lid_names:
 		camping_hatch_complete = camping_hatch_complete and lid_parts.has(lid_name)
 	check(camping_hatch_complete and camping_lid.get_node_or_null("BakedLid") != null, "camping hatch moves rear body, glass, trim and lamps together")
