@@ -494,6 +494,9 @@ func _racers_snapshot() -> Dictionary:
 			entry.towed = true
 		if int(r.get("recovery_helpers", 0)) != 0:
 			entry.recovery_helpers = r.recovery_helpers
+		# The camp a retired crew walked over to for lunch (crew_lunch.gd).
+		if int(r.get("lunch", -1)) >= 0:
+			entry.lunch = int(r.lunch)
 		racers.append(entry)
 	var result = {"racers": racers}
 	if not game.recovery_links.is_empty():
@@ -523,6 +526,7 @@ func _racers_apply(w: Dictionary, sample_time: float) -> void:
 				local.state = r.state
 				local.towed = r.get("towed", false)
 				local.recovery_helpers = int(r.get("recovery_helpers", 0))
+				local.lunch = int(r.get("lunch", -1))
 				_apply_steer(local.node, r)
 				exists = true
 				break
@@ -532,7 +536,7 @@ func _racers_apply(w: Dictionary, sample_time: float) -> void:
 			game.add_child(node)
 			node.position = room.v(r.pos)
 			node.set_meta("room_id", r.id)
-			game.racers.append({"id": r.id, "role": role, "zero_index": int(r.get("zero_index", 0)), "node": node, "state": r.state, "variant": r.variant})
+			game.racers.append({"id": r.id, "role": role, "zero_index": int(r.get("zero_index", 0)), "node": node, "state": r.state, "variant": r.variant, "lunch": int(r.get("lunch", -1))})
 			_apply_steer(node, r)
 		if not racer_motion.has(r.id):
 			racer_motion[r.id] = SnapshotMotion.new()

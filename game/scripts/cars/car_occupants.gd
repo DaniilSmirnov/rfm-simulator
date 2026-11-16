@@ -256,7 +256,16 @@ static func _local(node: Node3D, root: Node3D) -> Transform3D:
 		n = n.get_parent()
 	return t
 
-# Overalls or a uniform jacket over the character's clothes, and the head gear.
+# A rally crew member out of the car (crew_lunch.gd): full size, in the
+# overalls of car spec `p`, helmet off. `seat` 0 is the pilot, 1 the
+# navigator; `seed` is the one seat() got, so they are the same two people.
+static func crew_walker(p: Dictionary, seat: int, seed: int) -> Node3D:
+	var avatar = P.player_avatar(BARE_HEADS[posmod(seed * 2 + seat, BARE_HEADS.size())])
+	_dress(avatar, p, {"suit": "", "head": ""})
+	return avatar
+
+# Overalls or a uniform jacket over the character's clothes, and the head gear
+# ("helmet", "cap" or "" for none).
 static func _dress(avatar: Node3D, p: Dictionary, spec: Dictionary) -> void:
 	var suit = Color(spec.suit) if spec.suit != "" else Color(p.get("suit", p.get("accent", "2f4a7a")))
 	P.box(avatar, Vector3(0, 1.1, 0), Vector3(0.68, 0.6, 0.55), suit)
@@ -266,7 +275,7 @@ static func _dress(avatar: Node3D, p: Dictionary, spec: Dictionary) -> void:
 		# Harness straps over the overalls.
 		for dx in [-0.1, 0.1]:
 			P.box(avatar, Vector3(dx, 1.12, -0.28), Vector3(0.07, 0.56, 0.02), Color("1d2125"))
-	else:
+	elif spec.head == "cap":
 		P.box(avatar, Vector3(-0.15, 1.25, -0.28), Vector3(0.08, 0.07, 0.02), Color("c9a95b")) # badge
 	var head: Node3D = avatar.get_node("Head")
 	var box = AABB()
@@ -278,7 +287,7 @@ static func _dress(avatar: Node3D, p: Dictionary, spec: Dictionary) -> void:
 		P.faceted(head, centre, Vector3(0.62, 0.56, 0.64), Color(p.get("helmet", "f1f0ea")), 12, 6)
 		P.box(head, centre + Vector3(0, -0.04, -0.31), Vector3(0.46, 0.17, 0.03), Color("1b2228"))
 		P.box(head, centre + Vector3(0, 0.25, 0), Vector3(0.12, 0.03, 0.62), suit)
-	else:
+	elif spec.head == "cap":
 		P.faceted(head, centre + Vector3(0, 0.12, 0), Vector3(0.6, 0.24, 0.6), Color(spec.cap), 12, 4)
 		P.box(head, centre + Vector3(0, 0.05, 0), Vector3(0.6, 0.06, 0.6), Color("b8312f"))
 		P.box(head, centre + Vector3(0, 0.03, -0.34), Vector3(0.4, 0.025, 0.16), Color("151a22"))

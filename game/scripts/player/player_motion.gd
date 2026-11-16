@@ -19,11 +19,13 @@ var game:
 		perches.game = value
 		sauna.game = value
 		repair.game = value
+		moon.game = value
 var flight_solver = preload("res://scripts/net/drive_prediction.gd").new()
 var relief = preload("res://scripts/player/tree_relief.gd").new()
 var perches = preload("res://scripts/player/perches.gd").new()
 var sauna = preload("res://scripts/player/sauna_steam.gd").new()
 var repair = preload("res://scripts/cars/car_repair.gd").new()
+var moon = preload("res://scripts/player/moon_prank.gd").new()
 var drunk = preload("res://scripts/player/drunk_camera.gd").new()
 # Seated on a chair or a sauna bench the view turns only as far as a head and
 # shoulders do, not round the chair's back (SEAT_LOOK either way).
@@ -195,7 +197,7 @@ func walk(delta: float) -> void:
 	if Dedicated.active(): return
 	game.rides.update()
 	perches.carry()
-	if relief.update(delta) or repair.update(delta):
+	if relief.update(delta) or repair.update(delta) or moon.update(delta):
 		return
 	perches.gather(game.walker)
 	var remaining = maxf(delta, 0.0)
