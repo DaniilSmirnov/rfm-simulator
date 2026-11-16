@@ -11,7 +11,7 @@ export const groups = Object.freeze({
   "test_character_asset.gd", "test_character_rig.gd", "test_player_handling.gd", "test_prop_physics.gd", "test_prop_sleep.gd", "test_stage_start.gd", "test_rolling_wheels.gd",
   "test_helicopter.gd", "test_vehicle_contract.gd", "test_cargo_selection_order.gd", "test_trunk.gd",
   "test_niva_integration.gd", "test_packing.gd", "test_interaction_hold.gd", "test_demo.gd", "test_mobile.gd",
-  "test_stage_safety_gate.gd", "test_how_to_play.gd", "test_demo_build.gd", "test_tree_relief.gd", "test_lake_sauna.gd", "test_view_clearance.gd", "test_pointer_capture.gd", "test_party.gd", "test_selection.gd",
+  "test_stage_safety_gate.gd", "test_how_to_play.gd", "test_demo_build.gd", "test_tree_relief.gd", "test_lake_sauna.gd", "test_canyon_yurt.gd", "test_view_clearance.gd", "test_pointer_capture.gd", "test_party.gd", "test_selection.gd",
   "test_vk_access.gd", "test_vk_catalog_matrix.gd", "test_vk_invite_ui.gd",
   "test_lobby_ui.gd", "test_menu_memory.gd", "test_sky_weather.gd", "test_settings_screen.gd", "test_localization.gd", "test_room_origin.gd", "test_minimap.gd",
   "test_resource_cache.gd", "test_draw_distance.gd", "test_load_pacer.gd", "test_world_loading.gd",
@@ -23,6 +23,7 @@ export const groups = Object.freeze({
   "test_physics.gd", "test_prop_contact.gd", "test_car_hitbox.gd", "test_food_fleet.gd", "test_foraging.gd", "test_grill_fire.gd", "test_camp_models.gd",
   "test_poison_mushrooms.gd", "test_network_motion.gd", "test_tow_recovery.gd", "test_car_rides.gd", "test_car_repair.gd", "test_police_bridge.gd",
   "test_crew_limit.gd", "test_drive_prediction.gd", "test_route_index.gd", "test_knockdown.gd", "test_ambulance_medics.gd", "test_ambulance_right_of_way.gd", "test_ambulance_ford.gd", "test_away_players.gd", "test_ambulance_unreachable.gd",
+  "test_fan_gags.gd",
  ],
  world: [
   "test_baked_village.gd", "test_village_landmarks.gd", "test_navigation_budget.gd",
@@ -58,7 +59,7 @@ export const slowTests = new Set([
  "test_village_terrain_performance.gd", "test_canyon.gd", "test_finnish_forest.gd", "test_mineshaft.gd", "test_sever.gd", "test_quarry.gd", "test_offroad_contact.gd", "test_offroad_contact_late.gd", "test_offroad_contact_last.gd",
  "test_course_schedule.gd", "test_course_schedule_late.gd", "test_course_officials.gd", "test_spectators.gd", "test_alpine_winter.gd",
  "test_selection.gd", "test_world_loading.gd", "test_baked_village.gd",
- "test_provence_village.gd", "test_stage_solids.gd", "test_service_parks.gd", "test_service_park_layout.gd",
+ "test_provence_village.gd", "test_stage_solids.gd", "test_canyon_yurt.gd", "test_service_parks.gd", "test_service_park_layout.gd",
 ]);
 // Tests that outgrow the slow-test limit (180 s), with their own, in ms.
 export const timeouts = Object.freeze({

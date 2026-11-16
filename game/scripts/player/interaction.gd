@@ -58,6 +58,8 @@ func normal_target() -> Dictionary:
 		return {"action": "relief_stop", "label": Loc.t("Закончить")}
 	if game.player.stargaze.active:
 		return game.player.stargaze.target()
+	if game.player.moon.active:
+		return {}
 	if game.player.repair.active():
 		return game.player.repair.target()
 	var items: Array = []
@@ -112,6 +114,7 @@ func normal_target() -> Dictionary:
 			var beer = "" if game.beer_timer > 0 else ("Выпить пиво" if game.camp_actions.crates.count(source) > 0 else "Ящик пуст")
 			offer(items, table.position + Vector3(0, 0.75, 0), 0.85, 3, "beer" if beer != "" else "", beer)
 	game.player.relief.offers(items, self)
+	game.player.moon.offers(items, self)
 	game.player.repair.offers(items, self)
 	game.player.sauna.offers(items, self)
 	var chosen = select_target(items)
@@ -220,6 +223,7 @@ func activate() -> void:
 		"relief_stop": game.player.relief.stop()
 		"stargaze": game.player.stargaze.start()
 		"stargaze_stop": game.player.stargaze.stop()
+		"moon": game.player.moon.start()
 		"repair_car": game.player.repair.start(str(target.value))
 		"repair_stop": game.player.repair.stop()
 		"sauna": game.player.sauna.start(float(target.value))

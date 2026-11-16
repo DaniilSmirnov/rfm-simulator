@@ -23,6 +23,8 @@ extends RefCounted
 #   gaze      0..1 leaning far back to watch the sky (northern lights): the
 #             body arches back from bent knees, the head tips up, arms hang;
 #             the feet stay where they stood
+#   moon      bent over, trousers down, the backside (behind a censor mosaic)
+#             to whoever the person turned their back on (mooning.gd)
 const KNEE = 0.33
 const SHIN = 0.31
 const UPPER_ARM = 0.22
@@ -59,6 +61,18 @@ const GAZE_HIP = -0.43
 const GAZE_KNEE = -0.36
 const GAZE_HEAD = 0.6
 const GAZE_HAND = Vector3(0.38, 0.86, 0.22)
+# Mooning: the body bends forward this far (rad) about the feet and the knees
+# bend as much again, which keeps the feet under the hips and on the ground;
+# the hands rest on the thighs and the head turns to watch over the shoulder.
+const MOON_LEAN = 0.5
+const MOON_HAND = Vector3(0.24, 0.66, -0.30)
+# The censor mosaic over the seat of the trousers: centre (avatar space), size
+# of one tile and tiles across and down.
+const MOON_PATCH = Vector3(0.0, 0.70, 0.215)
+const MOON_TILE = 0.105
+const MOON_TILES = Vector2i(4, 3)
+const MOON_COLORS = [Color("e8b49a"), Color("d99a83"), Color("f2c9b4"), Color("c98a74")]
+const MOON_CENSOR = "MoonCensor"
 
 static func joints(avatar: Node3D) -> Dictionary:
 	if avatar.has_meta("rig_joints"):
@@ -87,11 +101,16 @@ static func pose(avatar: Node3D, p: Dictionary = {}) -> void:
 	var gait = int(p.get("gait", 0))
 	var angle = float(p.get("time", 0.0)) * (13.0 if gait == 2 else 8.0) + float(p.get("seed", 0.0))
 	var swing = sin(angle) if gait > 0 else 0.0
+	var moon = bool(p.get("moon", false))
+	_moon(avatar, j, moon)
 	_legs(avatar, j, p, gait, angle)
 	_arms(j, p, gait, swing)
 	var head: Node3D = j.head
 	var lift = float(p.get("lift", 0.0))
 	head.rotation = Vector3(0.18 * lift if p.get("arms", "") in ["eat", "drink"] else (-0.35 * lift if p.get("arms", "") == "pick" else 0.0), float(p.get("look", 0.0)), 0.0)
+	if moon:
+		# Looking back over the shoulder, chin up, at the car coming.
+		head.rotation = Vector3(-0.45, 0.95 + 0.08 * sin(float(p.get("time", 0.0)) * 3.0 + float(p.get("seed", 0.0))), 0.0)
 	if j.torso != null:
 		j.torso.rotation.x = -0.45 if p.get("kneel", false) else 0.0
 	if p.has("gaze"):
@@ -101,6 +120,10 @@ static func pose(avatar: Node3D, p: Dictionary = {}) -> void:
 # upright body had them. The shift is kept in a meta and undone first, so a
 # caller that does not reset the position every frame does not drift.
 static func _gaze(avatar: Node3D, j: Dictionary, gaze: float) -> void:
+	# Nothing is touched for someone who is not and was not gazing (the lean
+	# of a mooning body stays its own).
+	if gaze <= 0.0 and not avatar.has_meta("gaze_shift"):
+		return
 	var shift: Vector3 = avatar.get_meta("gaze_shift", Vector3.ZERO)
 	avatar.position -= shift
 	avatar.rotation.x = GAZE_LEAN * gaze
@@ -116,7 +139,10 @@ static func _gaze(avatar: Node3D, j: Dictionary, gaze: float) -> void:
 			feet += avatar.basis * foot - Basis(Vector3.UP, avatar.rotation.y) * upright
 		shift = -feet * 0.5
 	avatar.position += shift
-	avatar.set_meta("gaze_shift", shift)
+	if gaze > 0.0:
+		avatar.set_meta("gaze_shift", shift)
+	else:
+		avatar.remove_meta("gaze_shift")
 
 # Root lowering for a seat or a kneel, relative to the feet.
 static func body_drop(p: Dictionary) -> float:
@@ -146,6 +172,11 @@ static func _legs(avatar: Node3D, j: Dictionary, p: Dictionary, gait: int, angle
 			# no ankle joint.)
 			hip = CROUCH + (0.05 if i == 0 else -0.05)
 			knee = -hip
+		elif p.get("moon", false):
+			# Thigh forward and shin back by the lean (the root tilts in
+			# _moon()): the hips drop just as far as the tilt lowers them.
+			hip = 2.0 * MOON_LEAN
+			knee = -2.0 * MOON_LEAN
 		elif p.get("airborne", false):
 			hip = 0.55 if i == 0 else 0.15
 			knee = -0.95 if i == 0 else -0.55
@@ -175,7 +206,12 @@ static func _arms(j: Dictionary, p: Dictionary, gait: int, swing: float) -> void
 			rest = Vector3(0.52, 1.05, -0.18)
 		var target = rest
 		var pole = POLE_HANG
+		if p.get("moon", false):
+			mode = "moon"
 		match mode:
+			"moon":
+				target = MOON_HAND
+				pole = POLE_OUT
 			"radio":
 				# `lift` raises the radio to the mouth; while on air the hand
 				# bobs a little with the speech.
@@ -240,6 +276,51 @@ static func _arms(j: Dictionary, p: Dictionary, gait: int, swing: float) -> void
 		# body; a shoulder mounted elsewhere (the medic's leaning torso) moves them along.
 		var shoulder_shift: Vector3 = j.arms[i].position - Vector3(SHOULDER.x * side, SHOULDER.y, SHOULDER.z)
 		reach(j.arms[i], j.forearms[i], Vector3(target.x * side, target.y, target.z) + shoulder_shift, Vector3(pole.x * side, pole.y, pole.z))
+
+# Bends the person over (the whole body tilts forward about the feet; _legs()
+# bends the knees to match) and shows the censor mosaic; puts everything back
+# after. Nothing is touched for someone who never mooned (a casualty's own
+# tilt stays).
+static func _moon(avatar: Node3D, j: Dictionary, on: bool) -> void:
+	if not on and not avatar.has_meta("rig_moon"):
+		return
+	avatar.rotation.x = -MOON_LEAN if on else 0.0
+	var patch = avatar.get_node_or_null(MOON_CENSOR)
+	if on and patch == null:
+		patch = censor()
+		avatar.add_child(patch)
+	if patch != null:
+		patch.visible = on
+	if on:
+		avatar.set_meta("rig_moon", true)
+	else:
+		avatar.remove_meta("rig_moon")
+
+# A TV-style pixel mosaic, one mesh of flat tiles in skin tones.
+static func censor() -> MeshInstance3D:
+	var surface = SurfaceTool.new()
+	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var half = Vector2(MOON_TILES) * MOON_TILE * 0.5
+	for x in range(MOON_TILES.x):
+		for y in range(MOON_TILES.y):
+			surface.set_color(MOON_COLORS[(x * 3 + y * 5 + x * y) % MOON_COLORS.size()])
+			var a = Vector3(x * MOON_TILE - half.x, y * MOON_TILE - half.y, 0)
+			var b = a + Vector3(MOON_TILE, 0, 0)
+			var c = a + Vector3(MOON_TILE, MOON_TILE, 0)
+			var d = a + Vector3(0, MOON_TILE, 0)
+			for v in [a, c, b, a, d, c]:
+				surface.set_normal(Vector3.BACK)
+				surface.add_vertex(v)
+	var material = StandardMaterial3D.new()
+	material.vertex_color_use_as_albedo = true
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var patch = MeshInstance3D.new()
+	patch.name = MOON_CENSOR
+	patch.mesh = surface.commit()
+	patch.material_override = material
+	patch.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	patch.position = MOON_PATCH
+	return patch
 
 # Two-bone IK: turn the shoulder and bend the elbow so the grip lands on
 # `target` (shoulder-parent space), the elbow bending towards `pole`.
