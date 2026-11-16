@@ -60,6 +60,11 @@ var _drift = Vector3.ZERO
 var night_lights = preload("res://scripts/core/night_lights.gd").new()
 # Rooms behind building windows: lit or dark at night.
 const WindowRooms = preload("res://scripts/core/window_rooms.gd")
+# Keeps the drops out of houses, cars and from under crowns (rain_shelter.gd).
+var shelter = preload("res://scripts/core/rain_shelter.gd").new()
+var drop_material: ShaderMaterial
+# Northern lights on a clear night over the stages that have them (aurora.gd).
+var aurora = preload("res://scripts/core/aurora.gd").new()
 var _lamp_clock = 0.0
 
 static func night_or_day(value) -> String:
@@ -108,6 +113,8 @@ static func look(variant: int, time: String, kind: String) -> Dictionary:
 func setup(owner: Node3D) -> void:
 	game = owner
 	name = "SkyWeather"
+	aurora.setup(owner)
+	owner.add_child(aurora)
 
 func snowy() -> bool:
 	return game.stage != null and game.stage.has_snow
@@ -131,6 +138,7 @@ func rebuild() -> void:
 	if fall != null:
 		fall.free()
 		fall = null
+	shelter.centre = Vector2(INF, INF)
 	if game.stage != null:
 		game.stage.weather_grip = GRIP[weather]
 	var current = look(game.stage.variant if game.stage != null else 0, daytime, weather)
@@ -144,6 +152,7 @@ func rebuild() -> void:
 		fall = _fall(FALL[weather])
 		game.add_child(fall)
 	_last_camera = Vector3.INF
+	aurora.configure(daytime, weather, game.stage.variant if game.stage != null else 0, environment.environment)
 	_update_headlights()
 	WindowRooms.set_night(1.0 if daytime == "night" else 0.0)
 
@@ -209,17 +218,10 @@ func _fall(spec: Dictionary) -> GPUParticles3D:
 	node.process_material = process
 	var mesh = QuadMesh.new()
 	mesh.size = spec.size
-	var mat = StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.albedo_color = spec.color if daytime == "day" else spec.color.darkened(0.55)
 	# Rain streaks stay upright; flakes face the camera.
-	mat.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y if spec.speed > 5.0 else BaseMaterial3D.BILLBOARD_ENABLED
-	mat.billboard_keep_scale = true
-	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	if spec.speed <= 5.0:
-		mat.albedo_texture = _flake()
-	mesh.material = mat
+	var color: Color = spec.color if daytime == "day" else spec.color.darkened(0.55)
+	drop_material = shelter.material(color, _flake() if spec.speed <= 5.0 else null, spec.speed > 5.0)
+	mesh.material = drop_material
 	node.draw_pass_1 = mesh
 	node.position = _fall_origin(spec)
 	return node
@@ -257,6 +259,7 @@ func _process(delta: float) -> void:
 			_drift = _drift.lerp(lead.limit_length(30.0), minf(1.0, delta * 3.0))
 		_last_camera = at
 		fall.position = _fall_origin(FALL[weather])
+		shelter.update(drop_material, game.stage, fall.position, at, shelter_cars(), delta)
 	_update_headlights(delta)
 	var camera: Camera3D = game.camera
 	if camera != null and camera.is_inside_tree():
@@ -282,6 +285,14 @@ func _update_headlights(delta: float = 0.0) -> void:
 			CarLamps.set_lit(car, night)
 	for car in cars:
 		_beam(car, night and car.is_inside_tree())
+
+# Cars that keep the drops out of their cabins: every car with lamps and the
+# player's own.
+func shelter_cars() -> Array:
+	var cars: Array = shelter.cars_in(get_tree())
+	if game.car != null and is_instance_valid(game.car) and not cars.has(game.car):
+		cars.append(game.car)
+	return cars
 
 static func _beam(car: Node3D, on: bool) -> void:
 	var lights = car.get_node_or_null("Headlights")
@@ -310,9 +321,14 @@ static func headlights(car: Node3D = null) -> SpotLight3D:
 
 # ---------------------------------------------------------------- room
 
+# "aurora" travels only while the northern lights show.
 func snapshot() -> Dictionary:
-	return {"time": daytime, "weather": weather}
+	var data = {"time": daytime, "weather": weather}
+	if aurora.shown:
+		data.aurora = true
+	return data
 
 func apply_snapshot(data) -> void:
 	if data is Dictionary:
 		set_conditions(data.get("time", "day"), data.get("weather", "sun"))
+		aurora.set_shown(data.get("aurora", false) == true)

@@ -7,6 +7,7 @@ extends RefCounted
 const Movable = preload("res://scripts/core/prop_registry.gd")
 const P = preload("res://scripts/core/props.gd")
 const MeshMerge = preload("res://scripts/core/mesh_merge.gd")
+const Kit = preload("res://scripts/traffic/service_park_kit.gd")
 const TEAMS = [
 	{"name": "RFM RACING", "roof": Color("c9302c"), "trim": Color("f2f0e8")},
 	{"name": "VETRA SPORT", "roof": Color("2c5aa0"), "trim": Color("f1c232")},
@@ -30,11 +31,31 @@ static func build(stage: Node3D, parks, index: int) -> Node3D:
 	root.rotation.y = atan2(-end.forward.x, -end.forward.z)
 	for i in range(TENTS.size()):
 		tent(stage, root, TENTS[i], TEAMS[(i + index) % TEAMS.size()])
+		_team_area(stage, root, TENTS[i], TEAMS[(i + index) % TEAMS.size()])
 	_entrance(stage, root)
 	_far_end(stage, root)
 	_cones(stage, root, parks)
-	MeshMerge.bake(root, "service_park")
+	_bays(root, parks)
+	# The team colours differ between the two parks: one baked mesh each.
+	MeshMerge.bake(root, "service_park:%d" % index)
 	return root
+
+# Behind and under each team's tent: its truck, a parts shelf and a work lamp.
+static func _team_area(stage: Node3D, root: Node3D, center: Vector2, team: Dictionary) -> void:
+	var outward = signf(center.x)
+	Kit.team_truck(stage, root, center.x + outward * 4.05, center.y, team)
+	Kit.shelf(stage, root, center.x + outward * 2.05, center.y - 2.4)
+	Kit.work_lamp(root, center.x, center.y, 4.5)
+
+# A ground sheet under every bay and an extinguisher beside it; barrier tape
+# along both sides of the paddock.
+static func _bays(root: Node3D, parks) -> void:
+	for key in parks.KEYS:
+		var bay: Vector2 = parks.slot_local(key)
+		Kit.mat(root, bay.x, bay.y)
+		Kit.extinguisher(root, signf(bay.x) * (parks.SLOT_X + 3.0), bay.y + parks.SLOT_PITCH * 0.5)
+	for side in [-1.0, 1.0]:
+		Kit.tape(root, side * (parks.HALF_WIDTH + 1.2), parks.LANE + 1.0, parks.LANE + parks.DEPTH)
 
 # A gazebo tent open to the aisle, its back wall printed with the team name,
 # with a workbench, a tool chest, tyres and a jack under it.
@@ -102,6 +123,8 @@ static func tyres(stage: Node3D, root: Node3D, spot: Vector2, count: int) -> voi
 	var first = root.get_child_count()
 	for i in range(count):
 		P.cylinder(root, at(spot.x, spot.y, 0.105 + i * 0.22), 0.32, 0.32, 0.21, TYRE, 12)
+		# The gravel tyre's rim shows in its middle.
+		P.cylinder(root, at(spot.x, spot.y, 0.105 + i * 0.22), 0.19, 0.19, 0.215, Kit.RIM, 10)
 	var tyre = Movable.group(stage.solids, root, first, 8 * count)
 	tyre.set_meta("prop_roll", true)
 	root.set_meta("prop_count", int(root.get_meta("prop_count", 0)) + count - 1)
@@ -130,22 +153,24 @@ static func _entrance(stage: Node3D, root: Node3D) -> void:
 		P.box(root, at(x, 12.8, 2.5), Vector3(0.02, 2.2, 0.55), Color("ce4830"))
 		P.box(root, at(x, 12.8, 2.5), Vector3(0.04, 1.6, 0.12), Color.WHITE)
 		Movable.group(stage.solids, root, first, 6, true)
+	_time_control(stage, root)
+
+# The time control at the way in: yellow warning board, the red control board
+# by the marshals' desk, and the beige board where the control zone ends.
+static func _time_control(stage: Node3D, root: Node3D) -> void:
+	Kit.control_board(stage, root, -5.8, 3.0, Color("f1c232"), true)
+	Kit.control_board(stage, root, -5.8, 7.5, Color("d8261c"), true)
+	Kit.control_desk(stage, root, -7.5, 8.8)
+	Kit.control_board(stage, root, 5.6, 11.2, Color("d9c9a3"), false)
 
 # Back of the paddock: a service truck, a generator with fuel cans and a
 # portable toilet.
 static func _far_end(stage: Node3D, root: Node3D) -> void:
 	var first = root.get_child_count()
-	var truck = Vector2(-9.5, 43.0)
-	P.box(root, at(truck.x, truck.y, 1.75), Vector3(5.2, 2.6, 2.3), Color("e7e7e1"))
-	P.box(root, at(truck.x + 3.4, truck.y, 1.25), Vector3(1.7, 1.9, 2.25), Color("2c5aa0"))
-	P.box(root, at(truck.x + 4.26, truck.y, 1.55), Vector3(0.02, 0.7, 2.0), Color("3b4a55"))
-	P.box(root, at(truck.x, truck.y + 1.16, 2.0), Vector3(4.6, 0.6, 0.02), Color("ce4830"))
-	for wx in [-1.6, 0.4, 3.4]:
-		for wz in [-1.0, 1.0]:
-			# Tyres stand 2 cm proud of the body sides instead of flush with them.
-			var wheel = P.cylinder(root, at(truck.x + wx, truck.y + wz * 1.02, 0.42), 0.42, 0.42, 0.3, TYRE, 12)
-			wheel.rotation.x = PI / 2
-	stage.solids.solid(root, at(truck.x + 0.85, truck.y, 1.5), Vector3(6.9, 3.0, 2.3), "service")
+	var truck = Vector2(-9.75, 43.0)
+	# Its cab ends where the old one did, 5.25 m left of the aisle's centre.
+	Kit.truck(root, at(truck.x, truck.y), 0.0, Color("e7e7e1"), Color("2c5aa0"), Color("ce4830"))
+	stage.solids.solid(root, at(truck.x + 0.95, truck.y, 1.6), Vector3(7.1, 3.2, 2.5), "service")
 	Movable.group(stage.solids, root, first, 3500)
 	first = root.get_child_count()
 	# Beside the aisle's end, where the players' cars start the day.

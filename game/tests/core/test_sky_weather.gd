@@ -31,6 +31,7 @@ func run() -> void:
 	tiles.rain.pressed.emit()
 	check(ui.images[1].texture.resource_path == SkyWeather.preview_path(game.selected_stage, "day", "rain"), "the preview shows the stage in the rain")
 	check(sky.weather == "rain" and game.get_node_or_null("Weather") != null, "rain picked on the card falls")
+	check_shelter(game)
 	var forest_point = game.stage.at(100)
 	check(is_equal_approx(game.stage.grip(forest_point), game.stage.biome.grip(forest_point) * SkyWeather.GRIP.rain) and SkyWeather.GRIP.rain < 1.0, "rain makes the road slippery")
 	game.playing = true
@@ -80,6 +81,7 @@ func run() -> void:
 	await check_night_lights(game)
 	var validation = load("res://scripts/net/world_validation.gd")
 	check(validation.valid({"sky": shared}) and not validation.valid({"sky": {"time": 1}}), "the world schema checks the sky section")
+	check_aurora(game, validation)
 	game.queue_free()
 	await process_frame
 	finish()
@@ -185,3 +187,123 @@ func check_night_lights(game) -> void:
 	lights.update(self, false, at, 0.5)
 	await process_frame
 	check(fire.get_node_or_null(NightLights.LIGHT_NAME) == null and police.get_node("BeaconBlue").get_node_or_null(NightLights.LIGHT_NAME) == null, "the lights go out by day")
+
+# Rain stays out of cabins, houses and from under the crowns (rain_shelter.gd).
+func check_shelter(game) -> void:
+	var sky = game.sky_weather
+	var shelter = sky.shelter
+	var fall: GPUParticles3D = game.get_node("Weather")
+	check(fall.draw_pass_1.material == sky.drop_material and sky.drop_material.shader.resource_path.ends_with("weather_drop.gdshader"), "the drops are drawn by the sheltering material")
+	var stage = game.stage
+	if stage.trees.is_empty():
+		stage.build()
+	var tree_index = -1
+	for i in range(stage.trees.size()):
+		if not stage.fallen.has(i):
+			tree_index = i
+			break
+	check(tree_index >= 0, "the forest pass has trees")
+	var base: Vector3 = stage.trees[tree_index]
+	shelter.redraw(stage, Vector2(base.x, base.z))
+	check(shelter.roof_at(base + Vector3(0.3, 0, 0.3)) > base.y + 2.0, "no rain under a tree's crown (%.1f over %.1f)" % [shelter.roof_at(base + Vector3(0.3, 0, 0.3)), base.y])
+	var open = Vector3(base.x, base.y, base.z)
+	var clear = false
+	for step in range(1, 40):
+		open = base + Vector3(step * 0.5, 0, 0)
+		if shelter.roof_at(open) == shelter.OPEN:
+			clear = true
+			break
+	check(clear, "rain falls in the open next to it")
+	var near: Array = shelter.nearest_cars(sky.shelter_cars(), game.car.global_position)
+	check(near.has(game.car), "the player's own car keeps the rain out of its cabin")
+	var boxes: Array = sky.drop_material.get_shader_parameter("car_box")
+	shelter.update(sky.drop_material, stage, game.car.global_position, game.car.global_position, [game.car], 0.0)
+	boxes = sky.drop_material.get_shader_parameter("car_box")
+	check(boxes.size() == shelter.CARS and boxes[0].w == 1.0 and boxes[1].w == 0.0, "the car's box reaches the shader")
+	var provence = StageRegistry.index_of("provence")
+	if provence >= 0:
+		game.select_stage(provence)
+		game.stage.build()
+		var solids = game.stage.solids
+		check(not solids.interior_footprints.is_empty(), "the village has rooms to shelter in")
+		if not solids.interior_footprints.is_empty():
+			var area: Dictionary = solids.interior_footprints[0]
+			var inside: Vector3 = game.stage.global_transform * area.inverse.affine_inverse().origin
+			shelter.redraw(game.stage, Vector2(inside.x, inside.z))
+			check(shelter.roof_at(inside) > inside.y + 2.0, "no rain inside a village room (%.1f over %.1f)" % [shelter.roof_at(inside), inside.y])
+		game.select_stage(StageRegistry.index_of("forest"))
+
+# Northern lights over Поречье: only on a clear night, at a random moment,
+# fading in and out; the host's display reaches guests in the sky section.
+func check_aurora(game, validation) -> void:
+	var sky = game.sky_weather
+	var aurora = sky.aurora
+	game.select_stage(StageRegistry.index_of("forest"))
+	sky.set_conditions("night", "sun")
+	check(not aurora.possible, "no northern lights over the forest pass")
+	game.select_stage(StageRegistry.index_of("sever"))
+	sky.set_conditions("night", "sun")
+	check(aurora.possible and not aurora.shown and not aurora.visible, "a clear night over Поречье waits for the northern lights")
+	check(aurora._clock >= aurora.FIRST_WAIT.x and aurora._clock <= aurora.FIRST_WAIT.y, "they come at a random moment")
+	var base: Color = game.world_environment.environment.ambient_light_color
+	aurora._clock = 0.0
+	aurora._process(0.1)
+	check(aurora.shown and aurora.visible and aurora.level > 0.0 and aurora.level < 0.1, "the northern lights start to fade in")
+	check(sky.snapshot() == {"time": "night", "weather": "sun", "aurora": true} and validation.valid({"sky": sky.snapshot()}), "the room hears that they show")
+	for i in range(30):
+		aurora._process(1.0)
+	check(aurora.level == 1.0, "a full display after the fade")
+	var tinted: Color = game.world_environment.environment.ambient_light_color
+	check(tinted.g - tinted.r > base.g - base.r, "the snow catches their green light")
+	var mesh: ArrayMesh = aurora.curtains.mesh
+	check(mesh.get_surface_count() == 1 and aurora.curtains.material_override.shader != null, "the curtains have their animated material")
+	var reach = 0.0
+	for point in mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]:
+		reach = maxf(reach, point.length())
+	check(reach < 1050.0, "the curtains stay inside the camera's far plane (%d m)" % reach)
+	check_stargaze(game)
+	sky.apply_snapshot({"time": "night", "weather": "sun"})
+	check(not aurora.shown, "a guest's lights fade when the host's do")
+	for i in range(20):
+		aurora._process(1.0)
+	check(aurora.level == 0.0 and not aurora.visible, "faded out")
+	sky.set_conditions("night", "snow")
+	check(not aurora.possible and sky.snapshot() == {"time": "night", "weather": "snow"}, "snowfall hides the sky")
+
+# Watching the lights (stargaze.gd): offered looking up, the view rises and the
+# body leans back; friends get the pose from the pitch; it ends as they fade.
+func check_stargaze(game) -> void:
+	var gaze = game.player.stargaze
+	game.in_car = false
+	var Rig = load("res://scripts/people/character_rig.gd")
+	game.view_pitch = 0.1
+	check(gaze.offer().is_empty(), "looking ahead offers nothing")
+	game.view_pitch = 0.8
+	check(gaze.offer().get("action", "") == "stargaze", "looking up at the lights offers to watch them")
+	gaze.start()
+	for i in range(3):
+		gaze.update(1.0)
+	check(gaze.active and is_equal_approx(gaze.pitch(), gaze.GAZE_PITCH) and gaze.eye_offset().y < -0.1, "the view rises to the sky as the fan leans back")
+	check(gaze.gaze_of(gaze.pitch()) == 1.0 and gaze.gaze_of(gaze.FREE_PITCH) == 0.0 and gaze.gaze_of(0.5) == 0.0, "friends lean back only while watching")
+	var avatar = game.Props.player_avatar(0)
+	game.add_child(avatar)
+	avatar.position = Vector3(3, 0, 4)
+	avatar.rotation.y = 0.7
+	var feet = func() -> Vector3:
+		var j = Rig.joints(avatar)
+		return avatar.transform * (j.legs[0].transform * j.shins[0].transform * Vector3(0, -Rig.SHIN, 0))
+	Rig.pose(avatar, {"gaze": 0.0})
+	var standing: Vector3 = feet.call()
+	Rig.pose(avatar, {"gaze": 1.0})
+	Rig.pose(avatar, {"gaze": 1.0})
+	var head: Vector3 = avatar.transform * Rig.joints(avatar).head.position
+	check(avatar.rotation.x > 0.4 and feet.call().distance_to(standing) < 0.15, "the body arches back over feet that stay put (%s)" % feet.call().distance_to(standing))
+	check(head.y < 1.62 and Vector2(head.x - 3, head.z - 4).dot(Vector2(sin(0.7), cos(0.7))) > 0.3, "the head goes back and down")
+	Rig.pose(avatar, {"gaze": 0.0})
+	check(avatar.rotation.x == 0.0 and avatar.position.distance_to(Vector3(3, 0, 4)) < 0.001, "and comes back upright")
+	avatar.free()
+	game.sky_weather.aurora.level = 0.0
+	gaze.update(0.1)
+	check(not gaze.active and game.view_pitch <= gaze.FREE_PITCH, "watching ends when the lights fade")
+	game.sky_weather.aurora.level = 1.0
+	game.in_car = true
