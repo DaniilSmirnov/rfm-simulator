@@ -10,10 +10,16 @@ const TIP_SECONDS = 1.0
 const FIXED_KINDS = ["firewood"]
 # A flag is staked into the ground: it stands until a car runs it over.
 const STAKED_KINDS = ["flag"]
+# A cauldron of plov on its iron stand is heavy: a car nudging it below
+# PropContact.STURDY_SPEED stops against it, and only a real crash knocks it
+# off the fire.
+const STURDY_KINDS = ["cauldron"]
+const HEAVY_MASS = {"grill": 25.0, "cauldron": 150.0}
 const HEARTH_KINDS = ["firewood", "cauldron"]
 # How far off the campfire a resting cauldron still counts as mounted on it.
 const HEARTH_REACH = 0.55
 const Body = preload("res://scripts/core/prop_body.gd")
+const PropContact = preload("res://scripts/cars/prop_contact.gd")
 const Motion = preload("res://scripts/net/snapshot_motion.gd")
 var game
 var stage_id = 0
@@ -49,7 +55,8 @@ func refresh() -> void:
 		var fixed: bool = item.kind in FIXED_KINDS
 		if fixed: item.node.set_meta("prop_fixed", true)
 		if item.kind in STAKED_KINDS: item.node.set_meta("prop_staked", true)
-		Registry.register(game.stage.solids, item.node, 25.0 if item.kind in ["grill", "cauldron"] else 8.0, fixed or item.kind in STAKED_KINDS, key)
+		if item.kind in STURDY_KINDS: item.node.set_meta("prop_sturdy", true)
+		Registry.register(game.stage.solids, item.node, HEAVY_MASS.get(item.kind, 8.0), fixed or item.kind in STAKED_KINDS, key)
 		if item.kind in HEARTH_KINDS: hearth.append(item.node)
 	var movables: Array = game.stage.solids.movables
 	movables.assign(movables.filter(func(r): return is_instance_valid(r.node)))
@@ -104,7 +111,8 @@ func knock(key: String, velocity: Vector3) -> bool:
 		return false
 	var r: Dictionary = records[key]
 	var rooted: bool = r.anchored and not r.node.get_meta("prop_staked", false)
-	if r.node.get_meta("prop_fixed", false) or velocity.length() < (5.0 if rooted else 0.8):
+	var sturdy: bool = r.node.get_meta("prop_sturdy", false)
+	if r.node.get_meta("prop_fixed", false) or velocity.length() < (5.0 if rooted else (PropContact.STURDY_SPEED if sturdy else 0.8)):
 		return false
 	r.anchored = false
 	r.node.set_meta("prop_anchored", false)
@@ -112,7 +120,7 @@ func knock(key: String, velocity: Vector3) -> bool:
 	if r.has("body"): r.body.allow_tip(TIP_SECONDS)
 	r.velocity = (r.velocity + velocity * clampf(30.0 / r.mass, 0.08, 0.8)).limit_length(12.0)
 	if r.mass < 300.0:
-		r.spin = Vector3(velocity.z, 0, -velocity.x).limit_length(3.0)
+		r.spin = Vector3(velocity.z, 0, -velocity.x).limit_length(1.0 if sturdy else 3.0)
 	_move(r, 0)
 	return true
 
