@@ -42,7 +42,13 @@ const IRON = Color("2d2a28")
 const BRASS = Color("b98b3c")
 const LEATHER = Color("5b3520")
 
+# The floor plane (height, slope along x, slope along z) in the yurt frame:
+# the land under the yurt fitted with one plane and raised over its bumps,
+# so the felt and the carpets laid on it stay parallel and never cross.
+static var _plane := Vector3.ZERO
+
 static func build(stage, yurt: Node3D) -> void:
+	_plane = _fit_floor(stage, yurt)
 	_lining(yurt)
 	_lattice(yurt)
 	_roof_poles(yurt)
@@ -65,6 +71,36 @@ static func solids() -> Array:
 		[cupboard, Vector3(1.04, 1.3, 0.44), atan2(cupboard.x, cupboard.z)],
 		[wall_point(-PI * 0.5, 0.35, 0.5), Vector3(0.84, 0.7, 1.94), 0.0],
 	]
+
+static func _fit_floor(stage, yurt: Node3D) -> Vector3:
+	var points: Array = []
+	for x in range(-6, 7):
+		for z in range(-6, 7):
+			var p = Vector3(x * 0.5, 0, z * 0.5)
+			if p.length() < INNER:
+				points.append(Vector3(p.x, Furnishings.ground(stage, yurt, p).y, p.z))
+	# Least squares y = c + gx * x + gz * z on a grid symmetric about 0.
+	var sy = 0.0
+	var sxy = 0.0
+	var szy = 0.0
+	var sxx = 0.0
+	var szz = 0.0
+	for p in points:
+		sy += p.y
+		sxy += p.x * p.y
+		szy += p.z * p.y
+		sxx += p.x * p.x
+		szz += p.z * p.z
+	var plane = Vector3(sy / points.size(), sxy / maxf(sxx, 0.001), szy / maxf(szz, 0.001))
+	var above = 0.0
+	for p in points:
+		above = maxf(above, p.y - (plane.x + plane.y * p.x + plane.z * p.z))
+	plane.x += above
+	return plane
+
+# A point on the floor plane, `lift` metres above it.
+static func _ground(_stage, _yurt: Node3D, at: Vector3, lift: float = 0.0) -> Vector3:
+	return Vector3(at.x, _plane.x + _plane.y * at.x + _plane.z * at.z + lift, at.z)
 
 # Whether a point on the wall at `angle` (0 at the door) is in the doorway.
 static func in_doorway(angle: float) -> bool:
@@ -133,8 +169,8 @@ static func _lattice(yurt: Node3D) -> void:
 		var b = (i + 1) * TAU / segments
 		if in_doorway((a + b) * 0.5):
 			continue
-		for band in [[1.58, 0.16, CRIMSON], [1.67, 0.03, OCHRE], [1.5, 0.025, IVORY], [1.75, 0.025, IVORY]]:
-			var p = (wall_point(a, band[0], 0.08) + wall_point(b, band[0], 0.08)) * 0.5
+		for band in [[1.58, 0.16, CRIMSON, 0.08], [1.67, 0.03, OCHRE, 0.1], [1.5, 0.025, IVORY, 0.1], [1.75, 0.025, IVORY, 0.08]]:
+			var p = (wall_point(a, band[0], band[3]) + wall_point(b, band[0], band[3])) * 0.5
 			var piece = Props.box(yurt, p, Vector3(wall_point(a, 0).distance_to(wall_point(b, 0)) + 0.01, band[1], 0.012), band[2])
 			piece.rotation.y = (a + b) * 0.5
 		# Tassels hang from the band between the roof poles.
@@ -181,9 +217,9 @@ static func _floor(stage, yurt: Node3D) -> void:
 			var points = [Vector3(sin(a), 0, cos(a)) * rings[r], Vector3(sin(a), 0, cos(a)) * rings[r + 1], Vector3(sin(b), 0, cos(b)) * rings[r + 1], Vector3(sin(b), 0, cos(b)) * rings[r]]
 			st.set_color(FELT.darkened(0.03 * (r % 2)))
 			for index in [0, 2, 1, 0, 3, 2]:
-				st.add_vertex(Furnishings.ground(stage, yurt, points[index], 0.03))
+				st.add_vertex(_ground(stage, yurt, points[index], 0.03))
 	_carpet(st, stage, yurt, Vector3(0, 0, 0.2), Vector2(1.3, 4.6), CRIMSON, NAVY, 0.05)
-	_carpet(st, stage, yurt, Vector3(0, 0, -1.25), Vector2(2.4, 1.7), TEAL, OCHRE, 0.07)
+	_carpet(st, stage, yurt, Vector3(0, 0, -1.25), Vector2(2.4, 1.7), TEAL, OCHRE, 0.085)
 	_carpet(st, stage, yurt, Vector3(-1.75, 0, 0.35), Vector2(1.1, 1.9), DEEP_RED, IVORY, 0.06)
 	st.generate_normals()
 	var mesh = MeshInstance3D.new()
@@ -197,28 +233,28 @@ static func _floor(stage, yurt: Node3D) -> void:
 # A carpet draped on the floor: border, field and a row of medallions.
 static func _carpet(st: SurfaceTool, stage, yurt: Node3D, at: Vector3, size: Vector2, field: Color, border: Color, lift: float) -> void:
 	_patch(st, stage, yurt, at, size, border, lift)
-	_patch(st, stage, yurt, at, size - Vector2(0.16, 0.16), IVORY.darkened(0.1), lift + 0.003)
-	_patch(st, stage, yurt, at, size - Vector2(0.24, 0.24), field, lift + 0.006)
+	_patch(st, stage, yurt, at, size - Vector2(0.16, 0.16), IVORY.darkened(0.1), lift + 0.006)
+	_patch(st, stage, yurt, at, size - Vector2(0.24, 0.24), field, lift + 0.012)
 	var long = size.y > size.x
 	var count = maxi(1, int((size.y if long else size.x) / 0.8))
 	for i in range(count):
 		var t = (i + 0.5) / count - 0.5
 		var center = at + (Vector3(0, 0, t * size.y) if long else Vector3(t * size.x, 0, 0))
 		var half = minf(size.x, size.y) * 0.28
-		_diamond(st, stage, yurt, center, half, border, lift + 0.009)
-		_diamond(st, stage, yurt, center, half * 0.45, IVORY, lift + 0.012)
+		_diamond(st, stage, yurt, center, half, border, lift + 0.018)
+		_diamond(st, stage, yurt, center, half * 0.45, IVORY, lift + 0.024)
 
 static func _patch(st: SurfaceTool, stage, yurt: Node3D, at: Vector3, size: Vector2, color: Color, lift: float) -> void:
 	st.set_color(color)
 	var corners = [at + Vector3(-size.x, 0, -size.y) * 0.5, at + Vector3(size.x, 0, -size.y) * 0.5, at + Vector3(size.x, 0, size.y) * 0.5, at + Vector3(-size.x, 0, size.y) * 0.5]
 	for index in [0, 1, 2, 0, 2, 3]:
-		st.add_vertex(Furnishings.ground(stage, yurt, corners[index], lift))
+		st.add_vertex(_ground(stage, yurt, corners[index], lift))
 
 static func _diamond(st: SurfaceTool, stage, yurt: Node3D, at: Vector3, half: float, color: Color, lift: float) -> void:
 	st.set_color(color)
 	var points = [at + Vector3(0, 0, -half), at + Vector3(half, 0, 0), at + Vector3(0, 0, half), at + Vector3(-half, 0, 0)]
 	for index in [0, 1, 2, 0, 2, 3]:
-		st.add_vertex(Furnishings.ground(stage, yurt, points[index], lift))
+		st.add_vertex(_ground(stage, yurt, points[index], lift))
 
 # ---------------------------------------------------------------- төр
 
@@ -228,14 +264,14 @@ static func _tor(stage, yurt: Node3D) -> void:
 	for i in range(segments):
 		var a = PI - 0.62 + i * 1.24 / segments
 		var b = a + 1.24 / segments
-		var p = (wall_point(a, 1.0, 0.09) + wall_point(b, 1.0, 0.09)) * 0.5
+		var p = (wall_point(a, 0.95, 0.09) + wall_point(b, 0.95, 0.09)) * 0.5
 		var width = wall_point(a, 0).distance_to(wall_point(b, 0)) + 0.01
-		for layer in [[0.0, Vector2(1.1, 0.012), DEEP_RED], [0.008, Vector2(0.9, 0.012), CRIMSON]]:
+		for layer in [[0.0, Vector2(0.95, 0.012), DEEP_RED], [0.02, Vector2(0.78, 0.012), CRIMSON]]:
 			var panel = Props.box(yurt, p + (Vector3(sin(a), 0, cos(a)) * -layer[0]), Vector3(width, layer[1].x, layer[1].y), layer[2])
 			panel.rotation.y = (a + b) * 0.5
 		# Ram's-horn scrolls (қошқар мүйіз) in ochre and ivory.
-		var motif = (wall_point(a, 1.0, 0.115) + wall_point(b, 1.0, 0.115)) * 0.5
-		for y in [-0.24, 0.24]:
+		var motif = (wall_point(a, 0.95, 0.14) + wall_point(b, 0.95, 0.14)) * 0.5
+		for y in [-0.21, 0.21]:
 			var curl = Props.box(yurt, motif + Vector3.UP * y, Vector3(width * 0.6, 0.06, 0.01), OCHRE if i % 2 == 0 else IVORY)
 			curl.rotation = Vector3(0, (a + b) * 0.5, 0.6 if i % 2 == 0 else -0.6)
 		var hook = Props.box(yurt, motif, Vector3(0.1, 0.1, 0.01), IVORY)
@@ -243,19 +279,19 @@ static func _tor(stage, yurt: Node3D) -> void:
 	# Two painted chests side by side, bedding stacked on them.
 	for side in [-0.48, 0.48]:
 		var at = Vector3(side, 0, -INNER + 0.42)
-		var foot = Furnishings.ground(stage, yurt, at)
+		var foot = _ground(stage, yurt, at)
 		var chest = Node3D.new()
 		yurt.add_child(chest)
 		chest.position = foot
 		Props.box(chest, Vector3(0, 0.3, 0), Vector3(0.88, 0.5, 0.52), Color("8e3a22"))
 		Props.box(chest, Vector3(0, 0.05, 0), Vector3(0.92, 0.1, 0.56), DARK_WOOD)
 		for x in [-0.3, 0.0, 0.3]:
-			Props.box(chest, Vector3(x, 0.32, 0.262), Vector3(0.05, 0.46, 0.012), BRASS)
-		Props.box(chest, Vector3(0, 0.32, 0.263), Vector3(0.84, 0.04, 0.012), BRASS)
+			Props.box(chest, Vector3(x, 0.32, 0.285), Vector3(0.05, 0.46, 0.012), BRASS)
+		Props.box(chest, Vector3(0, 0.32, 0.298), Vector3(0.84, 0.04, 0.012), BRASS)
 		for x in [-0.15, 0.15]:
-			Props.box(chest, Vector3(x, 0.32, 0.264), Vector3(0.2, 0.2, 0.01), Color("2f5e86"))
-		Props.box(chest, Vector3(0, 0.25, 0.27), Vector3(0.07, 0.09, 0.02), IRON)
-	var stack = Furnishings.ground(stage, yurt, Vector3(0, 0, -INNER + 0.44)) + Vector3.UP * 0.55
+			Props.box(chest, Vector3(x, 0.32, 0.272), Vector3(0.2, 0.2, 0.008), Color("2f5e86"))
+		Props.box(chest, Vector3(0, 0.25, 0.315), Vector3(0.07, 0.09, 0.02), IRON)
+	var stack = _ground(stage, yurt, Vector3(0, 0, -INNER + 0.44)) + Vector3.UP * 0.55
 	var colors = [CRIMSON, TEAL, OCHRE, NAVY, DEEP_RED, Color("5c7c3a"), CRIMSON.lightened(0.15)]
 	var y = 0.0
 	for i in range(colors.size()):
@@ -273,7 +309,7 @@ static func _tor(stage, yurt: Node3D) -> void:
 
 static func _table(stage, yurt: Node3D) -> void:
 	var at = Vector3(0, 0, -1.2)
-	var foot = Furnishings.ground(stage, yurt, at)
+	var foot = _ground(stage, yurt, at)
 	var top = foot + Vector3.UP * 0.32
 	Props.cylinder(yurt, top, 0.58, 0.58, 0.05, WOOD.lightened(0.08), 20)
 	for i in range(4):
@@ -285,11 +321,11 @@ static func _table(stage, yurt: Node3D) -> void:
 	Props.cylinder(yurt, top + Vector3.UP * 0.028, 0.5, 0.5, 0.006, IVORY, 20)
 	for i in range(6):
 		var a = i * TAU / 6 + 0.3
-		var cup = top + Vector3(sin(a), 0, cos(a)) * 0.4 + Vector3.UP * 0.06
+		var cup = top + Vector3(sin(a), 0, cos(a)) * 0.4 + Vector3.UP * 0.062
 		Props.cylinder(yurt, cup, 0.032, 0.05, 0.06, Color("f1efe8"), 10)
-		Props.cylinder(yurt, cup + Vector3.UP * 0.026, 0.044, 0.044, 0.01, Color("9a5a2a"), 10)
+		Props.cylinder(yurt, cup + Vector3.UP * 0.034, 0.044, 0.044, 0.01, Color("9a5a2a"), 10)
 		Props.cylinder(yurt, cup + Vector3.UP * 0.02, 0.051, 0.051, 0.008, Color("2f5e86"), 10)
-	var dish = top + Vector3(0.12, 0.05, 0.06)
+	var dish = top + Vector3(0.12, 0.06, 0.06)
 	Props.cylinder(yurt, dish, 0.14, 0.2, 0.05, Color("e9e4d6"), 14)
 	for i in range(9):
 		var a = i * 2.4
@@ -304,13 +340,13 @@ static func _table(stage, yurt: Node3D) -> void:
 	Props.cylinder(yurt, pot + Vector3.UP * 0.075, 0.03, 0.02, 0.03, Color("2f5e86"), 8)
 	# Thin mattresses (көрпе) on three sides and a cushion on each.
 	for spot in [[Vector3(-0.95, 0, -1.2), PI * 0.5], [Vector3(0.95, 0, -1.2), -PI * 0.5], [Vector3(0, 0, -2.1), 0.0]]:
-		var mat_at = Furnishings.ground(stage, yurt, spot[0], 0.05)
+		var mat_at = _ground(stage, yurt, spot[0], 0.05)
 		var korpe = Node3D.new()
 		yurt.add_child(korpe)
 		korpe.position = mat_at
 		korpe.rotation.y = spot[1]
 		Props.box(korpe, Vector3.ZERO, Vector3(1.5, 0.08, 0.62), CRIMSON)
-		Props.box(korpe, Vector3(0, 0.003, 0), Vector3(1.4, 0.08, 0.5), Color("3f5f8f") if spot[1] == 0.0 else TEAL)
+		Props.box(korpe, Vector3(0, 0.008, 0), Vector3(1.4, 0.08, 0.5), Color("3f5f8f") if spot[1] == 0.0 else TEAL)
 		for x in [-0.4, 0.4]:
 			var cushion = Props.faceted(korpe, Vector3(x, 0.12, -0.12), Vector3(0.42, 0.18, 0.34), OCHRE if x < 0 else IVORY.darkened(0.08), 10, 4)
 			cushion.rotation.x = -0.25
@@ -318,14 +354,14 @@ static func _table(stage, yurt: Node3D) -> void:
 # ---------------------------------------------------------------- stove
 
 static func _stove(stage, yurt: Node3D) -> void:
-	var foot = Furnishings.ground(stage, yurt, Vector3(0, 0, 0.35))
+	var foot = _ground(stage, yurt, Vector3(0, 0, 0.35))
 	Props.box(yurt, foot + Vector3.UP * 0.02, Vector3(0.8, 0.04, 0.8), Color("8d867b"))
 	Props.box(yurt, foot + Vector3.UP * 0.33, Vector3(0.52, 0.5, 0.62), IRON)
 	for x in [-0.22, 0.22]:
 		for z in [-0.26, 0.26]:
-			Props.box(yurt, foot + Vector3(x, 0.06, z), Vector3(0.05, 0.12, 0.05), IRON)
+			Props.box(yurt, foot + Vector3(x, 0.1, z), Vector3(0.05, 0.12, 0.05), IRON)
 	Props.box(yurt, foot + Vector3(0, 0.32, 0.312), Vector3(0.26, 0.2, 0.02), Color("1d1b1a"))
-	var glow = Props.box(yurt, foot + Vector3(0, 0.27, 0.318), Vector3(0.2, 0.06, 0.01), Color("ff7a2a"))
+	var glow = Props.box(yurt, foot + Vector3(0, 0.27, 0.326), Vector3(0.2, 0.06, 0.01), Color("ff7a2a"))
 	Props.unique_material(glow)
 	glow.material_override.emission_enabled = true
 	glow.material_override.emission = Color("ff6a1a")
@@ -338,7 +374,7 @@ static func _stove(stage, yurt: Node3D) -> void:
 	Furnishings.pole(yurt, kettle + Vector3(0, 0.1, -0.08), kettle + Vector3(0, 0.1, 0.08), 0.012, IRON)
 	# A neat pile of dried dung and saxaul by the stove.
 	for i in range(5):
-		var log_piece = Props.cylinder(yurt, Furnishings.ground(stage, yurt, Vector3(0.62 + (i % 3) * 0.1, 0, 0.55), 0.06 + int(i / 3.0) * 0.1), 0.05, 0.04, 0.5, Color("6e5a42"), 6)
+		var log_piece = Props.cylinder(yurt, _ground(stage, yurt, Vector3(0.62 + (i % 3) * 0.1, 0, 0.55), 0.06 + int(i / 3.0) * 0.1), 0.05, 0.04, 0.5, Color("6e5a42"), 6)
 		log_piece.rotation = Vector3(PI * 0.5, 0.3, 0)
 
 # ---------------------------------------------------------------- kitchen
@@ -348,23 +384,28 @@ static func _kitchen(stage, yurt: Node3D) -> void:
 	var at = wall_point(PI * 0.55, 0.0, 0.32)
 	var cupboard = Node3D.new()
 	yurt.add_child(cupboard)
-	cupboard.position = Furnishings.ground(stage, yurt, at)
+	cupboard.position = _ground(stage, yurt, at)
 	_face_middle(cupboard, at)
-	Props.box(cupboard, Vector3(0, 0.6, 0), Vector3(1.0, 1.2, 0.4), Color("8a4a2a"))
-	Props.box(cupboard, Vector3(0, 1.22, 0), Vector3(1.06, 0.05, 0.44), DARK_WOOD)
+	# A closed base with two doors, open shelves for the plates above it.
+	Props.box(cupboard, Vector3(0, 0.35, 0), Vector3(1.0, 0.7, 0.4), Color("8a4a2a"))
+	Props.box(cupboard, Vector3(0, 0.96, 0.18), Vector3(1.0, 0.52, 0.04), Color("8a4a2a"))
+	for side in [-0.48, 0.48]:
+		Props.box(cupboard, Vector3(side, 0.96, 0.0), Vector3(0.04, 0.52, 0.4), Color("8a4a2a"))
+	Props.box(cupboard, Vector3(0, 0.95, 0.0), Vector3(0.92, 0.03, 0.32), DARK_WOOD)
+	Props.box(cupboard, Vector3(0, 1.245, 0), Vector3(1.06, 0.05, 0.44), DARK_WOOD)
 	for x in [-0.25, 0.25]:
-		Props.box(cupboard, Vector3(x, 0.35, -0.205), Vector3(0.44, 0.6, 0.02), Color("a35a32"))
-		Props.box(cupboard, Vector3(x, 0.35, -0.218), Vector3(0.3, 0.42, 0.01), OCHRE)
-		Props.box(cupboard, Vector3(x * 0.2, 0.35, -0.225), Vector3(0.03, 0.08, 0.015), BRASS)
-	Props.box(cupboard, Vector3(0, 0.9, -0.05), Vector3(0.94, 0.03, 0.3), DARK_WOOD)
+		Props.box(cupboard, Vector3(x, 0.35, -0.21), Vector3(0.44, 0.5, 0.02), Color("a35a32"))
+		Props.box(cupboard, Vector3(x, 0.35, -0.226), Vector3(0.3, 0.36, 0.01), OCHRE)
+		Props.box(cupboard, Vector3(x * 0.2, 0.35, -0.24), Vector3(0.03, 0.08, 0.015), BRASS)
+	# Plates stand on the shelf leaning on the back, bowls on the floor of the shelves.
 	for i in range(4):
-		var plate = Props.cylinder(cupboard, Vector3(-0.33 + i * 0.22, 1.02, 0.05), 0.09, 0.09, 0.015, Color("f1efe8") if i % 2 == 0 else Color("2f5e86"), 14)
+		var plate = Props.cylinder(cupboard, Vector3(-0.33 + i * 0.22, 1.065, 0.1), 0.09, 0.09, 0.015, Color("f1efe8") if i % 2 == 0 else Color("2f5e86"), 14)
 		plate.rotation.x = PI * 0.5 - 0.25
 	for i in range(3):
-		Props.cylinder(cupboard, Vector3(-0.2 + i * 0.2, 1.3, 0), 0.05, 0.07, 0.1, Color("f1efe8"), 10)
+		Props.cylinder(cupboard, Vector3(-0.2 + i * 0.2, 0.755, -0.02), 0.05, 0.07, 0.1, Color("f1efe8"), 10)
 	# A brass samovar on a low stand beside it.
 	var samovar_at = wall_point(PI * 0.43, 0.0, 0.42)
-	var base = Furnishings.ground(stage, yurt, samovar_at)
+	var base = _ground(stage, yurt, samovar_at)
 	Props.box(yurt, base + Vector3.UP * 0.12, Vector3(0.42, 0.24, 0.42), DARK_WOOD)
 	var body = base + Vector3.UP * 0.42
 	Props.cylinder(yurt, body - Vector3.UP * 0.12, 0.09, 0.12, 0.06, BRASS.darkened(0.15), 12)
@@ -378,7 +419,7 @@ static func _kitchen(stage, yurt: Node3D) -> void:
 		Props.box(yurt, handle, Vector3(0.04, 0.05, 0.04), DARK_WOOD)
 	# The leather kumys bag (саба) on its rack, its churn stick standing in it.
 	var saba_at = wall_point(PI * 0.32, 0.0, 0.45)
-	var saba_foot = Furnishings.ground(stage, yurt, saba_at)
+	var saba_foot = _ground(stage, yurt, saba_at)
 	for x in [-0.25, 0.25]:
 		for z in [-0.18, 0.18]:
 			Furnishings.pole(yurt, saba_foot + Vector3(x, 0, z), saba_foot + Vector3(x * 0.8, 0.42, z * 0.8), 0.022, WOOD)
@@ -388,7 +429,7 @@ static func _kitchen(stage, yurt: Node3D) -> void:
 	Furnishings.pole(yurt, bag + Vector3.UP * 0.1, bag + Vector3(0.05, 0.85, 0.02), 0.018, Color("c9a77a"))
 	Props.cylinder(yurt, bag + Vector3(0.0, -0.06, 0), 0.258, 0.258, 0.05, Color("b98b3c"), 10)
 	# A galvanised water can and a ladle hanging on the lattice.
-	var can = Furnishings.ground(stage, yurt, wall_point(PI * 0.22, 0.0, 0.35))
+	var can = _ground(stage, yurt, wall_point(PI * 0.22, 0.0, 0.35))
 	Props.cylinder(yurt, can + Vector3.UP * 0.2, 0.15, 0.13, 0.4, Color("9ea3a2"), 12)
 	Props.cylinder(yurt, can + Vector3.UP * 0.41, 0.07, 0.07, 0.03, Color("7e8382"), 10)
 	var ladle = wall_point(PI * 0.27, 1.25, 0.08)
@@ -402,30 +443,30 @@ static func _host_side(stage, yurt: Node3D) -> void:
 	var at = wall_point(-PI * 0.5, 0.0, 0.5)
 	var bed = Node3D.new()
 	yurt.add_child(bed)
-	bed.position = Furnishings.ground(stage, yurt, at)
+	bed.position = _ground(stage, yurt, at)
 	Props.box(bed, Vector3(0, 0.3, 0), Vector3(0.8, 0.1, 1.9), WOOD)
 	for z in [-0.9, 0.9]:
-		for x in [-0.36, 0.36]:
+		for x in [-0.35, 0.35]:
 			Props.box(bed, Vector3(x, 0.15, z), Vector3(0.07, 0.3, 0.07), DARK_WOOD)
 		# Carved head and foot boards with an ochre scroll.
 		Props.box(bed, Vector3(0, 0.55, z), Vector3(0.82, 0.5 if z < 0 else 0.34, 0.05), Color("8e3a22"))
-		Props.box(bed, Vector3(0, 0.6 if z < 0 else 0.55, z + signf(z) * 0.03), Vector3(0.5, 0.12, 0.01), OCHRE)
+		Props.box(bed, Vector3(0, 0.6 if z < 0 else 0.55, z + signf(z) * 0.045), Vector3(0.5, 0.12, 0.01), OCHRE)
 	Props.box(bed, Vector3(0, 0.4, 0), Vector3(0.74, 0.12, 1.78), IVORY.darkened(0.05))
 	Props.box(bed, Vector3(0, 0.47, 0.15), Vector3(0.78, 0.05, 1.3), NAVY)
-	Props.box(bed, Vector3(0, 0.475, 0.15), Vector3(0.6, 0.05, 1.1), CRIMSON)
+	Props.box(bed, Vector3(0, 0.482, 0.15), Vector3(0.6, 0.05, 1.1), CRIMSON)
 	Props.faceted(bed, Vector3(0, 0.55, -0.7), Vector3(0.55, 0.16, 0.32), IVORY, 10, 4)
 	# The saddle on its rack by the door, its felt cloth under it.
 	var rack_at = wall_point(-PI * 0.22, 0.0, 0.45)
 	var rack = Node3D.new()
 	yurt.add_child(rack)
-	rack.position = Furnishings.ground(stage, yurt, rack_at)
+	rack.position = _ground(stage, yurt, rack_at)
 	_face_middle(rack, rack_at)
 	for x in [-0.3, 0.3]:
 		Furnishings.pole(rack, Vector3(x, 0, -0.2), Vector3(x, 0.55, 0), 0.03, WOOD)
 		Furnishings.pole(rack, Vector3(x, 0, 0.2), Vector3(x, 0.55, 0), 0.03, WOOD)
 	Furnishings.pole(rack, Vector3(-0.32, 0.56, 0), Vector3(0.32, 0.56, 0), 0.035, WOOD)
 	Props.box(rack, Vector3(0, 0.6, 0), Vector3(0.62, 0.02, 0.62), CRIMSON)
-	Props.box(rack, Vector3(0, 0.52, 0), Vector3(0.64, 0.12, 0.012), OCHRE)
+	Props.box(rack, Vector3(0, 0.52, 0), Vector3(0.48, 0.12, 0.012), OCHRE)
 	Props.faceted(rack, Vector3(0, 0.68, 0), Vector3(0.36, 0.16, 0.55), LEATHER, 10, 4)
 	Props.box(rack, Vector3(0, 0.8, -0.24), Vector3(0.14, 0.18, 0.08), LEATHER.darkened(0.2))
 	Props.box(rack, Vector3(0, 0.76, 0.26), Vector3(0.2, 0.12, 0.06), LEATHER.darkened(0.2))

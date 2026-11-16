@@ -18,6 +18,55 @@ func walk_to(game, target: Vector3, seconds: float) -> void:
 		game.player.walk(1.0 / 30.0)
 	Input.action_release("forward")
 
+# Faces of different colours that face the same way, lie within GAP of each
+# other and overlap flicker as the camera moves (z-fighting). Scans the baked
+# camp mesh in the guest yurt's frame, inside its wall: "colour @ point" rows.
+const GAP = 0.005
+
+func flickering(mesh: Mesh, to_yurt: Transform3D) -> Array:
+	var tris: Array = []
+	var buckets: Dictionary = {}
+	for surface in range(mesh.get_surface_count()):
+		var arrays = mesh.surface_get_arrays(surface)
+		var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		var colors = arrays[Mesh.ARRAY_COLOR]
+		var indices = arrays[Mesh.ARRAY_INDEX]
+		var count = indices.size() if indices != null and indices.size() > 0 else verts.size()
+		for k in range(0, count - 2, 3):
+			var ids = [indices[k], indices[k + 1], indices[k + 2]] if indices != null and indices.size() > 0 else [k, k + 1, k + 2]
+			var v = [to_yurt * verts[ids[0]], to_yurt * verts[ids[1]], to_yurt * verts[ids[2]]]
+			var middle: Vector3 = (v[0] + v[1] + v[2]) / 3.0
+			var cross: Vector3 = (v[1] - v[0]).cross(v[2] - v[0])
+			if Vector2(middle.x, middle.z).length() > 3.2 or cross.length() < 0.0004:
+				continue
+			var n = cross.normalized()
+			var tri = {"v": v, "n": n, "m": middle, "c": colors[ids[0]] if colors != null and colors.size() > 0 else Color.WHITE}
+			var key = Vector4i(roundi(n.x * 20), roundi(n.y * 20), roundi(n.z * 20), roundi(n.dot(middle) / 0.05))
+			if not buckets.has(key):
+				buckets[key] = []
+			buckets[key].append(tri)
+			tris.append(tri)
+	var rows: Array = []
+	for key in buckets:
+		var group: Array = buckets[key]
+		for other_key in [key, key + Vector4i(0, 0, 0, 1)]:
+			var others: Array = buckets.get(other_key, [])
+			for a in group:
+				for b in others:
+					if a == b or a.n.dot(b.n) < 0.999 or absf(a.c.r - b.c.r) + absf(a.c.g - b.c.g) + absf(a.c.b - b.c.b) < 0.06:
+						continue
+					if absf(a.n.dot(b.m - a.v[0])) < GAP and (_inside(a, b.m) or _inside(b, a.m)):
+						rows.append("%s/%s @ %s" % [a.c.to_html(false), b.c.to_html(false), a.m.snapped(Vector3.ONE * 0.01)])
+	return rows
+
+static func _inside(tri: Dictionary, p: Vector3) -> bool:
+	var v: Array = tri.v
+	var n: Vector3 = tri.n
+	for i in range(3):
+		if n.dot((v[(i + 1) % 3] - v[i]).cross(p - v[i])) < 0.0:
+			return false
+	return true
+
 func run() -> void:
 	var game = load("res://main.tscn").instantiate()
 	root.add_child(game)
@@ -40,6 +89,9 @@ func run() -> void:
 	for part in ["YurtLining", "YurtFloor", "ShanyrakInner"]:
 		check(parts.has(part), "the guest yurt is furnished: %s" % part)
 	check(guest.get_node_or_null("YurtLantern") != null and guest.get_node("YurtLantern").has_meta("night_light"), "a lantern lights the room at night")
+	var baked: MeshInstance3D = camp.get_node_or_null("Baked")
+	var fighting = flickering(baked.mesh, pose.affine_inverse() * camp.transform) if baked != null else ["no baked mesh"]
+	check(fighting != null and fighting.is_empty(), "nothing in the guest yurt flickers: no two differently coloured faces share a plane (%d: %s)" % [fighting.size(), "; ".join(fighting.slice(0, 20))])
 	var other = camp.get_node_or_null("Yurt")
 	check(other != null and other.get_node_or_null("YurtLantern") == null, "the other yurts stay closed")
 

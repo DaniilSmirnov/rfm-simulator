@@ -5,6 +5,7 @@ extends SceneTree
 # camera's near plane of 0.1 m a 24-bit depth buffer resolves about 2.5 cm
 # at 200 m and 10 cm at 400 m, so cm-thin trims flicker from across the pit.
 # --path game --script res://tools/profile/find_zfight.gd -- --stage=N [--gap=0.06] [--min-area=0.02]
+# [--root=NodeName] scans only meshes whose path contains NodeName (fast).
 # MultiMesh transforms need a real renderer, so for scenery batches run it
 # under xvfb-run with --rendering-method gl_compatibility.
 const CELL = 16.0
@@ -15,6 +16,8 @@ var min_area := 0.02
 # Triangles: world vertices, unit normal, plane offset, colour, owner path.
 var tris: Array = []
 var buckets: Dictionary = {}
+# --frame=NodeName prints --detail positions and normals in that node's frame.
+var frame := Transform3D.IDENTITY
 
 func _initialize() -> void:
 	call_deferred("run")
@@ -28,10 +31,11 @@ func run() -> void:
 	var index = int(arg("stage", "0"))
 	gap = float(arg("gap", "0.06"))
 	min_area = float(arg("min-area", "0.02"))
-	var game = load("res://scripts/core/game.gd").new()
-	game.defer_world = false
+	var game = load("res://main.tscn").instantiate()
 	root.add_child(game)
 	await process_frame
+	game.set_process(false)
+	game.room.set_process(false)
 	game.select_stage(index)
 	game.rng.seed = 20261008
 	await game.start_game()
@@ -40,6 +44,7 @@ func run() -> void:
 	for node in game.find_children("*", "GeometryInstance3D", true, false):
 		if not node.is_visible_in_tree(): continue
 		var path = str(game.get_path_to(node))
+		if arg("root", "") != "" and not path.contains(arg("root", "")): continue
 		if node is MultiMeshInstance3D and node.multimesh != null and node.multimesh.mesh != null:
 			var mm: MultiMesh = node.multimesh
 			var count = mm.visible_instance_count if mm.visible_instance_count >= 0 else mm.instance_count
@@ -47,6 +52,11 @@ func run() -> void:
 				_collect(mm.mesh, node, node.global_transform * mm.get_instance_transform(i), "%s#%d" % [path, i])
 		elif node is MeshInstance3D and node.mesh != null:
 			_collect(node.mesh, node, node.global_transform, path)
+	var frame_name = arg("frame", "")
+	if frame_name != "":
+		var frames = game.find_children(frame_name, "Node3D", true, false)
+		if not frames.is_empty():
+			frame = frames[0].global_transform.affine_inverse()
 	var hits: Dictionary = {}
 	for key in buckets:
 		var here: Array = buckets[key]
@@ -108,8 +118,12 @@ func _insert(tri: Dictionary) -> void:
 				buckets[key].append(tri)
 
 func _compare(a: Dictionary, b: Dictionary, hits: Dictionary) -> void:
-	var separation = absf(a.d - b.d)
-	if separation > gap or a.n.dot(b.n) < 0.999: return
+	if absf(a.d - b.d) > gap + BAND or a.n.dot(b.n) < 0.999: return
+	# Distance of b's centre from a's plane: comparing the plane offsets
+	# (n . p) of two small triangles hundreds of metres from the origin
+	# magnifies float error in their normals into centimetres.
+	var separation = absf(a.n.dot((b.v[0] + b.v[1] + b.v[2]) / 3.0 - a.v[0]))
+	if separation > gap: return
 	var ca: Color = a.color
 	var cb: Color = b.color
 	if absf(ca.r - cb.r) + absf(ca.g - cb.g) + absf(ca.b - cb.b) < 0.06: return
@@ -118,7 +132,7 @@ func _compare(a: Dictionary, b: Dictionary, hits: Dictionary) -> void:
 	var only = arg("filter", "")
 	if only != "" and not (only in a.path or only in b.path): return
 	if arg("detail", "") != "":
-		print("PAIR gap=%.3f area=%.2f %s n=%s %s / %s  %s | %s" % [separation, area, ((a.v[0] + a.v[1] + a.v[2]) / 3.0).snapped(Vector3.ONE * 0.01), a.n.snapped(Vector3.ONE * 0.01), ca.to_html(false), cb.to_html(false), a.path, b.path])
+		print("PAIR gap=%.3f area=%.4f %s n=%s %s / %s  %s | %s" % [separation, area, (frame * ((a.v[0] + a.v[1] + a.v[2]) / 3.0)).snapped(Vector3.ONE * 0.01), (frame.basis * a.n).normalized().snapped(Vector3.ONE * 0.01), ca.to_html(false), cb.to_html(false), a.path, (frame * ((b.v[0] + b.v[1] + b.v[2]) / 3.0)).snapped(Vector3.ONE * 0.01)])
 	var key = a.path + " | " + b.path if a.path < b.path else b.path + " | " + a.path
 	var row = hits.get(key)
 	if row == null:

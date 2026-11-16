@@ -134,7 +134,7 @@ static func _door(node: Node3D, stage) -> void:
 		for y in [floor_y + 0.35, floor_y + height - 0.35]:
 			Props.box(node, Vector3(side, y, front + 0.17), Vector3(0.14, 0.055, 0.025), Color("393631"))
 	Props.box(node, Vector3(0.16, middle, front + 0.18), Vector3(0.07, 0.12, 0.04), Color("393631"))
-	Props.box(node, Vector3(0, floor_y + 0.04, front + 0.22), Vector3(1.35, 0.08, 0.45), TIMBER)
+	Props.box(node, Vector3(0, floor_y + 0.04, front + 0.22), Vector3(1.4, 0.08, 0.45), TIMBER)
 
 # The door frame of an open yurt and its two painted leaves swung outward
 # against the felt.
@@ -151,9 +151,9 @@ static func _open_door(node: Node3D, stage) -> void:
 		var leaf_height = top - floor_y - 0.12
 		Props.box(hinge, Vector3(-side * 0.3, 0, 0), Vector3(0.58, leaf_height, 0.05), DOOR)
 		for y in [-leaf_height * 0.36, leaf_height * 0.36]:
-			Props.box(hinge, Vector3(-side * 0.3, y, 0.03), Vector3(0.5, 0.06, 0.02), TIMBER.lightened(0.12))
-		Props.box(hinge, Vector3(-side * 0.3, 0, 0.03), Vector3(0.3, 0.42, 0.012), Color("c9933a"))
-		Props.box(hinge, Vector3(-side * 0.3, 0, 0.038), Vector3(0.16, 0.24, 0.01), DOOR.darkened(0.25))
+			Props.box(hinge, Vector3(-side * 0.3, y, 0.04), Vector3(0.5, 0.06, 0.02), TIMBER.lightened(0.12))
+		Props.box(hinge, Vector3(-side * 0.3, 0, 0.04), Vector3(0.3, 0.42, 0.012), Color("c9933a"))
+		Props.box(hinge, Vector3(-side * 0.3, 0, 0.056), Vector3(0.16, 0.24, 0.01), DOOR.darkened(0.25))
 	Props.box(node, Vector3(0, top + 0.06, front - 0.05), Vector3(1.62, 0.16, 0.3), TIMBER.darkened(0.15))
 	Props.box(node, Vector3(0, floor_y + 0.04, front - 0.05), Vector3(1.22, 0.08, 0.3), TIMBER)
 
