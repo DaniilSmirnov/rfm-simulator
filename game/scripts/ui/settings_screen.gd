@@ -1,6 +1,6 @@
 extends Node
 # The settings window, opened by the gear in the menu header (main menu and
-# pause): draw distance, game sound and radio volume and, in a desktop window, the window
+# pause): draw distance, game sound, radio volume and microphone and, in a desktop window, the window
 # mode and resolution. Every choice applies at once and is kept between
 # launches. The browser page has its own fullscreen button and no window to
 # resize, so the screen section is shown only by native desktop builds.
@@ -8,6 +8,7 @@ const UiKit = preload("res://scripts/ui/ui_kit.gd")
 const Loc = preload("res://scripts/ui/loc.gd")
 const MenuChoice = preload("res://scripts/ui/menu_choice.gd")
 const SoundBank = preload("res://scripts/core/sound_bank.gd")
+const Microphone = preload("res://scripts/net/microphone.gd")
 const AUDIO_SETTINGS_PATH = "user://audio_settings.cfg"
 const DISPLAY_SETTINGS_PATH = "user://display_settings.cfg"
 # Window sizes offered in windowed mode; ones larger than the screen are left out.
@@ -23,6 +24,9 @@ var volume_label: Label
 var volume_slider: HSlider
 var radio_label: Label
 var radio_slider: HSlider
+var mic_choice: HBoxContainer
+var mic_devices: Array[String] = []
+var mic_device = Microphone.DEFAULT
 var display_controls: VBoxContainer
 var window_mode_buttons: Array[Button] = []
 var resolution_choice: HBoxContainer
@@ -50,6 +54,8 @@ func is_open() -> bool:
 
 func open() -> void:
 	update_draw_distance_buttons()
+	# A headset plugged in while the game runs shows up on the next open.
+	_list_microphones()
 	# A VK profile can switch the language to Russian without a retranslate.
 	retranslate()
 	root.show()
@@ -119,6 +125,7 @@ func _build_audio(parent: Control) -> void:
 	volume_slider = _volume_slider(column, "MasterVolume", "Громкость звуков игры, кроме рации. 0 — без звука.", _saved_percent(settings, "volume") if loaded else 100.0)
 	radio_label = UiKit.label(column, "", "body")
 	radio_slider = _volume_slider(column, "RadioVolume", "Громкость голосов в рации. 0 — рация молчит.", _saved_percent(settings, "radio_volume") if loaded else 100.0)
+	_build_microphone(column, settings.get_value("audio", "input_device", Microphone.DEFAULT) if loaded else Microphone.DEFAULT)
 	_apply_volume(volume_slider.value)
 	_apply_radio_volume(radio_slider.value)
 	volume_slider.value_changed.connect(func(value: float):
@@ -151,6 +158,7 @@ func _save_audio() -> void:
 	var config = ConfigFile.new()
 	config.set_value("audio", "volume", volume_slider.value)
 	config.set_value("audio", "radio_volume", radio_slider.value)
+	config.set_value("audio", "input_device", mic_device)
 	if config.save(audio_path) != OK:
 		game.toast("Не удалось сохранить громкость.")
 
@@ -170,6 +178,44 @@ func _apply_radio_volume(percent: float) -> void:
 		AudioServer.set_bus_mute(radio, percent <= 0)
 		AudioServer.set_bus_volume_db(radio, linear_to_db(maxf(percent / 100.0, 0.0001)))
 	_show_radio_volume(percent)
+
+# The radio's microphone. The browser asks for its own microphone (site
+# settings in the address bar), so the page shows a hint instead of a list.
+func _build_microphone(column: Control, saved) -> void:
+	var row = UiKit.hbox(column, 10)
+	row.name = "MicrophoneRow"
+	var caption = UiKit.label(row, "Микрофон", "body")
+	caption.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	mic_choice = UiKit.expand(MenuChoice.new())
+	mic_choice.name = "Microphone"
+	mic_choice.custom_minimum_size.y = 42
+	mic_choice.tooltip_text = "Микрофон, в который говорят в рацию."
+	row.add_child(mic_choice)
+	mic_choice.item_selected.connect(func(index: int): set_microphone(mic_devices[index]))
+	row.visible = Microphone.available()
+	if not Microphone.available():
+		var hint = UiKit.wrap(UiKit.label(column, "Микрофон для рации выбирает браузер: значок слева от адреса сайта.", "muted"))
+		hint.name = "MicrophoneHint"
+		hint.add_theme_font_size_override("font_size", 13)
+		hint.visible = OS.has_feature("web")
+	mic_device = str(saved)
+	_list_microphones()
+
+func _list_microphones() -> void:
+	if mic_choice == null:
+		return
+	mic_devices = Microphone.devices()
+	mic_choice.items.clear()
+	for device in mic_devices:
+		mic_choice.add_item(Loc.t("По умолчанию") if device == Microphone.DEFAULT else device)
+	# The saved device may come back after being unplugged: keep the choice
+	# remembered, show what is used now.
+	var used = Microphone.apply(mic_device)
+	mic_choice.select(mic_devices.find(used))
+
+func set_microphone(device: String) -> void:
+	mic_device = Microphone.apply(device)
+	_save_audio()
 
 func _show_volume(percent: float) -> void:
 	volume_label.text = Loc.t("ЗВУК ВЫКЛЮЧЕН") if percent <= 0 else Loc.t("ГРОМКОСТЬ · %d%%") % roundi(percent)
