@@ -34,6 +34,10 @@ var resolution_note: Label
 var resolutions: Array[Vector2i] = []
 var window_mode = FULLSCREEN
 var resolution = Vector2i.ZERO
+# Godot's Windows fullscreen window has no minimize box, so Windows ignores the
+# taskbar button and Win+Down and the game can't be minimized. There a
+# borderless maximized window covers the same whole screen and keeps it.
+var borderless_fullscreen = OS.get_name() == "Windows"
 
 static func has_display_settings() -> bool:
 	return OS.has_feature("pc") and not OS.has_feature("web")
@@ -297,15 +301,27 @@ func apply_display() -> void:
 		return
 	var window = game.get_window()
 	if window_mode == FULLSCREEN:
-		if window.mode != Window.MODE_FULLSCREEN and window.mode != Window.MODE_EXCLUSIVE_FULLSCREEN:
+		if borderless_fullscreen:
+			_cover_screen(window)
+		elif window.mode != Window.MODE_FULLSCREEN and window.mode != Window.MODE_EXCLUSIVE_FULLSCREEN:
 			window.mode = Window.MODE_FULLSCREEN
 		return
+	if window.borderless:
+		window.borderless = false
 	if window.mode != Window.MODE_WINDOWED:
 		window.mode = Window.MODE_WINDOWED
 	window.size = resolution
 	var screen = DisplayServer.screen_get_usable_rect(window.current_screen)
 	if screen.size.x > 0:
 		window.position = screen.position + (screen.size - resolution) / 2
+
+func _cover_screen(window: Window) -> void:
+	if window.borderless and window.mode == Window.MODE_MAXIMIZED:
+		return
+	if window.mode != Window.MODE_WINDOWED:
+		window.mode = Window.MODE_WINDOWED
+	window.borderless = true
+	window.mode = Window.MODE_MAXIMIZED
 
 func _save_display() -> void:
 	var config = ConfigFile.new()
