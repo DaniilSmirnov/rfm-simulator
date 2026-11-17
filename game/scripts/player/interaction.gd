@@ -78,6 +78,8 @@ func normal_target() -> Dictionary:
 			if item.kind != "flag" and game.cargo.held.has(game.chair_owner()):
 				continue
 			offer(items, item.node.global_position + Vector3.UP * item.height * 0.5, maxf(item.radius, 0.8), 3.5, "pack", item.label, item.node.global_position)
+		# The stage is over, but a broken car still has to reach the service park.
+		game.player.repair.offers(items, self)
 		return select_target(items)
 	if game.cargo.held.has(game.chair_owner()):
 		if game.cargo.held[game.chair_owner()].kind == "shovel" and game.stage.has_snow:
