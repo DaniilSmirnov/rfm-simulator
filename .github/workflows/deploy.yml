@@ -12,7 +12,7 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 41
+    timeout-minutes: 40
     steps:
       - name: Setup SSH
         env:
